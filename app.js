@@ -52,8 +52,6 @@
     };
     const sideName = $("sideName"); if (sideName) sideName.textContent = nameOf(state.profile);
     const sideAvatar = $("sideAvatar"); if (sideAvatar) sideAvatar.outerHTML = avatarHTML(state.profile, "avatar");
-    const avatarBtn = $("avatarBtn");
-    if (avatarBtn) avatarBtn.innerHTML = state.profile.avatar_url ? `<img src="${esc(state.profile.avatar_url)}" alt="">` : esc((nameOf(state.profile)[0] || "T").toUpperCase());
   }
 
   async function loadPosts() {
@@ -312,7 +310,7 @@
       ["profile","◉","Profil","Voir votre profil"],["friends","♧","Amis","Votre réseau"],["groups","◎","Groupes","Communautés"],["pages","▣","Pages","Pages que vous gérez"],
       ["saved","♡","Enregistrements","Publications sauvegardées"],["videos","▷","Vidéos","Regarder et publier"],["reels","◉","Reels","Formats courts"],["settings","⚙","Paramètres & Confidentialité","Compte, sécurité et préférences"]
     ];
-    simplePage("Menu", `<div class="menu-profile">${avatarHTML(p)}<div class="grow"><b>${esc(nameOf(p))}</b><small>${esc(p.email || state.user?.email || "").replace(/^(.{0,18}).*(@.*)$/,"$1…$2")}</small></div><button class="small-action" data-route="profile">Profil</button></div><div class="menu-section-title">Raccourcis</div><div class="menu-grid">${items.map(x=>`<button class="menu-card" data-route="${x[0]}"><span class="menu-icon">${x[1]}</span><span><b>${x[2]}</b><small>${x[3]}</small></span></button>`).join("")}</div><div class="menu-section-title">Actions</div><div class="menu-grid"><button class="menu-card danger-card" data-action="logout"><span class="menu-icon">↪</span><span><b>Déconnexion</b><small>Quitter ce compte</small></span></button></div>`);
+    simplePage("Menu", `<div class="menu-profile">${avatarHTML(p)}<div class="grow"><b>${esc(nameOf(p))}</b><small>${esc(p.email || state.user?.email || "")}</small></div><button class="small-action" data-route="profile">Profil</button></div><div class="menu-section-title">Raccourcis</div><div class="menu-grid">${items.map(x=>`<button class="menu-card" data-route="${x[0]}"><span class="menu-icon">${x[1]}</span><span><b>${x[2]}</b><small>${x[3]}</small></span></button>`).join("")}</div><div class="menu-section-title">Actions</div><div class="menu-grid"><button class="menu-card danger-card" data-action="logout"><span class="menu-icon">↪</span><span><b>Déconnexion</b><small>Quitter ce compte</small></span></button></div>`);
   }
 
   function settingsPage() {
