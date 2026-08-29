@@ -1,8 +1,8 @@
 (() => {
 "use strict";
 
-const SUPABASE_URL = "https://qvxmaeepwrprtoaipoir.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_OxmDXLn69jclSWnYtdjsxQ_TMfMI4-";
+const SUPABASE_URL="https://qvxmaeepwrprtoaipoir.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY="sb_publishable_OxmDXLn69jclSWnYtdjsxQ_TMfMI4X-";
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false,lock:async(_n,_t,fn)=>await fn()}
 });
