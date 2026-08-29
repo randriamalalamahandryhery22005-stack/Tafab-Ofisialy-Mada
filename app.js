@@ -358,10 +358,20 @@
     render();
   }
 
+  function syncThemeButton() {
+    const btn = $("themeBtn");
+    if (!btn) return;
+    btn.innerHTML = state.theme === "dark"
+      ? '<svg class="action-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 15.5A8 8 0 0 1 8.5 4 8.5 8.5 0 1 0 20 15.5Z"/></svg>'
+      : '<svg class="action-svg" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+    btn.setAttribute("aria-label", state.theme === "dark" ? "Activer le mode clair" : "Activer le mode sombre");
+  }
+
   function toggleTheme() {
     state.theme = state.theme === "dark" ? "light" : "dark";
     document.body.classList.toggle("light", state.theme === "light");
     localStorage.setItem("tafa-theme", state.theme);
+    syncThemeButton();
     if (state.user && state.route === "settings") settingsPage();
   }
 
@@ -384,6 +394,7 @@
     state.entering = true;
     $("auth").classList.add("hidden"); $("app").classList.remove("hidden");
     document.body.classList.toggle("light", state.theme === "light");
+    syncThemeButton();
     await loadProfile(); await loadPosts(); await setupRealtime();
     state.entering = false;
     await render();
@@ -463,6 +474,7 @@
     } else $("signupMsg").textContent="Compte créé. Vérifiez votre e-mail si la confirmation est activée.";
   });
   $("themeBtn").addEventListener("click", toggleTheme);
+  syncThemeButton();
   $("modal").addEventListener("click", e => { if (e.target.id === "modal") closeModal(); });
   $("globalSearch").addEventListener("keydown", e => { if (e.key === "Enter") { state.route="search"; history.replaceState(null,"","#search"); searchPage(e.target.value); } });
   window.addEventListener("hashchange", () => { const r=location.hash.slice(1); if(routes.includes(r)) { state.route=r; render(); } });

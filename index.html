@@ -64,13 +64,13 @@
     <header class="topbar">
       <div class="top-left"><button class="logo-button" data-route="home"><span class="mini-logo">T</span><strong>Tafaß</strong></button><div class="desktop-search searchbox"><span class="icon">⌕</span><input id="globalSearch" placeholder="Rechercher sur Tafaß"></div></div>
       <nav class="desktop-nav" aria-label="Navigation principale">
-        <button data-route="home" data-label="Actualités"><span>⌂</span><small>Actualités</small></button>
-        <button data-route="friends" data-label="Amis"><span>♧</span><small>Amis</small></button>
-        <button data-route="messages" data-label="Messages"><span>▤</span><small>Messages</small><b id="msgBadge" class="badge hidden">0</b></button>
-        <button data-route="videos" data-label="Vidéos"><span>▷</span><small>Vidéos</small></button>
-        <button data-route="reels" data-label="Reels"><span>◉</span><small>Reels</small></button>
+        <button data-route="home" data-label="Actualités"><span class="nav-svg"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5.5 9.5V21h13V9.5"/><path d="M9.5 21v-6h5v6"/></svg></span><small>Actualités</small></button>
+        <button data-route="friends" data-label="Amis"><span class="nav-svg"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3.5 20c.6-3.5 2.6-5.5 5.5-5.5s4.9 2 5.5 5.5"/><path d="M14.5 15c3.2-.2 5.2 1.4 6 4.5"/></svg></span><small>Amis</small></button>
+        <button data-route="messages" data-label="Messages"><span class="nav-svg"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5h16v11H8l-4 3v-14Z"/><path d="M8 9h8M8 12h5"/></svg></span><small>Messages</small><b id="msgBadge" class="badge hidden">0</b></button>
+        <button data-route="videos" data-label="Vidéos"><span class="nav-svg"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m10 9 5 3-5 3Z"/></svg></span><small>Vidéos</small></button>
+        <button data-route="reels" data-label="Reels"><span class="nav-svg"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="m8 4 3 4m2-4 3 4M4 9h16M10 12l5 3-5 3Z"/></svg></span><small>Reels</small></button>
       </nav>
-      <div class="top-actions"><button class="round-button mobile-search-button" data-route="search">⌕</button><button class="round-button" data-route="notifications">♢<b id="notifBadge" class="badge hidden">0</b></button><button class="round-button desktop-only" id="themeBtn">☾</button><button class="round-button menu-trigger" data-route="menu" aria-label="Menu">☰</button></div>
+      <div class="top-actions"><button class="round-button mobile-search-button" data-route="search" aria-label="Rechercher"><svg class="action-svg" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/></svg></button><button class="round-button desktop-only" id="themeBtn" aria-label="Changer le thème"><svg class="action-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 15.5A8 8 0 0 1 8.5 4 8.5 8.5 0 1 0 20 15.5Z"/></svg></button><button class="round-button menu-trigger" data-route="menu" aria-label="Menu"><svg class="action-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14"/></svg></button></div>
     </header>
 
     <main class="main-layout">
@@ -97,11 +97,11 @@
     </main>
 
     <nav class="bottom-nav">
-      <button data-route="home"><span>⌂</span><small>Accueil</small></button>
-      <button data-route="friends"><span>♧</span><small>Amis</small></button>
-      <button data-route="messages"><span>▤</span><small>Messages</small></button>
-      <button data-route="notifications"><span>♢</span><small>Alertes</small></button>
-      <button data-route="menu"><span>☰</span><small>Menu</small></button>
+      <button data-route="home"><span class="nav-svg"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5.5 9.5V21h13V9.5"/><path d="M9.5 21v-6h5v6"/></svg></span><small>Actualités</small></button>
+      <button data-route="friends"><span class="nav-svg"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3.5 20c.6-3.5 2.6-5.5 5.5-5.5s4.9 2 5.5 5.5"/><path d="M14.5 15c3.2-.2 5.2 1.4 6 4.5"/></svg></span><small>Amis</small></button>
+      <button data-route="messages"><span class="nav-svg"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5h16v11H8l-4 3v-14Z"/><path d="M8 9h8M8 12h5"/></svg></span><small>Messages</small></button>
+      <button data-route="notifications"><span class="nav-svg"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 8h18c0-1-3-1-3-8Z"/><path d="M10 21h4"/></svg></span><small>Alertes</small></button>
+      <button data-route="menu"><span class="nav-svg"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></span><small>Menu</small></button>
     </nav>
   </div>
 
