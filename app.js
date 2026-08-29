@@ -9,7 +9,7 @@
 
   const $ = id => document.getElementById(id);
   const esc = s => String(s ?? "").replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]));
-  const routes = ["home","friends","search","messages","notifications","profile","videos","reels","pages","groups","saved","menu","settings"];
+  const routes = ["home","friends","search","messages","notifications","profile","videos","reels","pages","groups","saved","menu","tafab","settings"];
   const state = {
     user: null, profile: null, route: "home", posts: [], friends: [], stories: [],
     channel: null, theme: localStorage.getItem("tafa-theme") || "dark", entering: false,
@@ -304,6 +304,33 @@
     }
   }
 
+  function tafabPage() {
+    simplePage("Tafaß", `
+      <div class="tafab-hero card-inner">
+        <div class="tafab-brand-mark">T</div>
+        <div class="grow">
+          <h3>Marché & échanges Tafaß</h3>
+          <p class="page-subtitle">Un espace simple pour découvrir une offre et en discuter.</p>
+        </div>
+      </div>
+      <div class="tafab-grid">
+        <article class="tafab-card tafab-discussion">
+          <div class="tafab-card-head"><span class="tafab-icon">💬</span><div><b>Discussion — Vente d’eau</b><small>Échange local</small></div></div>
+          <p><b>Vendeur :</b> Eau potable disponible aujourd’hui. Livraison possible selon le quartier.</p>
+          <p class="muted">Client : « Bonjour, est-ce qu’il reste des bidons d’eau et pouvez-vous livrer ? »</p>
+          <div class="tafab-actions"><button class="primary" data-action="tafab-message">Répondre</button><button class="ghost-action" data-action="tafab-info">Voir les détails</button></div>
+        </article>
+        <article class="tafab-card tafab-ad">
+          <div class="tafab-ad-label">PUBLICATION • Tafaß</div>
+          <h3>💧 Eau potable à vendre</h3>
+          <p>Eau potable propre et prête à la livraison. Contactez le vendeur directement pour connaître le prix, la quantité et la zone desservie.</p>
+          <div class="tafab-price">Disponible aujourd’hui</div>
+          <button class="primary big" data-action="tafab-contact">Contacter le vendeur</button>
+        </article>
+      </div>
+    `);
+  }
+
   function menuPage() {
     const p = state.profile || {};
     const items = [
@@ -346,6 +373,7 @@
     else if (state.route === "profile") await profilePage();
     else if (["videos","reels","pages","groups","saved"].includes(state.route)) await genericListPage(state.route);
     else if (state.route === "menu") menuPage();
+    else if (state.route === "tafab") tafabPage();
     else if (state.route === "settings") settingsPage();
     updateBadges();
   }
@@ -426,6 +454,9 @@
     if (action === "open-conversation") return openConversation(id);
     if (action === "mark-read") return markRead();
     if (action === "theme") return toggleTheme();
+    if (action === "tafab-message") return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><h3>Discussion — Vente d’eau</h3><p class="muted">Vous pouvez demander la disponibilité, le prix et la livraison au vendeur.</p><button class="primary big" data-action="close-modal">Fermer</button></div>`);
+    if (action === "tafab-info") return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><h3>Détails de l’offre</h3><p class="muted">Eau potable disponible aujourd’hui. Les informations de prix, quantité et livraison sont à confirmer avec le vendeur.</p><button class="primary big" data-action="close-modal">Fermer</button></div>`);
+    if (action === "tafab-contact") return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><h3>Contacter le vendeur</h3><p class="muted">Demandez le prix, la quantité disponible et la zone de livraison avant de confirmer votre achat.</p><button class="primary big" data-action="close-modal">Fermer</button></div>`);
     if (action === "setting") return settingInfo(actionEl.dataset.name);
     if (action === "logout") return logout();
     if (action === "close-modal") return closeModal();

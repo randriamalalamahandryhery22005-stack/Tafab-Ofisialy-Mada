@@ -151,3 +151,19 @@ button,small,b,p,h1,h2,h3,label{overflow-wrap:anywhere}
   .bottom-nav button small{font-size:9px}
   .bottom-nav button .nav-svg{width:21px;height:21px}
 }
+
+/* Tafaß bottom tab — dedicated market/community space */
+.bottom-nav .tafab-nav-icon svg{stroke-width:2.1}
+.bottom-nav button[data-route="tafab"] small{font-weight:800;letter-spacing:.1px}
+.tafab-hero{display:flex;align-items:center;gap:14px;padding:18px;margin-bottom:14px;border-radius:20px;background:linear-gradient(135deg,rgba(31,102,255,.16),rgba(93,56,255,.10));border:1px solid rgba(73,133,255,.20)}
+.tafab-brand-mark{width:48px;height:48px;border-radius:15px;display:grid;place-items:center;font-size:25px;font-weight:900;color:#fff;background:linear-gradient(135deg,#1768ff,#7b4dff);box-shadow:0 10px 28px rgba(35,98,255,.28)}
+.tafab-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.tafab-card{padding:18px;border-radius:20px;border:1px solid rgba(255,255,255,.08);background:linear-gradient(145deg,rgba(20,29,53,.96),rgba(10,16,32,.98));box-shadow:0 16px 38px rgba(0,0,0,.18)}
+.tafab-card-head{display:flex;align-items:center;gap:11px;margin-bottom:13px}.tafab-card-head>div{display:flex;flex-direction:column;gap:3px}.tafab-card-head small{color:var(--muted)}
+.tafab-icon{width:40px;height:40px;border-radius:13px;display:grid;place-items:center;background:rgba(37,108,255,.14);font-size:19px}
+.tafab-card p{line-height:1.6}.tafab-ad{position:relative;overflow:hidden}.tafab-ad:before{content:"";position:absolute;inset:-60px auto auto -60px;width:150px;height:150px;border-radius:50%;background:rgba(31,113,255,.13);filter:blur(8px)}
+.tafab-ad>*{position:relative}.tafab-ad-label{font-size:10px;font-weight:800;letter-spacing:1.1px;color:#6ea3ff;margin-bottom:10px}.tafab-ad h3{font-size:20px;margin:0 0 9px}.tafab-price{display:inline-block;margin:5px 0 16px;padding:7px 10px;border-radius:10px;background:rgba(45,205,135,.10);color:#62dfa8;font-size:12px;font-weight:700}
+.tafab-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:15px}.tafab-actions button{min-height:42px}
+body.light .tafab-hero{background:linear-gradient(135deg,#eef5ff,#f7f4ff);border-color:#dce6f5}.light .tafab-card{background:linear-gradient(145deg,#fff,#f5f8fd);border-color:#dbe4ef;box-shadow:0 12px 30px rgba(37,64,105,.08)}
+@media(max-width:720px){.tafab-grid{grid-template-columns:1fr}.tafab-card{padding:16px}.tafab-actions{grid-template-columns:1fr 1fr}.tafab-hero{padding:15px}}
+@media(max-width:380px){.tafab-actions{grid-template-columns:1fr}.tafab-brand-mark{width:44px;height:44px}}
