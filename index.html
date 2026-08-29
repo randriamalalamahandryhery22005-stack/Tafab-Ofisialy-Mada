@@ -3,107 +3,105 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#1877f2">
-  <meta name="description" content="Tafaß — réseau social">
-  <title>Tafaß</title>
+  <meta name="theme-color" content="#070b18">
+  <meta name="description" content="Tafaß — Réseau social">
+  <title>Tafaß — Réseau social</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div id="splash" class="splash">
-    <div class="brand-mark">T</div>
-    <div class="brand-name">Tafaß</div>
-    <div class="loading"><i></i><i></i><i></i><i></i><i></i></div>
+  <div id="splash" class="splash-screen">
+    <div class="splash-orb"></div>
+    <div class="splash-logo">T</div>
+    <div class="splash-brand">Tafaß</div>
+    <div class="splash-tagline">Rapprochons le monde</div>
+    <div class="splash-dots"><i></i><i></i><i></i><i></i></div>
+    <div class="splash-label">SPLASH PREMIUM</div>
   </div>
 
-  <section id="auth" class="auth hidden">
-    <div class="auth-card">
-      <div class="auth-brand"><span class="brand-mark small">T</span><b>Tafaß</b></div>
-      <p class="muted">Connectez-vous à votre réseau.</p>
-      <form id="loginForm">
-        <input id="loginEmail" type="email" placeholder="E-mail" required>
-        <input id="loginPassword" type="password" placeholder="Mot de passe" required>
-        <button class="primary" type="submit">Se connecter</button>
-      </form>
-      <button id="showSignup" class="link-button">Créer un nouveau compte</button>
-      <div id="authMsg" class="auth-msg"></div>
+  <section id="auth" class="auth-screen hidden">
+    <div class="auth-shell">
+      <button class="back-button auth-back hidden" data-auth-back>‹</button>
+      <div class="auth-logo-row"><span class="mini-logo">T</span><strong>Tafaß</strong></div>
+      <div id="loginView" class="auth-view">
+        <div class="auth-title">Connexion</div>
+        <p class="auth-subtitle">Bienvenue sur Tafaß</p>
+        <form id="loginForm" class="auth-form">
+          <label>Adresse e-mail ou téléphone<input id="loginEmail" type="text" autocomplete="username" placeholder="exemple@mail.com" required></label>
+          <label>Mot de passe<div class="password-wrap"><input id="loginPassword" type="password" autocomplete="current-password" placeholder="Votre mot de passe" required><button type="button" class="field-eye" data-password-toggle="loginPassword">◉</button></div></label>
+          <button class="primary big" type="submit">Se connecter</button>
+        </form>
+        <button id="forgotPassword" class="text-link">Mot de passe oublié ?</button>
+        <div class="auth-divider"><span>ou continuer avec</span></div>
+        <div class="social-auth"><button type="button" disabled aria-label="Google">G</button><button type="button" disabled aria-label="Facebook">f</button><button type="button" disabled aria-label="Apple">●</button></div>
+        <div class="auth-bottom">Pas de compte ? <button id="showSignup" class="text-link inline">S'inscrire</button></div>
+        <div id="authMsg" class="auth-message"></div>
+      </div>
+
+      <div id="signupView" class="auth-view hidden">
+        <div class="auth-title">Créer un compte</div>
+        <p class="auth-subtitle">Rejoignez Tafaß aujourd'hui</p>
+        <form id="signupForm" class="auth-form signup-form">
+          <button type="button" id="avatarPick" class="signup-avatar"><span>⌾</span><small>Ajouter une photo</small></button>
+          <div class="grid2"><label>Prénom<input id="firstName" placeholder="Votre prénom" required></label><label>Nom<input id="lastName" placeholder="Votre nom" required></label></div>
+          <label>Adresse e-mail<input id="signupEmail" type="email" autocomplete="email" placeholder="Entrez votre e-mail" required></label>
+          <label>Téléphone<div class="phone-row"><select id="phoneCode"><option value="+261">🇲🇬 +261</option><option value="+33">🇫🇷 +33</option><option value="+1">🇺🇸 +1</option></select><input id="phone" type="tel" placeholder="Entrez votre numéro"></div></label>
+          <label>Mot de passe<div class="password-wrap"><input id="signupPassword" type="password" minlength="6" autocomplete="new-password" placeholder="Choisissez un mot de passe" required><button type="button" class="field-eye" data-password-toggle="signupPassword">◉</button></div></label>
+          <div class="grid2"><label>Date de naissance<input id="birth" type="date"></label><label>Pays<select id="country"><option value="Madagascar">Madagascar</option><option value="France">France</option><option value="États-Unis">États-Unis</option><option value="Autre">Autre</option></select></label></div>
+          <label>Pseudo <span class="muted-inline">(optionnel)</span><input id="username" placeholder="@votre_pseudo"></label>
+          <label class="check-row"><input id="terms" type="checkbox" required><span>J'accepte les conditions d'utilisation et la politique de confidentialité.</span></label>
+          <button class="primary big" type="submit">S'inscrire</button>
+        </form>
+        <div class="auth-bottom">Déjà un compte ? <button id="showLogin" class="text-link inline">Se connecter</button></div>
+        <div id="signupMsg" class="auth-message"></div>
+      </div>
     </div>
   </section>
 
-  <section id="signup" class="auth hidden">
-    <div class="auth-card">
-      <div class="auth-brand"><span class="brand-mark small">T</span><b>Créer votre compte</b></div>
-      <form id="signupForm">
-        <div class="grid2">
-          <input id="firstName" placeholder="Prénom" required>
-          <input id="lastName" placeholder="Nom" required>
-        </div>
-        <input id="signupEmail" type="email" placeholder="E-mail" required>
-        <input id="signupPassword" type="password" minlength="6" placeholder="Mot de passe (6 caractères min.)" required>
-        <input id="username" placeholder="@pseudo (optionnel)">
-        <button class="primary" type="submit">Créer mon compte</button>
-      </form>
-      <button id="showLogin" class="link-button">J'ai déjà un compte</button>
-      <div id="signupMsg" class="auth-msg"></div>
-    </div>
-  </section>
-
-  <div id="app" class="hidden">
+  <div id="app" class="app-shell hidden">
     <header class="topbar">
-      <div class="top-left">
-        <button class="logo-btn" data-route="home"><span class="brand-mark mini">T</span><span class="logo-text">Tafaß</span></button>
-        <div class="searchbox"><span>⌕</span><input id="globalSearch" placeholder="Rechercher sur Tafaß"></div>
-      </div>
-      <nav class="topnav">
-        <button data-route="home">⌂<span>Actualités</span></button>
-        <button data-route="friends">♙<span>Amis</span></button>
-        <button data-route="messages">▣<span>Messages</span><b id="msgBadge" class="badge hidden">0</b></button>
-        <button data-route="videos">▶<span>Vidéos</span></button>
-        <button data-route="reels">◉<span>Reels</span></button>
+      <div class="top-left"><button class="logo-button" data-route="home"><span class="mini-logo">T</span><strong>Tafaß</strong></button><div class="desktop-search searchbox"><span class="icon">⌕</span><input id="globalSearch" placeholder="Rechercher sur Tafaß"></div></div>
+      <nav class="desktop-nav" aria-label="Navigation principale">
+        <button data-route="home" data-label="Actualités"><span>⌂</span><small>Actualités</small></button>
+        <button data-route="friends" data-label="Amis"><span>♧</span><small>Amis</small></button>
+        <button data-route="messages" data-label="Messages"><span>▤</span><small>Messages</small><b id="msgBadge" class="badge hidden">0</b></button>
+        <button data-route="videos" data-label="Vidéos"><span>▷</span><small>Vidéos</small></button>
+        <button data-route="reels" data-label="Reels"><span>◉</span><small>Reels</small></button>
       </nav>
-      <div class="top-actions">
-        <button data-route="notifications" class="icon-btn">♢<b id="notifBadge" class="badge hidden">0</b></button>
-        <button id="themeBtn" class="icon-btn" title="Mode sombre">☾</button>
-        <button data-route="menu" class="icon-btn">☰</button>
-        <button data-route="profile" id="avatarBtn" class="avatar avatar-sm">T</button>
-      </div>
+      <div class="top-actions"><button class="round-button mobile-search-button" data-route="search">⌕</button><button class="round-button" data-route="notifications">♢<b id="notifBadge" class="badge hidden">0</b></button><button class="round-button desktop-only" id="themeBtn">☾</button><button class="round-button" data-route="menu">☰</button><button id="avatarBtn" class="avatar avatar-sm" data-route="profile">T</button></div>
     </header>
 
-    <main class="layout">
+    <main class="main-layout">
       <aside class="sidebar left-sidebar">
-        <button data-route="profile" class="side-profile"><span id="sideAvatar" class="avatar">T</span><b id="sideName">Mon profil</b></button>
-        <button data-route="home">⌂ <span>Actualités</span></button>
-        <button data-route="friends">♙ <span>Amis</span></button>
-        <button data-route="messages">▣ <span>Messages</span></button>
-        <button data-route="notifications">♢ <span>Notifications</span></button>
-        <button data-route="pages">▣ <span>Pages</span></button>
-        <button data-route="groups">◎ <span>Groupes</span></button>
-        <button data-route="videos">▶ <span>Vidéos</span></button>
-        <button data-route="reels">◉ <span>Reels</span></button>
-        <button data-route="saved">🔖 <span>Enregistrements</span></button>
-        <button data-route="menu">☰ <span>Menu</span></button>
+        <button data-route="profile" class="profile-shortcut"><span id="sideAvatar" class="avatar">T</span><span><b id="sideName">Mon profil</b><small>Voir mon profil</small></span></button>
+        <button data-route="home"><span class="nav-ico">⌂</span>Actualités</button>
+        <button data-route="friends"><span class="nav-ico">♧</span>Amis</button>
+        <button data-route="messages"><span class="nav-ico">▤</span>Messages</button>
+        <button data-route="notifications"><span class="nav-ico">♢</span>Notifications</button>
+        <button data-route="pages"><span class="nav-ico">▣</span>Pages</button>
+        <button data-route="groups"><span class="nav-ico">◎</span>Groupes</button>
+        <button data-route="videos"><span class="nav-ico">▷</span>Vidéos</button>
+        <button data-route="reels"><span class="nav-ico">◉</span>Reels</button>
+        <button data-route="saved"><span class="nav-ico">♡</span>Enregistrements</button>
+        <button data-route="menu"><span class="nav-ico">☰</span>Menu</button>
       </aside>
 
       <section id="content" class="content"></section>
 
       <aside class="sidebar right-sidebar">
-        <div class="card">
-          <div class="card-title"><b>Suggestions</b><button class="text-btn" data-route="friends">Voir tout</button></div>
-          <div id="suggestions"></div>
-        </div>
-        <div class="card">
-          <div class="card-title"><b>À propos de Tafaß</b></div>
-          <p class="muted">Publiez, échangez et construisez votre communauté.</p>
-          <small>© 2026 Tafaß</small>
-        </div>
+        <div class="panel"><div class="panel-title"><b>Suggestions pour vous</b><button class="text-button" data-route="friends">Voir tout</button></div><div id="suggestions"></div></div>
+        <div class="panel"><div class="panel-title"><b>À propos de Tafaß</b></div><p class="muted">Votre réseau. Votre communauté.</p><small class="muted">© 2026 Tafaß</small></div>
       </aside>
     </main>
 
-    <nav class="bottomnav">
-      <button data-route="home">⌂<small>Actualités</small></button>
-      <button data-route="friends">♙<small>Amis</small></button>
-      <button data-route="messages">▣<small>Messages</small></button>
-      <button data-route="notifications">♢<small>Alertes</small></button>
-      <button data-route="menu">☰<small>Menu</small></button>
+    <nav class="bottom-nav">
+      <button data-route="home"><span>⌂</span><small>Accueil</small></button>
+      <button data-route="friends"><span>♧</span><small>Amis</small></button>
+      <button data-route="messages"><span>▤</span><small>Messages</small></button>
+      <button data-route="notifications"><span>♢</span><small>Alertes</small></button>
+      <button data-route="menu"><span>☰</span><small>Menu</small></button>
     </nav>
   </div>
 
