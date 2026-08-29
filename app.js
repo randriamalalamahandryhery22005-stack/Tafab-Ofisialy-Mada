@@ -178,7 +178,7 @@
     const sent = await sb.from("friend_requests").select("receiver_id,status").eq("sender_id", state.user.id);
     const sentIds = new Set((sent.data || []).map(x => x.receiver_id));
     const pending = new Set((incoming.data || []).map(x => x.sender_id));
-    $("content").innerHTML = `<div class="card"><div class="page-header"><h2>Amis</h2><span class="muted">${people.length} personnes</span></div><div class="friends-filter"><button class="active">Suggestions</button><button>Amis</button><button>Demandes</button></div>${pending.size ? `<h3 class="menu-section-title">Demandes reçues</h3>${people.filter(p=>pending.has(p.id)).map(p=>friendRow(p,"incoming")).join("")}` : ""}<h3 class="menu-section-title">Suggestions pour vous</h3>${people.map(p=>friendRow(p,sentIds.has(p.id)?"sent":"add")).join("")}</div>`;
+    $("content").innerHTML = `<section class="clean-page friends-page"><div class="page-header clean-page-header"><div><h2>Amis</h2><p class="page-kicker">Votre réseau, vos demandes et vos suggestions</p></div><span class="count-label">${people.length} personnes</span></div><div class="friends-filter clean-filter"><button class="active">Suggestions</button><button>Amis</button><button>Demandes</button></div>${pending.size ? `<div class="clean-section"><h3 class="menu-section-title">Demandes reçues</h3>${people.filter(p=>pending.has(p.id)).map(p=>friendRow(p,"incoming")).join("")}</div>` : ""}<div class="clean-section"><h3 class="menu-section-title">Suggestions pour vous</h3>${people.map(p=>friendRow(p,sentIds.has(p.id)?"sent":"add")).join("")}</div></section>`;
   }
   function friendRow(p, type) {
     const action = type === "sent" ? `<button class="ghost-action" disabled>Envoyée</button>` : type === "incoming" ? `<div><button class="small-action" data-action="accept-friend" data-id="${esc(p.id)}">Confirmer</button><button class="ghost-action" data-action="decline-friend" data-id="${esc(p.id)}">Supprimer</button></div>` : `<button class="small-action" data-action="add-friend" data-id="${esc(p.id)}">Ajouter</button>`;
@@ -251,11 +251,11 @@
       </button>`);
     }
 
-    $("content").innerHTML = `<div class="card">
-      <div class="page-header"><h2>Messages</h2><button class="round-button" data-action="new-message" aria-label="Nouvelle conversation">＋</button></div>
-      <div class="searchbox" style="width:100%;margin-bottom:10px"><span class="icon">⌕</span><input id="messageSearch" placeholder="Rechercher une conversation"></div>
-      <div id="conversationList">${cards.join("") || `<div class="empty">Aucune conversation.<br><button class="text-button" data-action="new-message">Commencer une discussion</button></div>`}</div>
-    </div>`;
+    $("content").innerHTML = `<section class="clean-page messages-page">
+      <div class="page-header clean-page-header"><div><h2>Messages</h2><p class="page-kicker">Vos conversations, simplement et en temps réel</p></div><button class="round-button clean-new-button" data-action="new-message" aria-label="Nouvelle conversation">＋</button></div>
+      <div class="clean-search searchbox"><span class="icon">⌕</span><input id="messageSearch" placeholder="Rechercher une conversation"></div>
+      <div id="conversationList" class="clean-list">${cards.join("") || `<div class="empty">Aucune conversation.<br><button class="text-button" data-action="new-message">Commencer une discussion</button></div>`}</div>
+    </section>`;
 
     $("messageSearch")?.addEventListener("input", e => {
       const q = e.target.value.trim().toLowerCase();
@@ -287,7 +287,7 @@
     const ids = [...new Set((msgs || []).map(m => m.sender_id))];
     const { data: profiles } = ids.length ? await sb.from("profiles").select("*").in("id", ids) : { data: [] };
     const map = new Map((profiles || []).map(p => [p.id, p]));
-    $("content").innerHTML = `<div class="card"><div class="page-header"><button class="text-button" data-route="messages">‹ Messages</button><h2 style="margin:auto">Discussion</h2><span></span></div><div class="message-list">${(msgs||[]).map(m=>`<div class="message ${m.sender_id===state.user.id?"mine":""}"><div>${esc(m.content)}</div><small>${timeAgo(m.created_at)}</small></div>`).join("")||`<div class="empty">Dites bonjour 👋</div>`}</div><form id="messageForm" class="comment-form"><input id="messageText" placeholder="Écrire un message..." required><button>Envoyer</button></form></div>`;
+    $("content").innerHTML = `<section class="clean-page messages-page conversation-page"><div class="page-header clean-page-header"><button class="text-button" data-route="messages">‹ Messages</button><h2>Discussion</h2><span></span></div><div class="message-list clean-message-list">${(msgs||[]).map(m=>`<div class="message ${m.sender_id===state.user.id?"mine":""}"><div>${esc(m.content)}</div><small>${timeAgo(m.created_at)}</small></div>`).join("")||`<div class="empty">Dites bonjour 👋</div>`}</div><form id="messageForm" class="comment-form clean-message-form"><input id="messageText" placeholder="Écrire un message..." required><button>Envoyer</button></form></section>`;
     $("messageForm").addEventListener("submit", async e => { e.preventDefault(); const text=$("messageText").value.trim(); if(!text)return; const r=await sb.from("messages").insert({conversation_id:id,sender_id:state.user.id,content:text}); if(r.error)toast(r.error.message); else {$("messageText").value=""; await openConversation(id);} });
   }
 
@@ -300,9 +300,9 @@
     const { data: actors } = actorIds.length ? await sb.from("profiles").select("*").in("id", actorIds) : { data: [] };
     const amap = new Map((actors || []).map(p => [p.id,p]));
 
-    $("content").innerHTML = `<div class="card"><div class="page-header"><h2>Alertes</h2>
-      <button class="text-button" data-action="mark-read">Tout lire</button></div>
-      <div>${(data || []).map(n => {
+    $("content").innerHTML = `<section class="clean-page alerts-page"><div class="page-header clean-page-header"><div><h2>Alertes</h2><p class="page-kicker">Les activités importantes de votre compte</p></div>
+      <button class="text-button clean-read-button" data-action="mark-read">Tout lire</button></div>
+      <div class="clean-list">${(data || []).map(n => {
         const actor = amap.get(n.actor_id);
         return `<div class="list-row ${n.is_read ? "" : "unread"}" data-notification="${esc(n.id)}">
           ${avatarHTML(actor || null)}
@@ -310,7 +310,7 @@
           <small>${esc(n.message || "Vous avez une nouvelle notification.")} · ${timeAgo(n.created_at)}</small></div>
           ${n.is_read ? "" : '<span class="blue-dot"></span>'}
         </div>`;
-      }).join("") || `<div class="empty">Aucune alerte pour le moment.</div>`}</div></div>`;
+      }).join("") || `<div class="empty">Aucune alerte pour le moment.</div>`}</div></section>`;
   }
 
   async function createNotification(userId, type, title, message, entityType = "", entityId = null) {
@@ -400,7 +400,7 @@
     if (listR.error) return simplePage("Tafaß", `<div class="empty">${esc(listR.error.message)}</div>`);
     const listings=listR.data||[], ads=adsR.data||[];
     simplePage("Tafaß", `
-      <div class="tafab-hero card-inner premium-hero">
+      <div class="tafab-hero premium-hero clean-tafab-hero">
         <div class="tafab-brand-mark">T</div><div class="grow"><span class="eyebrow">TAFAß • MARCHÉ</span><h3>Vente & échanges</h3><p class="page-subtitle">Des offres publiées par les membres, synchronisées en temps réel.</p></div>
       </div>
       <div class="page-header-actions"><button class="primary" data-action="create-tafab-listing">＋ Publier une offre</button><button class="ghost-action" data-action="create-tafab-ad">＋ Publier une publicité</button></div>
@@ -505,7 +505,12 @@
     closeModal(); toast("Message envoyé en temps réel");
   }
 
-  function simplePage(title, body) { $("content").innerHTML = `<div class="card"><div class="page-header"><h2>${esc(title)}</h2></div>${body}</div>`; }
+  function simplePage(title, body) {
+    const clean = ["Amis","Messages","Alertes","Tafaß","Menu"].includes(title);
+    $("content").innerHTML = clean
+      ? `<section class="clean-page clean-page-shell"><div class="page-header clean-page-header"><h2>${esc(title)}</h2></div>${body}</section>`
+      : `<div class="card"><div class="page-header"><h2>${esc(title)}</h2></div>${body}</div>`;
+  }
   function openModal(html) { $("modal").className = "modal"; $("modal").innerHTML = html; }
   function closeModal() { $("modal").className = "modal hidden"; $("modal").innerHTML = ""; }
 
