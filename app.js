@@ -346,12 +346,17 @@
     const p = state.profile || {}, mine = state.posts.filter(x => x.user_id === state.user.id);
     const photos = mine.filter(x => x.media_url && x.media_type === "image");
     const cover = p.cover_url ? `style="background-image:url('${esc(p.cover_url)}')"` : "";
+    const [friendsCountR, followersCountR] = await Promise.all([
+      sb.from("friendships").select("id", { count:"exact", head:true }).eq("user_id", state.user.id),
+      sb.from("follows").select("id", { count:"exact", head:true }).eq("following_id", state.user.id)
+    ]);
+    const friendsCount = friendsCountR.count || 0, followersCount = followersCountR.count || 0;
     let tabBody = "";
     if (tab === "photos") tabBody = `<div class="card"><div class="photo-grid">${photos.map(x=>`<img src="${esc(x.media_url)}" alt="Photo">`).join("") || `<div class="empty" style="grid-column:1/-1">Aucune photo publiée.</div>`}</div></div>`;
     else if (tab === "friends") tabBody = `<div class="card"><div class="list-row">${avatarHTML(p)}<div class="grow"><b>Votre réseau</b><small>Découvrez vos amis et les personnes que vous suivez.</small></div></div><button class="primary big" data-route="friends">Voir mes amis</button></div>`;
     else if (tab === "videos") tabBody = `<div class="card"><div class="empty">${mine.some(x=>x.media_type==="video"||x.media_type==="reel")?"Vos vidéos sont disponibles ici.":"Aucune vidéo publiée."}</div></div>`;
     else tabBody = `<div class="card"><div class="profile-post-list">${mine.length?mine.map(x=>`<div class="list-row"><div class="grow"><b>${esc(x.content || "Publication avec média")}</b><small>${timeAgo(x.created_at)}</small></div></div>`).join(""):`<div class="empty">Aucune publication.</div>`}</div></div>`;
-    $("content").innerHTML = `<div class="hero card" style="padding:0;overflow:hidden"><div class="profile-cover" ${cover}></div><div class="profile-main">${avatarHTML(p,"avatar profile-avatar")}<h2 class="profile-name">${esc(nameOf(p))}</h2><div class="profile-handle">@${esc(p.username||"tafa_user")}</div><p class="profile-bio">${esc(p.bio || "Développeur | Passionné | Rêveur")}</p><div class="profile-actions"><button class="primary" data-action="edit-profile">Modifier le profil</button><button class="ghost-action" data-action="profile-more">•••</button></div><div class="profile-stats"><div class="profile-stat"><b>${mine.length}</b><small>Publications</small></div><div class="profile-stat"><b>1,2 K</b><small>Amis</small></div><div class="profile-stat"><b>3,4 K</b><small>Abonnés</small></div></div><div class="profile-info"><div>⌂ ${esc(p.location || "Toamasina, Madagascar")}</div><div>◷ Rejoint Tafaß en 2024</div></div><div class="profile-tabs">${[["posts","Publications"],["photos","Photos"],["videos","Vidéos"],["friends","Amis"]].map(([k,v])=>`<button class="${tab===k?"active":""}" data-action="profile-tab" data-tab="${k}">${v}</button>`).join("")}</div></div></div>${tabBody}`;
+    $("content").innerHTML = `<div class="hero card" style="padding:0;overflow:hidden"><div class="profile-cover" ${cover}></div><div class="profile-main">${avatarHTML(p,"avatar profile-avatar")}<h2 class="profile-name">${esc(nameOf(p))}</h2><div class="profile-handle">${p.username ? "@"+esc(p.username) : ""}</div><p class="profile-bio">${esc(p.bio || "")}</p><div class="profile-actions"><button class="primary" data-action="edit-profile">Modifier le profil</button><button class="ghost-action" data-action="profile-more">•••</button></div><div class="profile-stats"><div class="profile-stat"><b>${mine.length}</b><small>Publications</small></div><div class="profile-stat"><b>${friendsCount}</b><small>Amis</small></div><div class="profile-stat"><b>${followersCount}</b><small>Abonnés</small></div></div><div class="profile-info"><div>⌂ ${esc(p.location || "")}</div><div>◷ ${p.created_at ? "Membre depuis " + new Date(p.created_at).toLocaleDateString("fr-FR", {month:"long", year:"numeric"}) : ""}</div></div><div class="profile-tabs">${[["posts","Publications"],["photos","Photos"],["videos","Vidéos"],["friends","Amis"]].map(([k,v])=>`<button class="${tab===k?"active":""}" data-action="profile-tab" data-tab="${k}">${v}</button>`).join("")}</div></div></div>${tabBody}`;
   }
 
   function editProfile() {
@@ -388,49 +393,22 @@
   }
 
   async function tafabPage() {
-    let { data: listings } = await sb.from("tafab_listings").select("*")
-      .eq("status","active").order("created_at",{ascending:false}).limit(20);
-    const { data: ads } = await sb.from("tafab_ads").select("*")
-      .eq("status","active").order("created_at",{ascending:false}).limit(10);
-
-    // Crée une annonce réelle de démonstration uniquement si l’espace est vide.
-    // Elle appartient à l’utilisateur connecté et peut être modifiée/supprimée ensuite.
-    if (!(listings || []).length) {
-      const r = await sb.from("tafab_listings").insert({
-        seller_id: state.user.id,
-        title: "Eau potable à vendre",
-        description: "Eau potable disponible aujourd’hui. Contact et livraison à confirmer avec le vendeur.",
-        category: "eau",
-        currency: "MGA",
-        status: "active"
-      }).select().single();
-      if (!r.error) { listings = [r.data]; }
-    }
-
+    const [listR, adsR] = await Promise.all([
+      sb.from("tafab_listings").select("*").eq("status","active").order("created_at",{ascending:false}).limit(30),
+      sb.from("tafab_ads").select("*").eq("status","active").order("created_at",{ascending:false}).limit(20)
+    ]);
+    if (listR.error) return simplePage("Tafaß", `<div class="empty">${esc(listR.error.message)}</div>`);
+    const listings=listR.data||[], ads=adsR.data||[];
     simplePage("Tafaß", `
-      <div class="tafab-hero card-inner">
-        <div class="tafab-brand-mark">T</div>
-        <div class="grow"><h3>Marché & échanges Tafaß</h3>
-        <p class="page-subtitle">Des annonces réelles et des échanges directs entre membres.</p></div>
+      <div class="tafab-hero card-inner premium-hero">
+        <div class="tafab-brand-mark">T</div><div class="grow"><span class="eyebrow">TAFAß • MARCHÉ</span><h3>Vente & échanges</h3><p class="page-subtitle">Des offres publiées par les membres, synchronisées en temps réel.</p></div>
       </div>
+      <div class="page-header-actions"><button class="primary" data-action="create-tafab-listing">＋ Publier une offre</button><button class="ghost-action" data-action="create-tafab-ad">＋ Publier une publicité</button></div>
       <div class="tafab-grid">
-        ${(listings || []).map(x => `<article class="tafab-card tafab-ad">
-          <div class="tafab-ad-label">ANNONCE • TAFAß</div>
-          <h3>💧 ${esc(x.title)}</h3>
-          <p>${esc(x.description || "")}</p>
-          <div class="tafab-price">${x.price != null ? esc(x.price) + " " + esc(x.currency || "MGA") : "Prix à confirmer"}</div>
-          <div class="tafab-actions">
-            <button class="primary" data-action="tafab-contact" data-id="${esc(x.id)}">Contacter</button>
-            <button class="ghost-action" data-action="tafab-info" data-id="${esc(x.id)}">Détails</button>
-          </div>
-        </article>`).join("")}
-        ${(ads || []).map(a => `<article class="tafab-card tafab-discussion">
-          <div class="tafab-card-head"><span class="tafab-icon">📢</span><div><b>${esc(a.title)}</b><small>Publication sponsorisée</small></div></div>
-          <p>${esc(a.description || "")}</p>
-          <button class="primary big" data-action="tafab-ad" data-id="${esc(a.id)}">Voir la publication</button>
-        </article>`).join("")}
-      </div>
-    `);
+        ${listings.map(x=>`<article class="tafab-card tafab-ad"><div class="tafab-ad-label">OFFRE RÉELLE • TAFAß</div><h3>${esc(x.title)}</h3><p>${esc(x.description||"")}</p><div class="tafab-meta-line">${esc(x.location||"")} ${x.location&&x.price!=null?'• ':''}${x.price!=null?esc(x.price)+" "+esc(x.currency||"MGA"):""}</div><div class="tafab-actions"><button class="primary" data-action="tafab-contact" data-id="${esc(x.id)}">Contacter</button><button class="ghost-action" data-action="tafab-info" data-id="${esc(x.id)}">Détails</button></div></article>`).join("")}
+        ${ads.map(a=>`<article class="tafab-card tafab-discussion"><div class="tafab-card-head"><span class="tafab-icon">📢</span><div><b>${esc(a.title)}</b><small>Publicité Tafaß</small></div></div><p>${esc(a.description||"")}</p>${a.image_url?`<img class="post-media" src="${esc(a.image_url)}" alt="Publicité">`:""}<button class="primary big" data-action="tafab-ad" data-id="${esc(a.id)}">Voir la publicité</button></article>`).join("")}
+        ${!listings.length&&!ads.length?`<div class="empty tafab-empty" style="grid-column:1/-1"><b>Aucune offre ni publicité pour le moment.</b><small>Les contenus apparaîtront ici dès qu'un membre en publiera un.</small></div>`:""}
+      </div>`);
   }
 
   function menuPage() {
@@ -480,6 +458,51 @@
       "Recherche":"Les recherches effectuées peuvent être enregistrées dans votre historique de recherche."
     };
     openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><h3>${esc(name)}</h3><p class="muted" style="font-size:12px;line-height:1.65">${esc(bodies[name] || "Option Tafaß")}</p><button class="primary big" data-action="close-modal">Fermer</button></div>`);
+  }
+
+  async function logActivity(action_type, description, entity_type = "", entity_id = null) {
+    if (!state.user) return;
+    await sb.from("activity_history").insert({ user_id: state.user.id, action_type, description, entity_type, entity_id });
+  }
+
+  function createTafabListing() {
+    openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • OFFRE</span><h3>Publier une offre</h3><div class="form-stack"><label>Titre<input id="listingTitle" placeholder="Ex. Eau potable disponible" required></label><label>Description<textarea id="listingDesc" placeholder="Décrivez l'offre, la quantité et la livraison"></textarea></label><div class="grid2"><label>Prix<input id="listingPrice" type="number" min="0" placeholder="Prix"></label><label>Devise<select id="listingCurrency"><option value="MGA">MGA</option><option value="EUR">EUR</option><option value="USD">USD</option></select></label></div><label>Lieu<input id="listingLocation" placeholder="Ville / zone"></label><label>Téléphone<input id="listingPhone" type="tel" placeholder="Numéro de contact"></label><button class="primary big" data-action="save-tafab-listing">Publier</button></div></div>`);
+  }
+
+  async function saveTafabListing() {
+    const title=$("listingTitle")?.value.trim();
+    if (!title) return toast("Ajoutez un titre.");
+    const r=await sb.from("tafab_listings").insert({ seller_id:state.user.id, title, description:$("listingDesc")?.value.trim()||"", category:"eau", price:$("listingPrice")?.value?Number($("listingPrice").value):null, currency:$("listingCurrency")?.value||"MGA", location:$("listingLocation")?.value.trim()||null, phone:$("listingPhone")?.value.trim()||null, status:"active" }).select().single();
+    if(r.error) return toast(r.error.message);
+    await logActivity("tafab_listing_created", "Offre Tafaß publiée", "tafab_listing", r.data.id);
+    closeModal(); toast("Offre publiée"); await tafabPage();
+  }
+
+  function createTafabAd() {
+    openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • PUBLICITÉ</span><h3>Publier une publicité</h3><div class="form-stack"><label>Titre<input id="adTitle" placeholder="Titre de la publicité" required></label><label>Description<textarea id="adDesc" placeholder="Votre message publicitaire"></textarea></label><label>Image URL <span class="muted-inline">(optionnel)</span><input id="adImage" type="url" placeholder="https://..."></label><label>Lien <span class="muted-inline">(optionnel)</span><input id="adUrl" type="url" placeholder="https://..."></label><button class="primary big" data-action="save-tafab-ad">Publier</button></div></div>`);
+  }
+
+  async function saveTafabAd() {
+    const title=$("adTitle")?.value.trim();
+    if(!title) return toast("Ajoutez un titre.");
+    const r=await sb.from("tafab_ads").insert({ owner_id:state.user.id, title, description:$("adDesc")?.value.trim()||"", image_url:$("adImage")?.value.trim()||null, target_url:$("adUrl")?.value.trim()||null, status:"active" }).select().single();
+    if(r.error) return toast(r.error.message);
+    await logActivity("tafab_ad_created", "Publicité Tafaß publiée", "tafab_ad", r.data.id);
+    closeModal(); toast("Publicité publiée"); await tafabPage();
+  }
+
+  async function contactTafabListing(id) {
+    const {data:x,error}=await sb.from("tafab_listings").select("*").eq("id",id).maybeSingle();
+    if(error||!x) return toast(error?.message||"Offre introuvable");
+    openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • CONTACT</span><h3>${esc(x.title)}</h3><p class="muted">${esc(x.description||"")}</p><div class="form-stack"><label>Votre message<textarea id="listingMessage" placeholder="Bonjour, je souhaite connaître la disponibilité et les conditions..."></textarea></label><button class="primary big" data-action="send-tafab-message" data-id="${esc(x.id)}">Envoyer</button>${x.phone?`<small class="muted">Contact vendeur : ${esc(x.phone)}</small>`:""}</div></div>`);
+  }
+
+  async function sendTafabMessage(id) {
+    const message=$("listingMessage")?.value.trim(); if(!message)return toast("Écrivez un message.");
+    const r=await sb.from("tafab_listing_messages").insert({listing_id:id,sender_id:state.user.id,message});
+    if(r.error)return toast(r.error.message);
+    await logActivity("tafab_message_sent", "Message envoyé sur une offre Tafaß", "tafab_listing", id);
+    closeModal(); toast("Message envoyé en temps réel");
   }
 
   function simplePage(title, body) { $("content").innerHTML = `<div class="card"><div class="page-header"><h2>${esc(title)}</h2></div>${body}</div>`; }
@@ -595,9 +618,14 @@
     if (action === "open-conversation") return openConversation(id);
     if (action === "mark-read") return markRead();
     if (action === "theme") return toggleTheme();
-    if (action === "tafab-message") return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><h3>Discussion — Vente d’eau</h3><p class="muted">Vous pouvez demander la disponibilité, le prix et la livraison au vendeur.</p><button class="primary big" data-action="close-modal">Fermer</button></div>`);
-    if (action === "tafab-info") return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><h3>Détails de l’offre</h3><p class="muted">Eau potable disponible aujourd’hui. Les informations de prix, quantité et livraison sont à confirmer avec le vendeur.</p><button class="primary big" data-action="close-modal">Fermer</button></div>`);
-    if (action === "tafab-contact") return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><h3>Contacter le vendeur</h3><p class="muted">Demandez le prix, la quantité disponible et la zone de livraison avant de confirmer votre achat.</p><button class="primary big" data-action="close-modal">Fermer</button></div>`);
+    if (action === "create-tafab-listing") return createTafabListing();
+    if (action === "save-tafab-listing") return saveTafabListing();
+    if (action === "create-tafab-ad") return createTafabAd();
+    if (action === "save-tafab-ad") return saveTafabAd();
+    if (action === "tafab-message") return contactTafabListing(id);
+    if (action === "tafab-contact") return contactTafabListing(id);
+    if (action === "send-tafab-message") return sendTafabMessage(id);
+    if (action === "tafab-info") { const x=(await sb.from("tafab_listings").select("*").eq("id",id).maybeSingle()).data; if(!x)return toast("Offre introuvable"); return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">OFFRE TAFAß</span><h3>${esc(x.title)}</h3><p>${esc(x.description||"")}</p><p class="muted">${esc(x.location||"")} ${x.price!=null?"• "+esc(x.price)+" "+esc(x.currency||"MGA"):""}</p><button class="primary big" data-action="tafab-contact" data-id="${esc(x.id)}">Contacter le vendeur</button></div>`); }
     if (action === "setting") return settingInfo(actionEl.dataset.name);
     if (action === "notifications-settings") {
       const cfg = (await sb.from("user_settings").select("notifications_enabled").eq("user_id",state.user.id).maybeSingle()).data;

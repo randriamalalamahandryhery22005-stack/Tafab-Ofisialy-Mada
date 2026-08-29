@@ -310,14 +310,61 @@ create policy follows_insert on public.follows for insert to authenticated with 
 create policy follows_delete on public.follows for delete to authenticated using(follower_id=auth.uid());
 
 -- Messages
-create policy conversations_select on public.conversations for select to authenticated using(created_by=auth.uid() or exists(select 1 from public.conversation_members cm where cm.conversation_id=id and cm.user_id=auth.uid()));
-create policy conversations_insert on public.conversations for insert to authenticated with check(created_by=auth.uid());
-create policy members_select on public.conversation_members for select to authenticated using(user_id=auth.uid() or exists(select 1 from public.conversation_members cm where cm.conversation_id=conversation_id and cm.user_id=auth.uid()));
-create policy members_insert on public.conversation_members for insert to authenticated with check(user_id=auth.uid());
-create policy members_delete on public.conversation_members for delete to authenticated using(user_id=auth.uid());
-create policy messages_select on public.messages for select to authenticated using(sender_id=auth.uid() or exists(select 1 from public.conversation_members cm where cm.conversation_id=messages.conversation_id and cm.user_id=auth.uid()));
-create policy messages_insert on public.messages for insert to authenticated with check(sender_id=auth.uid());
-create policy messages_update on public.messages for update to authenticated using(sender_id=auth.uid());
+-- IMPORTANT: conversation_members policies must not query conversation_members directly,
+-- otherwise PostgreSQL detects infinite RLS recursion. Use SECURITY DEFINER helpers.
+create or replace function public.tafa_is_conversation_member(p_conversation_id uuid, p_user_id uuid default auth.uid())
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select exists(
+    select 1 from public.conversation_members cm
+    where cm.conversation_id = p_conversation_id
+      and cm.user_id = p_user_id
+  );
+$$;
+
+create or replace function public.tafa_is_group_member(p_group_id uuid, p_user_id uuid default auth.uid())
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select exists(
+    select 1 from public.group_members gm
+    where gm.group_id = p_group_id
+      and gm.user_id = p_user_id
+  );
+$$;
+
+grant execute on function public.tafa_is_conversation_member(uuid,uuid) to authenticated;
+grant execute on function public.tafa_is_group_member(uuid,uuid) to authenticated;
+
+create policy conversations_select on public.conversations
+for select to authenticated
+using(created_by=auth.uid() or public.tafa_is_conversation_member(id, auth.uid()));
+create policy conversations_insert on public.conversations
+for insert to authenticated
+with check(created_by=auth.uid());
+create policy members_select on public.conversation_members
+for select to authenticated
+using(user_id=auth.uid() or public.tafa_is_conversation_member(conversation_id, auth.uid()));
+create policy members_insert on public.conversation_members
+for insert to authenticated
+with check(user_id=auth.uid() or public.tafa_is_conversation_member(conversation_id, auth.uid()));
+create policy members_delete on public.conversation_members
+for delete to authenticated
+using(user_id=auth.uid());
+create policy messages_select on public.messages
+for select to authenticated
+using(sender_id=auth.uid() or public.tafa_is_conversation_member(conversation_id, auth.uid()));
+create policy messages_insert on public.messages
+for insert to authenticated
+with check(sender_id=auth.uid() and public.tafa_is_conversation_member(conversation_id, auth.uid()));
+create policy messages_update on public.messages
+for update to authenticated
+using(sender_id=auth.uid());
 
 -- Notifications
 create policy notifications_select on public.notifications for select to authenticated using(user_id=auth.uid());
@@ -329,9 +376,15 @@ create policy groups_select on public.groups for select to authenticated using(p
 create policy groups_insert on public.groups for insert to authenticated with check(owner_id=auth.uid());
 create policy groups_update on public.groups for update to authenticated using(owner_id=auth.uid());
 create policy groups_delete on public.groups for delete to authenticated using(owner_id=auth.uid());
-create policy group_members_select on public.group_members for select to authenticated using(user_id=auth.uid() or exists(select 1 from public.group_members gm where gm.group_id=group_id and gm.user_id=auth.uid()));
-create policy group_members_insert on public.group_members for insert to authenticated with check(user_id=auth.uid());
-create policy group_members_delete on public.group_members for delete to authenticated using(user_id=auth.uid());
+create policy group_members_select on public.group_members
+for select to authenticated
+using(user_id=auth.uid() or public.tafa_is_group_member(group_id, auth.uid()));
+create policy group_members_insert on public.group_members
+for insert to authenticated
+with check(user_id=auth.uid() or public.tafa_is_group_member(group_id, auth.uid()));
+create policy group_members_delete on public.group_members
+for delete to authenticated
+using(user_id=auth.uid());
 
 -- Pages
 create policy pages_select on public.pages for select to authenticated using(true);
@@ -366,6 +419,35 @@ create policy ads_select on public.tafab_ads for select to authenticated using(s
 create policy ads_insert on public.tafab_ads for insert to authenticated with check(owner_id=auth.uid());
 create policy ads_update on public.tafab_ads for update to authenticated using(owner_id=auth.uid());
 create policy ads_delete on public.tafab_ads for delete to authenticated using(owner_id=auth.uid());
+
+-- =========================================================
+-- STORAGE — real media uploads for posts/profile
+-- =========================================================
+insert into storage.buckets (id, name, public)
+values ('posts','posts',true)
+on conflict (id) do update set public = true;
+
+drop policy if exists tafa_posts_storage_select on storage.objects;
+drop policy if exists tafa_posts_storage_insert on storage.objects;
+drop policy if exists tafa_posts_storage_update on storage.objects;
+drop policy if exists tafa_posts_storage_delete on storage.objects;
+
+create policy tafa_posts_storage_select on storage.objects
+for select to public
+using(bucket_id='posts');
+
+create policy tafa_posts_storage_insert on storage.objects
+for insert to authenticated
+with check(bucket_id='posts' and (storage.foldername(name))[1] = auth.uid()::text);
+
+create policy tafa_posts_storage_update on storage.objects
+for update to authenticated
+using(bucket_id='posts' and owner_id::text = auth.uid()::text)
+with check(bucket_id='posts' and owner_id::text = auth.uid()::text);
+
+create policy tafa_posts_storage_delete on storage.objects
+for delete to authenticated
+using(bucket_id='posts' and owner_id::text = auth.uid()::text);
 
 -- =========================================================
 -- REALTIME
@@ -410,4 +492,4 @@ begin
 end $$;
 
 notify pgrst, 'reload schema';
-select 'TAFAß SUPABASE REPAIR V3 — TABLES + GRANTS + RLS + REALTIME READY' as status;
+select 'TAFAß SUPABASE REPAIR V4 — RLS + MESSAGES + REALTIME READY' as status;

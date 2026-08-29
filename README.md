@@ -1,21 +1,15 @@
-# Tafaß — nouveau frontend
+# Tafaß — Supabase Realtime V4
 
-Contenu:
-- index.html
-- app.js
-- style.css
+Version corrigée du projet Tafaß.
 
-Le frontend utilise Supabase Auth, Database, Storage et Realtime.
-Il réutilise le schéma Supabase déjà en place; aucun nouveau SQL n'est inclus ici.
+- Correction RLS : suppression de la récursion infinie sur `conversation_members` et `group_members`.
+- Messages : conversations et messages réellement liés à l'utilisateur connecté.
+- Realtime : tables principales configurées pour Supabase Realtime.
+- Tafaß : aucune annonce de démonstration créée automatiquement ; les offres/publicités sont des données Supabase réelles.
+- Profil : compteurs Amis/Abonnés et informations venant de Supabase, sans valeurs fictives.
+- Interface : navigation premium, notamment Actualités, Amis, Messages, Alertes, Tafaß, Menu et Profil.
+- Mobile : le bouton inférieur `Tafaß` reste Tafaß ; `Menu` est accessible depuis le bouton menu supérieur/latéral.
 
-Fonctionnalités UI:
-Splash, Auth, Actualités/feed, publication texte/photo/vidéo, réactions 7 types,
-commentaires, partage, Amis, Recherche, Profil, Notifications, Messages,
-Vidéos, Reels, Pages, Groupes, Enregistrements, Menu, Paramètres, thème sombre,
-responsive Android/iPhone/desktop et Realtime.
-
-Important:
-- Le bucket Storage `posts` doit exister et être public/autorisé selon votre configuration existante.
-- Les RPC existantes `tafa_set_post_reaction` et `tafa_increment_post_share` sont utilisées.
-- La table `friend_requests` est utilisée pour les invitations.
-- Si Supabase Auth exige la confirmation e-mail, l'utilisateur doit confirmer son adresse avant connexion.
+## SQL
+Exécuter `TAFASS_NEW_PROJECT.sql` dans Supabase SQL Editor.
+Le script est prévu pour être relancé sans supprimer les tables ni les données.
