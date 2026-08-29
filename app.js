@@ -127,12 +127,16 @@
   async function setReaction(postId, reaction) {
     const { error } = await sb.rpc("tafa_set_post_reaction", { p_post_id: postId, p_reaction_type: reaction });
     if (error) return toast(error.message);
+    const post = state.posts.find(x => x.id === postId);
+    if (post) await createNotification(post.user_id, "reaction", "Nouvelle réaction", `${nameOf(state.profile)} a réagi à votre publication.`, "post", postId);
     toast("Réaction enregistrée"); await loadPosts();
   }
   async function addComment(postId) {
     const input = $("comment-" + postId), text = input?.value.trim(); if (!text) return;
     const { error } = await sb.from("comments").insert({ post_id: postId, user_id: state.user.id, text, content: text });
     if (error) return toast(error.message);
+    const post = state.posts.find(x => x.id === postId);
+    if (post) await createNotification(post.user_id, "comment", "Nouveau commentaire", `${nameOf(state.profile)} a commenté votre publication.`, "post", postId);
     input.value = ""; toast("Commentaire publié"); await loadPosts();
   }
   async function sharePost(id) {
@@ -182,7 +186,10 @@
   }
   async function addFriend(id) {
     const { error } = await sb.from("friend_requests").insert({ sender_id: state.user.id, receiver_id: id, status: "pending" });
-    toast(error ? error.message : "Invitation envoyée"); if (!error) await friendsPage();
+    if (error) return toast(error.message);
+    await createNotification(id, "friend_request", "Nouvelle demande d’ami", `${nameOf(state.profile)} vous a envoyé une demande d’ami.`, "friend_request");
+    toast("Invitation envoyée");
+    await friendsPage();
   }
   async function handleFriend(id, status) {
     const { error } = await sb.from("friend_requests").update({ status }).eq("sender_id", id).eq("receiver_id", state.user.id).eq("status", "pending");
@@ -190,32 +197,72 @@
     if (status === "accepted") {
       await sb.from("friendships").upsert([{ user_id: state.user.id, friend_id: id }, { user_id: id, friend_id: state.user.id }], { onConflict: "user_id,friend_id" });
     }
+    await createNotification(id, status === "accepted" ? "friend_accepted" : "friend_declined",
+      status === "accepted" ? "Demande acceptée" : "Demande refusée",
+      `${nameOf(state.profile)} a ${status === "accepted" ? "accepté" : "refusé"} votre demande.`,
+      "friend_request");
     toast(status === "accepted" ? "Ami ajouté" : "Demande supprimée"); await friendsPage();
   }
 
   async function searchPage(q = "") {
     const term = q.trim(); let data = [];
     if (term) {
-      const r = await sb.from("profiles").select("*").or(`first_name.ilike.%${term}%,last_name.ilike.%${term}%,username.ilike.%${term}%`).limit(30);
+      const r = await sb.from("profiles").select("*")
+        .or(`first_name.ilike.%${term}%,last_name.ilike.%${term}%,username.ilike.%${term}%`).limit(30);
       data = r.data || [];
+      await sb.from("search_history").insert({ user_id: state.user.id, search_text: term, result_type: "profiles" });
     }
     $("content").innerHTML = `<div class="card search-page"><div class="page-header"><h2>Rechercher</h2></div><input id="searchInput" value="${esc(term)}" placeholder="Compte, pseudo..."><div id="searchResults">${term ? (data.length ? data.map(p=>`<div class="list-row">${avatarHTML(p)}<div class="grow"><b>${esc(nameOf(p))}</b><small>@${esc(p.username||"")}</small></div><button class="small-action" data-action="view-profile" data-id="${esc(p.id)}">Voir</button></div>`).join("") : `<div class="empty">Aucun résultat.</div>`) : `<div class="empty">Recherchez un utilisateur.</div>`}</div></div>`;
     $("searchInput").addEventListener("keydown", e => { if (e.key === "Enter") searchPage(e.target.value); });
   }
 
   async function messagesPage() {
-    const { data: members } = await sb.from("conversation_members").select("conversation_id,user_id").eq("user_id", state.user.id);
-    const ids = (members || []).map(x => x.conversation_id);
+    const { data: memberships, error } = await sb.from("conversation_members")
+      .select("conversation_id")
+      .eq("user_id", state.user.id);
+
+    if (error) return simplePage("Messages", `<div class="empty">${esc(error.message)}</div>`);
+
+    const ids = [...new Set((memberships || []).map(x => x.conversation_id))];
     let conversations = [];
     if (ids.length) {
-      const { data } = await sb.from("conversations").select("*").in("id", ids).order("created_at", { ascending: false });
-      conversations = data || [];
+      const r = await sb.from("conversations").select("*")
+        .in("id", ids).order("created_at", { ascending: false });
+      conversations = r.data || [];
     }
-    const otherIds = [...new Set((members || []).map(m => m.user_id))];
-    let people = [];
-    if (otherIds.length) { const r = await sb.from("profiles").select("*").in("id", otherIds); people = r.data || []; }
-    const person = people[0];
-    $("content").innerHTML = `<div class="card"><div class="page-header"><h2>Messages</h2><button class="round-button" data-action="new-message">↗</button></div><div class="searchbox" style="width:100%;margin-bottom:10px"><span class="icon">⌕</span><input id="messageSearch" placeholder="Rechercher"></div>${conversations.length ? conversations.map(c=>`<button class="list-row" style="width:100%;text-align:left" data-action="open-conversation" data-id="${esc(c.id)}">${avatarHTML(person)}<div class="grow"><b>${esc(c.name || nameOf(person) || "Conversation")}</b><small>Ouvrir la conversation</small></div><small>›</small></button>`).join("") : `<div class="empty">Aucune conversation.<br><button class="text-button" data-action="new-message">Commencer une discussion</button></div>`}</div>`;
+
+    const cards = [];
+    for (const c of conversations) {
+      const { data: cm } = await sb.from("conversation_members")
+        .select("user_id").eq("conversation_id", c.id);
+      const otherIds = [...new Set((cm || []).map(x => x.user_id).filter(id => id !== state.user.id))];
+      let person = null;
+      if (otherIds.length) {
+        const r = await sb.from("profiles").select("*").eq("id", otherIds[0]).maybeSingle();
+        person = r.data || null;
+      }
+      const { data: last } = await sb.from("messages").select("content,created_at")
+        .eq("conversation_id", c.id).order("created_at", { ascending:false }).limit(1);
+      cards.push(`<button class="list-row message-conversation" style="width:100%;text-align:left"
+        data-action="open-conversation" data-id="${esc(c.id)}">
+        ${avatarHTML(person || state.profile)}
+        <div class="grow"><b>${esc(c.name || (person ? nameOf(person) : "Conversation"))}</b>
+        <small>${esc(last?.[0]?.content || "Ouvrir la conversation")} · ${last?.[0] ? timeAgo(last[0].created_at) : ""}</small></div><small>›</small>
+      </button>`);
+    }
+
+    $("content").innerHTML = `<div class="card">
+      <div class="page-header"><h2>Messages</h2><button class="round-button" data-action="new-message" aria-label="Nouvelle conversation">＋</button></div>
+      <div class="searchbox" style="width:100%;margin-bottom:10px"><span class="icon">⌕</span><input id="messageSearch" placeholder="Rechercher une conversation"></div>
+      <div id="conversationList">${cards.join("") || `<div class="empty">Aucune conversation.<br><button class="text-button" data-action="new-message">Commencer une discussion</button></div>`}</div>
+    </div>`;
+
+    $("messageSearch")?.addEventListener("input", e => {
+      const q = e.target.value.trim().toLowerCase();
+      document.querySelectorAll(".message-conversation").forEach(row => {
+        row.classList.toggle("hidden", q && !row.textContent.toLowerCase().includes(q));
+      });
+    });
   }
 
   async function newMessage() {
@@ -245,17 +292,53 @@
   }
 
   async function notificationsPage() {
-    const { data, error } = await sb.from("notifications").select("*").eq("user_id", state.user.id).order("created_at", { ascending: false }).limit(50);
+    const { data, error } = await sb.from("notifications").select("*")
+      .eq("user_id", state.user.id).order("created_at", { ascending: false }).limit(80);
     if (error) return simplePage("Alertes", `<div class="empty">${esc(error.message)}</div>`);
-    $("content").innerHTML = `<div class="card"><div class="page-header"><h2>Alertes</h2><button class="text-button" data-action="mark-read">Tout lire</button></div><div>${(data||[]).map(n=>`<div class="list-row ${n.is_read?"":"unread"}">${avatarHTML(null)}<div class="grow"><b>${esc(n.title || "Nouvelle activité")}</b><small>${esc(n.message || "Vous avez une nouvelle notification.")} · ${timeAgo(n.created_at)}</small></div>${n.is_read?"":"<span class=\"blue-dot\"></span>"}</div>`).join("") || `<div class="empty">Aucune alerte pour le moment.</div>`}</div></div>`;
+
+    const actorIds = [...new Set((data || []).map(n => n.actor_id).filter(Boolean))];
+    const { data: actors } = actorIds.length ? await sb.from("profiles").select("*").in("id", actorIds) : { data: [] };
+    const amap = new Map((actors || []).map(p => [p.id,p]));
+
+    $("content").innerHTML = `<div class="card"><div class="page-header"><h2>Alertes</h2>
+      <button class="text-button" data-action="mark-read">Tout lire</button></div>
+      <div>${(data || []).map(n => {
+        const actor = amap.get(n.actor_id);
+        return `<div class="list-row ${n.is_read ? "" : "unread"}" data-notification="${esc(n.id)}">
+          ${avatarHTML(actor || null)}
+          <div class="grow"><b>${esc(n.title || "Nouvelle activité")}</b>
+          <small>${esc(n.message || "Vous avez une nouvelle notification.")} · ${timeAgo(n.created_at)}</small></div>
+          ${n.is_read ? "" : '<span class="blue-dot"></span>'}
+        </div>`;
+      }).join("") || `<div class="empty">Aucune alerte pour le moment.</div>`}</div></div>`;
   }
+
+  async function createNotification(userId, type, title, message, entityType = "", entityId = null) {
+    if (!userId || userId === state.user?.id) return;
+    const { error } = await sb.from("notifications").insert({
+      user_id: userId, actor_id: state.user.id, type, title, message,
+      entity_type: entityType, entity_id: entityId
+    });
+    if (error) console.warn("Notification:", error.message);
+  }
+
   async function markRead() {
-    const { error } = await sb.from("notifications").update({ is_read: true }).eq("user_id", state.user.id).eq("is_read", false);
-    if (error) return toast(error.message); toast("Alertes lues"); await notificationsPage(); updateBadges();
+    const { error } = await sb.from("notifications").update({ is_read: true })
+      .eq("user_id", state.user.id).eq("is_read", false);
+    if (error) return toast(error.message);
+    toast("Alertes lues");
+    await notificationsPage();
+    updateBadges();
   }
+
   async function updateBadges() {
-    const n = await sb.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", state.user.id).eq("is_read", false);
-    const el = $("notifBadge"); if (el) { el.textContent = String(n.count || 0); el.classList.toggle("hidden", !n.count); }
+    const n = await sb.from("notifications").select("id", { count:"exact", head:true })
+      .eq("user_id", state.user.id).eq("is_read", false);
+    const el = $("notifBadge");
+    if (el) {
+      el.textContent = String(n.count || 0);
+      el.classList.toggle("hidden", !n.count);
+    }
   }
 
   async function profilePage(tab = state.profileTab) {
@@ -291,11 +374,11 @@
     }
     if (route === "pages") {
       const { data } = await sb.from("pages").select("*").limit(30);
-      return simplePage("Pages", `<div class="menu-grid">${(data||[]).map(p=>`<div class="menu-card"><span class="menu-icon">▣</span><span><b>${esc(p.name)}</b><small>${esc(p.category||"Page")}</small></span></div>`).join("") || `<div class="empty" style="grid-column:1/-1">Aucune Page disponible.</div>`}</div>`);
+      return simplePage("Pages", `<div class="page-header-actions"><button class="primary" data-action="create-page">＋ Créer une Page</button></div><div class="menu-grid">${(data||[]).map(p=>`<button class="menu-card" data-action="page-open" data-id="${esc(p.id)}"><span class="menu-icon">▣</span><span><b>${esc(p.name)}</b><small>${esc(p.category||"Page")}</small></span></button>`).join("") || `<div class="empty" style="grid-column:1/-1">Aucune Page disponible.</div>`}</div>`);
     }
     if (route === "groups") {
       const { data } = await sb.from("groups").select("*").limit(30);
-      return simplePage("Groupes", `<div class="menu-grid">${(data||[]).map(g=>`<div class="menu-card"><span class="menu-icon">◎</span><span><b>${esc(g.name)}</b><small>${esc(g.privacy)}</small></span></div>`).join("") || `<div class="empty" style="grid-column:1/-1">Aucun groupe disponible.</div>`}</div>`);
+      return simplePage("Groupes", `<div class="page-header-actions"><button class="primary" data-action="create-group">＋ Créer un groupe</button></div><div class="menu-grid">${(data||[]).map(g=>`<button class="menu-card" data-action="group-open" data-id="${esc(g.id)}"><span class="menu-icon">◎</span><span><b>${esc(g.name)}</b><small>${esc(g.privacy)}</small></span></button>`).join("") || `<div class="empty" style="grid-column:1/-1">Aucun groupe disponible.</div>`}</div>`);
     }
     if (route === "saved") {
       const { data } = await sb.from("saved_posts").select("post_id").eq("user_id", state.user.id);
@@ -304,29 +387,48 @@
     }
   }
 
-  function tafabPage() {
+  async function tafabPage() {
+    let { data: listings } = await sb.from("tafab_listings").select("*")
+      .eq("status","active").order("created_at",{ascending:false}).limit(20);
+    const { data: ads } = await sb.from("tafab_ads").select("*")
+      .eq("status","active").order("created_at",{ascending:false}).limit(10);
+
+    // Crée une annonce réelle de démonstration uniquement si l’espace est vide.
+    // Elle appartient à l’utilisateur connecté et peut être modifiée/supprimée ensuite.
+    if (!(listings || []).length) {
+      const r = await sb.from("tafab_listings").insert({
+        seller_id: state.user.id,
+        title: "Eau potable à vendre",
+        description: "Eau potable disponible aujourd’hui. Contact et livraison à confirmer avec le vendeur.",
+        category: "eau",
+        currency: "MGA",
+        status: "active"
+      }).select().single();
+      if (!r.error) { listings = [r.data]; }
+    }
+
     simplePage("Tafaß", `
       <div class="tafab-hero card-inner">
         <div class="tafab-brand-mark">T</div>
-        <div class="grow">
-          <h3>Marché & échanges Tafaß</h3>
-          <p class="page-subtitle">Un espace simple pour découvrir une offre et en discuter.</p>
-        </div>
+        <div class="grow"><h3>Marché & échanges Tafaß</h3>
+        <p class="page-subtitle">Des annonces réelles et des échanges directs entre membres.</p></div>
       </div>
       <div class="tafab-grid">
-        <article class="tafab-card tafab-discussion">
-          <div class="tafab-card-head"><span class="tafab-icon">💬</span><div><b>Discussion — Vente d’eau</b><small>Échange local</small></div></div>
-          <p><b>Vendeur :</b> Eau potable disponible aujourd’hui. Livraison possible selon le quartier.</p>
-          <p class="muted">Client : « Bonjour, est-ce qu’il reste des bidons d’eau et pouvez-vous livrer ? »</p>
-          <div class="tafab-actions"><button class="primary" data-action="tafab-message">Répondre</button><button class="ghost-action" data-action="tafab-info">Voir les détails</button></div>
-        </article>
-        <article class="tafab-card tafab-ad">
-          <div class="tafab-ad-label">PUBLICATION • Tafaß</div>
-          <h3>💧 Eau potable à vendre</h3>
-          <p>Eau potable propre et prête à la livraison. Contactez le vendeur directement pour connaître le prix, la quantité et la zone desservie.</p>
-          <div class="tafab-price">Disponible aujourd’hui</div>
-          <button class="primary big" data-action="tafab-contact">Contacter le vendeur</button>
-        </article>
+        ${(listings || []).map(x => `<article class="tafab-card tafab-ad">
+          <div class="tafab-ad-label">ANNONCE • TAFAß</div>
+          <h3>💧 ${esc(x.title)}</h3>
+          <p>${esc(x.description || "")}</p>
+          <div class="tafab-price">${x.price != null ? esc(x.price) + " " + esc(x.currency || "MGA") : "Prix à confirmer"}</div>
+          <div class="tafab-actions">
+            <button class="primary" data-action="tafab-contact" data-id="${esc(x.id)}">Contacter</button>
+            <button class="ghost-action" data-action="tafab-info" data-id="${esc(x.id)}">Détails</button>
+          </div>
+        </article>`).join("")}
+        ${(ads || []).map(a => `<article class="tafab-card tafab-discussion">
+          <div class="tafab-card-head"><span class="tafab-icon">📢</span><div><b>${esc(a.title)}</b><small>Publication sponsorisée</small></div></div>
+          <p>${esc(a.description || "")}</p>
+          <button class="primary big" data-action="tafab-ad" data-id="${esc(a.id)}">Voir la publication</button>
+        </article>`).join("")}
       </div>
     `);
   }
@@ -340,21 +442,44 @@
     simplePage("Menu", `<div class="menu-profile">${avatarHTML(p)}<div class="grow"><b>${esc(nameOf(p))}</b><small>${esc(p.email || state.user?.email || "")}</small></div><button class="small-action" data-route="profile">Profil</button></div><div class="menu-section-title">Raccourcis</div><div class="menu-grid">${items.map(x=>`<button class="menu-card" data-route="${x[0]}"><span class="menu-icon">${x[1]}</span><span><b>${x[2]}</b><small>${x[3]}</small></span></button>`).join("")}</div><div class="menu-section-title">Actions</div><div class="menu-grid"><button class="menu-card danger-card" data-action="logout"><span class="menu-icon">↪</span><span><b>Déconnexion</b><small>Quitter ce compte</small></span></button></div>`);
   }
 
-  function settingsPage() {
+  async function settingsPage() {
+    let cfg = state.user ? (await sb.from("user_settings").select("*").eq("user_id", state.user.id).maybeSingle()).data : null;
+    if (!cfg && state.user) {
+      const r = await sb.from("user_settings").insert({ user_id: state.user.id }).select().single();
+      cfg = r.data || {};
+    }
     const dark = state.theme === "dark";
-    simplePage("Paramètres & Confidentialité", `<p class="page-subtitle">Gérez votre compte et votre expérience Tafaß.</p><div class="settings-grid"><button class="setting-card" data-action="setting" data-name="Compte"><span><b>Compte</b><small>Informations personnelles</small></span><span>›</span></button><button class="setting-card" data-action="setting" data-name="Paiement"><span><b>Paiement</b><small>Moyens et historique</small></span><span>›</span></button><button class="setting-card" data-action="setting" data-name="Aide"><span><b>Aide</b><small>Assistance Tafaß</small></span><span>›</span></button><button class="setting-card" data-action="setting" data-name="Politique de confidentialité"><span><b>Confidentialité</b><small>Contrôler vos données</small></span><span>›</span></button><button class="setting-card" data-action="setting" data-name="Historique d'activité"><span><b>Historique d'activité</b><small>Vos actions récentes</small></span><span>›</span></button><button class="setting-card" data-action="setting" data-name="Recherche"><span><b>Recherche</b><small>Préférences de recherche</small></span><span>›</span></button><button class="setting-card" data-action="theme"><span><b>Mode sombre</b><small>${dark?"Activé":"Désactivé"}</small></span><span class="toggle ${dark?"on":""}"><i></i></span></button><button class="setting-card" data-action="setting" data-name="Notifications"><span><b>Notifications</b><small>Alertes et activité</small></span><span>›</span></button></div>`);
+    simplePage("Paramètres & Confidentialité", `<p class="page-subtitle">Gérez votre compte, votre confidentialité et vos préférences.</p>
+      <div class="settings-grid">
+        <button class="setting-card" data-action="setting" data-name="Compte"><span><b>Compte</b><small>Informations personnelles</small></span><span>›</span></button>
+        <button class="setting-card" data-action="setting" data-name="Paiement"><span><b>Paiement</b><small>Moyens et historique</small></span><span>›</span></button>
+        <button class="setting-card" data-action="setting" data-name="Aide"><span><b>Aide</b><small>Assistance Tafaß</small></span><span>›</span></button>
+        <button class="setting-card" data-action="setting" data-name="Politique de confidentialité"><span><b>Confidentialité</b><small>Contrôler vos données</small></span><span>›</span></button>
+        <button class="setting-card" data-action="setting" data-name="Historique d'activité"><span><b>Historique d'activité</b><small>Vos actions récentes</small></span><span>›</span></button>
+        <button class="setting-card" data-action="setting" data-name="Recherche"><span><b>Recherche</b><small>Préférences de recherche</small></span><span>›</span></button>
+        <button class="setting-card" data-action="theme"><span><b>Mode sombre</b><small>${dark ? "Activé" : "Désactivé"}</small></span><span class="toggle ${dark?"on":""}"><i></i></span></button>
+        <button class="setting-card" data-action="notifications-settings"><span><b>Notifications</b><small>${cfg?.notifications_enabled === false ? "Désactivées" : "Activées"}</small></span><span>›</span></button>
+        <button class="setting-card" data-action="privacy-settings"><span><b>Confidentialité du profil</b><small>${esc(cfg?.profile_visibility || "public")}</small></span><span>›</span></button>
+      </div>`);
   }
+
+  async function saveUserSetting(patch) {
+    const { error } = await sb.from("user_settings").upsert({ user_id: state.user.id, ...patch }, { onConflict:"user_id" });
+    if (error) return toast(error.message);
+    toast("Paramètre enregistré");
+    await settingsPage();
+  }
+
   function settingInfo(name) {
     const bodies = {
-      "Compte":"Modifiez vos informations personnelles, votre pseudo et vos coordonnées depuis votre profil.",
-      "Paiement":"Cette section est prête pour les fonctions de paiement connectées à votre compte Tafaß.",
-      "Aide":"Consultez l'aide et les informations de support de Tafaß.",
-      "Politique de confidentialité":"Vos données de profil et vos contenus sont contrôlés par les règles de confidentialité configurées dans Supabase.",
-      "Historique d'activité":"Retrouvez ici vos activités récentes. Les événements disponibles sont ceux enregistrés par Tafaß.",
-      "Recherche":"Utilisez la recherche globale pour trouver des comptes et des contenus.",
-      "Notifications":"Gérez votre activité et consultez vos alertes depuis la section Alertes."
+      "Compte":"Modifiez vos informations personnelles depuis votre Profil.",
+      "Paiement":"Les informations de paiement seront conservées dans les fonctions de paiement activées par Tafaß.",
+      "Aide":"Utilisez cette section pour consulter l’aide et l’assistance Tafaß.",
+      "Politique de confidentialité":"Gérez qui peut voir votre profil et comment les autres membres peuvent vous contacter.",
+      "Historique d'activité":"Les actions enregistrées par Tafaß peuvent être consultées dans votre historique.",
+      "Recherche":"Les recherches effectuées peuvent être enregistrées dans votre historique de recherche."
     };
-    openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><h3>${esc(name)}</h3><p class="muted" style="font-size:11px;line-height:1.6">${esc(bodies[name] || "Option Tafaß")}</p><button class="primary big" data-action="close-modal">Fermer</button></div>`);
+    openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><h3>${esc(name)}</h3><p class="muted" style="font-size:12px;line-height:1.65">${esc(bodies[name] || "Option Tafaß")}</p><button class="primary big" data-action="close-modal">Fermer</button></div>`);
   }
 
   function simplePage(title, body) { $("content").innerHTML = `<div class="card"><div class="page-header"><h2>${esc(title)}</h2></div>${body}</div>`; }
@@ -408,12 +533,25 @@
   async function setupRealtime() {
     if (state.channel) await sb.removeChannel(state.channel);
     state.channel = sb.channel("tafa-live-ui")
+      .on("postgres_changes", { event:"*", schema:"public", table:"profiles" }, () => { loadProfile(); if (state.route==="search") searchPage(""); })
       .on("postgres_changes", { event:"*", schema:"public", table:"posts" }, () => loadPosts())
       .on("postgres_changes", { event:"*", schema:"public", table:"comments" }, () => loadPosts())
       .on("postgres_changes", { event:"*", schema:"public", table:"post_reactions" }, () => loadPosts())
-      .on("postgres_changes", { event:"*", schema:"public", table:"notifications" }, () => { updateBadges(); if (state.route === "notifications") notificationsPage(); })
-      .on("postgres_changes", { event:"*", schema:"public", table:"messages" }, () => { if (state.route === "messages" && state.selectedConversation) openConversation(state.selectedConversation); })
-      .on("postgres_changes", { event:"*", schema:"public", table:"friend_requests" }, () => { if (state.route === "friends") friendsPage(); })
+      .on("postgres_changes", { event:"*", schema:"public", table:"notifications" }, () => { updateBadges(); if (state.route==="notifications") notificationsPage(); })
+      .on("postgres_changes", { event:"*", schema:"public", table:"messages" }, () => {
+        if (state.route==="messages") state.selectedConversation ? openConversation(state.selectedConversation) : messagesPage();
+      })
+      .on("postgres_changes", { event:"*", schema:"public", table:"friend_requests" }, () => { if (state.route==="friends") friendsPage(); })
+      .on("postgres_changes", { event:"*", schema:"public", table:"friendships" }, () => { if (state.route==="friends") friendsPage(); })
+      .on("postgres_changes", { event:"*", schema:"public", table:"groups" }, () => { if (state.route==="groups") genericListPage("groups"); })
+      .on("postgres_changes", { event:"*", schema:"public", table:"group_members" }, () => { if (state.route==="groups") genericListPage("groups"); })
+      .on("postgres_changes", { event:"*", schema:"public", table:"pages" }, () => { if (state.route==="pages") genericListPage("pages"); })
+      .on("postgres_changes", { event:"*", schema:"public", table:"page_followers" }, () => { if (state.route==="pages") genericListPage("pages"); })
+      .on("postgres_changes", { event:"*", schema:"public", table:"saved_posts" }, () => { if (state.route==="saved") genericListPage("saved"); })
+      .on("postgres_changes", { event:"*", schema:"public", table:"user_settings" }, () => { if (state.route==="settings") settingsPage(); })
+      .on("postgres_changes", { event:"*", schema:"public", table:"tafab_listings" }, () => { if (state.route==="tafab") tafabPage(); })
+      .on("postgres_changes", { event:"*", schema:"public", table:"tafab_listing_messages" }, () => { if (state.route==="tafab") tafabPage(); })
+      .on("postgres_changes", { event:"*", schema:"public", table:"tafab_ads" }, () => { if (state.route==="tafab") tafabPage(); })
       .subscribe();
   }
 
@@ -458,6 +596,33 @@
     if (action === "tafab-info") return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><h3>Détails de l’offre</h3><p class="muted">Eau potable disponible aujourd’hui. Les informations de prix, quantité et livraison sont à confirmer avec le vendeur.</p><button class="primary big" data-action="close-modal">Fermer</button></div>`);
     if (action === "tafab-contact") return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><h3>Contacter le vendeur</h3><p class="muted">Demandez le prix, la quantité disponible et la zone de livraison avant de confirmer votre achat.</p><button class="primary big" data-action="close-modal">Fermer</button></div>`);
     if (action === "setting") return settingInfo(actionEl.dataset.name);
+    if (action === "notifications-settings") {
+      const cfg = (await sb.from("user_settings").select("notifications_enabled").eq("user_id",state.user.id).maybeSingle()).data;
+      return saveUserSetting({ notifications_enabled: !(cfg?.notifications_enabled !== false) });
+    }
+    if (action === "privacy-settings") return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><h3>Confidentialité du profil</h3><label>Visibilité<select id="privacyVisibility"><option value="public">Public</option><option value="friends">Amis</option><option value="private">Privé</option></select></label><button class="primary big" data-action="save-privacy">Enregistrer</button></div>`);
+    if (action === "save-privacy") return saveUserSetting({ profile_visibility: $("privacyVisibility").value });
+    if (action === "create-group") return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><h3>Créer un groupe</h3><label>Nom<input id="newGroupName" placeholder="Nom du groupe"></label><label>Description<textarea id="newGroupDesc" placeholder="Description"></textarea></label><button class="primary big" data-action="save-group">Créer</button></div>`);
+    if (action === "save-group") {
+      const name=$("newGroupName")?.value.trim(); if(!name)return toast("Entrez un nom.");
+      const r=await sb.from("groups").insert({owner_id:state.user.id,name,description:$("newGroupDesc")?.value.trim()||"",privacy:"public"}).select().single();
+      if(r.error)return toast(r.error.message);
+      await sb.from("group_members").insert({group_id:r.data.id,user_id:state.user.id,role:"admin"});
+      closeModal(); toast("Groupe créé"); return genericListPage("groups");
+    }
+    if (action === "create-page") return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><h3>Créer une Page</h3><label>Nom<input id="newPageName" placeholder="Nom de la Page"></label><label>Catégorie<input id="newPageCategory" placeholder="Catégorie"></label><label>Bio<textarea id="newPageBio" placeholder="Présentation"></textarea></label><button class="primary big" data-action="save-page">Créer</button></div>`);
+    if (action === "save-page") {
+      const name=$("newPageName")?.value.trim(); if(!name)return toast("Entrez un nom.");
+      const r=await sb.from("pages").insert({owner_id:state.user.id,name,category:$("newPageCategory")?.value.trim()||"Autre",bio:$("newPageBio")?.value.trim()||""}).select().single();
+      if(r.error)return toast(r.error.message);
+      closeModal(); toast("Page créée"); return genericListPage("pages");
+    }
+    if (action === "page-open" || action === "group-open") return toast("Élément sélectionné");
+    if (action === "tafab-ad") {
+      const a=(await sb.from("tafab_ads").select("*").eq("id",id).maybeSingle()).data;
+      if(!a)return toast("Publication introuvable");
+      return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><h3>${esc(a.title)}</h3><p class="muted">${esc(a.description||"")}</p><button class="primary big" data-action="close-modal">Fermer</button></div>`);
+    }
     if (action === "logout") return logout();
     if (action === "close-modal") return closeModal();
     if (action === "add-story") return toast("Les stories seront disponibles après activation du stockage dédié.");

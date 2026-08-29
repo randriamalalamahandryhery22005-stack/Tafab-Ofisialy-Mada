@@ -207,3 +207,21 @@ img, svg {
   0%,100% { transform: scale(.72); opacity: .45; }
   50% { transform: scale(1); opacity: 1; }
 }
+
+/* Tafaß stability / readability patch */
+html, body { -webkit-tap-highlight-color: transparent; }
+body { user-select: none; -webkit-user-select: none; }
+input, textarea, select, [contenteditable="true"] {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+}
+body.light .post, body.light .card, body.light .panel, body.light .menu-card,
+body.light .setting-card, body.light .tafab-card, body.light .modal-box {
+  color: var(--text);
+}
+body.light .muted, body.light small, body.light .page-subtitle { color: var(--muted); }
+body.light .nav-svg, body.light .nav-ico { color: var(--text-2); }
+body.light .bottom-nav { color: var(--text); }
+.page-header-actions { display:flex; justify-content:flex-end; gap:10px; margin:0 0 12px; }
+.message-conversation { transition: background .15s ease, transform .15s ease; }
+.message-conversation:active { transform: scale(.99); }
