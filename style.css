@@ -167,3 +167,43 @@ button,small,b,p,h1,h2,h3,label{overflow-wrap:anywhere}
 body.light .tafab-hero{background:linear-gradient(135deg,#eef5ff,#f7f4ff);border-color:#dce6f5}.light .tafab-card{background:linear-gradient(145deg,#fff,#f5f8fd);border-color:#dbe4ef;box-shadow:0 12px 30px rgba(37,64,105,.08)}
 @media(max-width:720px){.tafab-grid{grid-template-columns:1fr}.tafab-card{padding:16px}.tafab-actions{grid-template-columns:1fr 1fr}.tafab-hero{padding:15px}}
 @media(max-width:380px){.tafab-actions{grid-template-columns:1fr}.tafab-brand-mark{width:44px;height:44px}}
+
+/* =========================================================
+   TAFASS — CONTENT PROTECTION + SMOOTH SPLASH
+   ========================================================= */
+body, body * {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+input, textarea, select, [contenteditable="true"] {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+img, svg {
+  -webkit-user-drag: none;
+  user-drag: none;
+}
+.splash-screen {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity .35s ease, visibility .35s ease;
+}
+.splash-screen.splash-hide {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.splash-dots i {
+  animation: splashPulse 1.15s ease-in-out infinite;
+}
+.splash-dots i:nth-child(2) { animation-delay: .16s; }
+.splash-dots i:nth-child(3) { animation-delay: .32s; }
+.splash-dots i:nth-child(4) { animation-delay: .48s; }
+@keyframes splashPulse {
+  0%,100% { transform: scale(.72); opacity: .45; }
+  50% { transform: scale(1); opacity: 1; }
+}

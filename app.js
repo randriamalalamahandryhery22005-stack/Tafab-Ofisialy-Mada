@@ -511,14 +511,57 @@
   window.addEventListener("hashchange", () => { const r=location.hash.slice(1); if(routes.includes(r)) { state.route=r; render(); } });
 
   document.body.classList.toggle("light", state.theme === "light");
-  setTimeout(() => { const splash=$("splash"); if (splash) splash.remove(); }, 1600);
+
+  // Splash: reste visible pendant l'initialisation puis disparaît proprement.
+  let splashFinished = false;
+  const finishSplash = () => {
+    if (splashFinished) return;
+    splashFinished = true;
+    const splash = $("splash");
+    if (!splash) return;
+    splash.classList.add("splash-hide");
+    setTimeout(() => splash.remove(), 420);
+  };
+  // Filet de sécurité si Supabase met trop longtemps à répondre.
+  const splashFallback = setTimeout(finishSplash, 4500);
+
   sb.auth.onAuthStateChange(async (_event, session) => {
     state.user = session?.user || null;
     if (state.user) await enterApp(); else { $("app").classList.add("hidden"); showLogin(); }
   });
+
   (async () => {
-    const { data } = await sb.auth.getSession();
-    state.user = data.session?.user || null;
-    if (state.user) await enterApp(); else showLogin();
+    try {
+      const { data } = await sb.auth.getSession();
+      state.user = data.session?.user || null;
+      if (state.user) await enterApp(); else showLogin();
+    } catch (err) {
+      console.error("Tafaß initialisation:", err);
+      showLogin();
+    } finally {
+      clearTimeout(splashFallback);
+      finishSplash();
+    }
   })();
+
+  // Empêche la copie du contenu de l'application, tout en laissant les champs
+  // de formulaire utilisables normalement.
+  const isFormField = el => !!el?.closest?.("input, textarea, select, [contenteditable=\"true\"]");
+  document.addEventListener("contextmenu", e => {
+    if (!isFormField(e.target)) e.preventDefault();
+  });
+  document.addEventListener("copy", e => {
+    if (!isFormField(e.target)) e.preventDefault();
+  });
+  document.addEventListener("cut", e => {
+    if (!isFormField(e.target)) e.preventDefault();
+  });
+  document.addEventListener("dragstart", e => e.preventDefault());
+  document.addEventListener("keydown", e => {
+    if (isFormField(e.target)) return;
+    const key = String(e.key || "").toLowerCase();
+    if ((e.ctrlKey || e.metaKey) && ["c", "x", "a", "u", "s"].includes(key)) {
+      e.preventDefault();
+    }
+  });
 })();
