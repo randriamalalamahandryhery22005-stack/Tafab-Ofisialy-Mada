@@ -552,7 +552,10 @@
       .on("postgres_changes", { event:"*", schema:"public", table:"tafab_listings" }, () => { if (state.route==="tafab") tafabPage(); })
       .on("postgres_changes", { event:"*", schema:"public", table:"tafab_listing_messages" }, () => { if (state.route==="tafab") tafabPage(); })
       .on("postgres_changes", { event:"*", schema:"public", table:"tafab_ads" }, () => { if (state.route==="tafab") tafabPage(); })
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") console.info("Tafaß Realtime: connecté");
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") console.warn("Tafaß Realtime: reconnexion nécessaire", status);
+      });
   }
 
   async function enterApp() {
@@ -648,8 +651,8 @@
     $("authMsg").textContent = "Connexion…";
     let email = value;
     if (!value.includes("@")) {
-      const r = await sb.from("profiles").select("email").eq("phone", value).maybeSingle();
-      email = r.data?.email || "";
+      const r = await sb.rpc("tafa_lookup_email_by_phone", { p_phone: value });
+      email = r.data || "";
     }
     if (!email) { $("authMsg").textContent = "Compte introuvable."; return; }
     const { error } = await sb.auth.signInWithPassword({ email, password });
