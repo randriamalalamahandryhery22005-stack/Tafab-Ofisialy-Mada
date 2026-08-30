@@ -9,7 +9,7 @@
 
   const $ = id => document.getElementById(id);
   const esc = s => String(s ?? "").replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]));
-  const routes = ["home","friends","search","messages","notifications","profile","videos","reels","pages","groups","saved","menu","tafab","settings"];
+  const routes = ["home","friends","search","messages","notifications","profile","reels","pages","groups","saved","menu","tafab","settings"];
   const state = {
     user: null, profile: null, route: "home", posts: [], friends: [], stories: [],
     channel: null, theme: "dark", entering: false,
@@ -84,10 +84,16 @@
   async function loadProfile() {
     if (!state.user) return;
     const { data } = await sb.from("profiles").select("*").eq("id", state.user.id).maybeSingle();
+    const authEmail = state.user.email || "";
     state.profile = data || {
       id: state.user.id, first_name: state.user.user_metadata?.first_name || "",
-      last_name: state.user.user_metadata?.last_name || "", email: state.user.email || ""
+      last_name: state.user.user_metadata?.last_name || "", email: authEmail
     };
+    // The authenticated email is the source of truth for the profile.
+    if (authEmail && state.profile.email !== authEmail) {
+      state.profile.email = authEmail;
+      await sb.from("profiles").update({ email: authEmail }).eq("id", state.user.id);
+    }
     const settings=(await sb.from("user_settings").select("theme").eq("user_id",state.user.id).maybeSingle()).data;
     if(settings?.theme==="light" || settings?.theme==="dark") state.theme=settings.theme;
     const sideName = $("sideName"); if (sideName) sideName.textContent = nameOf(state.profile);
@@ -694,9 +700,16 @@
 
   function editProfile() {
     const p = state.profile || {};
+    const authEmail = state.user?.email || p.email || "";
+    const nameChangedAt = p.name_changed_at ? new Date(p.name_changed_at) : null;
+    const nextNameChange = nameChangedAt ? new Date(nameChangedAt.getTime() + 15*24*60*60*1000) : null;
+    const nameLocked = nextNameChange && nextNameChange.getTime() > Date.now();
+    const nameHint = nameLocked
+      ? `Nom/prénom verrouillés jusqu’au ${nextNameChange.toLocaleDateString("fr-FR")} à ${nextNameChange.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}.`
+      : "Le prénom et le nom peuvent être modifiés une fois tous les 15 jours.";
     openModal(`<div class="modal-box profile-edit-modal premium-profile-editor-v2">
       <button class="modal-close" data-action="close-modal" aria-label="Fermer">×</button>
-      <header class="profile-editor-header-v2"><span class="eyebrow">TAFAß • PROFIL</span><h3>Personnaliser votre profil</h3><p>Présentez votre identité avec une photo de profil, une couverture et des informations claires.</p></header>
+      <header class="profile-editor-header-v2"><span class="eyebrow">TAFAß • PROFIL</span><h3>Personnaliser votre profil</h3><p>Les informations du compte restent synchronisées avec l’adresse e-mail authentifiée.</p></header>
       <section class="profile-editor-stage-v2">
         <label class="editor-cover-v2" id="editorCoverPreview" style="${p.cover_url?`background-image:url('${esc(p.cover_url)}')`:""}">
           <span class="cover-placeholder-v2">Votre couverture</span><span class="editor-cover-overlay-v2">📷 Modifier la couverture</span>
@@ -704,12 +717,19 @@
         </label>
         <label class="editor-avatar-v2" id="editorAvatarPreview">${avatarHTML(p,"avatar")}<span class="editor-avatar-edit-v2">📷</span><input id="pfAvatar" type="file" accept="image/jpeg,image/png,image/webp" hidden></label>
       </section>
-      <div class="profile-editor-photo-label-v2"><b>Photo de profil</b><span>JPG, PNG ou WEBP • votre avatar par défaut est conservé si aucune photo n’est choisie.</span></div>
+      <div class="profile-editor-photo-label-v2"><b>Photo de profil</b><span>JPG, PNG ou WEBP • qualité originale conservée.</span></div>
       <div class="profile-form-v2">
-        <div class="profile-field-card-v2"><label><span>Prénom</span><input id="pfFirst" value="${esc(p.first_name||"")}" autocomplete="given-name" placeholder="Votre prénom"></label></div>
-        <div class="profile-field-card-v2"><label><span>Nom</span><input id="pfLast" value="${esc(p.last_name||"")}" autocomplete="family-name" placeholder="Votre nom"></label></div>
-        <div class="profile-field-card-v2 profile-field-wide-v2"><label><span>Bio</span><textarea id="pfBio" maxlength="500" placeholder="Présentez-vous en quelques mots…">${esc(p.bio||"")}</textarea><small>500 caractères maximum.</small></label></div>
+        <div class="profile-field-card-v2"><label><span>Prénom</span><input id="pfFirst" value="${esc(p.first_name||"")}" autocomplete="given-name" placeholder="Votre prénom" ${nameLocked?"disabled":""}></label></div>
+        <div class="profile-field-card-v2"><label><span>Nom</span><input id="pfLast" value="${esc(p.last_name||"")}" autocomplete="family-name" placeholder="Votre nom" ${nameLocked?"disabled":""}></label></div>
+        <div class="profile-field-card-v2 profile-field-wide-v2 name-change-hint-v2"><span>⏱ ${esc(nameHint)}</span></div>
+        <div class="profile-field-card-v2 profile-field-wide-v2"><label><span>E-mail du compte</span><input value="${esc(authEmail)}" type="email" readonly disabled></label><small>Synchronisé automatiquement avec votre connexion.</small></div>
+        <div class="profile-field-card-v2"><label><span>Pseudo</span><input id="pfUsername" value="${esc(p.username||"")}" maxlength="40" placeholder="@pseudo"></label></div>
+        <div class="profile-field-card-v2"><label><span>Téléphone</span><input id="pfPhone" value="${esc(p.phone||"")}" autocomplete="tel" placeholder="+261…"></label></div>
+        <div class="profile-field-card-v2"><label><span>Date de naissance</span><input id="pfBirth" value="${esc(p.birth||"")}" type="date"></label></div>
+        <div class="profile-field-card-v2"><label><span>Genre</span><input id="pfGender" value="${esc(p.gender||"")}" placeholder="Genre"></label></div>
+        <div class="profile-field-card-v2"><label><span>Pays</span><input id="pfCountry" value="${esc(p.country||"")}" placeholder="Madagascar"></label></div>
         <div class="profile-field-card-v2 profile-field-wide-v2"><label><span>Ville / pays</span><input id="pfLocation" value="${esc(p.location||"")}" autocomplete="address-level2" placeholder="Ex. Antananarivo, Madagascar"></label></div>
+        <div class="profile-field-card-v2 profile-field-wide-v2"><label><span>Bio</span><textarea id="pfBio" maxlength="500" placeholder="Présentez-vous en quelques mots…">${esc(p.bio||"")}</textarea><small>500 caractères maximum.</small></label></div>
       </div>
       <footer class="profile-editor-footer-v2"><button class="ghost-action" data-action="close-modal">Annuler</button><button class="primary big profile-save-button" data-action="save-profile"><span>✓</span> Enregistrer les modifications</button></footer>
     </div>`);
@@ -726,10 +746,29 @@
       $("editorCoverPreview").style.backgroundImage=`url("${URL.createObjectURL(file)}")`;
     });
   }
+
   async function saveProfile() {
+    const p = state.profile || {};
     const first = $('pfFirst')?.value.trim() || "", last = $('pfLast')?.value.trim() || "";
     if (!first && !last) return toast("Ajoutez au moins un prénom ou un nom.");
-    const patch = { first_name:first, last_name:last, bio:$('pfBio')?.value.trim() || "", location:$('pfLocation')?.value.trim() || "" };
+    const oldFirst = String(p.first_name || "").trim(), oldLast = String(p.last_name || "").trim();
+    const nameChanged = first !== oldFirst || last !== oldLast;
+    if (nameChanged && p.name_changed_at) {
+      const next = new Date(p.name_changed_at).getTime() + 15*24*60*60*1000;
+      if (Date.now() < next) return toast(`Vous pourrez modifier votre nom à partir du ${new Date(next).toLocaleDateString("fr-FR")}.`);
+    }
+    const patch = {
+      first_name:first, last_name:last,
+      username:$('pfUsername')?.value.trim() || null,
+      phone:$('pfPhone')?.value.trim() || "",
+      birth:$('pfBirth')?.value || null,
+      gender:$('pfGender')?.value.trim() || "",
+      country:$('pfCountry')?.value.trim() || "",
+      bio:$('pfBio')?.value.trim() || "",
+      location:$('pfLocation')?.value.trim() || "",
+      email: state.user?.email || p.email || ""
+    };
+    if (nameChanged) patch.name_changed_at = new Date().toISOString();
     try {
       for (const [file,key] of [[$('pfAvatar')?.files?.[0],"avatar_url"],[$('pfCover')?.files?.[0],"cover_url"]]) {
         if (!file) continue;
@@ -835,7 +874,6 @@
       ["notifications","history","Alertes","Vos notifications"],
       ["groups","groups","Groupes","Communautés"],
       ["pages","pages","Pages","Pages et gestion"],
-      ["videos","videos","Vidéos","Regarder et publier"],
       ["reels","reels","Reels","Formats courts"],
       ["saved","saved","Enregistrements","Vos contenus sauvegardés"],
       ["search","search","Rechercher","Trouver un compte ou contenu"],
@@ -1043,7 +1081,7 @@
       else if (route === "messages") await messagesPage();
       else if (route === "notifications") await notificationsPage();
       else if (route === "profile") await profilePage(state.profileTab);
-      else if (["videos","reels","pages","groups","saved"].includes(route)) await genericListPage(route);
+      else if (["reels","pages","groups","saved"].includes(route)) await genericListPage(route);
       else if (route === "menu") menuPage();
       else if (route === "tafab") await tafabPage();
       else if (route === "settings") await settingsPage();
@@ -1121,7 +1159,7 @@
     if (state.channel) await sb.removeChannel(state.channel);
     state.channel = sb.channel("tafa-live-ui")
       .on("postgres_changes", { event:"*", schema:"public", table:"profiles" }, () => { loadProfile(); if (state.route==="search") searchPage($("searchInput")?.value||""); if (state.viewingProfileId && state.route==="profile") openUserProfile(state.viewingProfileId); })
-      .on("postgres_changes", { event:"*", schema:"public", table:"posts" }, async () => { await loadPosts(); if (["home","profile","videos","reels","saved"].includes(state.route)) render(); })
+      .on("postgres_changes", { event:"*", schema:"public", table:"posts" }, async () => { await loadPosts(); if (["home","profile","reels","saved"].includes(state.route)) render(); })
       .on("postgres_changes", { event:"*", schema:"public", table:"comments" }, async () => { await loadPosts(); if (["home","profile"].includes(state.route)) render(); })
       .on("postgres_changes", { event:"*", schema:"public", table:"comment_likes" }, async () => { if (["home","profile"].includes(state.route)) render(); })
       .on("postgres_changes", { event:"*", schema:"public", table:"post_reactions" }, async () => { await loadPosts(); if (["home","profile"].includes(state.route)) render(); })

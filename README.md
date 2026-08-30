@@ -16,3 +16,10 @@ https://tafab-ofisialy-mada.vercel.app
 Utilisez exactement votre vrai domaine Vercel, sans l'espace éventuel de l'exemple ci-dessus.
 
 Pour Google et Apple, renseignez aussi leurs Client ID / Secret / clés demandées par Supabase. Sans cette configuration côté fournisseur, aucun frontend ne peut effectuer une authentification OAuth réelle.
+
+
+## Tafaß V22
+- Navigation mobile: Pages et Groupes accessibles directement dans la barre inférieure.
+- Suppression de la destination/navigation autonome « Vidéos » (les médias vidéo peuvent toujours être publiés et les Reels restent disponibles).
+- Profil: couverture sans séparation noire, informations synchronisées avec l’e-mail du compte, et changement prénom/nom limité à une fois tous les 15 jours.
+- Exécuter `TAFASS_V22_PROFILE_IDENTITY.sql` une seule fois dans Supabase pour activer la règle 15 jours côté base de données.
