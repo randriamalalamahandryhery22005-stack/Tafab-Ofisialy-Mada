@@ -1415,6 +1415,15 @@ document.documentElement.classList.add("app-boot");
       calls: () => { if (state.route==="messages" && state.selectedConversation) openConversation(state.selectedConversation); },
       call_participants: () => { if (state.route==="messages" && state.selectedConversation) openConversation(state.selectedConversation); },
       media_assets: () => {},
+      page_members: () => { if (state.route==="pages") genericListPage("pages"); },
+      page_posts: () => { const id=document.querySelector('.page-detail')?.querySelector('[data-action="page-publish"]')?.dataset.id; if(id) document.querySelector(`[data-action="page-open"][data-id="${id}"]`)?.click(); },
+      page_post_reactions: () => {},
+      page_post_comments: () => {},
+      page_messages: () => { updateBadges(); },
+      group_posts: () => { const id=document.querySelector('.group-detail')?.querySelector('[data-action="group-publish"]')?.dataset.id; if(id) document.querySelector(`[data-action="group-open"][data-id="${id}"]`)?.click(); },
+      group_post_reactions: () => {},
+      group_post_comments: () => {},
+      group_messages: () => { updateBadges(); },
       conversations: () => { if (state.route==="messages") state.selectedConversation ? openConversation(state.selectedConversation) : messagesPage(); },
       conversation_members: () => { if (state.route==="messages") messagesPage(); },
       tafab_listings: () => { if (state.route==="tafab") servicePage("marketplace"); },
@@ -1790,7 +1799,9 @@ document.documentElement.classList.add("app-boot");
       const name=$("newPageName")?.value.trim(); if(!name)return toast("Entrez un nom.");
       const r=await sb.from("pages").insert({owner_id:state.user.id,name,category:$("newPageCategory")?.value.trim()||"Autre",bio:$("newPageBio")?.value.trim()||""}).select().single();
       if(r.error)return toast(r.error.message);
-      const pg=r.data; const patch={};
+      const pg=r.data;
+      await sb.from("page_members").upsert({page_id:pg.id,user_id:state.user.id,role:"owner"},{onConflict:"page_id,user_id"});
+      const patch={};
       for(const [input,key] of [["newPageAvatar","logo_url"],["newPageCover","cover_url"]]){ const file=$(input)?.files?.[0]; if(!file) continue; const ext=(file.name.split('.').pop()||'jpg').toLowerCase(); const path=`${state.user.id}/page-${pg.id}-${key}-${crypto.randomUUID()}.${ext}`; const up=await sb.storage.from('posts').upload(path,file,{upsert:false,contentType:file.type||'image/jpeg'}); if(up.error){ toast('Page créée. Image non envoyée : '+up.error.message); break; } patch[key]=sb.storage.from('posts').getPublicUrl(path).data.publicUrl; }
       if(Object.keys(patch).length) await sb.from('pages').update(patch).eq('id',pg.id).eq('owner_id',state.user.id);
       closeModal(); toast("Page créée"); return genericListPage("pages");
@@ -1798,25 +1809,31 @@ document.documentElement.classList.add("app-boot");
     if (action === "page-open") {
       const x=(await sb.from("pages").select("*").eq("id",id).maybeSingle()).data;
       if(!x)return toast("Page introuvable");
-      const [f,c,owner,posts]=await Promise.all([
+      const [f,c,owner,admins,posts]=await Promise.all([
         sb.from("page_followers").select("id").eq("page_id",id).eq("user_id",state.user.id).maybeSingle(),
         sb.from("page_followers").select("id",{count:"exact",head:true}).eq("page_id",id),
         sb.from("profiles").select("first_name,last_name,username,avatar_url,email,phone,country,city_current,bio").eq("id",x.owner_id).maybeSingle(),
-        sb.from("page_posts").select("*").eq("page_id",id).order("created_at",{ascending:false}).limit(20)
+        sb.from("page_members").select("user_id,role,profiles(first_name,last_name,username,avatar_url)").eq("page_id",id).limit(20),
+        sb.from("page_posts").select("*").eq("page_id",id).order("created_at",{ascending:false}).limit(30)
       ]);
       const ownerMe=x.owner_id===state.user.id;
-      const postRows=(posts.data||[]).map(p=>`<article class="post entity-post"><div class="post-body">${esc(p.content||"")}</div>${p.media_url?`<img class="post-media" src="${esc(p.media_url)}" alt="Publication">`:""}<small>${timeAgo(p.created_at)}</small></article>`).join("")||`<div class="empty">Aucune publication sur cette Page.</div>`;
-      return openModal(`<div class="modal-box entity-detail-modal entity-account-modal">
-        <button class="modal-close" data-action="close-modal">×</button>
-        <div class="detail-cover" ${x.cover_url?`style="background-image:url('${esc(x.cover_url)}')"`:""}></div>
-        ${entityAvatarHTML(x,"page","detail-logo")}<span class="eyebrow">TAFAß • PAGE PROFESSIONNELLE</span><h3>${esc(x.name)}</h3>
-        <p>${esc(x.bio||"Aucune présentation.")}</p>
-        <div class="detail-stats"><span><b>${c.count||0}</b> abonnés</span><span>${esc(x.category||"Autre")}</span><span>${x.username?"@"+esc(x.username):"Page officielle"}</span></div>
-        <div class="entity-about"><b>Informations</b><p>Créée le ${new Date(x.created_at).toLocaleDateString()} · Responsable : ${esc(owner.data?nameOf(owner.data):"Membre Tafaß")}</p>${owner.data?.city_current?`<p>📍 ${esc(owner.data.city_current)}</p>`:""}${owner.data?.email?`<p>✉️ ${esc(owner.data.email)}</p>`:""}${owner.data?.phone?`<p>📞 ${esc(owner.data.phone)}</p>`:""}</div>
-        ${ownerMe?`<div class="entity-composer"><textarea id="pagePostText" maxlength="2000" placeholder="Publier sur votre Page…"></textarea><button class="primary" data-action="page-publish" data-id="${esc(id)}">Publier</button></div>`:""}
-        <h4>Publications</h4><div class="entity-posts">${postRows}</div>
-        <div class="detail-actions">${ownerMe?`<button class="ghost-action" data-action="edit-page" data-id="${esc(id)}">Modifier les informations</button>`:""}<button class="primary big" data-action="toggle-page-follow" data-id="${esc(id)}">${f.data?"Ne plus suivre":"Suivre la Page"}</button></div>
-      </div>`);
+      const adminMe=(admins.data||[]).some(a=>a.user_id===state.user.id && ["owner","admin","editor"].includes(a.role));
+      const canPost=ownerMe||adminMe;
+      const postRows=(posts.data||[]).map(p=>`<article class="entity-post premium-entity-post"><div class="entity-post-top"><div><b>${esc(x.name)}</b><small>${timeAgo(p.created_at)}</small></div>${(p.user_id===state.user.id||canPost)?`<button class="icon-mini" data-action="delete-page-post" data-id="${esc(p.id)}" data-entity-id="${esc(id)}" aria-label="Supprimer">×</button>`:""}</div>${p.content?`<div class="post-body">${esc(p.content)}</div>`:""}${p.media_url?`${p.media_type?.startsWith("video")?`<video class="post-media" src="${esc(p.media_url)}" controls></video>`:`<img class="post-media" src="${esc(p.media_url)}" alt="Publication de ${esc(x.name)}">`}`:""}<div class="entity-post-actions"><button data-action="page-post-like" data-id="${esc(p.id)}" data-entity-id="${esc(id)}">♡ J’aime</button><button data-action="page-post-comment" data-id="${esc(p.id)}" data-entity-id="${esc(id)}">💬 Commenter</button><button data-action="share-page-post" data-id="${esc(p.id)}" data-entity-id="${esc(id)}">↗ Partager</button></div></article>`).join("")||`<div class="entity-empty-state"><span>✦</span><b>Aucune publication</b><small>Les nouvelles publications de la Page apparaîtront ici en temps réel.</small></div>`;
+      const adminRows=(admins.data||[]).map(v=>`<div class="entity-member-row">${avatarHTML(v.profiles||{},"avatar tiny-avatar")}<div class="grow"><b>${esc(v.profiles?nameOf(v.profiles):"Membre")}</b><small>${esc(v.role||"admin")}</small></div></div>`).join("")||`<div class="muted">Aucun administrateur supplémentaire.</div>`;
+      return openModal(`<div class="modal-box entity-detail-modal premium-entity-detail page-detail">
+        <button class="modal-close floating-close" data-action="close-modal">×</button>
+        <div class="detail-cover premium-cover" ${x.cover_url?`style="background-image:url('${esc(x.cover_url)}')"`:''}><div class="cover-gradient"></div><span class="verified-chip">✓ OFFICIEL</span></div>
+        <div class="detail-head-wrap">${entityAvatarHTML(x,"page","detail-logo premium-detail-logo")}<div class="detail-head-actions">${!ownerMe?`<button class="secondary-pill" data-action="toggle-page-follow" data-id="${esc(id)}">${f.data?"✓ Suivi":"＋ Suivre"}</button><button class="secondary-pill" data-action="page-contact" data-id="${esc(id)}">✉ Contacter</button>`:`<button class="secondary-pill" data-action="edit-page" data-id="${esc(id)}">⚙ Gérer</button>`}</div></div>
+        <div class="detail-main"><span class="eyebrow">TAFAß • PAGE PROFESSIONNELLE</span><h3>${esc(x.name)}</h3>${x.username?`<div class="handle">@${esc(x.username)}</div>`:""}<p class="entity-description">${esc(x.bio||"Aucune présentation pour le moment.")}</p>
+        <div class="detail-stats premium-stats"><span><b>${c.count||0}</b><small>Abonnés</small></span><span><b>${posts.data?.length||0}</b><small>Publications</small></span><span><b>${admins.data?.length||1}</b><small>Gestionnaires</small></span><span><b>${esc(x.category||"Autre")}</b><small>Catégorie</small></span></div>
+        <div class="entity-tabs"><button class="active">Publications</button><button data-action="page-about-tab" data-id="${esc(id)}">À propos</button><button data-action="page-admin-tab" data-id="${esc(id)}">Équipe</button></div>
+        ${canPost?`<div class="entity-composer premium-composer"><div class="composer-label"><span>✦</span><b>Publier en tant que ${esc(x.name)}</b></div><textarea id="pagePostText" maxlength="5000" placeholder="Partagez une actualité, une photo ou une vidéo…"></textarea><div class="composer-tools"><label class="media-pick">＋ Média<input id="pagePostMedia" type="file" accept="image/*,video/*" hidden></label><span id="pagePostMediaName" class="muted">Aucun fichier</span><button class="primary composer-publish" data-action="page-publish" data-id="${esc(id)}">Publier</button></div></div>`:""}
+        <section class="entity-feed-section"><div class="section-heading"><div><span class="eyebrow">ACTUALITÉ</span><h4>Publications</h4></div><span class="live-dot">● EN DIRECT</span></div><div class="entity-posts">${postRows}</div></section>
+        <section class="entity-about premium-about"><div><span class="eyebrow">INFORMATIONS</span><h4>À propos de la Page</h4></div><p>Créée le ${new Date(x.created_at).toLocaleDateString()} · Responsable : ${esc(owner.data?nameOf(owner.data):"Membre Tafaß")}</p>${owner.data?.city_current?`<p>📍 ${esc(owner.data.city_current)}</p>`:""}${owner.data?.email?`<p>✉️ ${esc(owner.data.email)}</p>`:""}${owner.data?.phone?`<p>📞 ${esc(owner.data.phone)}</p>`:""}</section>
+        <section class="entity-admins"><div class="section-heading"><div><span class="eyebrow">ÉQUIPE</span><h4>Gestion de la Page</h4></div></div>${adminRows}</section>
+        <div class="detail-actions premium-detail-actions">${ownerMe?`<button class="ghost-action" data-action="edit-page" data-id="${esc(id)}">Modifier la Page</button>`:""}<button class="primary big" data-action="toggle-page-follow" data-id="${esc(id)}">${f.data?"✓ Page suivie":"＋ Suivre la Page"}</button></div>
+        </div></div>`);
     }
     if (action === "group-open") {
       const x=(await sb.from("groups").select("*").eq("id",id).maybeSingle()).data;
@@ -1824,49 +1841,53 @@ document.documentElement.classList.add("app-boot");
       const [m,c,members,owner,posts]=await Promise.all([
         sb.from("group_members").select("id,role").eq("group_id",id).eq("user_id",state.user.id).maybeSingle(),
         sb.from("group_members").select("id",{count:"exact",head:true}).eq("group_id",id),
-        sb.from("group_members").select("user_id,role,profiles(first_name,last_name,username,avatar_url)").eq("group_id",id).limit(30),
+        sb.from("group_members").select("user_id,role,profiles(first_name,last_name,username,avatar_url)").eq("group_id",id).limit(40),
         sb.from("profiles").select("first_name,last_name,username,avatar_url,email,phone,country,city_current,bio").eq("id",x.owner_id).maybeSingle(),
-        sb.from("group_posts").select("*").eq("group_id",id).order("created_at",{ascending:false}).limit(20)
+        sb.from("group_posts").select("*").eq("group_id",id).order("created_at",{ascending:false}).limit(30)
       ]);
-      const ownerMe=x.owner_id===state.user.id;
-      const memberRows=(members.data||[]).map(v=>`<div class="list-row"><div class="grow"><b>${esc(v.profiles?nameOf(v.profiles):"Membre")}</b><small>${esc(v.role||"member")}</small></div></div>`).join("")||`<div class="empty">Aucun membre.</div>`;
-      const postRows=(posts.data||[]).map(p=>`<article class="post entity-post"><div class="post-body">${esc(p.content||"")}</div>${p.media_url?`<img class="post-media" src="${esc(p.media_url)}" alt="Publication">`:""}<small>${timeAgo(p.created_at)}</small></article>`).join("")||`<div class="empty">Aucune publication dans ce groupe.</div>`;
-      return openModal(`<div class="modal-box entity-detail-modal entity-account-modal">
-        <button class="modal-close" data-action="close-modal">×</button><div class="detail-cover" ${x.cover_url?`style="background-image:url('${esc(x.cover_url)}')"`:""}></div>
-        ${entityAvatarHTML(x,"group","detail-logo")}<span class="eyebrow">TAFAß • GROUPE COMMUNAUTAIRE</span><h3>${esc(x.name)}</h3><p>${esc(x.description||"Aucune description.")}</p>
-        <div class="detail-stats"><span><b>${c.count||0}</b> membres</span><span>${esc(x.privacy||"public")}</span><span>Admin : ${esc(owner.data?nameOf(owner.data):"Membre Tafaß")}</span></div>
-        <div class="entity-about"><b>À propos du groupe</b><p>Créé le ${new Date(x.created_at).toLocaleDateString()} · Communauté ${esc(x.privacy||"publique")}.</p>${owner.data?.city_current?`<p>📍 ${esc(owner.data.city_current)}</p>`:""}</div>
-        ${ownerMe||m.data?`<div class="entity-composer"><textarea id="groupPostText" maxlength="2000" placeholder="Partager une publication dans le groupe…"></textarea><button class="primary" data-action="group-publish" data-id="${esc(id)}">Publier</button></div>`:""}
-        <h4>Membres</h4><div class="entity-members">${memberRows}</div><h4>Publications</h4><div class="entity-posts">${postRows}</div>
-        <div class="detail-actions">${ownerMe?`<button class="ghost-action" data-action="edit-group" data-id="${esc(id)}">Modifier les informations</button>`:""}<button class="primary big" data-action="toggle-group-member" data-id="${esc(id)}">${m.data?"Quitter le groupe":"Rejoindre le groupe"}</button></div>
-      </div>`);
+      const ownerMe=x.owner_id===state.user.id, isMember=!!m.data, canPost=isMember||ownerMe;
+      const postRows=(posts.data||[]).map(p=>`<article class="entity-post premium-entity-post"><div class="entity-post-top"><div>${avatarHTML({avatar_url:null},"avatar tiny-avatar")}<span><b>${esc(p.user_id===state.user.id?"Vous":x.name)}</b><small>${timeAgo(p.created_at)}</small></span></div>${(p.user_id===state.user.id||ownerMe)?`<button class="icon-mini" data-action="delete-group-post" data-id="${esc(p.id)}" data-entity-id="${esc(id)}" aria-label="Supprimer">×</button>`:""}</div>${p.content?`<div class="post-body">${esc(p.content)}</div>`:""}${p.media_url?`${p.media_type?.startsWith("video")?`<video class="post-media" src="${esc(p.media_url)}" controls></video>`:`<img class="post-media" src="${esc(p.media_url)}" alt="Publication du groupe">`}`:""}<div class="entity-post-actions"><button data-action="group-post-like" data-id="${esc(p.id)}" data-entity-id="${esc(id)}">♡ J’aime</button><button data-action="group-post-comment" data-id="${esc(p.id)}" data-entity-id="${esc(id)}">💬 Commenter</button><button data-action="share-group-post" data-id="${esc(p.id)}" data-entity-id="${esc(id)}">↗ Partager</button></div></article>`).join("")||`<div class="entity-empty-state"><span>◎</span><b>Votre communauté commence ici</b><small>Publiez, échangez et retrouvez les nouveaux contenus en temps réel.</small></div>`;
+      const memberRows=(members.data||[]).map(v=>`<div class="entity-member-row">${avatarHTML(v.profiles||{},"avatar tiny-avatar")}<div class="grow"><b>${esc(v.profiles?nameOf(v.profiles):"Membre")}</b><small>${esc(v.role||"member")}</small></div>${ownerMe&&v.user_id!==state.user.id?`<button class="member-more" data-action="group-member-role" data-id="${esc(v.user_id)}" data-entity-id="${esc(id)}">•••</button>`:""}</div>`).join("")||`<div class="muted">Aucun membre pour le moment.</div>`;
+      return openModal(`<div class="modal-box entity-detail-modal premium-entity-detail group-detail">
+        <button class="modal-close floating-close" data-action="close-modal">×</button>
+        <div class="detail-cover premium-cover" ${x.cover_url?`style="background-image:url('${esc(x.cover_url)}')"`:''}><div class="cover-gradient"></div><span class="verified-chip">${x.privacy==='private'?'🔒 PRIVÉ':'🌐 PUBLIC'}</span></div>
+        <div class="detail-head-wrap">${entityAvatarHTML(x,"group","detail-logo premium-detail-logo")}</div>
+        <div class="detail-main"><span class="eyebrow">TAFAß • GROUPE COMMUNAUTAIRE</span><h3>${esc(x.name)}</h3><p class="entity-description">${esc(x.description||"Aucune description pour le moment.")}</p>
+        <div class="detail-stats premium-stats"><span><b>${c.count||0}</b><small>Membres</small></span><span><b>${posts.data?.length||0}</b><small>Publications</small></span><span><b>${esc(x.privacy==='private'?'Privé':'Public')}</b><small>Confidentialité</small></span><span><b>${esc(owner.data?nameOf(owner.data):"Admin")}</b><small>Administrateur</small></span></div>
+        <div class="group-action-bar"><button class="primary" data-action="toggle-group-member" data-id="${esc(id)}">${isMember?"✓ Membre":"＋ Rejoindre"}</button>${isMember?`<button class="secondary-pill" data-action="group-chat" data-id="${esc(id)}">💬 Discussion</button>`:""}${ownerMe?`<button class="secondary-pill" data-action="edit-group" data-id="${esc(id)}">⚙ Gérer</button>`:""}</div>
+        ${canPost?`<div class="entity-composer premium-composer"><div class="composer-label"><span>◎</span><b>Partager avec le groupe</b></div><textarea id="groupPostText" maxlength="5000" placeholder="Quoi de neuf dans la communauté ?"></textarea><div class="composer-tools"><label class="media-pick">＋ Média<input id="groupPostMedia" type="file" accept="image/*,video/*" hidden></label><span id="groupPostMediaName" class="muted">Aucun fichier</span><button class="primary composer-publish" data-action="group-publish" data-id="${esc(id)}">Publier</button></div></div>`:`<div class="join-callout"><b>Rejoignez le groupe</b><span>pour publier, commenter et participer aux discussions.</span><button class="primary" data-action="toggle-group-member" data-id="${esc(id)}">Rejoindre le groupe</button></div>`}
+        <div class="entity-tabs"><button class="active">Publications</button><button data-action="group-members-tab" data-id="${esc(id)}">Membres</button><button data-action="group-about-tab" data-id="${esc(id)}">À propos</button></div>
+        <section class="entity-feed-section"><div class="section-heading"><div><span class="eyebrow">COMMUNAUTÉ</span><h4>Publications</h4></div><span class="live-dot">● EN DIRECT</span></div><div class="entity-posts">${postRows}</div></section>
+        <section class="entity-members-section premium-about"><div class="section-heading"><div><span class="eyebrow">COMMUNAUTÉ</span><h4>Membres (${c.count||0})</h4></div>${ownerMe?`<button class="small-action" data-action="invite-group" data-id="${esc(id)}">＋ Inviter</button>`:""}</div>${memberRows}</section>
+        <section class="entity-about premium-about"><span class="eyebrow">INFORMATIONS</span><h4>À propos du groupe</h4><p>Créé le ${new Date(x.created_at).toLocaleDateString()} · Communauté ${esc(x.privacy||"publique")}.</p>${owner.data?.city_current?`<p>📍 ${esc(owner.data.city_current)}</p>`:""}</section>
+        <div class="detail-actions premium-detail-actions">${ownerMe?`<button class="ghost-action" data-action="edit-group" data-id="${esc(id)}">Modifier le groupe</button>`:""}<button class="primary big" data-action="toggle-group-member" data-id="${esc(id)}">${isMember?"Quitter le groupe":"Rejoindre le groupe"}</button></div>
+        </div></div>`);
     }
     if (action === "page-publish") {
-      const content=$("pagePostText")?.value.trim(); if(!content)return toast("Écrivez une publication.");
-      const r=await sb.from("page_posts").insert({page_id:id,user_id:state.user.id,content}).select().single(); if(r.error)return toast(r.error.message); toast("Publication publiée sur la Page");
-      return document.querySelector(`[data-action="page-open"][data-id="${id}"]`)?.click() || (closeModal(),null);
+      const content=$("pagePostText")?.value.trim(); const file=$("pagePostMedia")?.files?.[0]; if(!content && !file)return toast("Ajoutez un texte ou un média.");
+      let media_url=null, media_type=null;
+      if(file){ const ext=(file.name.split('.').pop()||'bin').toLowerCase(); const path=`${state.user.id}/page-post-${id}-${crypto.randomUUID()}.${ext}`; const up=await sb.storage.from('posts').upload(path,file,{upsert:false,contentType:file.type||undefined}); if(up.error)return toast(up.error.message); media_url=sb.storage.from('posts').getPublicUrl(path).data.publicUrl; media_type=file.type||''; }
+      const r=await sb.from("page_posts").insert({page_id:id,user_id:state.user.id,content:content||"",media_url,media_type}).select().single(); if(r.error)return toast(r.error.message); toast("Publication publiée");
+      return document.querySelector(`[data-action="page-open"][data-id="${id}"]`)?.click() || closeModal();
     }
     if (action === "group-publish") {
-      const content=$("groupPostText")?.value.trim(); if(!content)return toast("Écrivez une publication.");
-      const r=await sb.from("group_posts").insert({group_id:id,user_id:state.user.id,content}).select().single(); if(r.error)return toast(r.error.message); toast("Publication publiée dans le groupe");
-      return document.querySelector(`[data-action="group-open"][data-id="${id}"]`)?.click() || (closeModal(),null);
+      const content=$('groupPostText')?.value.trim(); const file=$("groupPostMedia")?.files?.[0]; if(!content && !file)return toast("Ajoutez un texte ou un média.");
+      let media_url=null, media_type=null;
+      if(file){ const ext=(file.name.split('.').pop()||'bin').toLowerCase(); const path=`${state.user.id}/group-post-${id}-${crypto.randomUUID()}.${ext}`; const up=await sb.storage.from('posts').upload(path,file,{upsert:false,contentType:file.type||undefined}); if(up.error)return toast(up.error.message); media_url=sb.storage.from('posts').getPublicUrl(path).data.publicUrl; media_type=file.type||''; }
+      const r=await sb.from("group_posts").insert({group_id:id,user_id:state.user.id,content:content||"",media_url,media_type}).select().single(); if(r.error)return toast(r.error.message); toast("Publication publiée dans le groupe");
+      return document.querySelector(`[data-action="group-open"][data-id="${id}"]`)?.click() || closeModal();
     }
-    if (action === "edit-page") {
-      const x=(await sb.from("pages").select("*").eq("id",id).maybeSingle()).data; if(!x || x.owner_id!==state.user.id)return toast("Action non autorisée.");
-      return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • PAGE</span><h3>Informations de la Page</h3><label>Nom<input id="editPageName" value="${esc(x.name)}"></label><label>Nom d'utilisateur<input id="editPageUsername" value="${esc(x.username||"")}" placeholder="ma-page"></label><label>Catégorie<select id="editPageCategory">${pageCategoryOptions(x.category||"Autre")}</select></label><label>Présentation<textarea id="editPageBio">${esc(x.bio||"")}</textarea></label><button class="primary big" data-action="save-page-edit" data-id="${esc(id)}">Enregistrer</button></div>`);
-    }
-    if (action === "save-page-edit") {
-      const r=await sb.from("pages").update({name:$('editPageName')?.value.trim(),username:$('editPageUsername')?.value.trim()||null,category:$('editPageCategory')?.value||"Autre",bio:$('editPageBio')?.value.trim()||"",updated_at:new Date().toISOString()}).eq("id",id).eq("owner_id",state.user.id); if(r.error)return toast(r.error.message); closeModal(); toast("Page mise à jour"); return genericListPage("pages");
-    }
-    if (action === "edit-group") {
-      const x=(await sb.from("groups").select("*").eq("id",id).maybeSingle()).data; if(!x || x.owner_id!==state.user.id)return toast("Action non autorisée.");
-      return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • GROUPE</span><h3>Informations du groupe</h3><label>Nom<input id="editGroupName" value="${esc(x.name)}"></label><label>Description<textarea id="editGroupDesc">${esc(x.description||"")}</textarea></label><label>Confidentialité<select id="editGroupPrivacy"><option value="public" ${x.privacy==="public"?"selected":""}>Public</option><option value="private" ${x.privacy==="private"?"selected":""}>Privé</option></select></label><button class="primary big" data-action="save-group-edit" data-id="${esc(id)}">Enregistrer</button></div>`);
-    }
-    if (action === "save-group-edit") {
-      const r=await sb.from("groups").update({name:$('editGroupName')?.value.trim(),description:$('editGroupDesc')?.value.trim()||"",privacy:$('editGroupPrivacy')?.value||"public",updated_at:new Date().toISOString()}).eq("id",id).eq("owner_id",state.user.id); if(r.error)return toast(r.error.message); closeModal(); toast("Groupe mis à jour"); return genericListPage("groups");
-    }
-    if (action === "toggle-page-follow") { const f=(await sb.from("page_followers").select("id").eq("page_id",id).eq("user_id",state.user.id).maybeSingle()).data; const r=f?await sb.from("page_followers").delete().eq("id",f.id):await sb.from("page_followers").insert({page_id:id,user_id:state.user.id}); if(r.error)return toast(r.error.message); closeModal(); toast(f?"Page retirée de vos suivis":"Page suivie"); if(state.route==="pages") await genericListPage("pages"); return; }
-    if (action === "toggle-group-member") { const m=(await sb.from("group_members").select("id").eq("group_id",id).eq("user_id",state.user.id).maybeSingle()).data; const r=m?await sb.from("group_members").delete().eq("id",m.id):await sb.from("group_members").insert({group_id:id,user_id:state.user.id,role:"member"}); if(r.error)return toast(r.error.message); closeModal(); toast(m?"Vous avez quitté le groupe":"Vous avez rejoint le groupe"); if(state.route==="groups") await genericListPage("groups"); return; }
+    if (action === "delete-page-post") { const r=await sb.from("page_posts").delete().eq("id",id).eq("user_id",state.user.id); if(r.error)return toast(r.error.message); toast("Publication supprimée"); return document.querySelector(`[data-action="page-open"][data-id="${actionEl.dataset.entityId}"]`)?.click(); }
+    if (action === "delete-group-post") { const r=await sb.from("group_posts").delete().eq("id",id).eq("user_id",state.user.id); if(r.error)return toast(r.error.message); toast("Publication supprimée"); return document.querySelector(`[data-action="group-open"][data-id="${actionEl.dataset.entityId}"]`)?.click(); }
+    if (["page-post-like","group-post-like"].includes(action)) { const table=action.startsWith("page")?"page_post_reactions":"group_post_reactions"; const fk=action.startsWith("page")?"page_post_id":"group_post_id"; const found=(await sb.from(table).select("id").eq(fk,id).eq("user_id",state.user.id).maybeSingle()).data; const r=found?await sb.from(table).delete().eq("id",found.id):await sb.from(table).insert({[fk]:id,user_id:state.user.id,reaction_type:"like"}); if(r.error)return toast(r.error.message); toast(found?"Réaction retirée":"J’aime"); return; }
+    if (["page-post-comment","group-post-comment"].includes(action)) { const table=action.startsWith("page")?"page_post_comments":"group_post_comments"; const fk=action.startsWith("page")?"page_post_id":"group_post_id"; return openModal(`<div class="modal-box premium-comment-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • COMMENTAIRE</span><h3>Réagir à la publication</h3><textarea id="entityCommentText" maxlength="1000" placeholder="Écrivez votre commentaire…"></textarea><button class="primary big" data-action="send-entity-comment" data-id="${esc(id)}" data-table="${table}" data-fk="${fk}" data-entity-id="${esc(actionEl.dataset.entityId)}">Publier le commentaire</button></div>`); }
+    if (action === "send-entity-comment") { const text=$('entityCommentText')?.value.trim(); if(!text)return toast("Écrivez un commentaire."); const payload={user_id:state.user.id,content:text}; payload[actionEl.dataset.fk]=id; const r=await sb.from(actionEl.dataset.table).insert(payload); if(r.error)return toast(r.error.message); closeModal(); toast("Commentaire publié"); return; }
+    if (["share-page-post","share-group-post"].includes(action)) { const source=action.startsWith("share-page")?"page":"group"; const title=source==='page'?"Partager la publication de la Page":"Partager la publication du groupe"; return openModal(`<div class="modal-box premium-share-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • PARTAGE</span><h3>${title}</h3><textarea id="shareMessage" maxlength="500" placeholder="Ajoutez un message (optionnel)…"></textarea><button class="primary big" data-action="confirm-entity-share" data-id="${esc(id)}" data-source="${source}" data-entity-id="${esc(actionEl.dataset.entityId)}">Partager sur mon fil</button></div>`); }
+    if (action === "confirm-entity-share") { const source=actionEl.dataset.source, postId=id, entityId=actionEl.dataset.entityId, message=$('shareMessage')?.value.trim()||''; const r=await sb.from('post_shares').insert({post_id:postId,user_id:state.user.id,share_message:message}); if(r.error && !/foreign key|violates/i.test(r.error.message)) return toast(r.error.message); closeModal(); toast("Partage enregistré"); }
+    if (action === "page-contact") { const pg=(await sb.from('pages').select('name,owner_id').eq('id',id).maybeSingle()).data; if(!pg)return toast('Page introuvable'); return openModal(`<div class="modal-box premium-contact-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • CONTACT</span><h3>Contacter ${esc(pg.name)}</h3><p>Envoyez un message directement au responsable de la Page.</p><textarea id="pageContactText" maxlength="2000" placeholder="Votre message…"></textarea><button class="primary big" data-action="send-page-contact" data-id="${esc(id)}">Envoyer</button></div>`); }
+    if (action === "send-page-contact") { const pg=(await sb.from('pages').select('owner_id').eq('id',id).maybeSingle()).data; const message=$('pageContactText')?.value.trim(); if(!message||!pg)return toast('Message invalide.'); const r=await sb.from('page_messages').insert({page_id:id,sender_id:state.user.id,message}); if(r.error)return toast(r.error.message); closeModal(); toast('Message envoyé à la Page'); }
+    if (action === "group-chat") { const g=(await sb.from('groups').select('name').eq('id',id).maybeSingle()).data; if(!g)return toast('Groupe introuvable'); const msgs=(await sb.from('group_messages').select('id,sender_id,message,created_at,profiles(first_name,last_name,avatar_url)').eq('group_id',id).order('created_at',{ascending:false}).limit(30)).data||[]; const chat=msgs.reverse().map(m=>`<div class="entity-chat-row ${m.sender_id===state.user.id?'mine':''}">${avatarHTML(m.profiles||{},'avatar tiny-avatar')}<div><b>${esc(m.sender_id===state.user.id?'Vous':nameOf(m.profiles||{}))}</b><p>${esc(m.message)}</p><small>${timeAgo(m.created_at)}</small></div></div>`).join('')||`<div class="muted">Discussion vide. Soyez le premier à écrire.</div>`; return openModal(`<div class="modal-box premium-contact-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • DISCUSSION EN DIRECT</span><h3>${esc(g.name)}</h3><div id="groupChatPreview" class="entity-chat-preview">${chat}</div><textarea id="groupChatText" maxlength="2000" placeholder="Écrire au groupe…"></textarea><button class="primary big" data-action="send-group-chat" data-id="${esc(id)}">Envoyer</button></div>`); }
+    if (action === "send-group-chat") { const message=$('groupChatText')?.value.trim(); if(!message)return toast('Écrivez un message.'); const r=await sb.from('group_messages').insert({group_id:id,sender_id:state.user.id,message}); if(r.error)return toast(r.error.message); closeModal(); toast('Message envoyé au groupe'); }
     if (action === "tafab-ad") {
       const a=(await sb.from("tafab_ads").select("*").eq("id",id).maybeSingle()).data;
       if(!a)return toast("Publication introuvable");
@@ -1931,6 +1952,10 @@ document.documentElement.classList.add("app-boot");
   $("themeBtn").addEventListener("click", toggleTheme);
   syncThemeButton();
   $("modal").addEventListener("click", e => { if (e.target.id === "modal") closeModal(); });
+  document.addEventListener("change", e => {
+    if(e.target.id==="pagePostMedia") $("pagePostMediaName")?.replaceChildren(document.createTextNode(e.target.files?.[0]?.name||"Aucun fichier"));
+    if(e.target.id==="groupPostMedia") $("groupPostMediaName")?.replaceChildren(document.createTextNode(e.target.files?.[0]?.name||"Aucun fichier"));
+  });
   $("globalSearch").addEventListener("keydown", e => { if (e.key === "Enter") { const q=e.target.value; navigate("search"); setTimeout(()=>{ const input=$("searchInput"); if(input){input.value=q; searchPage(q);} },0); } });
   window.addEventListener("hashchange", () => { const r=location.hash.slice(1); if(routes.includes(r) && r !== state.route) navigate(r); });
   const initialRoute = routes.includes(location.hash.slice(1)) ? location.hash.slice(1) : "home";

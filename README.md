@@ -53,3 +53,6 @@ This build is aligned with `TAFASS_COMPLETE_SCHEMA.sql` (the supplied
   so this build does not require a separate `profile-media` bucket.
 - The SQL itself is idempotent and duplicate-safe for Realtime publication
   membership.
+
+## Pages & Groupes Premium
+Run `PAGES_GROUPS_PREMIUM_REALTIME.sql` once after the main Supabase schema. It is idempotent and does not delete existing rows. It adds Page managers, Page/Group post reactions/comments, Page contact messages, Group discussion messages and duplicate-safe Realtime.
