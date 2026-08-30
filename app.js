@@ -1678,6 +1678,45 @@ document.documentElement.classList.add("app-boot");
     await enterApp();
   }
 
+  async function pagePostReaction(postId, pageId){
+    const {data:mine,error:readErr}=await sb.from('page_post_reactions').select('id').eq('page_post_id',postId).eq('user_id',state.user.id).maybeSingle();
+    if(readErr)return toast(readErr.message);
+    const r=mine?await sb.from('page_post_reactions').delete().eq('id',mine.id):await sb.from('page_post_reactions').insert({page_post_id:postId,user_id:state.user.id,reaction_type:'like'});
+    if(r.error)return toast(r.error.message);
+    return openPageDetail(pageId);
+  }
+  async function pagePostComment(postId,pageId){
+    openModal(`<div class="modal-box interaction-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • COMMENTAIRE</span><h3>Commenter la publication</h3><textarea id="pageCommentInput" class="premium-input" maxlength="2000" placeholder="Écrivez votre commentaire…"></textarea><button class="primary big" data-action="page-send-comment" data-id="${esc(postId)}" data-entity-id="${esc(pageId)}">Publier le commentaire</button></div>`);
+    setTimeout(()=>$('pageCommentInput')?.focus(),50);
+  }
+  async function pagePostShare(postId,pageId){
+    const {error}=await sb.from('page_post_shares').insert({page_post_id:postId,user_id:state.user.id,share_message:''});
+    if(error)return toast(error.message);
+    toast('Publication partagée.');
+    return openPageDetail(pageId);
+  }
+  async function groupPostReaction(postId,groupId){
+    const {data:mine,error:readErr}=await sb.from('group_post_reactions').select('id').eq('group_post_id',postId).eq('user_id',state.user.id).maybeSingle();
+    if(readErr)return toast(readErr.message);
+    const r=mine?await sb.from('group_post_reactions').delete().eq('id',mine.id):await sb.from('group_post_reactions').insert({group_post_id:postId,user_id:state.user.id,reaction_type:'like'});
+    if(r.error)return toast(r.error.message);
+    return reopenGroupDetail(groupId);
+  }
+  async function groupPostComment(postId,groupId){
+    openModal(`<div class="modal-box interaction-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • GROUPE</span><h3>Commenter la publication</h3><textarea id="groupCommentInput" class="premium-input" maxlength="2000" placeholder="Écrivez votre commentaire…"></textarea><button class="primary big" data-action="group-send-comment" data-id="${esc(postId)}" data-entity-id="${esc(groupId)}">Publier le commentaire</button></div>`);
+    setTimeout(()=>$('groupCommentInput')?.focus(),50);
+  }
+  async function groupPostShare(postId,groupId){
+    const {error}=await sb.from('group_post_shares').insert({group_post_id:postId,user_id:state.user.id,share_message:''});
+    if(error)return toast(error.message);
+    toast('Publication partagée.');
+    return reopenGroupDetail(groupId);
+  }
+  async function reopenGroupDetail(id){
+    const listBtn=document.querySelector(`[data-action="group-open"][data-id="${CSS.escape(id)}"]`);
+    if(listBtn){ listBtn.click(); return; }
+    return toast('Actualisez les Groupes pour rouvrir cette communauté.');
+  }
   async function openPageDetail(id){
     const {data:x,error:xerr}=await sb.from('pages').select('*').eq('id',id).maybeSingle();
     if(xerr) return toast(xerr.message);
@@ -1883,11 +1922,45 @@ document.documentElement.classList.add("app-boot");
     if (action === "page-member-menu") return pageMemberMenu(id, actionEl.dataset.entityId);
     if (action === "set-page-role") { const r=await sb.from('page_members').update({role:actionEl.dataset.role}).eq('page_id',actionEl.dataset.entityId).eq('user_id',id); if(r.error)return toast(r.error.message); closeModal(); toast('Rôle mis à jour.'); return openPageDetail(actionEl.dataset.entityId); }
     if (action === "remove-page-member") { const r=await sb.from('page_members').delete().eq('page_id',actionEl.dataset.entityId).eq('user_id',id); if(r.error)return toast(r.error.message); closeModal(); toast('Gestionnaire retiré.'); return openPageDetail(actionEl.dataset.entityId); }
+    if (action === "page-contact") {
+      const pg=(await sb.from('pages').select('id,name,owner_id').eq('id',id).maybeSingle()).data;
+      if(!pg)return toast('Page introuvable.');
+      openModal(`<div class="modal-box interaction-modal page-contact-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • CONTACT</span><h3>Contacter ${esc(pg.name)}</h3><p class="muted">Votre message sera envoyé à l’équipe de la Page.</p><textarea id="pageContactText" class="premium-input" maxlength="2000" placeholder="Écrivez votre message…"></textarea><button class="primary big" data-action="page-contact-send" data-id="${esc(id)}">Envoyer le message</button></div>`);
+      setTimeout(()=>$('pageContactText')?.focus(),50); return;
+    }
+    if (action === "page-contact-send") {
+      const text=$('pageContactText')?.value.trim(); if(!text)return toast('Écrivez un message.');
+      const r=await sb.from('page_messages').insert({page_id:id,sender_id:state.user.id,message:text}); if(r.error)return toast(r.error.message);
+      closeModal(); toast('Message envoyé à la Page.'); return;
+    }
     if (action === "page-inbox") return pageInbox(id);
     if (action === "page-inbox-reply") { const text=$('pageReplyText')?.value.trim(); if(!text)return toast('Écrivez un message.'); const r=await sb.from('page_messages').insert({page_id:id,sender_id:state.user.id,message:text}); if(r.error)return toast(r.error.message); $('pageReplyText').value=''; toast('Réponse envoyée.'); return pageInbox(id); }
     if (action === "page-tab") return pageTab(id, actionEl.dataset.tab || "posts");
     if (action === "page-about-tab") return pageTab(id,'about');
     if (action === "page-admin-tab") return pageTab(id,'team');
+    if (action === "page-publish") {
+      const content=$('pagePostText')?.value.trim(); const file=$('pagePostMedia')?.files?.[0];
+      if(!content && !file)return toast('Ajoutez un texte ou un média.');
+      const btn=actionEl; setLoading(btn,true,'Publier');
+      let media_url=null, media_type=null;
+      if(file){ const ext=(file.name.split('.').pop()||'bin').toLowerCase(); const path=`${state.user.id}/page-post-${id}-${crypto.randomUUID()}.${ext}`; const up=await sb.storage.from('posts').upload(path,file,{upsert:false,contentType:file.type||undefined}); if(up.error){setLoading(btn,false,'Publier');return toast(up.error.message);} media_url=sb.storage.from('posts').getPublicUrl(path).data.publicUrl; media_type=file.type||''; }
+      const r=await sb.from('page_posts').insert({page_id:id,user_id:state.user.id,content:content||'',media_url,media_type,visibility:'public'});
+      setLoading(btn,false,'Publier'); if(r.error)return toast(r.error.message); toast('Publication publiée.'); return openPageDetail(id);
+    }
+    if (action === "page-post-like") return pagePostReaction(id, actionEl.dataset.entityId);
+    if (action === "page-post-comment") return pagePostComment(id, actionEl.dataset.entityId);
+    if (action === "page-send-comment") {
+      const text=$('pageCommentInput')?.value.trim(); if(!text)return toast('Écrivez un commentaire.');
+      const r=await sb.from('page_post_comments').insert({page_post_id:id,user_id:state.user.id,content:text}); if(r.error)return toast(r.error.message); closeModal(); toast('Commentaire publié.'); return openPageDetail(actionEl.dataset.entityId);
+    }
+    if (action === "share-page-post") return pagePostShare(id, actionEl.dataset.entityId);
+    if (action === "group-post-like") return groupPostReaction(id, actionEl.dataset.entityId);
+    if (action === "group-post-comment") return groupPostComment(id, actionEl.dataset.entityId);
+    if (action === "group-send-comment") {
+      const text=$('groupCommentInput')?.value.trim(); if(!text)return toast('Écrivez un commentaire.');
+      const r=await sb.from('group_post_comments').insert({group_post_id:id,user_id:state.user.id,content:text}); if(r.error)return toast(r.error.message); closeModal(); toast('Commentaire publié.'); return reopenGroupDetail(actionEl.dataset.entityId);
+    }
+    if (action === "share-group-post") return groupPostShare(id, actionEl.dataset.entityId);
 
     if (action === "auth-onboarding-back") { state.entering=false; state.user=null; sb.auth.signOut().catch(()=>{}); return showLogin(); }
     if (action === "menu-route") { const target = actionEl.dataset.routeTarget; if (target) navigate(target); return; }
@@ -2020,13 +2093,6 @@ document.documentElement.classList.add("app-boot");
         <section class="group-tab-panel entity-about premium-about hidden" data-tab="about"><span class="eyebrow">INFORMATIONS</span><h4>À propos du groupe</h4><p>Créé le ${new Date(x.created_at).toLocaleDateString()} · Communauté ${esc(x.privacy||"publique")}.</p>${owner.data?.city_current?`<p>📍 ${esc(owner.data.city_current)}</p>`:""}</section>
         <div class="detail-actions premium-detail-actions">${ownerMe?`<button class="ghost-action" data-action="edit-group" data-id="${esc(id)}">Modifier le groupe</button>`:""}<button class="primary big" data-action="toggle-group-member" data-id="${esc(id)}">${isMember?"Quitter le groupe":"Rejoindre le groupe"}</button></div>
         </div></div>`);
-    }
-    if (action === "page-publish") {
-      const content=$("pagePostText")?.value.trim(); const file=$("pagePostMedia")?.files?.[0]; if(!content && !file)return toast("Ajoutez un texte ou un média.");
-      let media_url=null, media_type=null;
-      if(file){ const ext=(file.name.split('.').pop()||'bin').toLowerCase(); const path=`${state.user.id}/page-post-${id}-${crypto.randomUUID()}.${ext}`; const up=await sb.storage.from('posts').upload(path,file,{upsert:false,contentType:file.type||undefined}); if(up.error)return toast(up.error.message); media_url=sb.storage.from('posts').getPublicUrl(path).data.publicUrl; media_type=file.type||''; }
-      const r=await sb.from("page_posts").insert({page_id:id,user_id:state.user.id,content:content||"",media_url,media_type}).select().single(); if(r.error)return toast(r.error.message); toast("Publication publiée");
-      return openPageDetail(id);
     }
     if (action === "group-publish") {
       const content=$('groupPostText')?.value.trim(); const file=$("groupPostMedia")?.files?.[0]; if(!content && !file)return toast("Ajoutez un texte ou un média.");

@@ -134,3 +134,53 @@ create index if not exists group_posts_group_created_idx on public.group_posts(g
  do $$ declare t text; begin foreach t in array array['page_members','page_posts','page_post_reactions','page_post_comments','page_post_shares','page_messages','page_followers','group_members','group_posts','group_post_reactions','group_post_comments','group_post_shares','group_messages'] loop execute format('alter table public.%I replica identity full',t); begin execute format('alter publication supabase_realtime add table public.%I',t); exception when duplicate_object then null; end; end loop; end $$;
 notify pgrst,'reload schema';
 select 'TAFAß PAGES + GROUPES PREMIUM COMPLETE REALTIME READY' as status;
+
+-- FINAL integrity helpers: keep denormalized Page counters correct.
+create or replace function public.tafa_sync_page_post_counts() returns trigger
+language plpgsql security definer set search_path=public as $$
+begin
+  if tg_op='INSERT' then
+    update public.page_posts set reactions_count=(select count(*) from public.page_post_reactions where page_post_id=new.page_post_id) where id=new.page_post_id;
+  elsif tg_op='DELETE' then
+    update public.page_posts set reactions_count=(select count(*) from public.page_post_reactions where page_post_id=old.page_post_id) where id=old.page_post_id;
+  end if;
+  return coalesce(new,old);
+end $$;
+
+drop trigger if exists tafa_page_reaction_count on public.page_post_reactions;
+create trigger tafa_page_reaction_count after insert or delete on public.page_post_reactions for each row execute function public.tafa_sync_page_post_counts();
+
+create or replace function public.tafa_sync_page_comment_counts() returns trigger
+language plpgsql security definer set search_path=public as $$
+begin
+  if tg_op='INSERT' then
+    update public.page_posts set comments_count=(select count(*) from public.page_post_comments where page_post_id=new.page_post_id) where id=new.page_post_id;
+  elsif tg_op='DELETE' then
+    update public.page_posts set comments_count=(select count(*) from public.page_post_comments where page_post_id=old.page_post_id) where id=old.page_post_id;
+  end if;
+  return coalesce(new,old);
+end $$;
+
+drop trigger if exists tafa_page_comment_count on public.page_post_comments;
+create trigger tafa_page_comment_count after insert or delete on public.page_post_comments for each row execute function public.tafa_sync_page_comment_counts();
+
+create or replace function public.tafa_sync_page_share_counts() returns trigger
+language plpgsql security definer set search_path=public as $$
+begin
+  if tg_op='INSERT' then
+    update public.page_posts set shares_count=(select count(*) from public.page_post_shares where page_post_id=new.page_post_id) where id=new.page_post_id;
+  elsif tg_op='DELETE' then
+    update public.page_posts set shares_count=(select count(*) from public.page_post_shares where page_post_id=old.page_post_id) where id=old.page_post_id;
+  end if;
+  return coalesce(new,old);
+end $$;
+
+drop trigger if exists tafa_page_share_count on public.page_post_shares;
+create trigger tafa_page_share_count after insert or delete on public.page_post_shares for each row execute function public.tafa_sync_page_share_counts();
+
+-- Re-grant in case these feature tables were created by another migration.
+grant usage on schema public to authenticated;
+grant select,insert,update,delete on public.page_members,public.page_posts,public.page_post_reactions,public.page_post_comments,public.page_post_shares,public.page_messages to authenticated;
+grant select,insert,update,delete on public.group_members,public.group_posts,public.group_post_reactions,public.group_post_comments,public.group_post_shares,public.group_messages to authenticated;
+notify pgrst,'reload schema';
+select 'TAFAß PAGES + GROUPES PREMIUM COMPLETE FINAL READY' as status;
