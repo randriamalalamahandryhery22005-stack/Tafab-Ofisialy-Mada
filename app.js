@@ -1,3 +1,4 @@
+document.documentElement.classList.add("app-boot");
 (() => {
   "use strict";
 
@@ -1736,6 +1737,7 @@
       if (splashFinished) return;
       splashFinished = true;
       splashResolve?.(true);
+      document.documentElement.classList.remove("app-boot");
       const splash = $("splash");
       if (!splash) return;
       splash.classList.add("splash-hide");

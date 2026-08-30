@@ -1466,11 +1466,70 @@ body.light .profile-tabs{background:transparent}
 .bottom-nav button{min-height:62px!important}
 @media(max-width:360px){.content{padding-bottom:calc(105px + env(safe-area-inset-bottom))!important}.bottom-nav button{min-height:60px!important}.bottom-nav button small{font-size:8.5px!important}}
 
-/* Minimal V31 repair: restore V30 behavior and only add clear spacing between PDP and Bio. */
-.profile-edit-modal.premium-profile-editor-v4 .profile-editor-photo-label-v2{margin-bottom:12px!important}
-.profile-edit-modal.premium-profile-editor-v4 .profile-form-v2{row-gap:14px!important}
-.profile-edit-modal.premium-profile-editor-v4 .profile-section-title-v23{margin-top:4px!important;margin-bottom:2px!important}
-@media(max-width:620px){
-  .profile-edit-modal.premium-profile-editor-v4 .profile-editor-photo-label-v2{margin-bottom:10px!important}
-  .profile-edit-modal.premium-profile-editor-v4 .profile-form-v2{row-gap:12px!important}
-}
+
+/* =========================================================
+   V32 SAFE UI PATCH — modal layering / profile editor / light mode
+   ========================================================= */
+/* Never let the application behind a modal bleed through the editor. */
+.modal{z-index:5000!important;background:rgba(3,8,18,.78)!important;backdrop-filter:blur(10px)}
+.modal-box{position:relative;z-index:5001}
+.modal-box.profile-edit-modal.premium-profile-editor-v4{background:linear-gradient(155deg,#0c172b,#07111f)!important;isolation:isolate;overflow:hidden!important}
+.profile-edit-modal.premium-profile-editor-v4 .profile-editor-header-v2,
+.profile-edit-modal.premium-profile-editor-v4 .profile-editor-scroll-v4,
+.profile-edit-modal.premium-profile-editor-v4 .profile-editor-footer-v4{position:relative;z-index:3}
+.profile-edit-modal.premium-profile-editor-v4 .profile-editor-scroll-v4{min-height:0;flex:1 1 auto;overflow-y:auto;overflow-x:hidden;padding-bottom:18px}
+.profile-edit-modal.premium-profile-editor-v4 .profile-editor-stage-v2{z-index:4}
+.profile-edit-modal.premium-profile-editor-v4 .editor-cover-v2{z-index:1}
+.profile-edit-modal.premium-profile-editor-v4 .editor-avatar-v2{z-index:8;background:#0b1424;border:4px solid #07111f;box-shadow:0 10px 30px rgba(0,0,0,.45)}
+.profile-edit-modal.premium-profile-editor-v4 .editor-avatar-v2 .avatar,
+.profile-edit-modal.premium-profile-editor-v4 .editor-avatar-v2 img{width:100%!important;height:100%!important;display:block!important;object-fit:cover!important;border-radius:50%!important}
+.profile-edit-modal.premium-profile-editor-v4 .profile-editor-photo-label-v2{position:relative;z-index:6;background:inherit}
+.profile-edit-modal.premium-profile-editor-v4 .profile-form-v2{position:relative;z-index:6}
+.profile-edit-modal.premium-profile-editor-v4 .profile-editor-footer-v4{background:linear-gradient(180deg,rgba(5,12,23,.98),#07101e)!important;border-top:1px solid rgba(125,160,220,.20);box-shadow:0 -10px 28px rgba(0,0,0,.20)}
+/* Keep the modal buttons visible without covering form fields. */
+.profile-edit-modal.premium-profile-editor-v4{height:min(900px,calc(100dvh - 10px))!important;max-height:calc(100dvh - 10px)!important;display:flex!important;flex-direction:column!important}
+.profile-edit-modal.premium-profile-editor-v4 .profile-editor-header-v2{flex:0 0 auto}
+.profile-edit-modal.premium-profile-editor-v4 .profile-editor-scroll-v4{flex:1 1 auto;min-height:0}
+.profile-edit-modal.premium-profile-editor-v4 .profile-editor-footer-v4{flex:0 0 auto;position:relative!important}
+
+/* Light theme: force readable foregrounds even where old dark literals remain. */
+body.light .modal{background:rgba(20,35,58,.34)!important}
+body.light .modal-box.profile-edit-modal.premium-profile-editor-v4{background:linear-gradient(155deg,#ffffff,#f3f7fd)!important;color:#16243a!important}
+body.light .profile-edit-modal.premium-profile-editor-v4 .profile-editor-footer-v4{background:linear-gradient(180deg,#ffffff,#f5f8fd)!important;border-top-color:#d5dfeb!important;box-shadow:0 -10px 28px rgba(37,64,105,.10)}
+body.light .profile-edit-modal.premium-profile-editor-v4 .editor-avatar-v2{background:#fff;border-color:#fff;box-shadow:0 8px 25px rgba(30,55,90,.18)}
+body.light .profile-edit-modal.premium-profile-editor-v4 .profile-editor-header-v2 h3,
+body.light .profile-edit-modal.premium-profile-editor-v4 .profile-editor-header-v2 p,
+body.light .profile-edit-modal.premium-profile-editor-v4 .profile-editor-photo-label-v2 b,
+body.light .profile-edit-modal.premium-profile-editor-v4 .profile-editor-photo-label-v2 span,
+body.light .profile-edit-modal.premium-profile-editor-v4 .profile-section-title-v23,
+body.light .profile-edit-modal.premium-profile-editor-v4 .profile-field-card-v2 label>span,
+body.light .profile-edit-modal.premium-profile-editor-v4 .profile-field-card-v2 small{color:#16243a!important}
+body.light .profile-edit-modal.premium-profile-editor-v4 .profile-editor-header-v2 p,
+body.light .profile-edit-modal.premium-profile-editor-v4 .profile-editor-photo-label-v2 span,
+body.light .profile-edit-modal.premium-profile-editor-v4 .profile-field-card-v2 small{color:#61718a!important}
+
+/* Account settings: compact, modern, never clip phone digits. */
+.account-settings-v23{box-sizing:border-box!important;width:min(650px,calc(100vw - 14px))!important;max-height:calc(100dvh - 14px)!important;overflow-y:auto!important;overflow-x:hidden!important}
+.account-settings-v23 .settings-account-grid-v23{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px!important}
+.account-settings-v23 label{min-width:0!important;display:block!important}
+.account-settings-v23 input,.account-settings-v23 select{box-sizing:border-box!important;max-width:100%!important}
+.account-settings-v23 .phone-row{display:grid!important;grid-template-columns:78px minmax(0,1fr)!important;width:100%!important;min-width:0!important}
+.account-settings-v23 .phone-row input{width:100%!important;min-width:0!important;overflow:visible!important;text-overflow:clip!important}
+.account-settings-v23 .phone-prefix-v3{font-weight:800!important}
+@media(max-width:520px){.account-settings-v23 .settings-account-grid-v23{grid-template-columns:1fr!important}.account-settings-v23{padding:15px!important}.account-settings-v23 .phone-row{grid-template-columns:72px minmax(0,1fr)!important}.account-settings-v23 .phone-row input{font-size:14px!important;letter-spacing:.1px!important}}
+
+/* Profile statistics/tabs: exact 3-column alignment. */
+.profile-tabs{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;width:100%!important;align-items:stretch!important}
+.profile-tabs button{min-width:0!important;width:100%!important;text-align:center!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
+.profile-stat{text-align:center!important}
+
+/* Full app viewport: bottom navigation never hides the last card. */
+.app-shell,.main-layout,.content{min-width:0;max-width:100%;box-sizing:border-box}
+.content{padding-bottom:calc(126px + env(safe-area-inset-bottom))!important}
+.main-layout{padding-bottom:calc(130px + env(safe-area-inset-bottom))!important}
+.bottom-nav{z-index:9000!important}
+@media(max-width:390px){.content{padding-bottom:calc(122px + env(safe-area-inset-bottom))!important}.main-layout{padding-bottom:calc(126px + env(safe-area-inset-bottom))!important}.bottom-nav button{min-height:60px!important}}
+
+/* Auth must not flash over the splash or appear for a frame during bootstrap. */
+html.app-boot #auth,html.app-boot #app{visibility:hidden!important;opacity:0!important;pointer-events:none!important}
+html.app-boot #splash{display:flex!important;visibility:visible!important;opacity:1!important}
