@@ -16,18 +16,14 @@
     profileTab: "posts", friendsTab: "suggestions", selectedConversation: null, viewingProfileId: null, renderToken: 0
   };
 
+  const DEFAULT_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop stop-color='%232d7cff'/%3E%3Cstop offset='.55' stop-color='%23745cff'/%3E%3Cstop offset='1' stop-color='%2310b8a6'/%3E%3C/linearGradient%3E%3ClinearGradient id='h' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop stop-color='%23ffffff' stop-opacity='.9'/%3E%3Cstop offset='1' stop-color='%23dce8ff' stop-opacity='.7'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='256' height='256' rx='128' fill='url(%23g)'/%3E%3Ccircle cx='128' cy='101' r='47' fill='url(%23h)'/%3E%3Cpath d='M52 218c10-47 38-70 76-70s66 23 76 70' fill='url(%23h)'/%3E%3Ccircle cx='128' cy='128' r='112' fill='none' stroke='%23ffffff' stroke-opacity='.22' stroke-width='5'/%3E%3C/svg%3E";
   function avatarHTML(p, cls = "avatar") {
-    const letter = (p?.first_name || p?.last_name || p?.name || "T").trim().slice(0, 1).toUpperCase() || "T";
-    return p?.avatar_url
-      ? `<span class="${cls}"><img src="${esc(p.avatar_url)}" alt=""></span>`
-      : `<span class="${cls} default-avatar" aria-label="Avatar par défaut">${esc(letter)}</span>`;
+    const url = p?.avatar_url || DEFAULT_AVATAR;
+    return `<span class="${cls} default-avatar-image"><img src="${esc(url)}" alt="Avatar"></span>`;
   }
   function entityAvatarHTML(entity, type = "page", cls = "entity-logo") {
-    const url = entity?.logo_url || entity?.avatar_url || "";
-    const icon = type === "group" ? "◎" : "▣";
-    return url
-      ? `<div class="${cls}"><img src="${esc(url)}" alt=""></div>`
-      : `<div class="${cls} entity-default-avatar ${type}" aria-label="Avatar par défaut">${icon}</div>`;
+    const url = entity?.logo_url || entity?.avatar_url || DEFAULT_AVATAR;
+    return `<div class="${cls} entity-default-avatar-image ${type}"><img src="${esc(url)}" alt="Avatar"></div>`;
   }
   function nameOf(p) { return [p?.first_name, p?.last_name].filter(Boolean).join(" ") || "Membre Tafaß"; }
   function notificationAction(n) {
@@ -87,7 +83,7 @@
     const settings=(await sb.from("user_settings").select("theme").eq("user_id",state.user.id).maybeSingle()).data;
     if(settings?.theme==="light" || settings?.theme==="dark") state.theme=settings.theme;
     const sideName = $("sideName"); if (sideName) sideName.textContent = nameOf(state.profile);
-    const sideAvatar = $("sideAvatar"); if (sideAvatar) { sideAvatar.className = "avatar default-avatar"; sideAvatar.innerHTML = state.profile?.avatar_url ? `<img src="${esc(state.profile.avatar_url)}" alt="">` : esc((state.profile?.first_name || state.profile?.last_name || "T").trim().slice(0,1).toUpperCase() || "T"); }
+    const sideAvatar = $("sideAvatar"); if (sideAvatar) { sideAvatar.outerHTML = avatarHTML(state.profile, "avatar").replace("<span ", '<span id="sideAvatar" '); }
   }
 
   async function loadPosts() {
@@ -760,7 +756,7 @@
       if(ids.length){ const f=await sb.from("page_followers").select("page_id,user_id").in("page_id",ids); followers=f.data||[]; }
       const counts=new Map(); followers.forEach(x=>counts.set(x.page_id,(counts.get(x.page_id)||0)+1));
       return simplePage("Pages", `<div class="entity-hero premium-hero"><div class="entity-hero-mark">▣</div><div><span class="eyebrow">TAFAß • PAGES</span><h3>Pages et communautés publiques</h3><p class="page-subtitle">Découvrez les Pages réelles, suivez-les et gérez vos propres Pages.</p></div></div>
-        <div class="page-header-actions"><button class="primary" data-action="create-page">＋ Créer une Page</button></div>
+        <div class="page-header-actions"><button class="primary premium-create-button" data-action="create-page">＋ Créer une Page</button></div>
         <div class="entity-grid">${rows.map(x=>`<article class="entity-card"><div class="entity-cover" ${x.cover_url?`style="background-image:url('${esc(x.cover_url)}')"`:""}></div><div class="entity-body">${entityAvatarHTML(x,"page")}<h3>${esc(x.name)}</h3><p>${esc(x.bio||"Aucune présentation.")}</p><div class="entity-meta"><span>${esc(x.category||"Autre")}</span><span>${counts.get(x.id)||0} abonné${(counts.get(x.id)||0)>1?"s":""}</span></div><div class="entity-actions"><button class="primary" data-action="page-open" data-id="${esc(x.id)}">Ouvrir</button></div></div></article>`).join("") || `<div class="empty entity-empty">Aucune Page disponible pour le moment.</div>`}</div>`);
     }
     if (route === "groups") {
@@ -773,7 +769,7 @@
       const counts=new Map(); members.forEach(x=>counts.set(x.group_id,(counts.get(x.group_id)||0)+1));
       const mineIds=new Set(members.filter(x=>x.user_id===state.user.id).map(x=>x.group_id));
       return simplePage("Groupes", `<div class="entity-hero premium-hero"><div class="entity-hero-mark">◎</div><div><span class="eyebrow">TAFAß • GROUPES</span><h3>Communautés réelles</h3><p class="page-subtitle">Rejoignez, quittez et gérez les groupes disponibles sur Tafaß.</p></div></div>
-        <div class="page-header-actions"><button class="primary" data-action="create-group">＋ Créer un groupe</button></div>
+        <div class="page-header-actions"><button class="primary premium-create-button" data-action="create-group">＋ Créer un groupe</button></div>
         <div class="entity-grid">${rows.map(x=>`<article class="entity-card"><div class="entity-cover" ${x.cover_url?`style="background-image:url('${esc(x.cover_url)}')"`:""}></div><div class="entity-body">${entityAvatarHTML(x,"group")}<h3>${esc(x.name)}</h3><p>${esc(x.description||"Aucune description.")}</p><div class="entity-meta"><span>${esc(x.privacy||"public")}</span><span>${counts.get(x.id)||0} membre${(counts.get(x.id)||0)>1?"s":""}</span></div><div class="entity-actions"><button class="primary" data-action="group-open" data-id="${esc(x.id)}">${mineIds.has(x.id)?"Ouvrir":"Voir le groupe"}</button></div></div></article>`).join("") || `<div class="empty entity-empty">Aucun groupe disponible pour le moment.</div>`}</div>`);
     }
     if (route === "saved") {
@@ -1096,8 +1092,7 @@
 
   function logout() {
     openModal(`<div class="modal-box logout-modal premium-logout-modal">
-      <button class="modal-close" data-action="close-modal" aria-label="Fermer">×</button>
-      <div class="logout-visual"><span>↪</span></div>
+      <div class="logout-visual"><span class="logout-shield" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M24 5l15 6v10c0 10.2-6.3 18.1-15 22-8.7-3.9-15-11.8-15-22V11l15-6z"/><path d="M16 24l5 5 11-12"/></svg></span></div>
       <span class="eyebrow">TAFAß • COMPTE</span>
       <h3>Déconnexion</h3>
       <p class="logout-question">Voulez-vous vraiment vous déconnecter de votre compte ?</p>
@@ -1106,11 +1101,15 @@
     </div>`);
   }
   async function confirmLogout() {
-    const { error } = await sb.auth.signOut();
-    if(error) return toast(error.message);
+    const button = document.querySelector('[data-action="confirm-logout"]');
+    if (button) { button.disabled = true; button.textContent = "Déconnexion…"; }
+    const { error } = await sb.auth.signOut({ scope: "global" });
+    if (error) { if (button) { button.disabled = false; button.textContent = "Se déconnecter"; } return toast(error.message); }
+    if (state.channel) { try { await sb.removeChannel(state.channel); } catch (_) {} state.channel = null; }
+    state.user=null; state.profile=null; state.selectedConversation=null; state.viewingProfileId=null;
     closeModal();
-    state.user=null; state.profile=null; state.selectedConversation=null;
-    $("app").classList.add("hidden"); showLogin();
+    $("app").classList.add("hidden");
+    showLogin();
   }
 
   async function setupRealtime() {
@@ -1240,7 +1239,7 @@
     if (action === "save-search-privacy") return saveUserSetting({ allow_search_by_phone: !!$("allowSearchPhone")?.checked, allow_search_by_email: !!$("allowSearchEmail")?.checked });
     if (action === "save-language") return saveUserSetting({ language: $("languageSelect")?.value || "fr" });
     if (["friend-settings","message-settings","search-privacy-settings","language-settings","message-notification-settings","friend-notification-settings","reaction-notification-settings","comment-notification-settings"].includes(action)) return openSettingControl(action);
-    if (action === "create-group") return openModal(`<div class="modal-box entity-create-modal-v2"><button class="modal-close" data-action="close-modal">×</button><div class="create-hero-v2 group"><span class="create-icon-v2">◎</span><div><span class="eyebrow">TAFAß • GROUPES</span><h3>Créer un groupe</h3><p>Créez votre espace communautaire avec une identité claire.</p></div></div><div class="create-grid-v2"><label class="create-field-v2 wide"><span>Nom du groupe</span><input id="newGroupName" maxlength="80" placeholder="Ex. Passion Madagascar"></label><label class="create-field-v2 wide"><span>Description</span><textarea id="newGroupDesc" maxlength="500" placeholder="Présentez votre groupe…"></textarea></label><label class="create-upload-v2"><span>Avatar du groupe</span><input id="newGroupAvatar" type="file" accept="image/jpeg,image/png,image/webp"><small>Optionnel • avatar par défaut automatique</small></label><label class="create-upload-v2"><span>Photo de couverture</span><input id="newGroupCover" type="file" accept="image/jpeg,image/png,image/webp"><small>Optionnel</small></label></div><button class="primary big create-submit-v2" data-action="save-group"><span>＋</span> Créer le groupe</button></div>`);
+    if (action === "create-group") return openModal(`<div class="modal-box entity-create-modal-v2"><button class="modal-close" data-action="close-modal">×</button><div class="create-hero-v2 group"><span class="create-icon-v2 group-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="8" cy="9" r="3"/><circle cx="17" cy="10" r="2.5"/><path d="M2.8 20c.6-4 2.5-6 5.2-6s4.6 2 5.2 6M13.5 15c3-.2 5 1.5 5.7 5"/></svg></span><div><span class="eyebrow">TAFAß • GROUPES</span><h3>Créer un groupe</h3><p>Créez votre espace communautaire avec une identité claire.</p></div></div><div class="create-grid-v2"><label class="create-field-v2 wide"><span>Nom du groupe</span><input id="newGroupName" maxlength="80" placeholder="Ex. Passion Madagascar"></label><label class="create-field-v2 wide"><span>Description</span><textarea id="newGroupDesc" maxlength="500" placeholder="Présentez votre groupe…"></textarea></label><label class="create-upload-v2"><span>Avatar du groupe</span><input id="newGroupAvatar" type="file" accept="image/jpeg,image/png,image/webp"><small>Optionnel • avatar par défaut automatique</small></label><label class="create-upload-v2"><span>Photo de couverture</span><input id="newGroupCover" type="file" accept="image/jpeg,image/png,image/webp"><small>Optionnel</small></label></div><button class="primary big create-submit-v2" data-action="save-group"><span>＋</span> Créer le groupe</button></div>`);
     if (action === "save-group") {
       const name=$("newGroupName")?.value.trim(); if(!name)return toast("Entrez un nom.");
       const r=await sb.from("groups").insert({owner_id:state.user.id,name,description:$("newGroupDesc")?.value.trim()||"",privacy:"public"}).select().single();
@@ -1252,7 +1251,7 @@
       if(Object.keys(patch).length) await sb.from('groups').update(patch).eq('id',g.id).eq('owner_id',state.user.id);
       closeModal(); toast("Groupe créé"); return genericListPage("groups");
     }
-    if (action === "create-page") return openModal(`<div class="modal-box entity-create-modal-v2"><button class="modal-close" data-action="close-modal">×</button><div class="create-hero-v2 page"><span class="create-icon-v2">▣</span><div><span class="eyebrow">TAFAß • PAGES</span><h3>Créer une Page</h3><p>Donnez à votre Page une identité professionnelle et claire.</p></div></div><div class="create-grid-v2"><label class="create-field-v2 wide"><span>Nom de la Page</span><input id="newPageName" maxlength="80" placeholder="Nom de la Page"></label><label class="create-field-v2"><span>Catégorie</span><input id="newPageCategory" maxlength="60" placeholder="Ex. Média, Commerce…"></label><label class="create-upload-v2"><span>Avatar de la Page</span><input id="newPageAvatar" type="file" accept="image/jpeg,image/png,image/webp"><small>Optionnel • avatar par défaut automatique</small></label><label class="create-field-v2 wide"><span>Présentation</span><textarea id="newPageBio" maxlength="500" placeholder="Présentez votre Page…"></textarea></label><label class="create-upload-v2 wide"><span>Photo de couverture</span><input id="newPageCover" type="file" accept="image/jpeg,image/png,image/webp"><small>Optionnel</small></label></div><button class="primary big create-submit-v2" data-action="save-page"><span>＋</span> Créer la Page</button></div>`);
+    if (action === "create-page") return openModal(`<div class="modal-box entity-create-modal-v2"><button class="modal-close" data-action="close-modal">×</button><div class="create-hero-v2 page"><span class="create-icon-v2 page-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 7h6M9 11h6M9 15h4"/></svg></span><div><span class="eyebrow">TAFAß • PAGES</span><h3>Créer une Page</h3><p>Donnez à votre Page une identité professionnelle et claire.</p></div></div><div class="create-grid-v2"><label class="create-field-v2 wide"><span>Nom de la Page</span><input id="newPageName" maxlength="80" placeholder="Nom de la Page"></label><label class="create-field-v2"><span>Catégorie</span><input id="newPageCategory" maxlength="60" placeholder="Ex. Média, Commerce…"></label><label class="create-upload-v2"><span>Avatar de la Page</span><input id="newPageAvatar" type="file" accept="image/jpeg,image/png,image/webp"><small>Optionnel • avatar par défaut automatique</small></label><label class="create-field-v2 wide"><span>Présentation</span><textarea id="newPageBio" maxlength="500" placeholder="Présentez votre Page…"></textarea></label><label class="create-upload-v2 wide"><span>Photo de couverture</span><input id="newPageCover" type="file" accept="image/jpeg,image/png,image/webp"><small>Optionnel</small></label></div><button class="primary big create-submit-v2" data-action="save-page"><span>＋</span> Créer la Page</button></div>`);
     if (action === "save-page") {
       const name=$("newPageName")?.value.trim(); if(!name)return toast("Entrez un nom.");
       const r=await sb.from("pages").insert({owner_id:state.user.id,name,category:$("newPageCategory")?.value.trim()||"Autre",bio:$("newPageBio")?.value.trim()||""}).select().single();
