@@ -427,6 +427,9 @@ document.documentElement.classList.add("app-boot");
     const token = state.renderToken;
     const term = q.trim();
     let people = [], posts = [], pages = [], groups = [];
+
+    // A search screen must stay clean until the user actually searches.
+    // Search history is intentionally kept in the dedicated History table.
     if (term) {
       const safe = term.replace(/[%_]/g, "");
       const [pr, por, pgr, gr] = await Promise.all([
@@ -436,9 +439,9 @@ document.documentElement.classList.add("app-boot");
         sb.from("groups").select("*").or(`name.ilike.%${safe}%,description.ilike.%${safe}%`).limit(20)
       ]);
       people=pr.data||[]; posts=por.data||[]; pages=pgr.data||[]; groups=gr.data||[];
-      if (state.user) {
+      if (state.user && safe.length >= 2) {
         const recent=await sb.from("search_history").select("id").eq("user_id",state.user.id).eq("search_text",term).limit(1);
-        if(!(recent.data||[]).length) await sb.from("search_history").insert({ user_id: state.user.id, search_text: term, result_type: "all" });
+        if(!(recent.data||[]).length) await sb.from("search_history").insert({ user_id:state.user.id, search_text:term, result_type:"all" });
       }
       const ids=[...new Set(posts.map(x=>x.user_id).filter(Boolean))];
       const pp=ids.length ? await sb.from("profiles").select("*").in("id",ids) : {data:[]};
@@ -446,12 +449,26 @@ document.documentElement.classList.add("app-boot");
       posts=posts.map(x=>({...x,author:map.get(x.user_id)}));
     }
     if (token !== state.renderToken || state.route !== "search") return;
+
     const peopleHtml=people.length ? people.map(p=>`<div class="list-row search-result-row">${avatarHTML(p)}<div class="grow"><b>${esc(nameOf(p))}</b></div><button class="small-action" data-action="view-profile" data-id="${esc(p.id)}">Voir le profil</button></div>`).join("") : `<div class="empty">Aucun compte trouvé.</div>`;
     const postHtml=posts.length ? posts.map(p=>`<div class="list-row search-result-row"><div class="grow"><b>${esc(nameOf(p.author||{}))}</b><small>${esc((p.content||"Publication sans texte").slice(0,140))}</small></div><button class="small-action" data-action="search-post" data-id="${esc(p.id)}">Voir</button></div>`).join("") : `<div class="empty">Aucune publication trouvée.</div>`;
     const pageHtml=pages.length ? pages.map(x=>`<div class="list-row search-result-row"><div class="entity-search-icon">▣</div><div class="grow"><b>${esc(x.name)}</b><small>${esc(x.category||"Page")} · ${esc(x.bio||"")}</small></div><button class="small-action" data-action="page-open" data-id="${esc(x.id)}">Ouvrir</button></div>`).join("") : `<div class="empty">Aucune Page trouvée.</div>`;
     const groupHtml=groups.length ? groups.map(x=>`<div class="list-row search-result-row"><div class="entity-search-icon">◎</div><div class="grow"><b>${esc(x.name)}</b><small>${esc(x.privacy||"public")} · ${esc(x.description||"")}</small></div><button class="small-action" data-action="group-open" data-id="${esc(x.id)}">Ouvrir</button></div>`).join("") : `<div class="empty">Aucun groupe trouvé.</div>`;
-    $("content").innerHTML = `<section class="clean-page search-page-premium"><div class="page-header clean-page-header"><div><h2>Rechercher</h2><p class="page-kicker">Comptes, publications, Pages et groupes réels de Tafaß</p></div></div><div class="clean-search searchbox"><span class="icon">⌕</span><input id="searchInput" value="${esc(term)}" placeholder="Nom, prénom ou publication..."></div><div class="clean-section"><h3 class="menu-section-title">Comptes</h3><div class="clean-list" id="searchPeople">${peopleHtml}</div></div><div class="clean-section"><h3 class="menu-section-title">Publications</h3><div class="clean-list" id="searchPosts">${postHtml}</div></div><div class="clean-section"><h3 class="menu-section-title">Pages</h3><div class="clean-list" id="searchPages">${pageHtml}</div></div><div class="clean-section"><h3 class="menu-section-title">Groupes</h3><div class="clean-list" id="searchGroups">${groupHtml}</div></div></section>`;
-    $("searchInput").addEventListener("input", e=>{ clearTimeout(searchTimer); searchTimer=setTimeout(()=>searchPage(e.target.value),320); });
+
+    const results = term ? `
+      <div class="clean-section search-results-section"><h3 class="menu-section-title">Comptes</h3><div class="clean-list" id="searchPeople">${peopleHtml}</div></div>
+      <div class="clean-section search-results-section"><h3 class="menu-section-title">Publications</h3><div class="clean-list" id="searchPosts">${postHtml}</div></div>
+      <div class="clean-section search-results-section"><h3 class="menu-section-title">Pages</h3><div class="clean-list" id="searchPages">${pageHtml}</div></div>
+      <div class="clean-section search-results-section"><h3 class="menu-section-title">Groupes</h3><div class="clean-list" id="searchGroups">${groupHtml}</div></div>` : `
+      <div class="search-idle-card">
+        <div class="search-idle-icon">⌕</div>
+        <h3>Commencez une recherche</h3>
+        <p>Saisissez un nom, une publication, une Page ou un groupe. Les résultats apparaîtront uniquement après votre recherche.</p>
+        <button class="ghost-action" data-action="menu-service" data-service="activity" data-name="Historique de recherche">Voir l’historique</button>
+      </div>`;
+
+    $("content").innerHTML = `<section class="clean-page search-page-premium"><div class="page-header clean-page-header"><div><h2>Rechercher</h2><p class="page-kicker">Recherche avancée Tafaß</p></div></div><div class="clean-search searchbox premium-searchbox"><span class="icon">⌕</span><input id="searchInput" value="${esc(term)}" placeholder="Nom, prénom, publication, Page ou groupe…" autocomplete="off"></div>${results}</section>`;
+    $("searchInput")?.addEventListener("input", e=>{ clearTimeout(searchTimer); searchTimer=setTimeout(()=>searchPage(e.target.value),320); });
   }
 
   async function messagesPage() {
@@ -1014,8 +1031,13 @@ document.documentElement.classList.add("app-boot");
   async function servicePage(service) {
     state.backOverride = "menu";
     if(service === "activity") {
-      const r=await sb.from("activity_history").select("*").eq("user_id",state.user.id).order("created_at",{ascending:false}).limit(100);
-      return simplePage("Historique d'activité", `<div class="clean-list">${(r.data||[]).map(x=>`<div class="list-row"><div class="grow"><b>${esc(x.description||x.action_type)}</b><small>${esc(x.entity_type||"")} · ${timeAgo(x.created_at)}</small></div></div>`).join("")||`<div class="empty">Aucune activité enregistrée.</div>`}</div>`);
+      const [activityR, searchR] = await Promise.all([
+        sb.from("activity_history").select("*").eq("user_id",state.user.id).order("created_at",{ascending:false}).limit(100),
+        sb.from("search_history").select("*").eq("user_id",state.user.id).order("created_at",{ascending:false}).limit(100)
+      ]);
+      const activityRows=(activityR.data||[]).map(x=>`<div class="list-row history-row"><div class="grow"><b>${esc(x.description||x.action_type||"Activité")}</b><small>${esc(x.entity_type||"")} · ${timeAgo(x.created_at)}</small></div></div>`).join("") || `<div class="empty">Aucune activité enregistrée.</div>`;
+      const searchRows=(searchR.data||[]).map(x=>`<div class="list-row history-row"><div class="history-search-icon">⌕</div><div class="grow"><b>${esc(x.search_text||"")}</b><small>Recherche · ${timeAgo(x.created_at)}</small></div><button class="ghost-action history-delete-btn" data-action="delete-search-history" data-id="${esc(x.id)}" aria-label="Supprimer cette recherche">Supprimer</button></div>`).join("") || `<div class="empty">Aucune recherche enregistrée.</div>`;
+      return simplePage("Historique d'activité", `<div class="history-table-head"><div><h3 class="menu-section-title">Historique de recherche</h3><p>Vos recherches sont conservées ici, séparément de la page Rechercher.</p></div><button class="ghost-action danger-history-action" data-action="clear-search-history">Tout effacer</button></div><div class="clean-list history-search-list">${searchRows}</div><div class="history-table-head activity-head"><div><h3 class="menu-section-title">Activité récente</h3><p>Les actions enregistrées sur votre compte.</p></div></div><div class="clean-list">${activityRows}</div>`);
     }
     if(service === "privacy") return settingsPage();
     if(service === "help") return simplePage("Aide", `<div class="clean-section"><h3 class="menu-section-title">Centre d'aide</h3><div class="settings-grid"><button class="setting-card" data-action="help-item" data-name="Compte"><span><b>Compte</b><small>Connexion, profil et paramètres</small></span><span>›</span></button><button class="setting-card" data-action="help-item" data-name="Sécurité"><span><b>Sécurité</b><small>Accès et protection du compte</small></span><span>›</span></button><button class="setting-card" data-action="help-item" data-name="Signalement"><span><b>Signalement</b><small>Signaler un compte ou une publication</small></span><span>›</span></button></div></div>`);
@@ -1616,6 +1638,18 @@ document.documentElement.classList.add("app-boot");
       if (!post) post = (await sb.from("posts").select("*").eq("id", id).maybeSingle()).data;
       const owner = post?.user_id === state.user.id;
       return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">PUBLICATION</span><h3>Actions</h3><div class="menu-grid"><button class="menu-card" data-action="save-post" data-id="${esc(id)}"><span class="menu-icon">♡</span><span><b>Enregistrer</b><small>Disponible pour tous</small></span></button>${owner ? `<button class="menu-card" data-action="edit-post" data-id="${esc(id)}"><span class="menu-icon">✎</span><span><b>Modifier</b><small>Uniquement votre publication</small></span></button><button class="menu-card danger-card" data-action="delete-post" data-id="${esc(id)}"><span class="menu-icon">⌫</span><span><b>Supprimer</b><small>Vous êtes le propriétaire</small></span></button>` : `<button class="menu-card" data-action="report-post" data-id="${esc(id)}"><span class="menu-icon">⚑</span><span><b>Signaler</b><small>Signaler cette publication</small></span></button>`}</div></div>`);
+    }
+    if (action === "delete-search-history") {
+      const r=await sb.from("search_history").delete().eq("id",id).eq("user_id",state.user.id);
+      if(r.error) return toast(r.error.message);
+      toast("Recherche supprimée");
+      return servicePage("activity");
+    }
+    if (action === "clear-search-history") {
+      const r=await sb.from("search_history").delete().eq("user_id",state.user.id);
+      if(r.error) return toast(r.error.message);
+      toast("Historique de recherche effacé");
+      return servicePage("activity");
     }
     if (action === "page-back") return goBack();
     if (action === "auth-onboarding-back") { state.entering=false; state.user=null; sb.auth.signOut().catch(()=>{}); return showLogin(); }

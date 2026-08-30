@@ -1854,3 +1854,92 @@ body.light .profile-redesign-v5 .redesign-section-v5{box-shadow:0 7px 22px rgba(
 .splash-logo-image{width:112px;height:112px;display:block;object-fit:contain;filter:drop-shadow(0 20px 42px rgba(46,113,255,.34));animation:splashLogoPremium 2.4s ease-in-out infinite}
 @keyframes splashLogoPremium{0%,100%{transform:scale(1) rotate(0deg)}50%{transform:scale(1.045) rotate(.6deg)}}
 @media(max-width:390px){.splash-logo-image{width:94px;height:94px}.auth-brand-logo{width:38px;height:38px}.brand-kicker img{width:20px!important;height:20px!important;flex-basis:20px!important}}
+
+/* =========================================================
+   TAFAß FINAL — REQUESTED ONLY: PROFILE AVATAR / TITLES / SEARCH
+   ========================================================= */
+/* PDP editor: place the avatar on the lower-left edge of the cover,
+   never below the visual header. */
+.profile-redesign-v5 .profile-visual-card-v5{
+  margin-bottom:18px!important;
+  padding-bottom:0!important;
+}
+.profile-redesign-v5 .profile-avatar-wrap-v5{
+  left:22px!important;
+  top:142px!important;
+  bottom:auto!important;
+  z-index:20!important;
+}
+.profile-redesign-v5 .profile-visual-meta-v5{
+  min-height:72px!important;
+  padding:13px 17px 13px 145px!important;
+}
+@media(max-width:620px){
+  .profile-redesign-v5 .profile-visual-card-v5{margin-bottom:13px!important;padding-bottom:0!important}
+  .profile-redesign-v5 .profile-avatar-wrap-v5{left:14px!important;top:112px!important;bottom:auto!important;width:82px!important;height:82px!important}
+  .profile-redesign-v5 .profile-visual-meta-v5{min-height:61px!important;padding:11px 12px 11px 108px!important}
+}
+
+/* Section/page titles must remain visible; never let a decorative label
+   replace or visually hide the actual title text. */
+.clean-page-header h1,.clean-page-header h2,.clean-page-header h3,
+.page-header h1,.page-header h2,.page-header h3,
+.menu-section-title,.settings-section-title,
+.redesign-section-head-v5 b,.redesign-heading h3{
+  visibility:visible!important;
+  opacity:1!important;
+}
+.menu-section-title,.settings-section-title{
+  color:var(--text,#eef4ff)!important;
+  font-weight:900!important;
+}
+body.light .menu-section-title,body.light .settings-section-title,
+body.light .clean-page-header h1,body.light .clean-page-header h2,
+body.light .clean-page-header h3,body.light .page-header h1,
+body.light .page-header h2,body.light .page-header h3{
+  color:#15243a!important;
+}
+.settings-section-title:before,.profile-section-title-v23:before{
+  color:#176be8!important;
+}
+
+/* Search: results are hidden until a real query is entered. */
+.search-page-premium .premium-searchbox{
+  position:sticky!important;top:0;z-index:4;box-shadow:0 12px 30px rgba(0,0,0,.10)!important;
+}
+.search-idle-card{
+  margin:20px auto 0;max-width:620px;padding:38px 24px;text-align:center;
+  border:1px solid rgba(105,145,220,.15);border-radius:22px;
+  background:linear-gradient(145deg,rgba(31,54,90,.40),rgba(11,20,36,.55));
+}
+.search-idle-icon{width:56px;height:56px;margin:0 auto 14px;border-radius:18px;display:grid;place-items:center;font-size:29px;color:#76a8ff;background:rgba(55,117,255,.12);border:1px solid rgba(91,143,255,.18)}
+.search-idle-card h3{margin:0 0 7px;color:#f0f5ff;font-size:18px}
+.search-idle-card p{margin:0 auto 18px;max-width:470px;color:#8392aa;font-size:11px;line-height:1.6}
+body.light .search-idle-card{background:linear-gradient(145deg,#fff,#f5f8fd);border-color:#d9e3ee}
+body.light .search-idle-card h3{color:#15243a}
+body.light .search-idle-card p{color:#60728a}
+
+.history-table-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:4px 0 10px}
+.history-table-head>div{min-width:0}
+.history-table-head .menu-section-title{margin:0 0 4px!important}
+.history-table-head p{margin:0;color:#7e8da5;font-size:10px;line-height:1.45}
+.history-search-list{margin-bottom:20px}
+.history-row{gap:10px}
+.history-search-icon{width:34px;height:34px;flex:0 0 34px;display:grid;place-items:center;border-radius:11px;background:rgba(62,125,255,.11);border:1px solid rgba(95,143,238,.14);color:#70a2ff;font-size:17px}
+.history-delete-btn{font-size:9px!important;padding:7px 9px!important}
+.danger-history-action{color:#e25568!important;border-color:rgba(226,85,104,.25)!important;background:rgba(226,85,104,.06)!important}
+.activity-head{margin-top:20px}
+body.light .history-table-head p{color:#64758d}
+body.light .history-search-icon{background:#edf4ff;border-color:#d7e3f3;color:#176be8}
+
+/* No visible native scrollbar anywhere in the main UI, while scrolling remains enabled. */
+html,body,#app,.main-layout,.content,.clean-page,.search-page-premium,
+.profile-redesign-body,.account-redesign-body-v5,.modal,.modal-box{
+  scrollbar-width:none!important;-ms-overflow-style:none!important;
+}
+html::-webkit-scrollbar,body::-webkit-scrollbar,#app::-webkit-scrollbar,
+.main-layout::-webkit-scrollbar,.content::-webkit-scrollbar,.clean-page::-webkit-scrollbar,
+.search-page-premium::-webkit-scrollbar,.profile-redesign-body::-webkit-scrollbar,
+.account-redesign-body-v5::-webkit-scrollbar,.modal::-webkit-scrollbar,.modal-box::-webkit-scrollbar{
+  width:0!important;height:0!important;display:none!important;
+}
