@@ -1672,3 +1672,58 @@ body.light .profile-visual-card-v5,body.light .redesign-section-v5{background:li
 /* Final centering fix: the intro animation preserves the exact 50/50 anchor. */
 .splash-content{animation:splashContentInCentered .78s cubic-bezier(.2,.8,.2,1) both!important}
 @keyframes splashContentInCentered{from{opacity:0;transform:translate(-50%,-46%) scale(.985)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
+
+/* =========================================================
+   TAFAß — PROFILE ACTION BAR FINAL ALIGNMENT
+   Ajouter/Suivre = gauche • Messages = centre • ⋯ = droite
+   ========================================================= */
+.profile-page-premium .profile-actions{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr) 48px!important;
+  align-items:center!important;
+  width:100%!important;
+  gap:10px!important;
+  flex-wrap:nowrap!important;
+  margin:14px 0 16px!important;
+}
+.profile-page-premium .profile-action-slot{
+  min-width:0!important;
+  width:100%!important;
+  display:flex!important;
+  align-items:center!important;
+}
+.profile-page-premium .profile-action-left{justify-content:flex-start!important;grid-column:1!important}
+.profile-page-premium .profile-action-center{justify-content:center!important;grid-column:2!important}
+.profile-page-premium .profile-action-right{justify-content:flex-end!important;grid-column:3!important}
+.profile-page-premium .profile-action-slot>button{
+  box-sizing:border-box!important;
+  max-width:100%!important;
+  min-width:0!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  white-space:nowrap!important;
+}
+.profile-page-premium .profile-action-left>button{width:auto!important;min-height:42px!important;padding:0 16px!important}
+.profile-page-premium .profile-action-center>button{width:auto!important;min-height:42px!important;padding:0 16px!important}
+.profile-page-premium .profile-action-right>button.profile-more-button{
+  width:46px!important;height:46px!important;min-width:46px!important;padding:0!important;
+  margin:0!important;display:grid!important;place-items:center!important;
+}
+.profile-page-premium .profile-more-button span{transform:none!important;line-height:1!important}
+@media(max-width:620px){
+  .profile-page-premium .profile-actions{
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr) 44px!important;
+    gap:7px!important;
+    margin:12px 0 14px!important;
+  }
+  .profile-page-premium .profile-action-left>button,
+  .profile-page-premium .profile-action-center>button{
+    width:100%!important;
+    min-height:40px!important;
+    padding:0 8px!important;
+    font-size:10px!important;
+  }
+  .profile-page-premium .profile-action-right>button.profile-more-button{
+    width:42px!important;height:42px!important;min-width:42px!important;
+  }
+}
