@@ -9,15 +9,22 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=32">
+  <link rel="stylesheet" href="style.css?v=27">
 </head>
 <body>
-  <div id="splash" class="splash-screen">
-    <div class="splash-orb"></div>
-    <div class="splash-logo">T</div>
-    <div class="splash-brand">Tafaß</div>
-    <div class="splash-tagline">Rapprochons le monde</div>
-    <div class="splash-dots"><i></i><i></i><i></i><i></i></div>
+  <div id="splash" class="splash-screen" aria-label="Chargement de Tafaß" role="status">
+    <div class="splash-noise" aria-hidden="true"></div>
+    <div class="splash-orb splash-orb-a" aria-hidden="true"></div>
+    <div class="splash-orb splash-orb-b" aria-hidden="true"></div>
+    <div class="splash-grid" aria-hidden="true"></div>
+    <div class="splash-content">
+      <div class="splash-mark-wrap"><div class="splash-logo"><span>T</span><b>ß</b></div><span class="splash-ring" aria-hidden="true"></span></div>
+      <div class="splash-brand"><span>Tafa</span><b>ß</b></div>
+      <div class="splash-tagline">Rapprochons le monde</div>
+      <div class="splash-loader" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
+      <div class="splash-status">Préparation de votre espace</div>
+    </div>
+    <div class="splash-footer">TAFAß <span>•</span> RÉSEAU SOCIAL</div>
   </div>
 
   <section id="auth" class="auth-screen hidden">
