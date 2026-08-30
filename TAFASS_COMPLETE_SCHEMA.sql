@@ -645,3 +645,239 @@ alter table public.post_shares replica identity full;
 alter table public.blocked_profiles replica identity full;
 alter table public.profile_reports replica identity full;
 alter table public.payment_transactions replica identity full;
+
+
+/* =========================================================
+   TAFAß FINAL — PRODUCTION INDEXES + OPTIONAL REALTIME MODULES
+   Safe additions: CREATE IF NOT EXISTS / duplicate-safe publication.
+   ========================================================= */
+
+-- Fast feed / profile / search indexes
+create index if not exists posts_created_at_idx on public.posts(created_at desc);
+create index if not exists posts_user_created_at_idx on public.posts(user_id, created_at desc);
+create index if not exists posts_visibility_created_at_idx on public.posts(visibility, created_at desc);
+create index if not exists post_reactions_post_idx on public.post_reactions(post_id, created_at desc);
+create index if not exists comments_post_created_at_idx on public.comments(post_id, created_at asc);
+create index if not exists notifications_user_created_at_idx on public.notifications(user_id, created_at desc);
+create index if not exists notifications_user_unread_idx on public.notifications(user_id, is_read, created_at desc);
+create index if not exists friend_requests_receiver_status_idx on public.friend_requests(receiver_id, status, created_at desc);
+create index if not exists friendships_user_idx on public.friendships(user_id, friend_id);
+create index if not exists friendships_friend_idx on public.friendships(friend_id, user_id);
+create index if not exists follows_follower_idx on public.follows(follower_id, created_at desc);
+create index if not exists follows_following_idx on public.follows(following_id, created_at desc);
+create index if not exists messages_conversation_created_idx on public.messages(conversation_id, created_at asc);
+create index if not exists conversation_members_user_idx on public.conversation_members(user_id, conversation_id);
+create index if not exists group_members_user_idx on public.group_members(user_id, group_id);
+create index if not exists page_followers_user_idx on public.page_followers(user_id, page_id);
+create index if not exists search_history_user_created_idx on public.search_history(user_id, created_at desc);
+create index if not exists activity_history_user_created_idx on public.activity_history(user_id, created_at desc);
+
+-- Realtime-friendly updated_at trigger
+create or replace function public.tafa_set_updated_at()
+returns trigger language plpgsql as $$
+begin
+  new.updated_at := now();
+  return new;
+end;
+$$;
+
+do $$
+begin
+  if exists(select 1 from information_schema.columns where table_schema='public' and table_name='profiles' and column_name='updated_at') then
+    drop trigger if exists tafa_profiles_updated_at on public.profiles;
+    create trigger tafa_profiles_updated_at before update on public.profiles for each row execute function public.tafa_set_updated_at();
+  end if;
+  if exists(select 1 from information_schema.columns where table_schema='public' and table_name='posts' and column_name='updated_at') then
+    drop trigger if exists tafa_posts_updated_at on public.posts;
+    create trigger tafa_posts_updated_at before update on public.posts for each row execute function public.tafa_set_updated_at();
+  end if;
+  if exists(select 1 from information_schema.columns where table_schema='public' and table_name='comments' and column_name='updated_at') then
+    drop trigger if exists tafa_comments_updated_at on public.comments;
+    create trigger tafa_comments_updated_at before update on public.comments for each row execute function public.tafa_set_updated_at();
+  end if;
+  if exists(select 1 from information_schema.columns where table_schema='public' and table_name='groups' and column_name='updated_at') then
+    drop trigger if exists tafa_groups_updated_at on public.groups;
+    create trigger tafa_groups_updated_at before update on public.groups for each row execute function public.tafa_set_updated_at();
+  end if;
+  if exists(select 1 from information_schema.columns where table_schema='public' and table_name='pages' and column_name='updated_at') then
+    drop trigger if exists tafa_pages_updated_at on public.pages;
+    create trigger tafa_pages_updated_at before update on public.pages for each row execute function public.tafa_set_updated_at();
+  end if;
+  if exists(select 1 from information_schema.columns where table_schema='public' and table_name='tafab_listings' and column_name='updated_at') then
+    drop trigger if exists tafa_listings_updated_at on public.tafab_listings;
+    create trigger tafa_listings_updated_at before update on public.tafab_listings for each row execute function public.tafa_set_updated_at();
+  end if;
+  if exists(select 1 from information_schema.columns where table_schema='public' and table_name='tafab_ads' and column_name='updated_at') then
+    drop trigger if exists tafa_ads_updated_at on public.tafab_ads;
+    create trigger tafa_ads_updated_at before update on public.tafab_ads for each row execute function public.tafa_set_updated_at();
+  end if;
+end $$;
+
+-- Stories
+create table if not exists public.stories (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  media_url text not null,
+  media_type text not null default 'image',
+  text_overlay text default '',
+  visibility text not null default 'friends',
+  expires_at timestamptz not null default (now() + interval '24 hours'),
+  created_at timestamptz not null default now()
+);
+create table if not exists public.story_views (
+  id uuid primary key default gen_random_uuid(),
+  story_id uuid not null references public.stories(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  viewed_at timestamptz not null default now(),
+  unique(story_id,user_id)
+);
+
+-- Reels / short videos
+create table if not exists public.reels (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  caption text default '',
+  media_url text not null,
+  thumbnail_url text,
+  visibility text not null default 'public',
+  views_count bigint not null default 0,
+  likes_count bigint not null default 0,
+  comments_count bigint not null default 0,
+  shares_count bigint not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- Voice/video calls
+create table if not exists public.calls (
+  id uuid primary key default gen_random_uuid(),
+  conversation_id uuid references public.conversations(id) on delete cascade,
+  caller_id uuid not null references public.profiles(id) on delete cascade,
+  type text not null default 'audio' check(type in ('audio','video')),
+  status text not null default 'ringing' check(status in ('ringing','accepted','declined','ended','missed')),
+  started_at timestamptz,
+  ended_at timestamptz,
+  created_at timestamptz not null default now()
+);
+create table if not exists public.call_participants (
+  id uuid primary key default gen_random_uuid(),
+  call_id uuid not null references public.calls(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  status text not null default 'invited' check(status in ('invited','ringing','joined','declined','left')),
+  joined_at timestamptz,
+  left_at timestamptz,
+  unique(call_id,user_id)
+);
+
+-- Reactions on comments
+create table if not exists public.comment_reactions (
+  id uuid primary key default gen_random_uuid(),
+  comment_id uuid not null references public.comments(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  reaction_type text not null default 'like',
+  created_at timestamptz not null default now(),
+  unique(comment_id,user_id)
+);
+
+-- Generic media records, useful for galleries/profile/posts/messages
+create table if not exists public.media_assets (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references public.profiles(id) on delete cascade,
+  bucket_id text not null,
+  object_path text not null,
+  media_type text not null default 'image',
+  mime_type text,
+  size_bytes bigint,
+  entity_type text,
+  entity_id uuid,
+  created_at timestamptz not null default now()
+);
+
+-- Enable RLS on optional modules
+alter table public.stories enable row level security;
+alter table public.story_views enable row level security;
+alter table public.reels enable row level security;
+alter table public.calls enable row level security;
+alter table public.call_participants enable row level security;
+alter table public.comment_reactions enable row level security;
+alter table public.media_assets enable row level security;
+
+drop policy if exists stories_select on public.stories;
+drop policy if exists stories_insert on public.stories;
+drop policy if exists stories_update on public.stories;
+drop policy if exists stories_delete on public.stories;
+create policy stories_select on public.stories for select to authenticated using(visibility='public' or user_id=auth.uid());
+create policy stories_insert on public.stories for insert to authenticated with check(user_id=auth.uid());
+create policy stories_update on public.stories for update to authenticated using(user_id=auth.uid());
+create policy stories_delete on public.stories for delete to authenticated using(user_id=auth.uid());
+
+drop policy if exists story_views_select on public.story_views;
+drop policy if exists story_views_insert on public.story_views;
+create policy story_views_select on public.story_views for select to authenticated using(user_id=auth.uid() or exists(select 1 from public.stories s where s.id=story_id and s.user_id=auth.uid()));
+create policy story_views_insert on public.story_views for insert to authenticated with check(user_id=auth.uid());
+
+drop policy if exists reels_select on public.reels;
+drop policy if exists reels_insert on public.reels;
+drop policy if exists reels_update on public.reels;
+drop policy if exists reels_delete on public.reels;
+create policy reels_select on public.reels for select to authenticated using(visibility='public' or user_id=auth.uid());
+create policy reels_insert on public.reels for insert to authenticated with check(user_id=auth.uid());
+create policy reels_update on public.reels for update to authenticated using(user_id=auth.uid());
+create policy reels_delete on public.reels for delete to authenticated using(user_id=auth.uid());
+
+-- Calls are visible only to conversation members / participants.
+drop policy if exists calls_select on public.calls;
+drop policy if exists calls_insert on public.calls;
+drop policy if exists calls_update on public.calls;
+create policy calls_select on public.calls for select to authenticated using(caller_id=auth.uid() or public.tafa_is_conversation_member(conversation_id,auth.uid()));
+create policy calls_insert on public.calls for insert to authenticated with check(caller_id=auth.uid() and (conversation_id is null or public.tafa_is_conversation_member(conversation_id,auth.uid())));
+create policy calls_update on public.calls for update to authenticated using(caller_id=auth.uid() or exists(select 1 from public.call_participants cp where cp.call_id=id and cp.user_id=auth.uid()));
+
+drop policy if exists call_participants_select on public.call_participants;
+drop policy if exists call_participants_insert on public.call_participants;
+drop policy if exists call_participants_update on public.call_participants;
+create policy call_participants_select on public.call_participants for select to authenticated using(user_id=auth.uid() or exists(select 1 from public.calls c where c.id=call_id and c.caller_id=auth.uid()));
+create policy call_participants_insert on public.call_participants for insert to authenticated with check(exists(select 1 from public.calls c where c.id=call_id and (c.caller_id=auth.uid() or public.tafa_is_conversation_member(c.conversation_id,auth.uid()))));
+create policy call_participants_update on public.call_participants for update to authenticated using(user_id=auth.uid());
+
+create policy comment_reactions_select on public.comment_reactions for select to authenticated using(true);
+create policy comment_reactions_insert on public.comment_reactions for insert to authenticated with check(user_id=auth.uid());
+create policy comment_reactions_update on public.comment_reactions for update to authenticated using(user_id=auth.uid());
+create policy comment_reactions_delete on public.comment_reactions for delete to authenticated using(user_id=auth.uid());
+
+create policy media_assets_select on public.media_assets for select to authenticated using(owner_id=auth.uid());
+create policy media_assets_insert on public.media_assets for insert to authenticated with check(owner_id=auth.uid());
+create policy media_assets_update on public.media_assets for update to authenticated using(owner_id=auth.uid());
+create policy media_assets_delete on public.media_assets for delete to authenticated using(owner_id=auth.uid());
+
+-- Indexes for optional modules
+create index if not exists stories_user_created_idx on public.stories(user_id, created_at desc);
+create index if not exists stories_expires_idx on public.stories(expires_at);
+create index if not exists story_views_story_idx on public.story_views(story_id, viewed_at desc);
+create index if not exists reels_user_created_idx on public.reels(user_id, created_at desc);
+create index if not exists reels_created_idx on public.reels(created_at desc);
+create index if not exists calls_conversation_created_idx on public.calls(conversation_id, created_at desc);
+create index if not exists call_participants_user_idx on public.call_participants(user_id, call_id);
+create index if not exists comment_reactions_comment_idx on public.comment_reactions(comment_id, created_at desc);
+create index if not exists media_assets_owner_created_idx on public.media_assets(owner_id, created_at desc);
+
+-- Realtime for optional modules; duplicate membership is safely ignored.
+do $$
+declare t text;
+begin
+  foreach t in array array['stories','story_views','reels','calls','call_participants','comment_reactions','media_assets'] loop
+    execute format('alter table public.%I replica identity full', t);
+    begin
+      execute format('alter publication supabase_realtime add table public.%I',t);
+    exception when duplicate_object then null;
+    end;
+  end loop;
+end $$;
+
+-- Keep reels timestamps current.
+drop trigger if exists tafa_reels_updated_at on public.reels;
+create trigger tafa_reels_updated_at before update on public.reels for each row execute function public.tafa_set_updated_at();
+
+-- Refresh PostgREST cache after schema changes.
+notify pgrst, 'reload schema';
+select 'TAFAß FINAL COMPLETE — AUTH + DATABASE + STORAGE + RLS + REALTIME READY' as status;

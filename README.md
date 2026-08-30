@@ -38,3 +38,18 @@ Le ZIP ne contient plus les anciens scripts SQL versionnés ni les copies de set
 - ZIP integrity: OK
 - JavaScript syntax: OK
 - Le formulaire d'inscription finalise le profil avec `upsert` afin de fonctionner même si le trigger de profil n'a pas encore créé la ligne.
+
+
+## Tafaß FINAL COMPLETE REALTIME — Supabase connection
+
+This build is aligned with `TAFASS_COMPLETE_SCHEMA.sql` (the supplied
+`TAFASS_FINAL_COMPLETE_REALTIME.sql`).
+
+- Supabase client remains configured in `app.js`.
+- Realtime subscribes to the production tables defined by the final SQL,
+  including messages, conversations, posts, reactions, shares, notifications,
+  friends, groups, pages, stories, reels, calls and media assets.
+- Existing client uploads use the SQL-provisioned public `posts` Storage bucket,
+  so this build does not require a separate `profile-media` bucket.
+- The SQL itself is idempotent and duplicate-safe for Realtime publication
+  membership.

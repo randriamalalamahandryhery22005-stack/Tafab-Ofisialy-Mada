@@ -924,9 +924,9 @@ document.documentElement.classList.add("app-boot");
         if (file.size > 8*1024*1024) throw new Error('Image trop volumineuse (maximum 8 Mo).');
         const ext=(file.name.split('.').pop()||'jpg').toLowerCase();
         const path=`${state.user.id}/${key.replace('_url','')}-${crypto.randomUUID()}.${ext}`;
-        const up=await sb.storage.from('profile-media').upload(path,file,{upsert:false,contentType:file.type||'image/jpeg'});
+        const up=await sb.storage.from('posts').upload(path,file,{upsert:false,contentType:file.type||'image/jpeg'});
         if(up.error) throw new Error('Upload : '+up.error.message);
-        patch[key]=sb.storage.from('profile-media').getPublicUrl(path).data.publicUrl;
+        patch[key]=sb.storage.from('posts').getPublicUrl(path).data.publicUrl;
       }
       const r=await sb.from('profiles').update(patch).eq('id',state.user.id);
       if(r.error) throw new Error(r.error.message);
@@ -1379,31 +1379,63 @@ document.documentElement.classList.add("app-boot");
   }
 
   async function setupRealtime() {
-    if (state.channel) await sb.removeChannel(state.channel);
-    state.channel = sb.channel("tafa-live-ui")
-      .on("postgres_changes", { event:"*", schema:"public", table:"profiles" }, () => { loadProfile(); if (state.route==="search") searchPage($("searchInput")?.value||""); if (state.viewingProfileId && state.route==="profile") openUserProfile(state.viewingProfileId); })
-      .on("postgres_changes", { event:"*", schema:"public", table:"posts" }, async () => { await loadPosts(); if (["home","profile","reels","saved"].includes(state.route)) render(); })
-      .on("postgres_changes", { event:"*", schema:"public", table:"comments" }, async () => { await loadPosts(); if (["home","profile"].includes(state.route)) render(); })
-      .on("postgres_changes", { event:"*", schema:"public", table:"comment_likes" }, async () => { if (["home","profile"].includes(state.route)) render(); })
-      .on("postgres_changes", { event:"*", schema:"public", table:"post_reactions" }, async () => { await loadPosts(); if (["home","profile"].includes(state.route)) render(); })
-      .on("postgres_changes", { event:"*", schema:"public", table:"post_shares" }, async () => { await loadPosts(); if (["home","profile"].includes(state.route)) render(); })
-      .on("postgres_changes", { event:"*", schema:"public", table:"notifications" }, () => { updateBadges(); if (state.route==="notifications") notificationsPage(); })
-      .on("postgres_changes", { event:"*", schema:"public", table:"messages" }, payload => { updateBadges(); if (state.route==="messages") state.selectedConversation ? openConversation(state.selectedConversation) : messagesPage(); })
-      .on("postgres_changes", { event:"*", schema:"public", table:"friend_requests" }, () => { updateBadges(); if (state.route==="friends") friendsPage(); if (state.viewingProfileId && state.route==="profile") openUserProfile(state.viewingProfileId); })
-      .on("postgres_changes", { event:"*", schema:"public", table:"friendships" }, () => { if (state.route==="friends") friendsPage(); if (state.viewingProfileId && state.route==="profile") openUserProfile(state.viewingProfileId); })
-      .on("postgres_changes", { event:"*", schema:"public", table:"follows" }, () => { if (state.route==="profile") state.viewingProfileId ? openUserProfile(state.viewingProfileId) : profilePage(state.profileTab); })
-      .on("postgres_changes", { event:"*", schema:"public", table:"groups" }, () => { if (state.route==="groups") genericListPage("groups"); })
-      .on("postgres_changes", { event:"*", schema:"public", table:"group_members" }, () => { if (state.route==="groups") genericListPage("groups"); })
-      .on("postgres_changes", { event:"*", schema:"public", table:"pages" }, () => { if (state.route==="pages") genericListPage("pages"); })
-      .on("postgres_changes", { event:"*", schema:"public", table:"page_followers" }, () => { if (state.route==="pages") genericListPage("pages"); })
-      .on("postgres_changes", { event:"*", schema:"public", table:"saved_posts" }, () => { if (state.route==="saved") genericListPage("saved"); })
-      .on("postgres_changes", { event:"*", schema:"public", table:"user_settings" }, () => { if (state.route==="settings") settingsPage(); })
-      .on("postgres_changes", { event:"*", schema:"public", table:"search_history" }, () => { if (state.route==="search") searchPage($("searchInput")?.value||""); })
-      .on("postgres_changes", { event:"*", schema:"public", table:"activity_history" }, () => { if (state.route==="menu") menuPage(); })
-      .on("postgres_changes", { event:"*", schema:"public", table:"blocked_profiles" }, () => { if (state.viewingProfileId && state.route==="profile") openUserProfile(state.viewingProfileId); })
-      .on("postgres_changes", { event:"*", schema:"public", table:"profile_reports" }, () => {})
-      .on("postgres_changes", { event:"*", schema:"public", table:"payment_transactions" }, () => { if (state.route==="settings") servicePage("payment"); })
-      .subscribe(status => { if(status==="SUBSCRIBED") console.info("Tafaß Realtime: connecté"); });
+    if (state.channel) {
+      try { await sb.removeChannel(state.channel); } catch (_) {}
+      state.channel = null;
+    }
+
+    const channel = sb.channel("tafa-live-ui");
+    const refresh = {
+      profiles: () => { loadProfile(); if (state.route==="search") searchPage($("searchInput")?.value||""); if (state.viewingProfileId && state.route==="profile") openUserProfile(state.viewingProfileId); },
+      posts: async () => { await loadPosts(); if (["home","profile","reels","saved"].includes(state.route)) render(); },
+      comments: async () => { await loadPosts(); if (["home","profile"].includes(state.route)) render(); },
+      comment_likes: () => { if (["home","profile"].includes(state.route)) render(); },
+      comment_reactions: () => { if (["home","profile"].includes(state.route)) render(); },
+      post_reactions: async () => { await loadPosts(); if (["home","profile"].includes(state.route)) render(); },
+      post_shares: async () => { await loadPosts(); if (["home","profile"].includes(state.route)) render(); },
+      notifications: () => { updateBadges(); if (state.route==="notifications") notificationsPage(); },
+      messages: payload => { updateBadges(); if (state.route==="messages") state.selectedConversation ? openConversation(state.selectedConversation) : messagesPage(); },
+      friend_requests: () => { updateBadges(); if (state.route==="friends") friendsPage(); if (state.viewingProfileId && state.route==="profile") openUserProfile(state.viewingProfileId); },
+      friendships: () => { if (state.route==="friends") friendsPage(); if (state.viewingProfileId && state.route==="profile") openUserProfile(state.viewingProfileId); },
+      follows: () => { if (state.route==="profile") state.viewingProfileId ? openUserProfile(state.viewingProfileId) : profilePage(state.profileTab); },
+      groups: () => { if (state.route==="groups") genericListPage("groups"); },
+      group_members: () => { if (state.route==="groups") genericListPage("groups"); },
+      pages: () => { if (state.route==="pages") genericListPage("pages"); },
+      page_followers: () => { if (state.route==="pages") genericListPage("pages"); },
+      saved_posts: () => { if (state.route==="saved") genericListPage("saved"); },
+      user_settings: () => { if (state.route==="settings") settingsPage(); },
+      search_history: () => { if (state.route==="search") searchPage($("searchInput")?.value||""); },
+      activity_history: () => { if (state.route==="menu") menuPage(); },
+      blocked_profiles: () => { if (state.viewingProfileId && state.route==="profile") openUserProfile(state.viewingProfileId); },
+      profile_reports: () => {},
+      payment_transactions: () => { if (state.route==="settings") servicePage("payment"); },
+      stories: () => { if (state.route==="home") render(); },
+      story_views: () => { if (state.route==="home") render(); },
+      reels: () => { if (state.route==="reels") render(); },
+      calls: () => { if (state.route==="messages" && state.selectedConversation) openConversation(state.selectedConversation); },
+      call_participants: () => { if (state.route==="messages" && state.selectedConversation) openConversation(state.selectedConversation); },
+      media_assets: () => {},
+      conversations: () => { if (state.route==="messages") state.selectedConversation ? openConversation(state.selectedConversation) : messagesPage(); },
+      conversation_members: () => { if (state.route==="messages") messagesPage(); },
+      tafab_listings: () => { if (state.route==="tafab") servicePage("marketplace"); },
+      tafab_listing_messages: () => { if (state.route==="tafab") servicePage("marketplace"); },
+      tafab_ads: () => {}
+    };
+
+    Object.keys(refresh).forEach(table => {
+      channel.on("postgres_changes", { event:"*", schema:"public", table }, payload => {
+        try { refresh[table](payload); } catch (e) { console.warn("Tafaß realtime refresh error:", table, e); }
+      });
+    });
+
+    state.channel = channel;
+    channel.subscribe(status => {
+      if (status === "SUBSCRIBED") console.info("Tafaß Realtime: connecté");
+      if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+        console.warn("Tafaß Realtime:", status);
+        setTimeout(() => { if (state.user && state.channel === channel) setupRealtime(); }, 1500);
+      }
+    });
   }
 
   async function profileIsComplete() {
@@ -1749,7 +1781,7 @@ document.documentElement.classList.add("app-boot");
       const g=r.data;
       await sb.from("group_members").insert({group_id:g.id,user_id:state.user.id,role:"admin"});
       const patch={};
-      for(const [input,key] of [["newGroupAvatar","avatar_url"],["newGroupCover","cover_url"]]){ const file=$(input)?.files?.[0]; if(!file) continue; const ext=(file.name.split('.').pop()||'jpg').toLowerCase(); const path=`${state.user.id}/group-${g.id}-${key}-${crypto.randomUUID()}.${ext}`; const up=await sb.storage.from('profile-media').upload(path,file,{upsert:false,contentType:file.type||'image/jpeg'}); if(up.error){ toast('Groupe créé. Image non envoyée : '+up.error.message); break; } patch[key]=sb.storage.from('profile-media').getPublicUrl(path).data.publicUrl; }
+      for(const [input,key] of [["newGroupAvatar","avatar_url"],["newGroupCover","cover_url"]]){ const file=$(input)?.files?.[0]; if(!file) continue; const ext=(file.name.split('.').pop()||'jpg').toLowerCase(); const path=`${state.user.id}/group-${g.id}-${key}-${crypto.randomUUID()}.${ext}`; const up=await sb.storage.from('posts').upload(path,file,{upsert:false,contentType:file.type||'image/jpeg'}); if(up.error){ toast('Groupe créé. Image non envoyée : '+up.error.message); break; } patch[key]=sb.storage.from('posts').getPublicUrl(path).data.publicUrl; }
       if(Object.keys(patch).length) await sb.from('groups').update(patch).eq('id',g.id).eq('owner_id',state.user.id);
       closeModal(); toast("Groupe créé"); return genericListPage("groups");
     }
@@ -1759,7 +1791,7 @@ document.documentElement.classList.add("app-boot");
       const r=await sb.from("pages").insert({owner_id:state.user.id,name,category:$("newPageCategory")?.value.trim()||"Autre",bio:$("newPageBio")?.value.trim()||""}).select().single();
       if(r.error)return toast(r.error.message);
       const pg=r.data; const patch={};
-      for(const [input,key] of [["newPageAvatar","logo_url"],["newPageCover","cover_url"]]){ const file=$(input)?.files?.[0]; if(!file) continue; const ext=(file.name.split('.').pop()||'jpg').toLowerCase(); const path=`${state.user.id}/page-${pg.id}-${key}-${crypto.randomUUID()}.${ext}`; const up=await sb.storage.from('profile-media').upload(path,file,{upsert:false,contentType:file.type||'image/jpeg'}); if(up.error){ toast('Page créée. Image non envoyée : '+up.error.message); break; } patch[key]=sb.storage.from('profile-media').getPublicUrl(path).data.publicUrl; }
+      for(const [input,key] of [["newPageAvatar","logo_url"],["newPageCover","cover_url"]]){ const file=$(input)?.files?.[0]; if(!file) continue; const ext=(file.name.split('.').pop()||'jpg').toLowerCase(); const path=`${state.user.id}/page-${pg.id}-${key}-${crypto.randomUUID()}.${ext}`; const up=await sb.storage.from('posts').upload(path,file,{upsert:false,contentType:file.type||'image/jpeg'}); if(up.error){ toast('Page créée. Image non envoyée : '+up.error.message); break; } patch[key]=sb.storage.from('posts').getPublicUrl(path).data.publicUrl; }
       if(Object.keys(patch).length) await sb.from('pages').update(patch).eq('id',pg.id).eq('owner_id',state.user.id);
       closeModal(); toast("Page créée"); return genericListPage("pages");
     }
