@@ -87,7 +87,7 @@
     const settings=(await sb.from("user_settings").select("theme").eq("user_id",state.user.id).maybeSingle()).data;
     if(settings?.theme==="light" || settings?.theme==="dark") state.theme=settings.theme;
     const sideName = $("sideName"); if (sideName) sideName.textContent = nameOf(state.profile);
-    const sideAvatar = $("sideAvatar"); if (sideAvatar) sideAvatar.outerHTML = avatarHTML(state.profile, "avatar");
+    const sideAvatar = $("sideAvatar"); if (sideAvatar) { sideAvatar.className = "avatar default-avatar"; sideAvatar.innerHTML = state.profile?.avatar_url ? `<img src="${esc(state.profile.avatar_url)}" alt="">` : esc((state.profile?.first_name || state.profile?.last_name || "T").trim().slice(0,1).toUpperCase() || "T"); }
   }
 
   async function loadPosts() {
@@ -690,26 +690,24 @@
 
   function editProfile() {
     const p = state.profile || {};
-    openModal(`<div class="modal-box profile-edit-modal premium-profile-editor">
+    openModal(`<div class="modal-box profile-edit-modal premium-profile-editor-v2">
       <button class="modal-close" data-action="close-modal" aria-label="Fermer">×</button>
-      <div class="editor-heading"><span class="eyebrow">TAFAß • PROFIL</span><h3>Personnaliser votre profil</h3><p>Gérez votre identité, votre photo de profil et votre couverture dans un espace clair et sécurisé.</p></div>
-      <div class="profile-editor-preview premium-editor-preview">
-        <label class="editor-cover-preview" id="editorCoverPreview" style="${p.cover_url?`background-image:url('${esc(p.cover_url)}')`:""}">
-          <span class="editor-cover-overlay">📷 &nbsp; Modifier la couverture</span>
+      <header class="profile-editor-header-v2"><span class="eyebrow">TAFAß • PROFIL</span><h3>Personnaliser votre profil</h3><p>Présentez votre identité avec une photo de profil, une couverture et des informations claires.</p></header>
+      <section class="profile-editor-stage-v2">
+        <label class="editor-cover-v2" id="editorCoverPreview" style="${p.cover_url?`background-image:url('${esc(p.cover_url)}')`:""}">
+          <span class="cover-placeholder-v2">Votre couverture</span><span class="editor-cover-overlay-v2">📷 Modifier la couverture</span>
           <input id="pfCover" type="file" accept="image/jpeg,image/png,image/webp" hidden>
         </label>
-        <label class="editor-avatar-preview" id="editorAvatarPreview">${avatarHTML(p,"avatar")}<span class="editor-avatar-edit">📷</span><input id="pfAvatar" type="file" accept="image/jpeg,image/png,image/webp" hidden></label>
+        <label class="editor-avatar-v2" id="editorAvatarPreview">${avatarHTML(p,"avatar")}<span class="editor-avatar-edit-v2">📷</span><input id="pfAvatar" type="file" accept="image/jpeg,image/png,image/webp" hidden></label>
+      </section>
+      <div class="profile-editor-photo-label-v2"><b>Photo de profil</b><span>JPG, PNG ou WEBP • votre avatar par défaut est conservé si aucune photo n’est choisie.</span></div>
+      <div class="profile-form-v2">
+        <div class="profile-field-card-v2"><label><span>Prénom</span><input id="pfFirst" value="${esc(p.first_name||"")}" autocomplete="given-name" placeholder="Votre prénom"></label></div>
+        <div class="profile-field-card-v2"><label><span>Nom</span><input id="pfLast" value="${esc(p.last_name||"")}" autocomplete="family-name" placeholder="Votre nom"></label></div>
+        <div class="profile-field-card-v2 profile-field-wide-v2"><label><span>Bio</span><textarea id="pfBio" maxlength="500" placeholder="Présentez-vous en quelques mots…">${esc(p.bio||"")}</textarea><small>500 caractères maximum.</small></label></div>
+        <div class="profile-field-card-v2 profile-field-wide-v2"><label><span>Ville / pays</span><input id="pfLocation" value="${esc(p.location||"")}" autocomplete="address-level2" placeholder="Ex. Antananarivo, Madagascar"></label></div>
       </div>
-      <div class="profile-editor-hint"><b>Photo de profil</b><span>Votre avatar apparaît ici et dans vos publications.</span><em>JPG, PNG ou WEBP</em></div>
-      <div class="form-stack profile-form-premium">
-        <div class="profile-name-fields">
-          <label><span>Prénom</span><input id="pfFirst" value="${esc(p.first_name||"")}" autocomplete="given-name" placeholder="Votre prénom"></label>
-          <label><span>Nom</span><input id="pfLast" value="${esc(p.last_name||"")}" autocomplete="family-name" placeholder="Votre nom"></label>
-        </div>
-        <label><span>Bio</span><textarea id="pfBio" maxlength="500" placeholder="Présentez-vous en quelques mots…">${esc(p.bio||"")}</textarea><small class="field-help">500 caractères maximum.</small></label>
-        <label><span>Ville / pays</span><input id="pfLocation" value="${esc(p.location||"")}" autocomplete="address-level2" placeholder="Ex. Antananarivo, Madagascar"></label>
-        <button class="primary big profile-save-button" data-action="save-profile"><span>✓</span> Enregistrer les modifications</button>
-      </div>
+      <footer class="profile-editor-footer-v2"><button class="ghost-action" data-action="close-modal">Annuler</button><button class="primary big profile-save-button" data-action="save-profile"><span>✓</span> Enregistrer les modifications</button></footer>
     </div>`);
     $("pfAvatar")?.addEventListener("change", e => {
       const file=e.target.files?.[0]; if(!file)return;
@@ -1242,19 +1240,26 @@
     if (action === "save-search-privacy") return saveUserSetting({ allow_search_by_phone: !!$("allowSearchPhone")?.checked, allow_search_by_email: !!$("allowSearchEmail")?.checked });
     if (action === "save-language") return saveUserSetting({ language: $("languageSelect")?.value || "fr" });
     if (["friend-settings","message-settings","search-privacy-settings","language-settings","message-notification-settings","friend-notification-settings","reaction-notification-settings","comment-notification-settings"].includes(action)) return openSettingControl(action);
-    if (action === "create-group") return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><h3>Créer un groupe</h3><label>Nom<input id="newGroupName" placeholder="Nom du groupe"></label><label>Description<textarea id="newGroupDesc" placeholder="Description"></textarea></label><button class="primary big" data-action="save-group">Créer</button></div>`);
+    if (action === "create-group") return openModal(`<div class="modal-box entity-create-modal-v2"><button class="modal-close" data-action="close-modal">×</button><div class="create-hero-v2 group"><span class="create-icon-v2">◎</span><div><span class="eyebrow">TAFAß • GROUPES</span><h3>Créer un groupe</h3><p>Créez votre espace communautaire avec une identité claire.</p></div></div><div class="create-grid-v2"><label class="create-field-v2 wide"><span>Nom du groupe</span><input id="newGroupName" maxlength="80" placeholder="Ex. Passion Madagascar"></label><label class="create-field-v2 wide"><span>Description</span><textarea id="newGroupDesc" maxlength="500" placeholder="Présentez votre groupe…"></textarea></label><label class="create-upload-v2"><span>Avatar du groupe</span><input id="newGroupAvatar" type="file" accept="image/jpeg,image/png,image/webp"><small>Optionnel • avatar par défaut automatique</small></label><label class="create-upload-v2"><span>Photo de couverture</span><input id="newGroupCover" type="file" accept="image/jpeg,image/png,image/webp"><small>Optionnel</small></label></div><button class="primary big create-submit-v2" data-action="save-group"><span>＋</span> Créer le groupe</button></div>`);
     if (action === "save-group") {
       const name=$("newGroupName")?.value.trim(); if(!name)return toast("Entrez un nom.");
       const r=await sb.from("groups").insert({owner_id:state.user.id,name,description:$("newGroupDesc")?.value.trim()||"",privacy:"public"}).select().single();
       if(r.error)return toast(r.error.message);
-      await sb.from("group_members").insert({group_id:r.data.id,user_id:state.user.id,role:"admin"});
+      const g=r.data;
+      await sb.from("group_members").insert({group_id:g.id,user_id:state.user.id,role:"admin"});
+      const patch={};
+      for(const [input,key] of [["newGroupAvatar","avatar_url"],["newGroupCover","cover_url"]]){ const file=$(input)?.files?.[0]; if(!file) continue; const ext=(file.name.split('.').pop()||'jpg').toLowerCase(); const path=`${state.user.id}/group-${g.id}-${key}-${crypto.randomUUID()}.${ext}`; const up=await sb.storage.from('profile-media').upload(path,file,{upsert:false,contentType:file.type||'image/jpeg'}); if(up.error){ toast('Groupe créé. Image non envoyée : '+up.error.message); break; } patch[key]=sb.storage.from('profile-media').getPublicUrl(path).data.publicUrl; }
+      if(Object.keys(patch).length) await sb.from('groups').update(patch).eq('id',g.id).eq('owner_id',state.user.id);
       closeModal(); toast("Groupe créé"); return genericListPage("groups");
     }
-    if (action === "create-page") return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><h3>Créer une Page</h3><label>Nom<input id="newPageName" placeholder="Nom de la Page"></label><label>Catégorie<input id="newPageCategory" placeholder="Catégorie"></label><label>Bio<textarea id="newPageBio" placeholder="Présentation"></textarea></label><button class="primary big" data-action="save-page">Créer</button></div>`);
+    if (action === "create-page") return openModal(`<div class="modal-box entity-create-modal-v2"><button class="modal-close" data-action="close-modal">×</button><div class="create-hero-v2 page"><span class="create-icon-v2">▣</span><div><span class="eyebrow">TAFAß • PAGES</span><h3>Créer une Page</h3><p>Donnez à votre Page une identité professionnelle et claire.</p></div></div><div class="create-grid-v2"><label class="create-field-v2 wide"><span>Nom de la Page</span><input id="newPageName" maxlength="80" placeholder="Nom de la Page"></label><label class="create-field-v2"><span>Catégorie</span><input id="newPageCategory" maxlength="60" placeholder="Ex. Média, Commerce…"></label><label class="create-upload-v2"><span>Avatar de la Page</span><input id="newPageAvatar" type="file" accept="image/jpeg,image/png,image/webp"><small>Optionnel • avatar par défaut automatique</small></label><label class="create-field-v2 wide"><span>Présentation</span><textarea id="newPageBio" maxlength="500" placeholder="Présentez votre Page…"></textarea></label><label class="create-upload-v2 wide"><span>Photo de couverture</span><input id="newPageCover" type="file" accept="image/jpeg,image/png,image/webp"><small>Optionnel</small></label></div><button class="primary big create-submit-v2" data-action="save-page"><span>＋</span> Créer la Page</button></div>`);
     if (action === "save-page") {
       const name=$("newPageName")?.value.trim(); if(!name)return toast("Entrez un nom.");
       const r=await sb.from("pages").insert({owner_id:state.user.id,name,category:$("newPageCategory")?.value.trim()||"Autre",bio:$("newPageBio")?.value.trim()||""}).select().single();
       if(r.error)return toast(r.error.message);
+      const pg=r.data; const patch={};
+      for(const [input,key] of [["newPageAvatar","logo_url"],["newPageCover","cover_url"]]){ const file=$(input)?.files?.[0]; if(!file) continue; const ext=(file.name.split('.').pop()||'jpg').toLowerCase(); const path=`${state.user.id}/page-${pg.id}-${key}-${crypto.randomUUID()}.${ext}`; const up=await sb.storage.from('profile-media').upload(path,file,{upsert:false,contentType:file.type||'image/jpeg'}); if(up.error){ toast('Page créée. Image non envoyée : '+up.error.message); break; } patch[key]=sb.storage.from('profile-media').getPublicUrl(path).data.publicUrl; }
+      if(Object.keys(patch).length) await sb.from('pages').update(patch).eq('id',pg.id).eq('owner_id',state.user.id);
       closeModal(); toast("Page créée"); return genericListPage("pages");
     }
     if (action === "page-open") {
