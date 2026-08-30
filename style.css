@@ -1465,3 +1465,12 @@ body.light .profile-tabs{background:transparent}
 .bottom-nav{height:auto!important;min-height:66px;padding-bottom:env(safe-area-inset-bottom)!important}
 .bottom-nav button{min-height:62px!important}
 @media(max-width:360px){.content{padding-bottom:calc(105px + env(safe-area-inset-bottom))!important}.bottom-nav button{min-height:60px!important}.bottom-nav button small{font-size:8.5px!important}}
+
+/* Minimal V31 repair: restore V30 behavior and only add clear spacing between PDP and Bio. */
+.profile-edit-modal.premium-profile-editor-v4 .profile-editor-photo-label-v2{margin-bottom:12px!important}
+.profile-edit-modal.premium-profile-editor-v4 .profile-form-v2{row-gap:14px!important}
+.profile-edit-modal.premium-profile-editor-v4 .profile-section-title-v23{margin-top:4px!important;margin-bottom:2px!important}
+@media(max-width:620px){
+  .profile-edit-modal.premium-profile-editor-v4 .profile-editor-photo-label-v2{margin-bottom:10px!important}
+  .profile-edit-modal.premium-profile-editor-v4 .profile-form-v2{row-gap:12px!important}
+}
