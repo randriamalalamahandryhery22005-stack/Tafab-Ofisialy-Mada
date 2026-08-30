@@ -267,7 +267,7 @@ document.documentElement.classList.add("app-boot");
     }).join("");
     const shareNames = sh.slice(0,3).map(x => esc(nameOf(x.user))).join(", ");
     const shareSummary = sh.length ? `<span class="share-summary">↗ ${shareNames}${sh.length > 3 ? ` +${sh.length-3}` : ""}</span>` : "";
-    return `<article class="post" id="post-${esc(p.id)}">
+    return `<article class="post" id="post-${esc(p.id)}" data-post-id="${esc(p.id)}">
       <div class="post-head">${profileLink(p.author, avatarHTML(p.author), "profile-link profile-avatar-link")}<div class="meta">${profileLink(p.author, `<span class="post-author-name">${esc(nameOf(p.author))}</span>`, "profile-link profile-meta-link")}<span class="post-time"><small>${timeAgo(p.created_at)} · ${esc(p.visibility || "public")}</small></span></div><button class="post-menu" data-action="post-menu" data-id="${esc(p.id)}">⋯</button></div>
       ${p.content ? `<div class="post-body">${esc(p.content)}</div>` : ""}${media}
       <div class="post-stats"><span class="reaction-summary">${reactionVisual || "<span class='muted-inline'>Aucune réaction</span>"}</span><span>${cs.length} commentaire(s) · ${Number(p.shares || sh.length || 0)} partage(s)</span></div>
@@ -284,11 +284,19 @@ document.documentElement.classList.add("app-boot");
     box.querySelectorAll("[data-reaction]").forEach(b => b.addEventListener("click", () => setReaction(id, b.dataset.reaction), { once: true }));
   }
   async function setReaction(postId, reaction) {
+    // Instant UI: reflect the selected reaction immediately, then sync Supabase.
+    const picker = $("reaction-" + postId);
+    const button = document.querySelector(`[data-action="react"][data-id="${CSS.escape(String(postId))}"]`);
+    const meta = reactionMeta[reaction] || ["J’aime", "👍"];
+    if (button) { button.innerHTML = `${meta[1]} ${esc(meta[0])}`; button.classList.add("is-reacted"); }
+    if (picker) picker.innerHTML = "";
     const { error } = await sb.rpc("tafa_set_post_reaction", { p_post_id: postId, p_reaction_type: reaction });
-    if (error) return toast(error.message);
-    const post = state.posts.find(x => x.id === postId);
-    toast("Réaction enregistrée"); await loadPosts();
-    if (state.route === "profile") await profilePage(state.profileTab);
+    if (error) {
+      if (button) { button.classList.remove("is-reacted"); button.textContent = "👍 J’aime"; }
+      return toast(error.message);
+    }
+    toast("Réaction enregistrée");
+    loadPosts().then(()=>{ if (state.route === "profile") profilePage(state.profileTab); });
   }
   async function addComment(postId, parentId = null) {
     const input = $(parentId ? "reply-input-" + parentId : "comment-" + postId);
@@ -309,10 +317,13 @@ document.documentElement.classList.add("app-boot");
   }
 
   async function deleteComment(id) {
+    const row = document.querySelector(`[data-comment-id="${CSS.escape(String(id))}"]`);
+    const snapshot = row?.outerHTML || "";
+    row?.remove();
+    toast("Commentaire supprimé");
     const { error } = await sb.rpc("tafa_delete_comment", { p_comment_id: id });
-    if (error) return toast(error.message);
-    toast("Commentaire supprimé"); await loadPosts();
-    if (state.route === "profile") await profilePage(state.profileTab);
+    if (error) { toast(error.message); await loadPosts(); return; }
+    loadPosts().then(()=>{ if (state.route === "profile") profilePage(state.profileTab); });
   }
   async function editPost(id) {
     const p = state.posts.find(x => x.id === id) || (await sb.from("posts").select("*").eq("id",id).maybeSingle()).data;
@@ -327,10 +338,13 @@ document.documentElement.classList.add("app-boot");
     if (state.route === "profile") await profilePage(state.profileTab);
   }
   async function deletePost(id) {
+    const row = document.querySelector(`[data-post-id="${CSS.escape(String(id))}"]`) || document.querySelector(`article.post:has([data-action="post-menu"][data-id="${CSS.escape(String(id))}"])`);
+    row?.remove();
+    state.posts = state.posts.filter(p => String(p.id) !== String(id));
+    closeModal(); toast("Publication supprimée");
     const { error } = await sb.rpc("tafa_delete_post", { p_post_id: id });
-    if (error) return toast(error.message);
-    closeModal(); toast("Publication supprimée"); await loadPosts();
-    if (state.route === "profile") await profilePage(state.profileTab);
+    if (error) { toast(error.message); await loadPosts(); return; }
+    loadPosts().then(()=>{ if (state.route === "profile") profilePage(state.profileTab); });
   }
   async function reportPost(id) {
     const { error } = await sb.rpc("tafa_report_post", { p_post_id: id, p_reason: "Contenu à vérifier" });
@@ -423,7 +437,9 @@ document.documentElement.classList.add("app-boot");
   }
 
   let searchTimer = null;
-  async function searchPage(q = "") {
+  let searchCategory = "accounts";
+  async function searchPage(q = "", category = searchCategory) {
+    searchCategory = category || searchCategory;
     const token = state.renderToken;
     const term = q.trim();
     let people = [], posts = [], pages = [], groups = [];
@@ -455,20 +471,24 @@ document.documentElement.classList.add("app-boot");
     const pageHtml=pages.length ? pages.map(x=>`<div class="list-row search-result-row"><div class="entity-search-icon">▣</div><div class="grow"><b>${esc(x.name)}</b><small>${esc(x.category||"Page")} · ${esc(x.bio||"")}</small></div><button class="small-action" data-action="page-open" data-id="${esc(x.id)}">Ouvrir</button></div>`).join("") : `<div class="empty">Aucune Page trouvée.</div>`;
     const groupHtml=groups.length ? groups.map(x=>`<div class="list-row search-result-row"><div class="entity-search-icon">◎</div><div class="grow"><b>${esc(x.name)}</b><small>${esc(x.privacy||"public")} · ${esc(x.description||"")}</small></div><button class="small-action" data-action="group-open" data-id="${esc(x.id)}">Ouvrir</button></div>`).join("") : `<div class="empty">Aucun groupe trouvé.</div>`;
 
-    const results = term ? `
-      <div class="clean-section search-results-section"><h3 class="menu-section-title">Comptes</h3><div class="clean-list" id="searchPeople">${peopleHtml}</div></div>
-      <div class="clean-section search-results-section"><h3 class="menu-section-title">Publications</h3><div class="clean-list" id="searchPosts">${postHtml}</div></div>
-      <div class="clean-section search-results-section"><h3 class="menu-section-title">Pages</h3><div class="clean-list" id="searchPages">${pageHtml}</div></div>
-      <div class="clean-section search-results-section"><h3 class="menu-section-title">Groupes</h3><div class="clean-list" id="searchGroups">${groupHtml}</div></div>` : `
-      <div class="search-idle-card">
-        <div class="search-idle-icon">⌕</div>
-        <h3>Commencez une recherche</h3>
-        <p>Saisissez un nom, une publication, une Page ou un groupe. Les résultats apparaîtront uniquement après votre recherche.</p>
-        <button class="ghost-action" data-action="menu-service" data-service="activity" data-name="Historique de recherche">Voir l’historique</button>
-      </div>`;
+    const categories = [
+      ["accounts","Comptes","people",people.length],
+      ["posts","Publications","post",posts.length],
+      ["pages","Pages","page",pages.length],
+      ["groups","Groupes","group",groups.length]
+    ];
+    const categoryTabs = term ? `<div class="search-category-bar" role="tablist" aria-label="Types de résultats">${categories.map(([key,label,icon,count])=>`<button type="button" class="search-category-tab ${searchCategory===key?"active":""}" data-action="search-category" data-category="${key}" role="tab" aria-selected="${searchCategory===key}"><span class="search-tab-icon">${icon === "people" ? "♙" : icon === "post" ? "▤" : icon === "page" ? "▣" : "◎"}</span><span>${label}</span><b>${count}</b></button>`).join("")}</div>` : "";
+    let activeResults = "";
+    if (term) {
+      const map = {accounts: ["Comptes", peopleHtml], posts: ["Publications", postHtml], pages: ["Pages", pageHtml], groups: ["Groupes", groupHtml]};
+      const [label, html] = map[searchCategory] || map.accounts;
+      activeResults = `<div class="search-active-result"><div class="search-result-heading"><div><span class="eyebrow">TAFAß • RECHERCHE</span><h3>${label}</h3><p>${html.includes("Aucun") ? "Aucun résultat pour cette catégorie." : "Résultats correspondant à votre recherche."}</p></div><span class="search-result-count">${categories.find(x=>x[0]===searchCategory)?.[3] || 0}</span></div><div class="clean-list search-results-list">${html}</div></div>`;
+    } else {
+      activeResults = `<div class="search-idle-card search-idle-card-v2"><div class="search-idle-icon">⌕</div><span class="eyebrow">TAFAß • EXPLORER</span><h3>Recherchez ce que vous voulez</h3><p>Entrez un nom, une publication, une Page ou un groupe. Les résultats sont chargés uniquement après votre recherche.</p><button class="ghost-action" data-action="menu-service" data-service="activity" data-name="Historique de recherche">Voir l’historique</button></div>`;
+    }
 
-    $("content").innerHTML = `<section class="clean-page search-page-premium"><div class="page-header clean-page-header"><div><h2>Rechercher</h2><p class="page-kicker">Recherche avancée Tafaß</p></div></div><div class="clean-search searchbox premium-searchbox"><span class="icon">⌕</span><input id="searchInput" value="${esc(term)}" placeholder="Nom, prénom, publication, Page ou groupe…" autocomplete="off"></div>${results}</section>`;
-    $("searchInput")?.addEventListener("input", e=>{ clearTimeout(searchTimer); searchTimer=setTimeout(()=>searchPage(e.target.value),320); });
+    $("content").innerHTML = `<section class="clean-page search-page-premium"><div class="page-header clean-page-header"><div><span class="eyebrow">TAFAß • EXPLORER</span><h2>Rechercher</h2><p class="page-kicker">Une recherche rapide, claire et privée.</p></div></div><div class="clean-search searchbox premium-searchbox"><span class="icon">⌕</span><input id="searchInput" value="${esc(term)}" placeholder="Rechercher un compte, une publication, une Page ou un groupe…" autocomplete="off"></div>${categoryTabs}${activeResults}</section>`;
+    $("searchInput")?.addEventListener("input", e=>{ clearTimeout(searchTimer); searchTimer=setTimeout(()=>searchPage(e.target.value, searchCategory),220); });
   }
 
   async function messagesPage() {
@@ -1256,8 +1276,11 @@ document.documentElement.classList.add("app-boot");
   }
   function endPageLoading() {
     const el = ensurePageLoader();
+    // Do not block taps while the tiny visual transition finishes.
+    pageLoading = false;
+    document.body.classList.remove("page-loading");
     el.classList.add("done");
-    setTimeout(() => { el.classList.remove("active","done"); document.body.classList.remove("page-loading"); pageLoading = false; }, 220);
+    setTimeout(() => { el.classList.remove("active","done"); }, 90);
   }
 
   async function render() {
@@ -1626,6 +1649,7 @@ document.documentElement.classList.add("app-boot");
     const action = actionEl.dataset.action, id = actionEl.dataset.id;
     const notificationId = actionEl.dataset.notification;
     if (notificationId && action !== "mark-read") { await sb.from("notifications").update({is_read:true}).eq("id",notificationId).eq("user_id",state.user.id); updateBadges(); }
+    if (action === "search-category") { searchCategory = actionEl.dataset.category || "accounts"; return searchPage($("searchInput")?.value || "", searchCategory); }
     if (action === "react") return showReactions(id);
     if (action === "comment") { $("comment-"+id)?.focus(); return; }
     if (action === "send-comment") return addComment(id);

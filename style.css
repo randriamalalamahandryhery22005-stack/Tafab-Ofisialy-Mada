@@ -1943,3 +1943,134 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,#app::-webkit-scrollbar,
 .account-redesign-body-v5::-webkit-scrollbar,.modal::-webkit-scrollbar,.modal-box::-webkit-scrollbar{
   width:0!important;height:0!important;display:none!important;
 }
+
+/* =========================================================
+   TAFAß FINAL UI PATCH — SEARCH TABS / NEW LIGHT THEME / INSTANT ACTIONS
+   Only the three requested corrections.
+   ========================================================= */
+
+/* Search categories: premium horizontal selector, never four long blocks. */
+.search-category-bar{
+  display:grid!important;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:8px!important;
+  margin:14px 0 16px!important;
+  padding:6px!important;
+  border:1px solid rgba(116,151,213,.16)!important;
+  border-radius:18px!important;
+  background:rgba(11,20,36,.72)!important;
+  box-shadow:0 14px 35px rgba(0,0,0,.14)!important;
+}
+.search-category-tab{
+  min-width:0!important; min-height:52px!important; padding:8px 7px!important;
+  border:1px solid transparent!important; border-radius:13px!important;
+  background:transparent!important; color:#8494ad!important;
+  display:grid!important; grid-template-columns:auto 1fr auto; align-items:center!important; gap:6px!important;
+  cursor:pointer!important; transition:transform .16s ease,background .16s ease,color .16s ease,border-color .16s ease!important;
+}
+.search-category-tab:hover{transform:translateY(-1px)!important;color:#dfeaff!important}
+.search-category-tab.active{
+  color:#fff!important;
+  background:linear-gradient(135deg,rgba(48,116,255,.25),rgba(118,77,255,.17))!important;
+  border-color:rgba(92,145,255,.30)!important;
+  box-shadow:0 8px 22px rgba(38,103,255,.14)!important;
+}
+.search-tab-icon{width:28px;height:28px;border-radius:9px;display:grid;place-items:center;font-size:15px;background:rgba(89,140,255,.10);color:#76a8ff;font-weight:900}
+.search-category-tab.active .search-tab-icon{background:rgba(74,133,255,.22);color:#fff}
+.search-category-tab span:not(.search-tab-icon){font-size:10px;font-weight:850;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left}
+.search-category-tab>b{font-size:9px;min-width:18px;text-align:center;padding:3px 4px;border-radius:8px;background:rgba(255,255,255,.06);color:#aebbd0}
+.search-category-tab.active>b{background:rgba(255,255,255,.12);color:#fff}
+.search-active-result{
+  border:1px solid rgba(108,148,215,.15);border-radius:22px;padding:15px;
+  background:linear-gradient(145deg,rgba(18,31,53,.78),rgba(9,17,31,.82));
+  box-shadow:0 18px 42px rgba(0,0,0,.14);
+}
+.search-result-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:2px 3px 13px}
+.search-result-heading h3{margin:3px 0 2px!important;font-size:18px!important;color:#f2f6ff!important}
+.search-result-heading p{margin:0;color:#8494ab;font-size:10px}
+.search-result-count{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;background:rgba(53,119,255,.13);border:1px solid rgba(92,145,255,.20);color:#75a7ff;font-size:11px;font-weight:900}
+.search-results-list .search-result-row{margin:7px 0;border:1px solid rgba(111,149,215,.10)!important;border-radius:14px!important;background:rgba(255,255,255,.025);padding:10px!important}
+.search-results-list .search-result-row:hover{background:rgba(68,126,255,.07)}
+.search-idle-card-v2{max-width:680px!important;margin:18px auto 0!important;padding:44px 25px!important}
+
+/* New light theme: one coherent visual system, overriding the old grey palette. */
+body.light{
+  --bg:#f4f7fc!important; --bg-soft:#edf2f8!important;
+  --surface:#ffffff!important; --surface-2:#f8faff!important; --surface-3:#eef4fb!important;
+  --line:#d6e0ec!important; --line-strong:#9dbbe8!important;
+  --text:#122039!important; --text-2:#263954!important; --muted:#566a84!important;
+  --shadow:0 18px 48px rgba(35,60,96,.12)!important;
+  color:#122039!important;
+  background:radial-gradient(900px 430px at 50% -160px,rgba(50,119,255,.13),transparent 68%),linear-gradient(180deg,#f9fbff 0%,#eef3f9 100%)!important;
+}
+body.light:before{opacity:.32!important;background-image:linear-gradient(rgba(38,75,125,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(38,75,125,.035) 1px,transparent 1px)!important}
+body.light .topbar{background:rgba(255,255,255,.97)!important;border-bottom:1px solid #d9e3ee!important;box-shadow:0 7px 25px rgba(40,67,105,.08)!important}
+body.light .panel,body.light .card,body.light .clean-page,body.light .clean-section,body.light .search-active-result,
+body.light .profile-content-section,body.light .profile-info,body.light .post,body.light .menu-card,body.light .setting-card{
+  color:#122039!important;background:linear-gradient(145deg,#fff,#f8faff)!important;border-color:#d8e2ee!important;
+}
+body.light h1,body.light h2,body.light h3,body.light h4,body.light b,body.light strong,
+body.light .page-header h2,body.light .clean-page-header h2,body.light .menu-section-title,
+body.light .post-author-name,body.light .profile-name,body.light .entity-body h3,body.light .search-result-heading h3{
+  color:#102039!important;opacity:1!important;
+}
+body.light p,body.light small,body.light .muted,body.light .page-subtitle,body.light .page-kicker,
+body.light .list-row small,body.light .menu-card small,body.light .setting-card small,
+body.light .profile-bio,body.light .profile-handle{color:#536983!important;opacity:1!important}
+body.light label,body.light .form-stack label,body.light .auth-form label{color:#304661!important}
+body.light input,body.light textarea,body.light select,
+body.light .searchbox,body.light .composer textarea{
+  background:#fff!important;color:#11213a!important;border:1px solid #cbd8e7!important;box-shadow:inset 0 1px 2px rgba(30,55,90,.025)!important;
+}
+body.light input::placeholder,body.light textarea::placeholder{color:#71839a!important;opacity:1!important}
+body.light .searchbox{background:#f8faff!important}
+body.light .searchbox .icon{color:#316fd6!important}
+body.light .ghost-action{background:#edf3fa!important;color:#243b5b!important;border-color:#cfdae8!important}
+body.light .small-action{color:#fff!important}
+body.light .post-stats{color:#536983!important;border-bottom-color:#dce5ef!important}
+body.light .post-actions button,body.light .comment-actions button{color:#35506f!important}
+body.light .bottom-nav{background:rgba(255,255,255,.985)!important;border-top:1px solid #d8e2ed!important;box-shadow:0 -8px 25px rgba(37,63,99,.09)!important}
+body.light .bottom-nav button{color:#536982!important}
+body.light .bottom-nav button.active{color:#1769e8!important;background:rgba(23,105,232,.07)!important}
+body.light .desktop-nav button{color:#536982!important}
+body.light .desktop-nav button.active{color:#1769e8!important}
+body.light .left-sidebar>button{color:#304965!important}
+body.light .left-sidebar>button:hover,body.light .left-sidebar>button.active{color:#12478f!important;background:linear-gradient(90deg,rgba(40,111,232,.10),rgba(40,111,232,.025))!important}
+body.light .search-category-bar{background:#fff!important;border-color:#d4dfeb!important;box-shadow:0 10px 28px rgba(38,65,103,.08)!important}
+body.light .search-category-tab{color:#5d718a!important}
+body.light .search-category-tab.active{color:#123a78!important;background:linear-gradient(135deg,#eaf3ff,#f3efff)!important;border-color:#bfd2ed!important;box-shadow:0 7px 18px rgba(50,105,185,.10)!important}
+body.light .search-category-tab.active .search-tab-icon{color:#1769e8!important;background:#dceaff!important}
+body.light .search-category-tab>b{color:#63758d!important;background:#eef3f8!important}
+body.light .search-category-tab.active>b{color:#1769e8!important;background:#dceaff!important}
+body.light .search-result-heading h3{color:#102039!important}
+body.light .search-result-heading p{color:#58708d!important}
+body.light .search-result-count{background:#e8f1ff!important;border-color:#cadcf3!important;color:#1769e8!important}
+body.light .search-results-list .search-result-row{background:#fbfdff!important;border-color:#dce5ef!important}
+body.light .search-results-list .search-result-row:hover{background:#f1f6ff!important}
+body.light .search-idle-card{background:linear-gradient(145deg,#fff,#f4f8fd)!important;border-color:#d7e2ee!important;box-shadow:0 18px 45px rgba(38,65,103,.09)!important}
+body.light .search-idle-card h3{color:#102039!important}
+body.light .search-idle-card p{color:#58708b!important}
+body.light .toast{background:#fff!important;color:#122039!important;border-color:#d4dfeb!important;box-shadow:0 15px 35px rgba(30,55,90,.16)!important}
+body.light .profile-redesign-v5 .redesign-section-v5,
+body.light .profile-redesign-v5 .profile-visual-card-v5,
+body.light .account-redesign-v5{background:linear-gradient(145deg,#fff,#f5f9fe)!important;border-color:#d3dfeb!important;color:#122039!important}
+body.light .profile-redesign-v5 .redesign-field-v5{background:#f8fbff!important;border-color:#d5e0eb!important}
+body.light .profile-redesign-v5 .redesign-field-v5 input,
+body.light .profile-redesign-v5 .redesign-field-v5 textarea,
+body.light .profile-redesign-v5 .redesign-field-v5 select{background:#fff!important;color:#122039!important;border-color:#c8d6e6!important}
+
+/* Instant feedback: actions feel immediate while server sync continues in background. */
+button[data-action],button[data-route]{-webkit-tap-highlight-color:transparent!important;touch-action:manipulation!important}
+.react-btn.is-reacted{transform:scale(1.025);font-weight:850;transition:transform .12s ease,background .12s ease}
+.post,.comment{transition:opacity .14s ease,transform .14s ease}
+.search-category-tab:active,button[data-action]:active{transform:scale(.98)!important}
+
+@media(max-width:620px){
+  .search-category-bar{gap:5px!important;padding:5px!important;border-radius:16px!important}
+  .search-category-tab{min-height:48px!important;grid-template-columns:1fr!important;justify-items:center!important;gap:2px!important;padding:6px 3px!important}
+  .search-tab-icon{width:25px;height:25px;font-size:13px}
+  .search-category-tab span:not(.search-tab-icon){font-size:8px!important;text-align:center!important}
+  .search-category-tab>b{font-size:8px!important;min-width:16px;padding:2px 4px}
+  .search-active-result{padding:11px!important;border-radius:18px!important}
+  .search-result-heading{padding-bottom:10px}
+}
