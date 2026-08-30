@@ -22,8 +22,30 @@
       ? `<span class="${cls}"><img src="${esc(p.avatar_url)}" alt=""></span>`
       : `<span class="${cls}">${esc(letter)}</span>`;
   }
-  function nameOf(p) { return [p?.first_name, p?.last_name].filter(Boolean).join(" ") || p?.username || "Utilisateur"; }
+  function nameOf(p) { return [p?.first_name, p?.last_name].filter(Boolean).join(" ") || "Membre Tafaß"; }
   function usernameOf(p) { return p?.username ? "@" + p.username.replace(/^@/, "") : ""; }
+  function notificationAction(n) {
+    const map = {
+      reaction: "a réagi à votre publication.",
+      comment: "a commenté votre publication.",
+      share: "a partagé votre publication.",
+      friend_request: "vous a envoyé une demande d’ami.",
+      friend_accepted: "a accepté votre demande d’ami.",
+      message: "vous a envoyé un message.",
+      follow: "vous suit maintenant.",
+      page_follow: "s’est abonné à votre Page.",
+      group_join: "a rejoint votre groupe."
+    };
+    return map[n?.type] || n?.message || "a effectué une nouvelle activité.";
+  }
+  function notificationTarget(n, actor) {
+    if (n?.type === "message" && n?.entity_id) return { action:"open-conversation", id:n.entity_id };
+    if (["page_follow"].includes(n?.type) && n?.entity_id) return { action:"page-open", id:n.entity_id };
+    if (["group_join"].includes(n?.type) && n?.entity_id) return { action:"group-open", id:n.entity_id };
+    if (n?.entity_type === "post" || n?.post_id) return { action:"open-notification-post", id:n.post_id || n.entity_id };
+    if (actor?.id) return { action:"view-profile", id:actor.id };
+    return null;
+  }
   function profileLink(p, inner, cls="profile-link") {
     if (!p?.id) return inner;
     return `<button type="button" class="${cls}" data-action="view-profile" data-id="${esc(p.id)}">${inner}</button>`;
@@ -155,7 +177,7 @@
     const shareNames = sh.slice(0,3).map(x => esc(nameOf(x.user))).join(", ");
     const shareSummary = sh.length ? `<span class="share-summary">↗ ${shareNames}${sh.length > 3 ? ` +${sh.length-3}` : ""}</span>` : "";
     return `<article class="post" id="post-${esc(p.id)}">
-      <div class="post-head">${profileLink(p.author, avatarHTML(p.author), "profile-link profile-avatar-link")}<div class="meta">${profileLink(p.author, `<span class="post-author-name">${esc(nameOf(p.author))}</span><span class="post-author-handle">${esc(usernameOf(p.author))}</span>`, "profile-link profile-meta-link")}<span class="post-time"><small>${timeAgo(p.created_at)} · ${esc(p.visibility || "public")}</small></span></div><button class="post-menu" data-action="post-menu" data-id="${esc(p.id)}">⋯</button></div>
+      <div class="post-head">${profileLink(p.author, avatarHTML(p.author), "profile-link profile-avatar-link")}<div class="meta">${profileLink(p.author, `<span class="post-author-name">${esc(nameOf(p.author))}</span>`, "profile-link profile-meta-link")}<span class="post-time"><small>${timeAgo(p.created_at)} · ${esc(p.visibility || "public")}</small></span></div><button class="post-menu" data-action="post-menu" data-id="${esc(p.id)}">⋯</button></div>
       ${p.content ? `<div class="post-body">${esc(p.content)}</div>` : ""}${media}
       <div class="post-stats"><span class="reaction-summary">${reactionVisual || "<span class='muted-inline'>Aucune réaction</span>"}</span><span>${cs.length} commentaire(s) · ${Number(p.shares || sh.length || 0)} partage(s)</span></div>
       ${shareSummary}
@@ -248,12 +270,15 @@
   async function friendsPage(tab = state.friendsTab) {
     state.friendsTab = tab || "suggestions";
     const token = state.renderToken;
-    const { data: people, error } = await sb.from("profiles").select("*").neq("id", state.user.id).limit(80);
+    const { data: people, error } = await sb.from("profiles").select("*").neq("id", state.user.id).order("created_at", { ascending:false }).limit(100);
     if (token !== state.renderToken) return;
     if (error) return simplePage("Amis", `<div class="empty">${esc(error.message)}</div>`);
-    const incomingR = await sb.from("friend_requests").select("sender_id,status").eq("receiver_id", state.user.id).eq("status", "pending");
-    const sentR = await sb.from("friend_requests").select("receiver_id,status").eq("sender_id", state.user.id).eq("status", "pending");
-    const mineR = await sb.from("friendships").select("friend_id").eq("user_id", state.user.id);
+
+    const [incomingR, sentR, mineR] = await Promise.all([
+      sb.from("friend_requests").select("sender_id,status").eq("receiver_id", state.user.id).eq("status", "pending"),
+      sb.from("friend_requests").select("receiver_id,status").eq("sender_id", state.user.id).eq("status", "pending"),
+      sb.from("friendships").select("friend_id").eq("user_id", state.user.id)
+    ]);
     if (token !== state.renderToken) return;
     const incoming = new Set((incomingR.data || []).map(x => x.sender_id));
     const sent = new Set((sentR.data || []).map(x => x.receiver_id));
@@ -262,14 +287,26 @@
     const friends = [...friendIds].map(id => map.get(id)).filter(Boolean);
     const requests = [...incoming].map(id => map.get(id)).filter(Boolean);
     const suggestions = (people || []).filter(p => !friendIds.has(p.id) && !incoming.has(p.id) && !sent.has(p.id));
+
+    // Calcul réel et sécurisé des amis en commun via une fonction SQL dédiée.
+    const commonMap = new Map();
+    if (people?.length) {
+      const commonR = await sb.rpc("tafa_common_friend_counts", { p_user_ids: people.map(p => p.id) });
+      (commonR.data || []).forEach(r => commonMap.set(r.user_id, Number(r.common_count || 0)));
+    }
     const tabButton = (key, label, count) => `<button class="${state.friendsTab === key ? "active" : ""}" data-action="friends-tab" data-tab="${key}">${label}${count ? ` <span class="tab-count">${count}</span>` : ""}</button>`;
-    const body = state.friendsTab === "friends" ? (friends.length ? friends.map(p => friendRow(p,"friend")).join("") : `<div class="empty">Vous n'avez pas encore d'amis.</div>`) : state.friendsTab === "requests" ? (requests.length ? requests.map(p => friendRow(p,"incoming")).join("") : `<div class="empty">Aucune demande en attente.</div>`) : (suggestions.length ? suggestions.map(p => friendRow(p,sent.has(p.id)?"sent":"add")).join("") : `<div class="empty">Aucune suggestion pour le moment.</div>`);
+    const body = state.friendsTab === "friends"
+      ? (friends.length ? friends.map(p => friendRow(p,"friend",commonMap.get(p.id)||0)).join("") : `<div class="empty">Vous n'avez pas encore d'amis.</div>`)
+      : state.friendsTab === "requests"
+        ? (requests.length ? requests.map(p => friendRow(p,"incoming",commonMap.get(p.id)||0)).join("") : `<div class="empty">Aucune demande en attente.</div>`)
+        : (suggestions.length ? suggestions.map(p => friendRow(p,sent.has(p.id)?"sent":"add",commonMap.get(p.id)||0)).join("") : `<div class="empty">Aucune suggestion pour le moment.</div>`);
     const title = state.friendsTab === "friends" ? "Vos amis" : state.friendsTab === "requests" ? "Demandes reçues" : "Suggestions pour vous";
-    $("content").innerHTML = `<section class="clean-page friends-page"><div class="page-header clean-page-header"><div><h2>Amis</h2><p class="page-kicker">Votre réseau, vos demandes et vos suggestions</p></div><span class="count-label">${friends.length} amis</span></div><div class="friends-filter clean-filter">${tabButton("suggestions","Suggestions",suggestions.length)}${tabButton("friends","Amis",friends.length)}${tabButton("requests","Demandes",requests.length)}</div><div class="clean-section friends-section"><h3 class="menu-section-title">${title}</h3><div class="friends-list">${body}</div></div></section>`;
+    $("content").innerHTML = `<section class="clean-page friends-page"><div class="page-header clean-page-header"><div><h2>Amis</h2><p class="page-kicker">Votre réseau, vos demandes et vos suggestions réelles</p></div><span class="count-label">${friends.length} amis</span></div><div class="friends-filter clean-filter">${tabButton("suggestions","Suggestions",suggestions.length)}${tabButton("friends","Amis",friends.length)}${tabButton("requests","Demandes",requests.length)}</div><div class="clean-section friends-section"><h3 class="menu-section-title">${title}</h3><div class="friends-list">${body}</div></div></section>`;
   }
-  function friendRow(p,type) {
+  function friendRow(p,type,commonCount=0) {
+    const common = commonCount > 0 ? `<small class="mutual-friends">${commonCount} ami${commonCount > 1 ? "s" : ""} en commun</small>` : "";
     const action = type === "friend" ? `<button class="ghost-action" data-action="view-profile" data-id="${esc(p.id)}">Profil</button>` : type === "sent" ? `<button class="ghost-action" disabled>Demande envoyée</button>` : type === "incoming" ? `<div class="friend-actions"><button class="small-action" data-action="accept-friend" data-id="${esc(p.id)}">Confirmer</button><button class="ghost-action" data-action="decline-friend" data-id="${esc(p.id)}">Refuser</button></div>` : `<button class="small-action" data-action="add-friend" data-id="${esc(p.id)}">Ajouter</button>`;
-    return `<div class="list-row friend-row">${avatarHTML(p)}<div class="grow"><b>${esc(nameOf(p))}</b><small>${p.username ? "@"+esc(p.username) : "Membre Tafaß"}</small></div>${action}</div>`;
+    return `<div class="list-row friend-row">${avatarHTML(p)}<div class="grow"><b>${esc(nameOf(p))}</b>${common}</div>${action}</div>`;
   }
   async function addFriend(id) {
     if (!id || id === state.user.id) return;
@@ -311,7 +348,7 @@
       const map=new Map((pp.data||[]).map(x=>[x.id,x])); posts=posts.map(x=>({...x,author:map.get(x.user_id)}));
     }
     if (token !== state.renderToken || state.route !== "search") return;
-    const peopleHtml=people.length ? people.map(p=>`<div class="list-row search-result-row">${avatarHTML(p)}<div class="grow"><b>${esc(nameOf(p))}</b><small>${esc(usernameOf(p) || "Membre Tafaß")}</small></div><button class="small-action" data-action="view-profile" data-id="${esc(p.id)}">Voir le profil</button></div>`).join("") : `<div class="empty">Aucun compte trouvé.</div>`;
+    const peopleHtml=people.length ? people.map(p=>`<div class="list-row search-result-row">${avatarHTML(p)}<div class="grow"><b>${esc(nameOf(p))}</b></div><button class="small-action" data-action="view-profile" data-id="${esc(p.id)}">Voir le profil</button></div>`).join("") : `<div class="empty">Aucun compte trouvé.</div>`;
     const postHtml=posts.length ? posts.map(p=>`<div class="list-row search-result-row"><div class="grow"><b>${esc(nameOf(p.author||{}))}</b><small>${esc((p.content||"Publication sans texte").slice(0,140))}</small></div><button class="small-action" data-action="search-post" data-id="${esc(p.id)}">Voir</button></div>`).join("") : `<div class="empty">Aucune publication trouvée.</div>`;
     $("content").innerHTML = `<section class="clean-page search-page-premium"><div class="page-header clean-page-header"><div><h2>Rechercher</h2><p class="page-kicker">Comptes et publications réels de Tafaß</p></div></div><div class="clean-search searchbox"><span class="icon">⌕</span><input id="searchInput" value="${esc(term)}" placeholder="Nom, pseudo ou publication..."></div><div class="clean-section"><h3 class="menu-section-title">Comptes</h3><div class="clean-list" id="searchPeople">${peopleHtml}</div></div><div class="clean-section"><h3 class="menu-section-title">Publications</h3><div class="clean-list" id="searchPosts">${postHtml}</div></div></section>`;
     $("searchInput").addEventListener("input", e=>{ clearTimeout(searchTimer); searchTimer=setTimeout(()=>searchPage(e.target.value),280); });
@@ -371,7 +408,7 @@
 
   async function newMessage() {
     const { data: people } = await sb.from("profiles").select("*").neq("id", state.user.id).limit(20);
-    openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><h3>Nouvelle conversation</h3><div>${(people||[]).map(p=>`<button class="list-row" style="width:100%;text-align:left" data-action="start-conversation" data-id="${esc(p.id)}">${avatarHTML(p)}<div class="grow"><b>${esc(nameOf(p))}</b><small>${esc(p.username||"")}</small></div><span>›</span></button>`).join("")}</div></div>`);
+    openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><h3>Nouvelle conversation</h3><div>${(people||[]).map(p=>`<button class="list-row" style="width:100%;text-align:left" data-action="start-conversation" data-id="${esc(p.id)}">${avatarHTML(p)}<div class="grow"><b>${esc(nameOf(p))}</b></div><span>›</span></button>`).join("")}</div></div>`);
   }
   async function startConversation(otherId) {
     if(!otherId || otherId===state.user.id)return;
@@ -391,6 +428,7 @@
   async function openConversation(id) {
     const token = state.renderToken;
     state.selectedConversation = id;
+    if (state.route !== "messages") { state.route = "messages"; history.replaceState(null, "", "#messages"); document.querySelectorAll("[data-route]").forEach(el => el.classList.toggle("active", el.dataset.route === "messages")); }
     const { data: memberCheck } = await sb.from("conversation_members").select("user_id").eq("conversation_id", id).eq("user_id", state.user.id).maybeSingle();
     if (!memberCheck) return toast("Conversation inaccessible.");
     const { data: msgs } = await sb.from("messages").select("*").eq("conversation_id", id).order("created_at", { ascending: true }).limit(200);
@@ -399,33 +437,45 @@
     const { data: profiles } = ids.length ? await sb.from("profiles").select("*").in("id", ids) : { data: [] };
     if (token !== state.renderToken) return;
     const map = new Map((profiles || []).map(p => [p.id, p]));
-    $("content").innerHTML = `<section class="clean-page messages-page conversation-page"><div class="page-header clean-page-header"><button class="text-button" data-route="messages">‹ Messages</button><h2>Discussion</h2><span></span></div><div class="message-list clean-message-list">${(msgs||[]).map(m=>`<div class="message ${m.sender_id===state.user.id?"mine":""}"><div>${esc(m.content)}</div><small>${timeAgo(m.created_at)}</small></div>`).join("")||`<div class="empty">Dites bonjour 👋</div>`}</div><form id="messageForm" class="comment-form clean-message-form"><input id="messageText" placeholder="Écrire un message..." required><button>Envoyer</button></form></section>`;
+    const otherId = (await sb.from("conversation_members").select("user_id").eq("conversation_id", id).neq("user_id", state.user.id).maybeSingle()).data?.user_id;
+    const otherProfile = otherId ? (await sb.from("profiles").select("*").eq("id", otherId).maybeSingle()).data : null;
+    $("content").innerHTML = `<section class="clean-page messages-page conversation-page"><div class="page-header clean-page-header"><button class="text-button" data-route="messages">‹ Messages</button><div class="conversation-title">${avatarHTML(otherProfile || state.profile,"avatar conversation-avatar")}<h2>${esc(otherProfile ? nameOf(otherProfile) : "Discussion")}</h2></div><span></span></div><div class="message-list clean-message-list">${(msgs||[]).map(m=>`<div class="message ${m.sender_id===state.user.id?"mine":""}"><div>${esc(m.content)}</div><small>${timeAgo(m.created_at)}</small></div>`).join("")||`<div class="empty">Dites bonjour 👋</div>`}</div><form id="messageForm" class="comment-form clean-message-form"><input id="messageText" placeholder="Écrire un message..." required><button>Envoyer</button></form></section>`;
     $("messageForm").addEventListener("submit", async e => { e.preventDefault(); const text=$("messageText").value.trim(); if(!text)return; const r=await sb.from("messages").insert({conversation_id:id,sender_id:state.user.id,content:text,is_read:false}); if(r.error)toast(r.error.message); else {$("messageText").value=""; await openConversation(id);} });
   }
 
   async function notificationsPage() {
     const token = state.renderToken;
-    const { data, error } = await sb.from("notifications").select("*")
-      .eq("user_id", state.user.id).order("created_at", { ascending: false }).limit(80);
+    const { data, error } = await sb.from("notifications").select("*").eq("user_id", state.user.id).order("created_at", { ascending:false }).limit(100);
     if (token !== state.renderToken || state.route !== "notifications") return;
     if (error) return simplePage("Alertes", `<div class="empty">${esc(error.message)}</div>`);
-
     const actorIds = [...new Set((data || []).map(n => n.actor_id).filter(Boolean))];
     const { data: actors } = actorIds.length ? await sb.from("profiles").select("*").in("id", actorIds) : { data: [] };
     const amap = new Map((actors || []).map(p => [p.id,p]));
     if (token !== state.renderToken) return;
-
-    $("content").innerHTML = `<section class="clean-page alerts-page"><div class="page-header clean-page-header"><div><h2>Alertes</h2><p class="page-kicker">Les activités importantes de votre compte</p></div>
-      <button class="text-button clean-read-button" data-action="mark-read">Tout lire</button></div>
+    $("content").innerHTML = `<section class="clean-page alerts-page"><div class="page-header clean-page-header"><div><h2>Alertes</h2><p class="page-kicker">Les activités réelles de votre compte, en temps réel</p></div><button class="text-button clean-read-button" data-action="mark-read">Tout lire</button></div>
       <div class="clean-list">${(data || []).map(n => {
         const actor = amap.get(n.actor_id);
-        return `<div class="list-row ${n.is_read ? "" : "unread"}" data-notification="${esc(n.id)}">
-          ${avatarHTML(actor || null)}
-          <div class="grow"><b>${esc(n.title || "Nouvelle activité")}</b>
-          <small>${esc(n.message || "Vous avez une nouvelle notification.")} · ${timeAgo(n.created_at)}</small></div>
-          ${n.is_read ? "" : '<span class="blue-dot"></span>'}
-        </div>`;
+        const target = notificationTarget(n, actor);
+        const actionAttrs = target ? `data-action="${esc(target.action)}" data-id="${esc(target.id || "")}"` : `data-action="notification-read" data-id="${esc(n.id)}"`;
+        const actorName = actor ? nameOf(actor) : "Un membre";
+        return `<button class="list-row notification-row ${n.is_read ? "" : "unread"}" ${actionAttrs} data-notification="${esc(n.id)}">${avatarHTML(actor || null)}<div class="grow"><b>${esc(actorName)}</b><small>${esc(notificationAction(n))} · ${timeAgo(n.created_at)}</small></div>${n.is_read ? "" : '<span class="blue-dot"></span>'}<span class="notification-arrow">›</span></button>`;
       }).join("") || `<div class="empty">Aucune alerte pour le moment.</div>`}</div></section>`;
+  }
+
+  async function openNotificationPost(notificationId) {
+    const n = (await sb.from("notifications").select("*").eq("id", notificationId).maybeSingle()).data;
+    if (!n) return toast("Alerte introuvable");
+    await sb.from("notifications").update({is_read:true}).eq("id",notificationId).eq("user_id",state.user.id);
+    const postId=n.post_id || n.entity_id;
+    if (!postId) return notificationsPage();
+    const p=(await sb.from("posts").select("*").eq("id",postId).maybeSingle()).data;
+    if(!p) return toast("Publication introuvable");
+    const author=(await sb.from("profiles").select("*").eq("id",p.user_id).maybeSingle()).data || state.profile;
+    return openModal(`<div class="modal-box post-preview-modal"><button class="modal-close" data-action="close-modal">×</button>${await postHTML({...p,author})}</div>`);
+  }
+  async function notificationRead(id) {
+    await sb.from("notifications").update({is_read:true}).eq("id",id).eq("user_id",state.user.id);
+    await notificationsPage(); updateBadges();
   }
 
   async function markRead() {
@@ -459,11 +509,15 @@
     state.renderToken++;
     const token = state.renderToken;
     const { data: p, error } = await sb.from("profiles").select("*").eq("id", userId).maybeSingle();
-    if (error || !p || token !== state.renderToken) return toast("Profil indisponible");
+    if (error || !p || token !== state.renderToken) {
+      if (token !== state.renderToken) return;
+      $("content").innerHTML = `<section class="profile-unavailable"><div class="profile-unavailable-icon">⌁</div><h2>Profil indisponible</h2><p>Ce profil n’est pas accessible pour le moment. Il a peut-être été supprimé, désactivé ou rendu privé.</p><button class="primary" data-route="friends">Retour aux amis</button></section>`;
+      return;
+    }
 
     const { data: mine } = await sb.from("posts").select("*").eq("user_id", userId).order("created_at", { ascending:false }).limit(100);
     const postRows = mine || [];
-    const friendsR = await sb.from("friendships").select("id", { count:"exact", head:true }).or(`user_id.eq.${userId},friend_id.eq.${userId}`);
+    const friendsR = await sb.from("friendships").select("id", { count:"exact", head:true }).eq("user_id", userId);
     const followersR = await sb.from("follows").select("id", { count:"exact", head:true }).eq("following_id", userId);
     const cover = p.cover_url ? `style="background-image:url('${esc(p.cover_url)}')"` : "";
     const isMe = userId === state.user.id;
@@ -487,8 +541,8 @@
       <div class="profile-main-premium">
         <div class="profile-identity-row">
           ${avatarHTML(p,"avatar profile-avatar")}
-          <div class="profile-identity"><h2 class="profile-name">${esc(nameOf(p))}</h2><div class="profile-handle">${esc(usernameOf(p))}</div></div>
         </div>
+        <div class="profile-name-block"><h2 class="profile-name">${esc(nameOf(p))}</h2></div>
         <p class="profile-bio">${esc(p.bio || "")}</p>
         <div class="profile-actions">${actions}</div>
         <div class="profile-stats"><div class="profile-stat"><b>${postRows.length}</b><small>Publications</small></div><div class="profile-stat"><b>${friendsR.count || 0}</b><small>Amis</small></div><div class="profile-stat"><b>${followersR.count || 0}</b><small>Abonnés</small></div></div>
@@ -558,7 +612,8 @@
     $("content").innerHTML = `<section class="profile-page-premium">
       <div class="profile-cover-wrap"><div class="profile-cover" ${cover}></div></div>
       <div class="profile-main-premium">
-        <div class="profile-identity-row">${avatarHTML(p,"avatar profile-avatar")}<div class="profile-identity"><h2 class="profile-name">${esc(nameOf(p))}</h2><div class="profile-handle">${p.username ? "@"+esc(p.username) : ""}</div></div></div>
+        <div class="profile-identity-row">${avatarHTML(p,"avatar profile-avatar")}</div>
+        <div class="profile-name-block"><h2 class="profile-name">${esc(nameOf(p))}</h2></div>
         <p class="profile-bio">${esc(p.bio || "")}</p>
         <div class="profile-actions"><button class="primary" data-action="edit-profile">Modifier le profil</button></div>
         <div class="profile-stats"><div class="profile-stat"><b>${mine.length}</b><small>Publications</small></div><div class="profile-stat"><b>${friendsCount}</b><small>Amis</small></div><div class="profile-stat"><b>${followersCount}</b><small>Abonnés</small></div></div>
@@ -570,10 +625,10 @@
 
   function editProfile() {
     const p = state.profile || {};
-    openModal(`<div class="modal-box profile-edit-modal premium-profile-editor"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • PROFIL</span><h3>Personnaliser votre profil</h3><div class="profile-editor-preview"><div class="editor-cover-preview" style="background-image:url('${esc(p.cover_url || "")}')"></div><div class="editor-avatar-preview">${avatarHTML(p,"avatar")}</div></div><div class="profile-media-pickers"><label class="media-picker premium-picker"><span>Photo de profil</span><small>JPG, PNG ou WEBP</small><input id="pfAvatar" type="file" accept="image/*"></label><label class="media-picker premium-picker"><span>Photo de couverture</span><small>Grande image de couverture</small><input id="pfCover" type="file" accept="image/*"></label></div><div class="form-stack"><label>Prénom<input id="pfFirst" value="${esc(p.first_name||"")}"></label><label>Nom<input id="pfLast" value="${esc(p.last_name||"")}"></label><label>Pseudo<input id="pfUsername" value="${esc(p.username||"")}"></label><label>Bio<textarea id="pfBio">${esc(p.bio||"")}</textarea></label><label>Ville / pays<input id="pfLocation" value="${esc(p.location||"")}"></label><button class="primary big" data-action="save-profile">Enregistrer les modifications</button></div></div>`);
+    openModal(`<div class="modal-box profile-edit-modal premium-profile-editor"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • PROFIL</span><h3>Personnaliser votre profil</h3><div class="profile-editor-preview"><div class="editor-cover-preview" style="background-image:url('${esc(p.cover_url || "")}')"></div><div class="editor-avatar-preview">${avatarHTML(p,"avatar")}</div></div><div class="profile-media-pickers"><label class="media-picker premium-picker"><span>Photo de profil</span><small>JPG, PNG ou WEBP</small><input id="pfAvatar" type="file" accept="image/*"></label><label class="media-picker premium-picker"><span>Photo de couverture</span><small>Grande image de couverture</small><input id="pfCover" type="file" accept="image/*"></label></div><div class="form-stack"><label>Prénom<input id="pfFirst" value="${esc(p.first_name||"")}"></label><label>Nom<input id="pfLast" value="${esc(p.last_name||"")}"></label><label>Bio<textarea id="pfBio">${esc(p.bio||"")}</textarea></label><label>Ville / pays<input id="pfLocation" value="${esc(p.location||"")}"></label><button class="primary big" data-action="save-profile">Enregistrer les modifications</button></div></div>`);
   }
   async function saveProfile() {
-    const patch = { first_name:$('pfFirst').value.trim(), last_name:$('pfLast').value.trim(), username:$('pfUsername').value.trim().replace(/^@/,"") || null, bio:$('pfBio').value.trim(), location:$('pfLocation').value.trim() };
+    const patch = { first_name:$('pfFirst').value.trim(), last_name:$('pfLast').value.trim(), bio:$('pfBio').value.trim(), location:$('pfLocation').value.trim() };
     try {
       for (const [file,key] of [[$('pfAvatar')?.files?.[0],"avatar_url"],[$('pfCover')?.files?.[0],"cover_url"]]) {
         if (!file) continue;
@@ -596,7 +651,7 @@
       const wanted = route === "reels" ? ["reel","video"] : ["video"];
       const rows = state.posts.filter(p => wanted.includes(p.media_type));
       if (token !== state.renderToken || state.route !== route) return;
-      $("content").innerHTML = `<div class="card"><div class="page-header"><h2>${route === "reels" ? "Reels" : "Vidéos"}</h2><span class="muted">Découvrir</span></div>${rows.length?rows.map(p=>`<article class="post"><div class="post-head">${profileLink(p.author, avatarHTML(p.author), "profile-link profile-avatar-link")}<div class="meta">${profileLink(p.author, `<span class="post-author-name">${esc(nameOf(p.author))}</span><span class="post-author-handle">${esc(usernameOf(p.author))}</span>`, "profile-link profile-meta-link")}<span class="post-time"><small>${timeAgo(p.created_at)}</small></span></div></div>${p.content?`<div class="post-body">${esc(p.content)}</div>`:""}${p.media_type==="video"||p.media_type==="reel"?`<video class="post-media" src="${esc(p.media_url)}" controls></video>`:""}</article>`).join(""):`<div class="empty">Aucun contenu pour le moment.</div>`}</div>`;
+      $("content").innerHTML = `<div class="card"><div class="page-header"><h2>${route === "reels" ? "Reels" : "Vidéos"}</h2><span class="muted">Découvrir</span></div>${rows.length?rows.map(p=>`<article class="post"><div class="post-head">${profileLink(p.author, avatarHTML(p.author), "profile-link profile-avatar-link")}<div class="meta">${profileLink(p.author, `<span class="post-author-name">${esc(nameOf(p.author))}</span>`, "profile-link profile-meta-link")}<span class="post-time"><small>${timeAgo(p.created_at)}</small></span></div></div>${p.content?`<div class="post-body">${esc(p.content)}</div>`:""}${p.media_type==="video"||p.media_type==="reel"?`<video class="post-media" src="${esc(p.media_url)}" controls></video>`:""}</article>`).join(""):`<div class="empty">Aucun contenu pour le moment.</div>`}</div>`;
       return;
     }
     if (route === "pages") {
@@ -676,7 +731,6 @@
     const actions = [
       ["history","history","Historique d'activité","Vos actions enregistrées", "activity"],
       ["payment","payment","Paiement","Vos paiements et transactions", "payment"],
-      ["privacy","privacy","Confidentialité","Vos réglages de confidentialité", "privacy"],
       ["help","help","Aide","Assistance et signalement", "help"]
     ];
     const card = x => `<button class="menu-card premium-menu-card" ${x[4] ? `data-action="menu-service" data-name="${esc(x[2])}" data-service="${esc(x[4])}"` : `data-route="${x[0]}"`} aria-label="${esc(x[2])}"><span class="menu-icon">${menuIcon(x[1])}</span><span class="menu-card-copy"><b>${esc(x[2])}</b><small title="${esc(x[3])}">${esc(x[3])}</small></span><span class="menu-arrow">›</span></button>`;
@@ -709,19 +763,53 @@
       cfg = r.data || {};
     }
     const dark = state.theme === "dark";
-    if (token !== state.renderToken) return;
-    simplePage("Para & Conf", `<p class="page-subtitle">Gérez votre compte, votre confidentialité et vos préférences.</p>
-      <div class="settings-grid">
-        <button class="setting-card" data-action="setting" data-name="Compte"><span><b>Compte</b><small>Informations personnelles</small></span><span>›</span></button>
-        <button class="setting-card" data-action="setting" data-name="Paiement"><span><b>Paiement</b><small>Moyens et historique</small></span><span>›</span></button>
-        <button class="setting-card" data-action="setting" data-name="Aide"><span><b>Aide</b><small>Assistance Tafaß</small></span><span>›</span></button>
-        <button class="setting-card" data-action="setting" data-name="Politique de confidentialité"><span><b>Confidentialité</b><small>Contrôler vos données</small></span><span>›</span></button>
-        <button class="setting-card" data-action="setting" data-name="Historique d'activité"><span><b>Historique d'activité</b><small>Vos actions récentes</small></span><span>›</span></button>
-        <button class="setting-card" data-action="setting" data-name="Recherche"><span><b>Recherche</b><small>Préférences de recherche</small></span><span>›</span></button>
+    if (token !== state.renderToken || state.route !== "settings") return;
+    const toggleLabel = (value) => value ? "Activé" : "Désactivé";
+    simplePage("Para & Conf", `<p class="page-subtitle">Tous les réglages réels de votre compte, de votre sécurité, de votre confidentialité et de vos notifications.</p>
+      <div class="settings-section-title">Compte</div><div class="settings-grid settings-grid-complete">
+        <button class="setting-card" data-action="edit-profile"><span><b>Profil</b><small>Modifier vos informations et vos photos</small></span><span>›</span></button>
+        <button class="setting-card" data-action="security-settings"><span><b>Sécurité et connexion</b><small>Accès, session et protection du compte</small></span><span>›</span></button>
+        <button class="setting-card" data-action="setting" data-name="Paiement"><span><b>Paiement</b><small>Moyens et historique des transactions</small></span><span>›</span></button>
+        <button class="setting-card" data-action="setting" data-name="Historique d'activité"><span><b>Historique d'activité</b><small>Vos actions enregistrées</small></span><span>›</span></button>
+      </div>
+      <div class="settings-section-title">Confidentialité</div><div class="settings-grid settings-grid-complete">
+        <button class="setting-card" data-action="privacy-settings"><span><b>Confidentialité du profil</b><small>Visibilité : ${esc(cfg?.profile_visibility || "public")}</small></span><span>›</span></button>
+        <button class="setting-card" data-action="friend-settings"><span><b>Demandes d’amis</b><small>${toggleLabel(cfg?.allow_friend_requests !== false)}</small></span><span>›</span></button>
+        <button class="setting-card" data-action="message-settings"><span><b>Messages</b><small>${toggleLabel(cfg?.allow_messages !== false)}</small></span><span>›</span></button>
+        <button class="setting-card" data-action="search-privacy-settings"><span><b>Recherche</b><small>Téléphone : ${toggleLabel(cfg?.allow_search_by_phone !== false)} · E-mail : ${toggleLabel(cfg?.allow_search_by_email !== false)}</small></span><span>›</span></button>
+      </div>
+      <div class="settings-section-title">Notifications</div><div class="settings-grid settings-grid-complete">
+        <button class="setting-card" data-action="notifications-settings"><span><b>Notifications générales</b><small>${toggleLabel(cfg?.notifications_enabled !== false)}</small></span><span>›</span></button>
+        <button class="setting-card" data-action="message-notification-settings"><span><b>Messages</b><small>${toggleLabel(cfg?.message_notifications !== false)}</small></span><span>›</span></button>
+        <button class="setting-card" data-action="friend-notification-settings"><span><b>Amis</b><small>${toggleLabel(cfg?.friend_notifications !== false)}</small></span><span>›</span></button>
+        <button class="setting-card" data-action="reaction-notification-settings"><span><b>Réactions</b><small>${toggleLabel(cfg?.reaction_notifications !== false)}</small></span><span>›</span></button>
+        <button class="setting-card" data-action="comment-notification-settings"><span><b>Commentaires</b><small>${toggleLabel(cfg?.comment_notifications !== false)}</small></span><span>›</span></button>
+      </div>
+      <div class="settings-section-title">Préférences</div><div class="settings-grid settings-grid-complete">
         <button class="setting-card" data-action="theme"><span><b>Mode sombre</b><small>${dark ? "Activé" : "Désactivé"}</small></span><span class="toggle ${dark?"on":""}"><i></i></span></button>
-        <button class="setting-card" data-action="notifications-settings"><span><b>Notifications</b><small>${cfg?.notifications_enabled === false ? "Désactivées" : "Activées"}</small></span><span>›</span></button>
-        <button class="setting-card" data-action="privacy-settings"><span><b>Confidentialité du profil</b><small>${esc(cfg?.profile_visibility || "public")}</small></span><span>›</span></button>
+        <button class="setting-card" data-action="language-settings"><span><b>Langue</b><small>Français</small></span><span>›</span></button>
+        <button class="setting-card" data-action="setting" data-name="Aide"><span><b>Aide et assistance</b><small>Centre d'aide Tafaß</small></span><span>›</span></button>
       </div>`);
+  }
+  async function openSettingControl(action) {
+    const cfg = (await sb.from("user_settings").select("*").eq("user_id", state.user.id).maybeSingle()).data || {};
+    const labels = {
+      "friend-settings":["Demandes d’amis","allow_friend_requests","Autoriser les autres membres à vous envoyer des demandes d’ami"],
+      "message-settings":["Messages","allow_messages","Autoriser les autres membres à vous envoyer des messages"],
+      "search-privacy-settings":["Recherche","search_privacy","Autoriser la recherche de votre compte par téléphone ou e-mail"],
+      "language-settings":["Langue","language","Langue de l’interface"],
+      "message-notification-settings":["Notifications de messages","message_notifications","Recevoir les alertes de messages"],
+      "friend-notification-settings":["Notifications d’amis","friend_notifications","Recevoir les alertes liées aux demandes et relations"],
+      "reaction-notification-settings":["Notifications de réactions","reaction_notifications","Recevoir les alertes de réactions"],
+      "comment-notification-settings":["Notifications de commentaires","comment_notifications","Recevoir les alertes de commentaires"]
+    };
+    const [title,key,desc] = labels[action];
+    if (key === "search_privacy") {
+      return openModal(`<div class="modal-box settings-modal"><button class="modal-close" data-action="close-modal">×</button><h3>${esc(title)}</h3><label><input id="allowSearchPhone" type="checkbox" ${cfg.allow_search_by_phone !== false ? "checked" : ""}> Recherche par téléphone</label><label><input id="allowSearchEmail" type="checkbox" ${cfg.allow_search_by_email !== false ? "checked" : ""}> Recherche par e-mail</label><button class="primary big" data-action="save-search-privacy">Enregistrer</button></div>`);
+    }
+    if (key === "language") return openModal(`<div class="modal-box settings-modal"><button class="modal-close" data-action="close-modal">×</button><h3>Langue</h3><label>Langue<select id="languageSelect"><option value="fr" ${cfg.language === "fr" || !cfg.language ? "selected" : ""}>Français</option><option value="mg" ${cfg.language === "mg" ? "selected" : ""}>Malagasy</option></select></label><button class="primary big" data-action="save-language">Enregistrer</button></div>`);
+    const current = cfg[key] !== false;
+    return openModal(`<div class="modal-box settings-modal"><button class="modal-close" data-action="close-modal">×</button><h3>${esc(title)}</h3><p class="muted">${esc(desc)}</p><label class="setting-switch-line"><input id="settingToggle" type="checkbox" ${current ? "checked" : ""}><span>${current ? "Activé" : "Désactivé"}</span></label><button class="primary big" data-action="save-setting-toggle" data-setting-key="${esc(key)}">Enregistrer</button></div>`);
   }
 
   async function saveUserSetting(patch) {
@@ -731,9 +819,22 @@
     await settingsPage();
   }
 
+  function securitySettings() {
+    openModal(`<div class="modal-box settings-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • SÉCURITÉ</span><h3>Sécurité et connexion</h3><p class="muted">Compte connecté : ${esc(state.user?.email || "Compte Tafaß")}</p><div class="form-stack"><label>Nouveau mot de passe<input id="newPassword" type="password" minlength="6" autocomplete="new-password" placeholder="Au moins 6 caractères"></label><label>Confirmer le mot de passe<input id="confirmPassword" type="password" minlength="6" autocomplete="new-password" placeholder="Répétez le mot de passe"></label><button class="primary big" data-action="change-password">Modifier le mot de passe</button><button class="ghost-action big" data-action="logout">Se déconnecter</button></div></div>`);
+  }
+  async function changePassword() {
+    const password=$("newPassword")?.value || "", confirm=$("confirmPassword")?.value || "";
+    if(password.length < 6) return toast("Le mot de passe doit contenir au moins 6 caractères.");
+    if(password !== confirm) return toast("Les mots de passe ne correspondent pas.");
+    const r=await sb.auth.updateUser({password});
+    if(r.error)return toast(r.error.message);
+    closeModal(); toast("Mot de passe modifié"); await logActivity("password_changed","Mot de passe modifié","security");
+  }
+
   function settingInfo(name) {
     const bodies = {
       "Compte":"Modifiez vos informations personnelles depuis votre Profil.",
+      "Sécurité et connexion":"Votre session Tafaß est protégée par l’authentification Supabase. Utilisez la déconnexion pour fermer immédiatement cette session.",
       "Paiement":"Les informations de paiement seront conservées dans les fonctions de paiement activées par Tafaß.",
       "Aide":"Utilisez cette section pour consulter l’aide et l’assistance Tafaß.",
       "Politique de confidentialité":"Gérez qui peut voir votre profil et comment les autres membres peuvent vous contacter.",
@@ -913,6 +1014,8 @@
     if (routeEl) { e.preventDefault(); if (pageLoading) return; navigate(routeEl.dataset.route); return; }
     const actionEl = e.target.closest("[data-action]"); if (!actionEl) return;
     const action = actionEl.dataset.action, id = actionEl.dataset.id;
+    const notificationId = actionEl.dataset.notification;
+    if (notificationId && action !== "mark-read") { await sb.from("notifications").update({is_read:true}).eq("id",notificationId).eq("user_id",state.user.id); updateBadges(); }
     if (action === "react") return showReactions(id);
     if (action === "comment") { $("comment-"+id)?.focus(); return; }
     if (action === "send-comment") return addComment(id);
@@ -942,6 +1045,8 @@
     if (action === "view-profile") {
       return openUserProfile(id);
     }
+    if (action === "open-notification-post") return openNotificationPost(notificationId || id);
+    if (action === "notification-read") return notificationRead(id);
     if (action === "search-post") {
       const p=(await sb.from("posts").select("*").eq("id",id).maybeSingle()).data;
       if(!p)return toast("Publication introuvable");
@@ -970,13 +1075,18 @@
     if (action === "tafab-contact") return contactTafabListing(id);
     if (action === "send-tafab-message") return sendTafabMessage(id);
     if (action === "tafab-info") { const x=(await sb.from("tafab_listings").select("*").eq("id",id).maybeSingle()).data; if(!x)return toast("Offre introuvable"); return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">OFFRE TAFAß</span><h3>${esc(x.title)}</h3><p>${esc(x.description||"")}</p><p class="muted">${esc(x.location||"")} ${x.price!=null?"• "+esc(x.price)+" "+esc(x.currency||"MGA"):""}</p><button class="primary big" data-action="tafab-contact" data-id="${esc(x.id)}">Contacter le vendeur</button></div>`); }
+    if (action === "security-settings") return securitySettings();
     if (action === "setting") return settingInfo(actionEl.dataset.name);
     if (action === "notifications-settings") {
       const cfg = (await sb.from("user_settings").select("notifications_enabled").eq("user_id",state.user.id).maybeSingle()).data;
       return saveUserSetting({ notifications_enabled: !(cfg?.notifications_enabled !== false) });
     }
-    if (action === "privacy-settings") return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><h3>Confidentialité du profil</h3><label>Visibilité<select id="privacyVisibility"><option value="public">Public</option><option value="friends">Amis</option><option value="private">Privé</option></select></label><button class="primary big" data-action="save-privacy">Enregistrer</button></div>`);
+    if (action === "privacy-settings") return openModal(`<div class="modal-box settings-modal"><button class="modal-close" data-action="close-modal">×</button><h3>Confidentialité du profil</h3><p class="muted">Choisissez qui peut accéder à votre profil.</p><label>Visibilité<select id="privacyVisibility"><option value="public">Public</option><option value="friends">Amis</option><option value="private">Privé</option></select></label><button class="primary big" data-action="save-privacy">Enregistrer</button></div>`);
     if (action === "save-privacy") return saveUserSetting({ profile_visibility: $("privacyVisibility").value });
+    if (action === "save-setting-toggle") { const key=actionEl.dataset.settingKey; return saveUserSetting({ [key]: !!$("settingToggle")?.checked }); }
+    if (action === "save-search-privacy") return saveUserSetting({ allow_search_by_phone: !!$("allowSearchPhone")?.checked, allow_search_by_email: !!$("allowSearchEmail")?.checked });
+    if (action === "save-language") return saveUserSetting({ language: $("languageSelect")?.value || "fr" });
+    if (["friend-settings","message-settings","search-privacy-settings","language-settings","message-notification-settings","friend-notification-settings","reaction-notification-settings","comment-notification-settings"].includes(action)) return openSettingControl(action);
     if (action === "create-group") return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><h3>Créer un groupe</h3><label>Nom<input id="newGroupName" placeholder="Nom du groupe"></label><label>Description<textarea id="newGroupDesc" placeholder="Description"></textarea></label><button class="primary big" data-action="save-group">Créer</button></div>`);
     if (action === "save-group") {
       const name=$("newGroupName")?.value.trim(); if(!name)return toast("Entrez un nom.");
@@ -1001,6 +1111,7 @@
       if(!a)return toast("Publication introuvable");
       return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><h3>${esc(a.title)}</h3><p class="muted">${esc(a.description||"")}</p><button class="primary big" data-action="close-modal">Fermer</button></div>`);
     }
+    if (action === "change-password") return changePassword();
     if (action === "logout") return logout();
     if (action === "close-modal") return closeModal();
   });

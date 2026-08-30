@@ -287,3 +287,67 @@ alter table public.profile_reports replica identity full;
 alter table public.payment_transactions replica identity full;
 
 select 'TAFAß V12 REAL SOCIAL READY' as status;
+
+-- =========================================================
+-- V12.1 — COMMENT LIKE ALERT + COMPLETE NOTIFICATION REALTIME
+-- =========================================================
+create or replace function public.tafa_notify_comment_like()
+returns trigger
+language plpgsql
+security definer
+set search_path=public
+as $$
+declare owner_id uuid;
+declare post_id_value uuid;
+begin
+  select c.user_id, c.post_id into owner_id, post_id_value
+    from public.comments c where c.id=new.comment_id;
+  perform public.tafa_notify(owner_id,new.user_id,'comment_like','Réaction sur votre commentaire','Un membre a réagi à votre commentaire.','post',post_id_value,post_id_value);
+  return new;
+end;
+$$;
+
+drop trigger if exists tafa_notify_comment_like_trigger on public.comment_likes;
+create trigger tafa_notify_comment_like_trigger
+after insert on public.comment_likes
+for each row execute function public.tafa_notify_comment_like();
+
+-- Correct notification wording for shares.
+create or replace function public.tafa_notify_share()
+returns trigger language plpgsql security definer set search_path=public as $$
+declare owner_id uuid;
+begin
+  select user_id into owner_id from public.posts where id=new.post_id;
+  perform public.tafa_notify(owner_id,new.user_id,'share','Nouveau partage','Un membre a partagé votre publication.','post',new.post_id,new.post_id);
+  return new;
+end; $$;
+
+drop trigger if exists tafa_notify_share_trigger on public.post_shares;
+create trigger tafa_notify_share_trigger after insert or update on public.post_shares for each row execute function public.tafa_notify_share();
+
+do $$
+begin
+  begin execute 'alter publication supabase_realtime add table public.comment_likes'; exception when duplicate_object then null; end;
+end $$;
+alter table public.comment_likes replica identity full;
+
+-- =========================================================
+-- V12.2 — COMMON FRIENDS (REAL + RLS SAFE)
+-- =========================================================
+create or replace function public.tafa_common_friend_counts(p_user_ids uuid[])
+returns table(user_id uuid, common_count bigint)
+language sql
+stable
+security definer
+set search_path=public
+as $$
+  select target.user_id, count(*)::bigint as common_count
+  from public.friendships target
+  join public.friendships mine
+    on mine.friend_id = target.friend_id
+   and mine.user_id = auth.uid()
+  where target.user_id = any(p_user_ids)
+    and target.user_id <> auth.uid()
+  group by target.user_id;
+$$;
+grant execute on function public.tafa_common_friend_counts(uuid[]) to authenticated;
