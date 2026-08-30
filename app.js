@@ -425,40 +425,32 @@
   async function searchPage(q = "") {
     const token = state.renderToken;
     const term = q.trim();
-    if (!term) {
-      let history=[];
+    let people = [], posts = [], pages = [], groups = [];
+    if (term) {
+      const safe = term.replace(/[%_]/g, "");
+      const [pr, por, pgr, gr] = await Promise.all([
+        sb.from("profiles").select("*").or(`first_name.ilike.%${safe}%,last_name.ilike.%${safe}%,username.ilike.%${safe}%`).limit(30),
+        sb.from("posts").select("*").or(`content.ilike.%${safe}%`).order("created_at", {ascending:false}).limit(30),
+        sb.from("pages").select("*").or(`name.ilike.%${safe}%,category.ilike.%${safe}%,bio.ilike.%${safe}%`).limit(20),
+        sb.from("groups").select("*").or(`name.ilike.%${safe}%,description.ilike.%${safe}%`).limit(20)
+      ]);
+      people=pr.data||[]; posts=por.data||[]; pages=pgr.data||[]; groups=gr.data||[];
       if (state.user) {
-        const hr=await sb.from("search_history").select("id,search_text,result_type,created_at").eq("user_id",state.user.id).order("created_at",{ascending:false}).limit(60);
-        history=hr.data||[];
+        const recent=await sb.from("search_history").select("id").eq("user_id",state.user.id).eq("search_text",term).limit(1);
+        if(!(recent.data||[]).length) await sb.from("search_history").insert({ user_id: state.user.id, search_text: term, result_type: "all" });
       }
-      if (token !== state.renderToken || state.route !== "search") return;
-      const historyHtml=history.length ? history.map(h=>`<div class="search-history-row-v31"><button class="history-open-v31" data-action="search-history-open" data-term="${esc(h.search_text)}"><span class="history-icon">◷</span><span class="history-main-v31"><b>${esc(h.search_text)}</b><small>${new Date(h.created_at).toLocaleString("fr-FR")}</small></span></button><button class="history-delete-v31" data-action="delete-search-history" data-id="${esc(h.id)}" aria-label="Supprimer cette recherche">×</button></div>`).join("") : `<div class="search-empty-v31"><b>Aucun historique</b><small>Vos recherches apparaîtront ici.</small></div>`;
-      $("content").innerHTML=`<section class="clean-page search-page-premium-v31"><div class="page-header clean-page-header"><div><span class="eyebrow">TAFAß • RECHERCHE</span><h2>Rechercher</h2><p class="page-kicker">Recherchez d'abord une personne, une Page, un groupe ou une publication.</p></div></div><div class="clean-search searchbox searchbox-v31"><span class="icon">⌕</span><input id="searchInput" value="" placeholder="Rechercher…" autocomplete="off"></div><section class="search-history-card-v31"><div class="search-history-head-v31"><div><span class="eyebrow">HISTORIQUE</span><h3>Vos recherches</h3></div>${history.length?`<button class="ghost-action" data-action="clear-search-history">Tout effacer</button>`:""}</div><div class="search-history-list-v31">${historyHtml}</div></section></section>`;
-      $("searchInput").focus();
-      $("searchInput").addEventListener("input",e=>{clearTimeout(searchTimer);searchTimer=setTimeout(()=>searchPage(e.target.value),350);});
-      return;
+      const ids=[...new Set(posts.map(x=>x.user_id).filter(Boolean))];
+      const pp=ids.length ? await sb.from("profiles").select("*").in("id",ids) : {data:[]};
+      const map=new Map((pp.data||[]).map(x=>[x.id,x]));
+      posts=posts.map(x=>({...x,author:map.get(x.user_id)}));
     }
-    let people=[],posts=[],pages=[],groups=[];
-    const safe=term.replace(/[%_]/g,"");
-    const [pr,por,pgr,gr]=await Promise.all([
-      sb.from("profiles").select("*").or(`first_name.ilike.%${safe}%,last_name.ilike.%${safe}%,username.ilike.%${safe}%`).limit(30),
-      sb.from("posts").select("*").or(`content.ilike.%${safe}%`).order("created_at",{ascending:false}).limit(30),
-      sb.from("pages").select("*").or(`name.ilike.%${safe}%,category.ilike.%${safe}%,bio.ilike.%${safe}%`).limit(20),
-      sb.from("groups").select("*").or(`name.ilike.%${safe}%,description.ilike.%${safe}%`).limit(20)
-    ]);
-    people=pr.data||[];posts=por.data||[];pages=pgr.data||[];groups=gr.data||[];
-    if(state.user){const recent=await sb.from("search_history").select("id").eq("user_id",state.user.id).eq("search_text",term).limit(1);if(!(recent.data||[]).length)await sb.from("search_history").insert({user_id:state.user.id,search_text:term,result_type:"all"});}
-    const ids=[...new Set(posts.map(x=>x.user_id).filter(Boolean))];const pp=ids.length?await sb.from("profiles").select("*").in("id",ids):{data:[]};const map=new Map((pp.data||[]).map(x=>[x.id,x]));posts=posts.map(x=>({...x,author:map.get(x.user_id)}));
-    if(token!==state.renderToken||state.route!=="search")return;
-    const friendIds=new Set((await sb.from("friendships").select("friend_id").eq("user_id",state.user.id)).data?.map(x=>x.friend_id)||[]);
-    const pending=new Set((await sb.from("friend_requests").select("receiver_id").eq("sender_id",state.user.id).eq("status","pending")).data?.map(x=>x.receiver_id)||[]);
-    const peopleHtml=people.length?people.map(p=>{const location=[p.city_current,p.country].filter(Boolean).join(", ");const rel=friendIds.has(p.id)?"Amis":pending.has(p.id)?"Demande envoyée":"Ajouter";return `<article class="search-card-v31"><div class="search-avatar-v31">${avatarHTML(p)}</div><div class="search-card-body-v31"><b>${esc(nameOf(p))}</b><small>${esc(location||"Madagascar")}</small><small>${rel==="Amis"?"Ami":""}</small></div><div class="search-card-actions-v31">${p.id!==state.user.id?`<button class="small-action" ${rel!=="Ajouter"?"disabled":""} data-action="add-friend" data-id="${esc(p.id)}">${rel}</button>`:""}<button class="small-action secondary" data-action="view-profile" data-id="${esc(p.id)}">Voir le profil</button></div></article>`}).join(""):`<div class="empty">Aucune personne trouvée.</div>`;
-    const pageHtml=pages.length?pages.map(x=>`<article class="search-card-v31"><div class="entity-search-icon">▣</div><div class="search-card-body-v31"><b>${esc(x.name)}</b><small>${esc(x.category||"Page")}</small><small>${esc(x.bio||"")}</small></div><div class="search-card-actions-v31"><button class="small-action" data-action="page-follow-search" data-id="${esc(x.id)}">Suivre</button><button class="small-action secondary" data-action="page-open" data-id="${esc(x.id)}">Voir le profil</button></div></article>`).join(""):`<div class="empty">Aucune Page trouvée.</div>`;
-    const groupHtml=groups.length?groups.map(x=>`<article class="search-card-v31"><div class="entity-search-icon">◎</div><div class="search-card-body-v31"><b>${esc(x.name)}</b><small>${esc(x.privacy||"Public")}</small><small>${esc(x.description||"")}</small></div><div class="search-card-actions-v31"><button class="small-action secondary" data-action="group-open" data-id="${esc(x.id)}">Voir le profil</button></div></article>`).join(""):`<div class="empty">Aucun groupe trouvé.</div>`;
-    const postHtml=posts.length?posts.map(p=>`<article class="search-card-v31"><div class="search-avatar-v31">${avatarHTML(p.author||{})}</div><div class="search-card-body-v31"><b>${esc(nameOf(p.author||{}))}</b><small>${esc((p.content||"Publication sans texte").slice(0,150))}</small></div><div class="search-card-actions-v31"><button class="small-action secondary" data-action="search-post" data-id="${esc(p.id)}">Voir</button></div></article>`).join(""):`<div class="empty">Aucune publication trouvée.</div>`;
-    $("content").innerHTML=`<section class="clean-page search-page-premium-v31"><div class="page-header clean-page-header"><div><span class="eyebrow">TAFAß • RECHERCHE</span><h2>Résultats</h2><p class="page-kicker">Recherche : <b>${esc(term)}</b></p></div></div><div class="clean-search searchbox searchbox-v31"><span class="icon">⌕</span><input id="searchInput" value="${esc(term)}" placeholder="Rechercher…" autocomplete="off"></div><div class="search-results-grid-v31"><section class="clean-section"><h3 class="menu-section-title">Personnes</h3><div class="search-result-list-v31">${peopleHtml}</div></section><section class="clean-section"><h3 class="menu-section-title">Pages</h3><div class="search-result-list-v31">${pageHtml}</div></section><section class="clean-section"><h3 class="menu-section-title">Groupes</h3><div class="search-result-list-v31">${groupHtml}</div></section><section class="clean-section"><h3 class="menu-section-title">Publications</h3><div class="search-result-list-v31">${postHtml}</div></section></div></section>`;
-    $("searchInput").focus();
-    $("searchInput").addEventListener("input",e=>{clearTimeout(searchTimer);searchTimer=setTimeout(()=>searchPage(e.target.value),350);});
+    if (token !== state.renderToken || state.route !== "search") return;
+    const peopleHtml=people.length ? people.map(p=>`<div class="list-row search-result-row">${avatarHTML(p)}<div class="grow"><b>${esc(nameOf(p))}</b></div><button class="small-action" data-action="view-profile" data-id="${esc(p.id)}">Voir le profil</button></div>`).join("") : `<div class="empty">Aucun compte trouvé.</div>`;
+    const postHtml=posts.length ? posts.map(p=>`<div class="list-row search-result-row"><div class="grow"><b>${esc(nameOf(p.author||{}))}</b><small>${esc((p.content||"Publication sans texte").slice(0,140))}</small></div><button class="small-action" data-action="search-post" data-id="${esc(p.id)}">Voir</button></div>`).join("") : `<div class="empty">Aucune publication trouvée.</div>`;
+    const pageHtml=pages.length ? pages.map(x=>`<div class="list-row search-result-row"><div class="entity-search-icon">▣</div><div class="grow"><b>${esc(x.name)}</b><small>${esc(x.category||"Page")} · ${esc(x.bio||"")}</small></div><button class="small-action" data-action="page-open" data-id="${esc(x.id)}">Ouvrir</button></div>`).join("") : `<div class="empty">Aucune Page trouvée.</div>`;
+    const groupHtml=groups.length ? groups.map(x=>`<div class="list-row search-result-row"><div class="entity-search-icon">◎</div><div class="grow"><b>${esc(x.name)}</b><small>${esc(x.privacy||"public")} · ${esc(x.description||"")}</small></div><button class="small-action" data-action="group-open" data-id="${esc(x.id)}">Ouvrir</button></div>`).join("") : `<div class="empty">Aucun groupe trouvé.</div>`;
+    $("content").innerHTML = `<section class="clean-page search-page-premium"><div class="page-header clean-page-header"><div><h2>Rechercher</h2><p class="page-kicker">Comptes, publications, Pages et groupes réels de Tafaß</p></div></div><div class="clean-search searchbox"><span class="icon">⌕</span><input id="searchInput" value="${esc(term)}" placeholder="Nom, prénom ou publication..."></div><div class="clean-section"><h3 class="menu-section-title">Comptes</h3><div class="clean-list" id="searchPeople">${peopleHtml}</div></div><div class="clean-section"><h3 class="menu-section-title">Publications</h3><div class="clean-list" id="searchPosts">${postHtml}</div></div><div class="clean-section"><h3 class="menu-section-title">Pages</h3><div class="clean-list" id="searchPages">${pageHtml}</div></div><div class="clean-section"><h3 class="menu-section-title">Groupes</h3><div class="clean-list" id="searchGroups">${groupHtml}</div></div></section>`;
+    $("searchInput").addEventListener("input", e=>{ clearTimeout(searchTimer); searchTimer=setTimeout(()=>searchPage(e.target.value),320); });
   }
 
   async function messagesPage() {
@@ -1547,13 +1539,6 @@
     }
     if (action === "open-notification-post") return openNotificationPost(notificationId || id);
     if (action === "notification-read") return notificationRead(id);
-    if (action === "search-history-open") return searchPage(actionEl.dataset.term||"");
-    if (action === "delete-search-history") { const r=await sb.from("search_history").delete().eq("id",id).eq("user_id",state.user.id); if(r.error)return toast(r.error.message); return searchPage(""); }
-    if (action === "clear-search-history") { const r=await sb.from("search_history").delete().eq("user_id",state.user.id); if(r.error)return toast(r.error.message); return searchPage(""); }
-    if (action === "page-follow-search") {
-      const r=await sb.from("page_followers").upsert({page_id:id,user_id:state.user.id},{onConflict:"page_id,user_id"});
-      return toast(r.error?r.error.message:"Page suivie");
-    }
     if (action === "search-post") {
       const p=(await sb.from("posts").select("*").eq("id",id).maybeSingle()).data;
       if(!p)return toast("Publication introuvable");
