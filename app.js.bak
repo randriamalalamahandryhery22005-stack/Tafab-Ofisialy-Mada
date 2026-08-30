@@ -1776,21 +1776,9 @@ document.documentElement.classList.add("app-boot");
   }
 
   async function editPage(id){
-    const {data:p,error}=await sb.from('pages').select('*').eq('id',id).maybeSingle();
-    if(error) return toast(error.message); if(!p) return toast('Page introuvable.');
-    const {data:me}=await sb.from('page_members').select('role').eq('page_id',id).eq('user_id',state.user.id).maybeSingle();
-    const ownerMe=p.owner_id===state.user.id;
-    const canManage=ownerMe || ['owner','admin'].includes(me?.role||'');
-    if(!canManage) return toast('Vous n’avez pas les droits pour gérer cette Page.');
-    openModal(`<div class="modal-box page-management-modal" data-page-id="${esc(id)}">
-      <header class="page-management-head"><div><span class="page-eyebrow">TAFAß · PAGE PRO</span><h2>Gérer la Page</h2><p>Gérez l’identité, les coordonnées et les visuels de votre Page.</p></div><button class="page-close" data-action="close-modal" aria-label="Fermer">×</button></header>
-      <nav class="page-management-tabs"><button class="active" data-action="management-tab" data-tab="general">Général</button><button data-action="management-tab" data-tab="identity">Identité</button><button data-action="management-tab" data-tab="contact">Contact</button><button data-action="management-tab" data-tab="media">Visuels</button></nav>
-      <section class="page-management-panel" data-mtab="general"><div class="management-hero"><div class="management-avatar">${entityAvatarHTML(p,'page','')}</div><div><b>${esc(p.name)}</b><span>@${esc(p.username||'page')}</span><small>Page professionnelle · ${esc(p.category||'Autre')}</small></div></div><div class="management-cards"><div><span>STATUT</span><b>Active</b><small>Votre Page est disponible à la communauté.</small></div><div><span>RÔLE</span><b>${ownerMe?'Propriétaire':esc(me.role)}</b><small>Vos permissions sont appliquées automatiquement.</small></div></div></section>
-      <section class="page-management-panel hidden" data-mtab="identity"><div class="page-edit-grid"><label>Nom de la Page<input id="editPageName" maxlength="80" value="${esc(p.name)}"></label><label>Nom d’utilisateur<input id="editPageUsername" maxlength="50" value="${esc(p.username||'')}" placeholder="@ma-page"></label><label>Catégorie<select id="editPageCategory">${pageCategoryOptions(p.category||'Autre')}</select></label><label class="wide">Présentation<textarea id="editPageBio" maxlength="1000" placeholder="Présentez votre Page…">${esc(p.bio||'')}</textarea></label></div></section>
-      <section class="page-management-panel hidden" data-mtab="contact"><div class="page-edit-grid"><label>Adresse<input id="editPageAddress" maxlength="200" value="${esc(p.address||p.location||'')}" placeholder="Adresse / ville"></label><label>E-mail professionnel<input id="editPageEmail" type="email" value="${esc(p.contact_email||'')}" placeholder="contact@…"></label><label>Téléphone professionnel<input id="editPagePhone" type="tel" value="${esc(p.contact_phone||'')}" placeholder="+261…"></label><label>Site web<input id="editPageWebsite" type="url" value="${esc(p.website_url||'')}" placeholder="https://…"></label></div></section>
-      <section class="page-management-panel hidden" data-mtab="media"><div class="management-upload-grid"><label class="management-upload"><span>Logo de la Page</span><strong>＋ Choisir une image</strong><small>JPG, PNG ou WebP · recommandé 800×800</small><input id="editPageLogo" type="file" accept="image/jpeg,image/png,image/webp"></label><label class="management-upload"><span>Photo de couverture</span><strong>＋ Choisir une image</strong><small>JPG, PNG ou WebP · recommandé 1600×600</small><input id="editPageCover" type="file" accept="image/jpeg,image/png,image/webp"></label></div></section>
-      <footer class="page-management-footer"><button class="management-cancel" data-action="close-modal">Annuler</button><button class="management-save" data-action="save-page-edit" data-id="${esc(id)}">✓ Enregistrer les modifications</button></footer>
-    </div>`);
+    const {data:p,error}=await sb.from('pages').select('*').eq('id',id).eq('owner_id',state.user.id).maybeSingle();
+    if(error) return toast(error.message); if(!p) return toast('Seul le propriétaire peut modifier ces informations.');
+    openModal(`<div class="modal-box page-edit-modal"><button class="page-close" data-action="close-modal">×</button><span class="page-eyebrow">TAFAß · ADMINISTRATION</span><h2>Gérer la Page</h2><p class="muted">Modifiez l’identité publique, les coordonnées et les visuels.</p><div class="page-edit-grid"><label>Nom<input id="editPageName" maxlength="80" value="${esc(p.name)}"></label><label>Nom d’utilisateur<input id="editPageUsername" maxlength="50" value="${esc(p.username||'')}" placeholder="@ma-page"></label><label>Catégorie<select id="editPageCategory">${pageCategoryOptions(p.category||'Autre')}</select></label><label>Site web<input id="editPageWebsite" type="url" value="${esc(p.website_url||'')}" placeholder="https://…"></label><label class="wide">Présentation<textarea id="editPageBio" maxlength="1000">${esc(p.bio||'')}</textarea></label><label>Adresse<input id="editPageAddress" maxlength="200" value="${esc(p.address||p.location||'')}" placeholder="Adresse / ville"></label><label>E-mail professionnel<input id="editPageEmail" type="email" value="${esc(p.contact_email||'')}" placeholder="contact@…"></label><label>Téléphone professionnel<input id="editPagePhone" type="tel" value="${esc(p.contact_phone||'')}" placeholder="+261…"></label><label>Logo<input id="editPageLogo" type="file" accept="image/jpeg,image/png,image/webp"></label><label>Couverture<input id="editPageCover" type="file" accept="image/jpeg,image/png,image/webp"></label></div><button class="primary big" data-action="save-page-edit" data-id="${esc(id)}">Enregistrer les modifications</button></div>`);
   }
 
   async function savePageEdit(id){
@@ -1804,7 +1792,7 @@ document.documentElement.classList.add("app-boot");
   async function pageMemberMenu(userId,pageId){
     const {data:m}=await sb.from('page_members').select('role,profiles(first_name,last_name,username,avatar_url)').eq('page_id',pageId).eq('user_id',userId).maybeSingle();
     if(!m) return toast('Gestionnaire introuvable.');
-    openModal(`<div class="modal-box page-option-modal"><header class="page-option-head"><div class="page-option-person">${avatarHTML(m.profiles||{},'avatar page-option-avatar')}<div><span class="page-eyebrow">ÉQUIPE DE LA PAGE</span><h3>${esc(nameOf(m.profiles||{}))}</h3><small>Rôle actuel : ${esc(m.role||'editor')}</small></div></div><button class="page-close" data-action="close-modal">×</button></header><div class="page-role-actions premium-role-actions"><button class="role-option ${m.role==='admin'?'selected':''}" data-action="set-page-role" data-id="${esc(userId)}" data-entity-id="${esc(pageId)}" data-role="admin"><span>🛡️</span><b>Administrateur</b><small>Gère la Page et son équipe.</small></button><button class="role-option ${m.role==='editor'?'selected':''}" data-action="set-page-role" data-id="${esc(userId)}" data-entity-id="${esc(pageId)}" data-role="editor"><span>✏️</span><b>Éditeur</b><small>Peut créer et gérer les publications.</small></button><button class="role-option danger-option" data-action="remove-page-member" data-id="${esc(userId)}" data-entity-id="${esc(pageId)}"><span>⌫</span><b>Retirer de l’équipe</b><small>Révoquer l’accès de ce gestionnaire.</small></button></div><footer class="page-management-footer"><button class="management-cancel" data-action="close-modal">Annuler</button></footer></div>`);
+    openModal(`<div class="modal-box page-edit-modal"><button class="page-close" data-action="close-modal">×</button><span class="page-eyebrow">ÉQUIPE DE LA PAGE</span><h2>${esc(nameOf(m.profiles||{}))}</h2><p class="muted">Rôle actuel : ${esc(m.role)}</p><div class="page-role-actions"><button class="page-action secondary" data-action="set-page-role" data-id="${esc(userId)}" data-entity-id="${esc(pageId)}" data-role="admin">Administrateur</button><button class="page-action secondary" data-action="set-page-role" data-id="${esc(userId)}" data-entity-id="${esc(pageId)}" data-role="editor">Éditeur</button><button class="page-action secondary danger" data-action="remove-page-member" data-id="${esc(userId)}" data-entity-id="${esc(pageId)}">Retirer de l’équipe</button></div></div>`);
   }
 
   async function pageInbox(pageId){
@@ -1947,7 +1935,6 @@ document.documentElement.classList.add("app-boot");
     }
     if (action === "page-inbox") return pageInbox(id);
     if (action === "page-inbox-reply") { const text=$('pageReplyText')?.value.trim(); if(!text)return toast('Écrivez un message.'); const r=await sb.from('page_messages').insert({page_id:id,sender_id:state.user.id,message:text}); if(r.error)return toast(r.error.message); $('pageReplyText').value=''; toast('Réponse envoyée.'); return pageInbox(id); }
-    if (action === "management-tab") { document.querySelectorAll("[data-mtab]").forEach(x=>x.classList.toggle("hidden",x.dataset.mtab!==actionEl.dataset.tab)); document.querySelectorAll(".page-management-tabs button").forEach(x=>x.classList.toggle("active",x===actionEl)); return; }
     if (action === "page-tab") return pageTab(id, actionEl.dataset.tab || "posts");
     if (action === "page-about-tab") return pageTab(id,'about');
     if (action === "page-admin-tab") return pageTab(id,'team');
@@ -2222,7 +2209,6 @@ document.documentElement.classList.add("app-boot");
   });
   document.addEventListener("dragstart", e => e.preventDefault());
   document.addEventListener("keydown", e => {
-    if (e.key === "Escape" && !$('modal').classList.contains('hidden')) { closeModal(); return; }
     if (isFormField(e.target)) return;
     const key = String(e.key || "").toLowerCase();
     if ((e.ctrlKey || e.metaKey) && ["c", "x", "a", "u", "s"].includes(key)) {
