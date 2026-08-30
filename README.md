@@ -23,3 +23,13 @@ Pour Google et Apple, renseignez aussi leurs Client ID / Secret / clés demandé
 - Suppression de la destination/navigation autonome « Vidéos » (les médias vidéo peuvent toujours être publiés et les Reels restent disponibles).
 - Profil: couverture sans séparation noire, informations synchronisées avec l’e-mail du compte, et changement prénom/nom limité à une fois tous les 15 jours.
 - Exécuter `TAFASS_V22_PROFILE_IDENTITY.sql` une seule fois dans Supabase pour activer la règle 15 jours côté base de données.
+
+
+## V23 FIX
+- Google/Apple: mandatory first-connection onboarding before app access.
+- Account data moved to Settings; public profile keeps bio, location and photos.
+- Name/prénom cooldown: 15 days.
+- Separate current/origin city fields.
+- Mobile bottom spacing reduced and Tafaß brand restored.
+- Standalone Videos destination removed; Reels remains.
+- Run `TAFASS_V23_PROFILE_ONBOARDING.sql` in Supabase.

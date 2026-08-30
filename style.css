@@ -1120,3 +1120,33 @@ body.light .profile-edit-modal{background:linear-gradient(155deg,#fff,#f3f7fd)!i
   opacity:.65;
   cursor:not-allowed;
 }
+
+/* V23 FINAL — compact mobile shell, full Tafaß branding */
+@media(max-width:720px){
+  .main-layout{padding-bottom:72px!important;}
+  .logo-button strong{display:inline!important;font-size:19px;}
+  .logo-button{gap:8px;}
+  .top-left{min-width:0!important;}
+}
+@media(max-width:390px){.main-layout{padding-bottom:68px!important}.logo-button strong{font-size:18px}.bottom-nav{height:62px!important}}
+.profile-cover-wrap,.profile-cover{border-radius:0!important;}
+.profile-cover-wrap{overflow:hidden!important;border-bottom:0!important;box-shadow:none!important;}
+.profile-main-premium{border-top:0!important;margin-top:0!important;}
+.profile-cover-wrap:after{display:none!important;}
+.profile-video-list{display:none!important;}
+
+/* V23 — profile/settings separation */
+.profile-section-title-v23{grid-column:1/-1;margin:5px 0 -3px;padding:9px 2px 4px;border-bottom:1px solid rgba(112,151,215,.13);font-size:10px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:#6ea3ff}
+.profile-info-v23{display:grid!important;gap:6px!important;padding:12px 0!important;border-top:1px solid rgba(112,151,215,.12)!important;border-bottom:1px solid rgba(112,151,215,.12)!important;margin:13px 0!important;color:#9eabc0!important;font-size:11px!important}
+.profile-info-title-v23{font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.12em;color:#6ea3ff;margin-bottom:2px}
+.profile-member-v23{margin-top:4px;color:#718096}
+.onboarding-modal-v23{max-width:650px!important;padding:26px!important;background:linear-gradient(155deg,#0d172b,#07101e)!important}
+.onboarding-modal-v23 h3{font-size:25px;margin:6px 0}.onboarding-modal-v23>p{line-height:1.55;font-size:11px}.onboarding-grid-v23{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:18px 0}.onboarding-grid-v23 label,.settings-account-grid-v23 label{display:grid;gap:7px;font-size:10px;font-weight:800;color:#aebbd0}.onboarding-grid-v23 .wide{grid-column:1/-1}.onboarding-grid-v23 input,.onboarding-grid-v23 select,.settings-account-grid-v23 input,.settings-account-grid-v23 select{width:100%;box-sizing:border-box}.onboarding-submit-v23{width:100%;min-height:50px}.settings-account-grid-v23{display:grid;grid-template-columns:1fr 1fr;gap:10px}.settings-lock-v23{margin:8px 0;padding:10px 12px;border-radius:12px;background:rgba(64,111,180,.08);border:1px solid rgba(100,140,210,.12);font-size:10px;color:#8da1be;line-height:1.4}
+@media(max-width:620px){.onboarding-grid-v23,.settings-account-grid-v23{grid-template-columns:1fr}.onboarding-grid-v23 .wide{grid-column:auto}.onboarding-modal-v23{padding:18px!important}.profile-section-title-v23{grid-column:auto}}
+
+/* V23 PDC edge cleanup — no separator stripe / black cap above cover */
+.profile-page-premium{background:transparent!important;}
+.profile-cover-wrap{margin:0!important;border:0!important;border-top:0!important;outline:0!important;}
+.profile-cover-wrap .profile-cover{display:block!important;margin:0!important;border:0!important;outline:0!important;box-shadow:none!important;}
+.profile-cover-wrap .profile-cover:after{display:none!important;}
+.profile-main-premium{background:transparent!important;border:0!important;}

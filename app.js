@@ -591,7 +591,7 @@
         <p class="profile-bio">${esc(p.bio || "")}</p>
         <div class="profile-actions">${actions}</div>
         <div class="profile-stats"><div class="profile-stat"><b>${postRows.length}</b><small>Publications</small></div><div class="profile-stat"><b>${friendsR.count || 0}</b><small>Amis</small></div><div class="profile-stat"><b>${followersR.count || 0}</b><small>Abonnés</small></div></div>
-        <div class="profile-info">${p.location ? `<div>⌖ ${esc(p.location)}</div>` : ""}${p.created_at ? `<div>◷ Membre depuis ${new Date(p.created_at).toLocaleDateString("fr-FR", {month:"long", year:"numeric"})}</div>` : ""}</div>
+        <div class="profile-info profile-info-v23"><div class="profile-info-title-v23">Lieu</div>${p.country ? `<div>🌍 Pays : ${esc(p.country)}</div>` : ""}${p.city_current ? `<div>⌖ Ville actuelle : ${esc(p.city_current)}</div>` : ""}${p.city_origin ? `<div>⌂ Ville d’origine : ${esc(p.city_origin)}</div>` : ""}${p.created_at ? `<div class="profile-member-v23">◷ Membre depuis ${new Date(p.created_at).toLocaleDateString("fr-FR", {month:"long", year:"numeric"})}</div>` : ""}</div>
         <div class="profile-tabs">
           ${[["posts","Publications"],["photos","Photos"],["videos","Vidéos"],["friends","Amis"]].map(([k,v])=>`<button class="${k==="posts"?"active":""}" data-action="public-profile-tab" data-id="${esc(userId)}" data-tab="${k}">${v}</button>`).join("")}
         </div>
@@ -658,7 +658,8 @@
 
   async function profilePage(tab = state.profileTab) {
     const token = state.renderToken;
-    state.profileTab = tab;
+    state.profileTab = ["posts","photos","friends"].includes(tab) ? tab : "posts";
+    tab = state.profileTab;
     const p = state.profile || {};
     const mine = await loadMyPosts();
     const photos = mine.filter(x => x.media_url && x.media_type === "image");
@@ -692,83 +693,68 @@
         <p class="profile-bio">${esc(p.bio || "")}</p>
         <div class="profile-actions"><button class="primary" data-action="edit-profile">Modifier le profil</button></div>
         <div class="profile-stats"><div class="profile-stat"><b>${mine.length}</b><small>Publications</small></div><div class="profile-stat"><b>${friendsCount}</b><small>Amis</small></div><div class="profile-stat"><b>${followersCount}</b><small>Abonnés</small></div></div>
-        <div class="profile-info">${p.location ? `<div>⌖ ${esc(p.location)}</div>` : ""}${p.created_at ? `<div>◷ Membre depuis ${new Date(p.created_at).toLocaleDateString("fr-FR", {month:"long", year:"numeric"})}</div>` : ""}</div>
-        <div class="profile-tabs">${[["posts","Publications"],["photos","Photos"],["videos","Vidéos"],["friends","Amis"]].map(([k,v])=>`<button class="${tab===k?"active":""}" data-action="profile-tab" data-tab="${k}">${v}</button>`).join("")}</div>
+        <div class="profile-info profile-info-v23"><div class="profile-info-title-v23">Lieu</div>${p.country ? `<div>🌍 Pays : ${esc(p.country)}</div>` : ""}${p.city_current ? `<div>⌖ Ville actuelle : ${esc(p.city_current)}</div>` : ""}${p.city_origin ? `<div>⌂ Ville d’origine : ${esc(p.city_origin)}</div>` : ""}${p.created_at ? `<div class="profile-member-v23">◷ Membre depuis ${new Date(p.created_at).toLocaleDateString("fr-FR", {month:"long", year:"numeric"})}</div>` : ""}</div>
+        <div class="profile-tabs">${[["posts","Publications"],["photos","Photos"],["friends","Amis"]].map(([k,v])=>`<button class="${tab===k?"active":""}" data-action="profile-tab" data-tab="${k}">${v}</button>`).join("")}</div>
       </div>${tabBody}
     </section>`;
   }
 
   function editProfile() {
     const p = state.profile || {};
-    const authEmail = state.user?.email || p.email || "";
-    const nameChangedAt = p.name_changed_at ? new Date(p.name_changed_at) : null;
-    const nextNameChange = nameChangedAt ? new Date(nameChangedAt.getTime() + 15*24*60*60*1000) : null;
-    const nameLocked = nextNameChange && nextNameChange.getTime() > Date.now();
-    const nameHint = nameLocked
-      ? `Nom/prénom verrouillés jusqu’au ${nextNameChange.toLocaleDateString("fr-FR")} à ${nextNameChange.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}.`
-      : "Le prénom et le nom peuvent être modifiés une fois tous les 15 jours.";
     openModal(`<div class="modal-box profile-edit-modal premium-profile-editor-v2">
       <button class="modal-close" data-action="close-modal" aria-label="Fermer">×</button>
-      <header class="profile-editor-header-v2"><span class="eyebrow">TAFAß • PROFIL</span><h3>Personnaliser votre profil</h3><p>Les informations du compte restent synchronisées avec l’adresse e-mail authentifiée.</p></header>
+      <header class="profile-editor-header-v2"><span class="eyebrow">TAFAß • PROFIL</span><h3>Personnaliser votre profil</h3><p>Votre profil public contient uniquement votre présentation, votre lieu et vos photos.</p></header>
       <section class="profile-editor-stage-v2">
-        <label class="editor-cover-v2" id="editorCoverPreview" style="${p.cover_url?`background-image:url('${esc(p.cover_url)}')`:""}">
+        <label class="editor-cover-v2" id="editorCoverPreview" style="${p.cover_url?`background-image:url('${esc(p.cover_url)}')`:''}">
           <span class="cover-placeholder-v2">Votre couverture</span><span class="editor-cover-overlay-v2">📷 Modifier la couverture</span>
           <input id="pfCover" type="file" accept="image/jpeg,image/png,image/webp" hidden>
         </label>
         <label class="editor-avatar-v2" id="editorAvatarPreview">${avatarHTML(p,"avatar")}<span class="editor-avatar-edit-v2">📷</span><input id="pfAvatar" type="file" accept="image/jpeg,image/png,image/webp" hidden></label>
       </section>
-      <div class="profile-editor-photo-label-v2"><b>Photo de profil</b><span>JPG, PNG ou WEBP • qualité originale conservée.</span></div>
-      <div class="profile-form-v2">
-        <div class="profile-field-card-v2"><label><span>Prénom</span><input id="pfFirst" value="${esc(p.first_name||"")}" autocomplete="given-name" placeholder="Votre prénom" ${nameLocked?"disabled":""}></label></div>
-        <div class="profile-field-card-v2"><label><span>Nom</span><input id="pfLast" value="${esc(p.last_name||"")}" autocomplete="family-name" placeholder="Votre nom" ${nameLocked?"disabled":""}></label></div>
-        <div class="profile-field-card-v2 profile-field-wide-v2 name-change-hint-v2"><span>⏱ ${esc(nameHint)}</span></div>
-        <div class="profile-field-card-v2 profile-field-wide-v2"><label><span>E-mail du compte</span><input value="${esc(authEmail)}" type="email" readonly disabled></label><small>Synchronisé automatiquement avec votre connexion.</small></div>
-        <div class="profile-field-card-v2"><label><span>Pseudo</span><input id="pfUsername" value="${esc(p.username||"")}" maxlength="40" placeholder="@pseudo"></label></div>
-        <div class="profile-field-card-v2"><label><span>Téléphone</span><input id="pfPhone" value="${esc(p.phone||"")}" autocomplete="tel" placeholder="+261…"></label></div>
-        <div class="profile-field-card-v2"><label><span>Date de naissance</span><input id="pfBirth" value="${esc(p.birth||"")}" type="date"></label></div>
-        <div class="profile-field-card-v2"><label><span>Genre</span><input id="pfGender" value="${esc(p.gender||"")}" placeholder="Genre"></label></div>
-        <div class="profile-field-card-v2"><label><span>Pays</span><input id="pfCountry" value="${esc(p.country||"")}" placeholder="Madagascar"></label></div>
-        <div class="profile-field-card-v2 profile-field-wide-v2"><label><span>Ville / pays</span><input id="pfLocation" value="${esc(p.location||"")}" autocomplete="address-level2" placeholder="Ex. Antananarivo, Madagascar"></label></div>
-        <div class="profile-field-card-v2 profile-field-wide-v2"><label><span>Bio</span><textarea id="pfBio" maxlength="500" placeholder="Présentez-vous en quelques mots…">${esc(p.bio||"")}</textarea><small>500 caractères maximum.</small></label></div>
+      <div class="profile-form-v2 profile-form-public-v23">
+        <div class="profile-field-card-v2 profile-field-wide-v2"><label><span>Bio</span><textarea id="pfBio" maxlength="500" placeholder="Présentez-vous en quelques mots…">${esc(p.bio||'')}</textarea></label></div>
+        <div class="profile-section-title-v23">Lieu</div>
+        <div class="profile-field-card-v2"><label><span>Pays</span><input id="pfCountry" value="${esc(p.country||'')}" placeholder="Madagascar"></label></div>
+        <div class="profile-field-card-v2"><label><span>Ville actuelle</span><input id="pfCityCurrent" value="${esc(p.city_current||'')}" placeholder="Antananarivo"></label></div>
+        <div class="profile-field-card-v2 profile-field-wide-v2"><label><span>Ville d’origine</span><input id="pfCityOrigin" value="${esc(p.city_origin||'')}" placeholder="Votre ville d’origine"></label></div>
       </div>
-      <footer class="profile-editor-footer-v2"><button class="ghost-action" data-action="close-modal">Annuler</button><button class="primary big profile-save-button" data-action="save-profile"><span>✓</span> Enregistrer les modifications</button></footer>
+      <footer class="profile-editor-footer-v2"><button class="ghost-action" data-action="close-modal">Annuler</button><button class="primary big profile-save-button" data-action="save-profile"><span>✓</span> Enregistrer</button></footer>
     </div>`);
-    $("pfAvatar")?.addEventListener("change", e => {
-      const file=e.target.files?.[0]; if(!file)return;
-      if(!file.type.startsWith("image/")) return toast("Choisissez une image.");
-      const url=URL.createObjectURL(file);
-      const img=document.createElement("img"); img.src=url; img.className="avatar";
-      $("editorAvatarPreview").querySelector(".avatar")?.replaceWith(img);
-    });
-    $("pfCover")?.addEventListener("change", e => {
-      const file=e.target.files?.[0]; if(!file)return;
-      if(!file.type.startsWith("image/")) return toast("Choisissez une image.");
-      $("editorCoverPreview").style.backgroundImage=`url("${URL.createObjectURL(file)}")`;
-    });
+    $("pfAvatar")?.addEventListener("change", e => { const file=e.target.files?.[0]; if(!file)return; if(!file.type.startsWith("image/"))return toast("Choisissez une image."); const img=document.createElement("img"); img.src=URL.createObjectURL(file); img.className="avatar"; $("editorAvatarPreview").querySelector(".avatar")?.replaceWith(img); });
+    $("pfCover")?.addEventListener("change", e => { const file=e.target.files?.[0]; if(!file)return; if(!file.type.startsWith("image/"))return toast("Choisissez une image."); $("editorCoverPreview").style.backgroundImage=`url("${URL.createObjectURL(file)}")`; });
+  }
+
+  function accountSettings() {
+    const p=state.profile||{}, authEmail=state.user?.email||p.email||'';
+    const changed=p.name_changed_at?new Date(p.name_changed_at):null, next=changed?new Date(changed.getTime()+15*86400000):null, locked=next&&next.getTime()>Date.now();
+    openModal(`<div class="modal-box settings-modal account-settings-v23"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • COMPTE</span><h3>Informations du compte</h3><p class="muted">Les informations personnelles et de connexion se modifient ici, pas dans le profil public.</p><div class="settings-section-title">Identité</div><div class="settings-account-grid-v23"><label>Prénom<input id="asFirst" value="${esc(p.first_name||'')}" ${locked?'disabled':''}></label><label>Nom<input id="asLast" value="${esc(p.last_name||'')}" ${locked?'disabled':''}></label></div><div class="settings-lock-v23">${locked?'🔒 Nom/prénom verrouillés jusqu’au '+next.toLocaleDateString('fr-FR'):'✓ Nom et prénom : une modification tous les 15 jours.'}</div><div class="settings-section-title">Coordonnées</div><label>E-mail<input id="asEmail" value="${esc(authEmail)}" type="email" autocomplete="email"></label><label>Numéro de téléphone<input id="asPhone" value="${esc(p.phone||'')}" type="tel"></label><div class="settings-section-title">Informations personnelles</div><div class="settings-account-grid-v23"><label>Date de naissance<input id="asBirth" value="${esc(p.birth||'')}" type="date"></label><label>Genre<select id="asGender"><option value="">Choisir</option><option ${p.gender==='Homme'?'selected':''}>Homme</option><option ${p.gender==='Femme'?'selected':''}>Femme</option><option ${p.gender==='Autre'?'selected':''}>Autre</option></select></label></div><button class="primary big" data-action="save-account-settings">Enregistrer les informations</button></div>`);
+  }
+
+  async function saveAccountSettings() {
+    const p=state.profile||{}, first=$("asFirst")?.value.trim()||'', last=$("asLast")?.value.trim()||'', oldFirst=String(p.first_name||'').trim(), oldLast=String(p.last_name||'').trim();
+    const changed=first!==oldFirst||last!==oldLast;
+    if(changed&&p.name_changed_at&&Date.now()<new Date(p.name_changed_at).getTime()+15*86400000) return toast('Le nom et le prénom sont encore verrouillés.');
+    const birth=$("asBirth")?.value||null, gender=$("asGender")?.value||'', phone=$("asPhone")?.value.trim()||'', newEmail=$("asEmail")?.value.trim()||'', oldEmail=state.user?.email||p.email||'';
+    if(!first||!last||!birth||!gender||!phone||!newEmail||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) return toast('Remplissez correctement toutes les informations obligatoires.');
+    try {
+      if(newEmail.toLowerCase()!==oldEmail.toLowerCase()){ const er=await sb.auth.updateUser({email:newEmail}); if(er.error) throw new Error(er.error.message); }
+      const patch={first_name:first,last_name:last,birth,gender,phone,email:newEmail};
+      const r=await sb.from('profiles').update(patch).eq('id',state.user.id); if(r.error)throw new Error(r.error.message);
+      closeModal(); await loadProfile(); await settingsPage(); toast(newEmail.toLowerCase()!==oldEmail.toLowerCase()?'E-mail mis à jour. Vérifiez votre nouvelle adresse si Supabase demande une confirmation.':'Informations du compte enregistrées.');
+    } catch(e){toast(e.message)}
   }
 
   async function saveProfile() {
     const p = state.profile || {};
-    const first = $('pfFirst')?.value.trim() || "", last = $('pfLast')?.value.trim() || "";
-    if (!first && !last) return toast("Ajoutez au moins un prénom ou un nom.");
-    const oldFirst = String(p.first_name || "").trim(), oldLast = String(p.last_name || "").trim();
-    const nameChanged = first !== oldFirst || last !== oldLast;
-    if (nameChanged && p.name_changed_at) {
-      const next = new Date(p.name_changed_at).getTime() + 15*24*60*60*1000;
-      if (Date.now() < next) return toast(`Vous pourrez modifier votre nom à partir du ${new Date(next).toLocaleDateString("fr-FR")}.`);
-    }
     const patch = {
-      first_name:first, last_name:last,
-      username:$('pfUsername')?.value.trim() || null,
-      phone:$('pfPhone')?.value.trim() || "",
-      birth:$('pfBirth')?.value || null,
-      gender:$('pfGender')?.value.trim() || "",
       country:$('pfCountry')?.value.trim() || "",
+      city_current:$('pfCityCurrent')?.value.trim() || "",
+      city_origin:$('pfCityOrigin')?.value.trim() || "",
       bio:$('pfBio')?.value.trim() || "",
-      location:$('pfLocation')?.value.trim() || "",
+      location:$('pfCityCurrent')?.value.trim() || "",
       email: state.user?.email || p.email || ""
     };
-    if (nameChanged) patch.name_changed_at = new Date().toISOString();
+    if (!patch.country || !patch.city_current || !patch.city_origin) return toast('Complétez le lieu : pays, ville actuelle et ville d’origine.');
     try {
       for (const [file,key] of [[$('pfAvatar')?.files?.[0],"avatar_url"],[$('pfCover')?.files?.[0],"cover_url"]]) {
         if (!file) continue;
@@ -787,11 +773,11 @@
 
   async function genericListPage(route) {
     const token = state.renderToken;
-    if (route === "videos" || route === "reels") {
-      const wanted = route === "reels" ? ["reel","video"] : ["video"];
+    if (route === "reels") {
+      const wanted = ["reel","video"];
       const rows = state.posts.filter(p => wanted.includes(p.media_type));
       if (token !== state.renderToken || state.route !== route) return;
-      $("content").innerHTML = `<div class="card"><div class="page-header"><h2>${route === "reels" ? "Reels" : "Vidéos"}</h2><span class="muted">Découvrir</span></div>${rows.length?rows.map(p=>`<article class="post"><div class="post-head">${profileLink(p.author, avatarHTML(p.author), "profile-link profile-avatar-link")}<div class="meta">${profileLink(p.author, `<span class="post-author-name">${esc(nameOf(p.author))}</span>`, "profile-link profile-meta-link")}<span class="post-time"><small>${timeAgo(p.created_at)}</small></span></div></div>${p.content?`<div class="post-body">${esc(p.content)}</div>`:""}${p.media_type==="video"||p.media_type==="reel"?`<video class="post-media" src="${esc(p.media_url)}" controls></video>`:""}</article>`).join(""):`<div class="empty">Aucun contenu pour le moment.</div>`}</div>`;
+      $("content").innerHTML = `<div class="card"><div class="page-header"><h2>Reels</h2><span class="muted">Découvrir</span></div>${rows.length?rows.map(p=>`<article class="post"><div class="post-head">${profileLink(p.author, avatarHTML(p.author), "profile-link profile-avatar-link")}<div class="meta">${profileLink(p.author, `<span class="post-author-name">${esc(nameOf(p.author))}</span>`, "profile-link profile-meta-link")}<span class="post-time"><small>${timeAgo(p.created_at)}</small></span></div></div>${p.content?`<div class="post-body">${esc(p.content)}</div>`:""}<video class="post-media" src="${esc(p.media_url)}" controls></video></article>`).join(""):`<div class="empty">Aucun Reel pour le moment.</div>`}</div>`;
       return;
     }
     if (route === "pages") {
@@ -918,7 +904,7 @@
     const toggleLabel = (value) => value ? "Activé" : "Désactivé";
     simplePage("Para & Conf", `<p class="page-subtitle">Tous les réglages réels de votre compte, de votre sécurité, de votre confidentialité et de vos notifications.</p>
       <div class="settings-section-title">Compte</div><div class="settings-grid settings-grid-complete">
-        <button class="setting-card" data-action="edit-profile"><span><b>Profil</b><small>Modifier vos informations et vos photos</small></span><span>›</span></button>
+        <button class="setting-card" data-action="account-settings"><span><b>Informations du compte</b><small>Nom, prénom, e-mail, numéro, naissance et genre</small></span><span>›</span></button>
         <button class="setting-card" data-action="security-settings"><span><b>Sécurité et connexion</b><small>Accès, session et protection du compte</small></span><span>›</span></button>
         <button class="setting-card" data-action="menu-service" data-service="payment" data-name="Paiement"><span><b>Paiement</b><small>Moyens et historique des transactions</small></span><span>›</span></button>
         <button class="setting-card" data-action="menu-service" data-service="activity" data-name="Historique d'activité"><span><b>Historique d'activité</b><small>Vos actions enregistrées</small></span><span>›</span></button>
@@ -1183,13 +1169,72 @@
       .subscribe(status => { if(status==="SUBSCRIBED") console.info("Tafaß Realtime: connecté"); });
   }
 
+  async function profileIsComplete() {
+    if (!state.user) return false;
+    await loadProfile();
+    const p = state.profile || {};
+    return Boolean(
+      String(state.user.email || p.email || '').trim() &&
+      String(p.first_name || '').trim() &&
+      String(p.last_name || '').trim() &&
+      p.birth &&
+      String(p.gender || '').trim() &&
+      String(p.phone || '').trim() &&
+      String(p.country || '').trim() &&
+      String(p.city_current || '').trim() &&
+      String(p.city_origin || '').trim()
+    );
+  }
+
+  function showOAuthOnboarding() {
+    const p = state.profile || {};
+    openModal(`<div class="modal-box onboarding-modal-v23">
+      <span class="eyebrow">TAFAß • PREMIÈRE CONNEXION</span>
+      <h3>Complétez votre compte</h3>
+      <p class="muted">Pour terminer votre connexion Google/Apple, renseignez toutes les informations obligatoires. L’application restera verrouillée jusqu’à validation.</p>
+      <div class="onboarding-grid-v23">
+        <label>Prénom<input id="onFirst" value="${esc(p.first_name||state.user?.user_metadata?.first_name||'')}" autocomplete="given-name"></label>
+        <label>Nom<input id="onLast" value="${esc(p.last_name||state.user?.user_metadata?.last_name||'')}" autocomplete="family-name"></label>
+        <label>Date de naissance<input id="onBirth" type="date" value="${esc(p.birth||'')}"></label>
+        <label>Genre<select id="onGender"><option value="">Choisir</option><option value="Homme" ${p.gender==='Homme'?'selected':''}>Homme</option><option value="Femme" ${p.gender==='Femme'?'selected':''}>Femme</option><option value="Autre" ${p.gender==='Autre'?'selected':''}>Autre</option></select></label>
+        <label class="wide">E-mail<input value="${esc(state.user?.email||p.email||'')}" type="email" readonly disabled></label>
+        <label>Téléphone<input id="onPhone" value="${esc(p.phone||'')}" type="tel" autocomplete="tel" placeholder="+261…"></label>
+        <label>Pays actuel<input id="onCountry" value="${esc(p.country||'')}" placeholder="Madagascar"></label>
+        <label>Ville actuelle<input id="onCityCurrent" value="${esc(p.city_current||'')}" placeholder="Antananarivo"></label>
+        <label>Ville d’origine<input id="onCityOrigin" value="${esc(p.city_origin||'')}" placeholder="Votre ville d’origine"></label>
+      </div>
+      <button class="primary big onboarding-submit-v23" data-action="complete-onboarding">Continuer vers Tafaß</button>
+    </div>`);
+  }
+
+  async function completeOnboarding() {
+    const first=$('onFirst')?.value.trim()||'', last=$('onLast')?.value.trim()||'', birth=$('onBirth')?.value||'', gender=$('onGender')?.value||'', phone=$('onPhone')?.value.trim()||'', country=$('onCountry')?.value.trim()||'', current=$('onCityCurrent')?.value.trim()||'', origin=$('onCityOrigin')?.value.trim()||'';
+    if(!first||!last||!birth||!gender||!phone||!country||!current||!origin) return toast('Remplissez toutes les informations obligatoires.');
+    const d=new Date(birth+'T00:00:00'), now=new Date();
+    const age=now.getFullYear()-d.getFullYear()-((now.getMonth()<d.getMonth()||(now.getMonth()===d.getMonth()&&now.getDate()<d.getDate()))?1:0);
+    if(age<13) return toast('Vous devez avoir au moins 13 ans.');
+    const btn=document.querySelector('[data-action="complete-onboarding"]'); setLoading(btn,true,'Continuer vers Tafaß');
+    const patch={first_name:first,last_name:last,email:state.user.email||'',birth,gender,phone,country,city_current:current,city_origin:origin};
+    const r=await sb.from('profiles').update(patch).eq('id',state.user.id);
+    if(r.error){ setLoading(btn,false,'Continuer vers Tafaß'); return toast(r.error.message); }
+    closeModal(); await loadProfile(); await setupRealtime(); await render(); toast('Compte complété. Bienvenue sur Tafaß.');
+  }
+
   async function enterApp() {
     if (state.entering) return;
     state.entering = true;
-    $("auth").classList.add("hidden"); $("app").classList.remove("hidden");
+    $("app").classList.add("hidden");
+    $("auth").classList.remove("hidden");
     document.body.classList.toggle("light", state.theme === "light");
     syncThemeButton();
-    await loadProfile(); await loadPosts(); await setupRealtime();
+    await loadProfile();
+    if (!(await profileIsComplete())) {
+      state.entering = false;
+      showOAuthOnboarding();
+      return;
+    }
+    $("auth").classList.add("hidden"); $("app").classList.remove("hidden");
+    await loadPosts(); await setupRealtime();
     state.entering = false;
     await render();
   }
@@ -1360,6 +1405,9 @@
     if (action === "profile-tab") return profilePage(actionEl.dataset.tab);
     if (action === "public-profile-tab") return openUserProfileTab(id, actionEl.dataset.tab);
     if (action === "edit-profile") return editProfile();
+    if (action === "account-settings") return accountSettings();
+    if (action === "save-account-settings") return saveAccountSettings();
+    if (action === "complete-onboarding") return completeOnboarding();
     if (action === "save-profile") return saveProfile();
     if (action === "profile-more") return profileMore(id);
     if (action === "message-user") return startConversation(id);
