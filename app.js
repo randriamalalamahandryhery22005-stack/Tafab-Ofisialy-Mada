@@ -775,40 +775,80 @@ document.documentElement.classList.add("app-boot");
   }
 
   function editProfile() {
-    const p = state.profile || {};
-    openModal(`<div class="modal-box profile-edit-modal premium-profile-editor-v4">
-      <button class="modal-close" data-action="close-modal" aria-label="Fermer">×</button>
-      <header class="profile-editor-header-v2"><span class="eyebrow">TAFAß • PROFIL</span><h3>Personnaliser votre profil</h3><p>Bio, lieu et photos sont gérés ici. Les informations personnelles restent dans Paramètres.</p></header>
-      <div class="profile-editor-scroll-v4">
-        <section class="profile-editor-stage-v2">
-          <label class="editor-cover-v2" id="editorCoverPreview" style="${p.cover_url?`background-image:url('${esc(p.cover_url)}')`:''}">
-            <span class="cover-placeholder-v2">Votre couverture</span><span class="editor-cover-overlay-v2">📷 Modifier la couverture</span>
+    const p=state.profile||{};
+    openModal(`<div class="modal-box profile-redesign-v5">
+      <header class="redesign-modal-header">
+        <button class="modal-back-v5" data-action="close-modal" aria-label="Retour"><span>‹</span><small>Retour</small></button>
+        <div class="redesign-heading"><span class="brand-kicker"><b>ß</b> TAFAß · PROFIL</span><h3>Modifier le profil</h3><p>Personnalisez votre présence publique avec une présentation claire et élégante.</p></div>
+      </header>
+      <div class="profile-redesign-body">
+        <section class="profile-visual-card-v5">
+          <label class="profile-cover-v5" id="editorCoverPreview" style="${p.cover_url?`background-image:url('${esc(p.cover_url)}')`:''}">
+            <span class="cover-fallback-v5"><b>Votre couverture</b><small>Ajoutez une image qui vous représente</small></span>
+            <span class="cover-edit-v5">📷 <b>Modifier</b></span>
             <input id="pfCover" type="file" accept="image/jpeg,image/png,image/webp" hidden>
           </label>
-          <label class="editor-avatar-v2" id="editorAvatarPreview">${avatarHTML(p,"avatar editor-avatar-image-v3")}<span class="editor-avatar-edit-v2">📷</span><input id="pfAvatar" type="file" accept="image/jpeg,image/png,image/webp" hidden></label>
+          <label class="profile-avatar-wrap-v5" id="editorAvatarPreview">
+            ${avatarHTML(p,"avatar editor-avatar-image-v3")}
+            <span class="avatar-edit-v5">📷</span>
+            <input id="pfAvatar" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+          </label>
+          <div class="profile-visual-meta-v5"><div><b>${esc(nameOf(p))}</b><small>Profil public Tafaß</small></div><span>PHOTO & COUVERTURE</span></div>
         </section>
-        <div class="profile-editor-photo-label-v2"><b>Photos du profil</b><span>La photo de profil remplit toujours parfaitement le rond.</span></div>
-        <div class="profile-form-v2 profile-form-public-v24">
-          <div class="profile-section-title-v23">Présentation</div>
-          <div class="profile-field-card-v2 profile-field-wide-v2"><label><span>Bio</span><textarea id="pfBio" maxlength="500" placeholder="Présentez-vous en quelques mots…">${esc(p.bio||'')}</textarea></label></div>
-          <div class="profile-section-title-v23">Lieu</div>
-          <div class="profile-field-card-v2 profile-field-wide-v2"><label><span>Pays</span><input id="pfCountry" value="Madagascar" readonly disabled></label></div>
-          <div class="profile-field-card-v2 profile-field-wide-v2 place-field-v4"><label><span>Ville actuelle / Lieu</span><div class="place-search-wrap-v4"><input id="pfCityCurrent" value="${esc(p.city_current||'')}" placeholder="Rechercher un lieu réel…" autocomplete="off" data-place-valid="${p.city_current?'true':'false'}"><div id="pfCityCurrentResults" class="place-results-v4"></div></div><small>Recherchez puis sélectionnez un lieu réel à Madagascar. Exemple : Ambohimanambola, Analamanga, Antananarivo.</small></label></div>
-          <div class="profile-field-card-v2 profile-field-wide-v2 place-field-v4"><label><span>Ville d'origine</span><div class="place-search-wrap-v4"><input id="pfCityOrigin" value="${esc(p.city_origin||'')}" placeholder="Rechercher une ville réelle…" autocomplete="off" data-place-valid="${p.city_origin?'true':'false'}"><div id="pfCityOriginResults" class="place-results-v4"></div></div><small>Recherchez puis sélectionnez la ville réelle. Exemple : Antananarivo, Madagascar.</small></label></div>
-        </div>
+
+        <section class="redesign-section-v5">
+          <div class="redesign-section-head-v5"><span class="section-icon-v5">Aa</span><div><b>Présentation</b><small>Ce que les autres voient sur votre profil</small></div></div>
+          <div class="redesign-field-v5 wide"><label><span>Bio</span><textarea id="pfBio" maxlength="500" placeholder="Présentez-vous en quelques mots…">${esc(p.bio||'')}</textarea><small class="field-counter-v5">Maximum 500 caractères</small></label></div>
+        </section>
+
+        <section class="redesign-section-v5">
+          <div class="redesign-section-head-v5"><span class="section-icon-v5">⌖</span><div><b>Lieu</b><small>Ajoutez des informations de localisation publiques</small></div></div>
+          <div class="redesign-field-v5"><label><span>Pays</span><input value="Madagascar" readonly disabled></label></div>
+          <div class="redesign-field-v5 wide place-field-v5"><label><span>Ville actuelle / Lieu</span><div class="place-search-wrap-v4"><input id="pfCityCurrent" value="${esc(p.city_current||'')}" placeholder="Rechercher un lieu réel…" autocomplete="off" data-place-valid="${p.city_current?'true':'false'}"><div id="pfCityCurrentResults" class="place-results-v4"></div></div><small>Sélectionnez un lieu réel à Madagascar.</small></label></div>
+          <div class="redesign-field-v5 wide place-field-v5"><label><span>Ville d'origine</span><div class="place-search-wrap-v4"><input id="pfCityOrigin" value="${esc(p.city_origin||'')}" placeholder="Rechercher une ville réelle…" autocomplete="off" data-place-valid="${p.city_origin?'true':'false'}"><div id="pfCityOriginResults" class="place-results-v4"></div></div><small>La ville d'origine peut rester vide.</small></label></div>
+        </section>
       </div>
-      <footer class="profile-editor-footer-v4"><button class="ghost-action" data-action="close-modal">Annuler</button><button class="primary big profile-save-button" data-action="save-profile"><span>✓</span> Enregistrer</button></footer>
+      <footer class="redesign-modal-footer-v5"><button class="ghost-action" data-action="close-modal">Annuler</button><button class="primary big profile-save-button" data-action="save-profile"><span>✓</span> Enregistrer les modifications</button></footer>
     </div>`);
     installPlaceSearch("pfCityCurrent","pfCityCurrentResults");
     installPlaceSearch("pfCityOrigin","pfCityOriginResults");
-    $("pfAvatar")?.addEventListener("change", e => { const file=e.target.files?.[0]; if(!file)return; if(!file.type.startsWith("image/"))return toast("Choisissez une image."); const img=document.createElement("img"); img.src=URL.createObjectURL(file); img.className="avatar editor-avatar-image-v3-img"; img.alt="Avatar"; $("editorAvatarPreview").querySelector(".avatar")?.replaceWith(img); });
+    $("pfAvatar")?.addEventListener("change", e => { const file=e.target.files?.[0]; if(!file)return; if(!file.type.startsWith("image/"))return toast("Choisissez une image."); const img=document.createElement("img"); img.src=URL.createObjectURL(file); img.className="avatar editor-avatar-image-v3-img"; img.alt="Avatar"; const old=$("editorAvatarPreview")?.querySelector(".avatar"); if(old) old.replaceWith(img); });
     $("pfCover")?.addEventListener("change", e => { const file=e.target.files?.[0]; if(!file)return; if(!file.type.startsWith("image/"))return toast("Choisissez une image."); $("editorCoverPreview").style.backgroundImage=`url("${URL.createObjectURL(file)}")`; });
   }
 
   function accountSettings() {
     const p=state.profile||{}, authEmail=state.user?.email||p.email||'';
     const changed=p.name_changed_at?new Date(p.name_changed_at):null, next=changed?new Date(changed.getTime()+15*86400000):null, locked=next&&next.getTime()>Date.now();
-    openModal(`<div class="modal-box settings-modal account-settings-v23"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • COMPTE</span><h3>Informations du compte</h3><p class="muted">Les informations personnelles et de connexion se modifient ici, pas dans le profil public.</p><div class="settings-section-title">Identité</div><div class="settings-account-grid-v23"><label>Prénom<input id="asFirst" value="${esc(p.first_name||'')}" ${locked?'disabled':''}></label><label>Nom<input id="asLast" value="${esc(p.last_name||'')}" ${locked?'disabled':''}></label></div><div class="settings-lock-v23">${locked?'🔒 Nom/prénom verrouillés jusqu’au '+next.toLocaleDateString('fr-FR'):'✓ Nom et prénom : une modification tous les 15 jours.'}</div><div class="settings-section-title">Coordonnées</div><label>E-mail<input id="asEmail" value="${esc(authEmail)}" type="email" autocomplete="email"></label><label>Numéro de téléphone<div class="phone-row phone-row-auto-v3"><span class="phone-prefix-v3">${esc(phoneMeta().code)}</span><input id="asPhone" value="${esc(normalizePhone(p.phone||"",phoneMeta()))}" type="tel" inputmode="numeric" maxlength="${phoneMeta().digits}" placeholder="${phoneMeta().placeholder}" autocomplete="tel-national"></div><small class="phone-auto-note-v3">Pays détecté automatiquement : ${esc(phoneMeta().name)}. Entrez uniquement le numéro national.</small></label><div class="settings-section-title">Informations personnelles</div><div class="settings-account-grid-v23"><label>Date de naissance<input id="asBirth" value="${esc(p.birth||'')}" type="date"></label><label>Genre<select id="asGender"><option value="">Choisir</option><option ${p.gender==='Homme'?'selected':''}>Homme</option><option ${p.gender==='Femme'?'selected':''}>Femme</option><option ${p.gender==='Autre'?'selected':''}>Autre</option></select></label></div><button class="primary big" data-action="save-account-settings">Enregistrer les informations</button></div>`);
+    openModal(`<div class="modal-box account-redesign-v5">
+      <header class="redesign-modal-header account-header-v5">
+        <button class="modal-back-v5" data-action="close-modal" aria-label="Retour"><span>‹</span><small>Retour</small></button>
+        <div class="redesign-heading"><span class="brand-kicker"><b>ß</b> TAFAß · COMPTE</span><h3>Informations du compte</h3><p>Gérez vos informations privées et vos coordonnées de connexion dans un espace sécurisé.</p></div>
+      </header>
+      <div class="account-redesign-body-v5">
+        <div class="account-identity-banner-v5"><span class="account-mark-v5">${esc((p.first_name||'T').slice(0,1).toUpperCase())}</span><div><b>${esc(nameOf(p))}</b><small>Informations privées · non visibles sur le profil public</small></div><span class="secure-pill-v5">● Sécurisé</span></div>
+        <section class="redesign-section-v5 account-section-v5">
+          <div class="redesign-section-head-v5"><span class="section-icon-v5">ID</span><div><b>Identité</b><small>Nom et prénom associés à votre compte</small></div></div>
+          <div class="redesign-grid-v5 two">
+            <div class="redesign-field-v5"><label><span>Prénom</span><input id="asFirst" value="${esc(p.first_name||'')}" ${locked?'disabled':''} autocomplete="given-name"></label></div>
+            <div class="redesign-field-v5"><label><span>Nom</span><input id="asLast" value="${esc(p.last_name||'')}" ${locked?'disabled':''} autocomplete="family-name"></label></div>
+          </div>
+          <div class="account-note-v5">${locked?`🔒 Nom et prénom verrouillés jusqu’au ${next.toLocaleDateString('fr-FR')}.`:'✓ Votre nom et prénom peuvent être modifiés une fois tous les 15 jours.'}</div>
+        </section>
+        <section class="redesign-section-v5 account-section-v5">
+          <div class="redesign-section-head-v5"><span class="section-icon-v5">@</span><div><b>Coordonnées</b><small>Utilisées pour vous connecter et récupérer votre compte</small></div></div>
+          <div class="redesign-field-v5 wide"><label><span>E-mail</span><input id="asEmail" value="${esc(authEmail)}" type="email" autocomplete="email"></label></div>
+          <div class="redesign-field-v5 wide"><label><span>Numéro de téléphone</span><div class="phone-field-v5"><span>${esc(phoneMeta().code)}</span><input id="asPhone" value="${esc(normalizePhone(p.phone||"",phoneMeta()))}" type="tel" inputmode="numeric" maxlength="${phoneMeta().digits}" placeholder="${phoneMeta().placeholder}" autocomplete="tel-national"></div><small>Pays détecté automatiquement : ${esc(phoneMeta().name)} · Entrez uniquement le numéro national.</small></label></div>
+        </section>
+        <section class="redesign-section-v5 account-section-v5">
+          <div class="redesign-section-head-v5"><span class="section-icon-v5">••</span><div><b>Informations personnelles</b><small>Ces données restent liées à votre compte</small></div></div>
+          <div class="redesign-grid-v5 two">
+            <div class="redesign-field-v5"><label><span>Date de naissance</span><input id="asBirth" value="${esc(p.birth||'')}" type="date"></label></div>
+            <div class="redesign-field-v5"><label><span>Genre</span><select id="asGender"><option value="">Choisir</option><option value="Homme" ${p.gender==='Homme'?'selected':''}>Homme</option><option value="Femme" ${p.gender==='Femme'?'selected':''}>Femme</option><option value="Autre" ${p.gender==='Autre'?'selected':''}>Autre</option></select></label></div>
+          </div>
+        </section>
+      </div>
+      <footer class="redesign-modal-footer-v5"><button class="ghost-action" data-action="close-modal">Annuler</button><button class="primary big" data-action="save-account-settings"><span>✓</span> Enregistrer</button></footer>
+    </div>`);
   }
 
   async function saveAccountSettings() {
@@ -1178,8 +1218,8 @@ document.documentElement.classList.add("app-boot");
       : `<div class="card"><div class="page-header"><h2>${esc(title)}</h2></div>${body}</div>`;
     decoratePageHeader(state.route);
   }
-  function openModal(html) { $("modal").className = "modal"; $("modal").innerHTML = html; }
-  function closeModal() { $("modal").className = "modal hidden"; $("modal").innerHTML = ""; }
+  function openModal(html) { $("modal").className = "modal"; $("modal").innerHTML = html; document.body.classList.add("modal-open"); }
+  function closeModal() { $("modal").className = "modal hidden"; $("modal").innerHTML = ""; document.body.classList.remove("modal-open"); }
 
   function ensurePageLoader() {
     let el = document.getElementById("pageLoader");
@@ -1792,8 +1832,8 @@ document.documentElement.classList.add("app-boot");
 
   // Splash stable : animation courte, puis sortie dès que l'initialisation est prête.
   const splashStartedAt = Date.now();
-  const SPLASH_MIN_MS = 900;
-  const SPLASH_MAX_MS = 4500;
+  const SPLASH_MIN_MS = 1200;
+  const SPLASH_MAX_MS = 3200;
   let splashFinished = false;
   let splashResolve;
   const splashReady = new Promise(resolve => { splashResolve = resolve; });
