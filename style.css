@@ -71,7 +71,7 @@ textarea{resize:vertical;line-height:1.55}.hidden{display:none!important}.muted{
 /* Keep every light-mode component readable. */
 body.light{color:var(--text)}
 body.light .topbar{background:rgba(255,255,255,.94);border-bottom-color:rgba(38,68,112,.14);box-shadow:0 8px 28px rgba(38,68,112,.07)}
-body.light .logo-button,.body.light .round-button{color:var(--text)}
+body.light .logo-button,body.light .round-button{color:var(--text)}
 body.light .searchbox{background:#f1f5fb;border-color:rgba(38,68,112,.13)}
 body.light .searchbox input{color:var(--text)}
 body.light .searchbox input::placeholder{color:#7a879b}
@@ -1363,3 +1363,105 @@ body{padding-bottom:env(safe-area-inset-bottom)}
   .profile-editor-scroll-v4 .profile-editor-photo-label-v2{padding-top:32px!important}
   .profile-editor-footer-v4 button{font-size:10px!important}
 }
+
+/* =========================================================
+   V30 — FINAL STABILITY / LIGHT THEME / FORMS / PAYMENT
+   ========================================================= */
+html,body{width:100%;max-width:100%;overflow-x:hidden}
+body{padding-bottom:env(safe-area-inset-bottom)}
+.content{padding-bottom:calc(112px + env(safe-area-inset-bottom))!important;min-height:calc(100dvh - 72px)}
+.main-layout{padding-bottom:calc(118px + env(safe-area-inset-bottom))!important}
+
+/* Light mode: explicit readable text for components that previously used dark-theme literals. */
+body.light .profile-editor-header-v2 h3,
+body.light .profile-editor-photo-label-v2 b,
+body.light .profile-field-card-v2 label>span,
+body.light .settings-section-title,
+body.light .settings-lock-v23,
+body.light .account-settings-v23 h3,
+body.light .payment-page-premium h3,
+body.light .payment-method-card b,
+body.light .payment-history-row b,
+body.light .profile-name,
+body.light .profile-info-title-v23,
+body.light .profile-info div,
+body.light .menu-profile b,
+body.light .menu-card b,
+body.light .setting-card b,
+body.light .page-header h2,
+body.light .page-hero h2,
+body.light .page-hero h3,
+body.light .entity-body h3,
+body.light .entity-hero h3,
+body.light .create-hero-v2 h3,
+body.light .create-field-v2 span,
+body.light .create-upload-v2>span{color:#16243a!important}
+body.light .profile-editor-header-v2 p,
+body.light .profile-editor-photo-label-v2 span,
+body.light .profile-field-card-v2 small,
+body.light .settings-modal .muted,
+body.light .settings-lock-v23,
+body.light .payment-page-premium .page-subtitle,
+body.light .payment-method-card small,
+body.light .entity-body p,
+body.light .create-hero-v2 p,
+body.light .create-upload-v2 small{color:#61718a!important}
+body.light .profile-edit-modal.premium-profile-editor-v2,
+body.light .account-settings-v23{background:linear-gradient(145deg,#fff,#f3f7fd)!important;color:#16243a!important}
+body.light .profile-field-card-v2,
+body.light .payment-method-card{background:linear-gradient(145deg,#fff,#f5f8fd)!important;border-color:#d8e2ef!important}
+body.light .profile-field-card-v2 input,
+body.light .profile-field-card-v2 textarea{background:#f8faff!important;color:#17263d!important;border-color:#d5dfeb!important}
+body.light .profile-editor-footer-v2{background:rgba(255,255,255,.96)!important;border-top-color:#d8e2ef!important}
+body.light .create-field-v2,body.light .create-upload-v2{background:#f7faff!important;border-color:#d9e3ef!important}
+body.light .create-field-v2 input,body.light .create-field-v2 textarea,body.light .create-field-v2 select{background:#fff!important;color:#17263d!important}
+body.light .premium-hero{background:linear-gradient(145deg,#fff,#f4f8ff)!important;border-color:#d8e3f0!important}
+body.light .premium-hero .eyebrow{color:#176be8!important}
+body.light .profile-tabs{background:transparent}
+
+/* Profile editor: fixed action area + independently scrolling body. */
+.modal-box.profile-edit-modal.premium-profile-editor-v2{
+  width:min(720px,calc(100vw - 14px))!important;
+  height:min(880px,calc(100dvh - 12px))!important;
+  max-height:calc(100dvh - 12px)!important;
+  display:flex!important;flex-direction:column!important;overflow:hidden!important;
+}
+.profile-edit-modal.premium-profile-editor-v2 .profile-editor-header-v2{flex:0 0 auto}
+.profile-edit-modal.premium-profile-editor-v2 .profile-editor-stage-v2{flex:0 0 auto}
+.profile-edit-modal.premium-profile-editor-v2 .profile-editor-photo-label-v2{flex:0 0 auto}
+.profile-edit-modal.premium-profile-editor-v2 .profile-form-v2{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;align-content:start;padding-bottom:22px}
+.profile-edit-modal.premium-profile-editor-v2 .profile-editor-footer-v2{position:sticky;bottom:0;flex:0 0 auto;z-index:20;background:linear-gradient(180deg,rgba(5,12,23,.96),#07101e);padding-bottom:calc(14px + env(safe-area-inset-bottom))}
+@media(max-width:620px){
+  .modal-box.profile-edit-modal.premium-profile-editor-v2{height:calc(100dvh - 8px)!important;max-height:calc(100dvh - 8px)!important;width:calc(100vw - 10px)!important}
+  .profile-edit-modal.premium-profile-editor-v2 .profile-editor-stage-v2{height:175px!important;flex-basis:175px!important}
+  .profile-edit-modal.premium-profile-editor-v2 .profile-editor-footer-v2{display:grid!important;grid-template-columns:1fr 1fr;gap:9px;padding:10px 12px calc(12px + env(safe-area-inset-bottom))!important}
+  .profile-edit-modal.premium-profile-editor-v2 .profile-editor-footer-v2 button{width:100%!important;min-width:0!important;min-height:48px!important}
+}
+
+/* Account information: never clip the phone number or the save button. */
+.account-settings-v23{width:min(620px,calc(100vw - 18px));max-height:calc(100dvh - 18px);overflow-y:auto;padding:22px!important}
+.account-settings-v23 .settings-account-grid-v23{min-width:0}
+.account-settings-v23 .phone-row{grid-template-columns:86px minmax(0,1fr)!important;align-items:center}
+.account-settings-v23 .phone-prefix-v3{white-space:nowrap;display:flex;align-items:center;justify-content:center;min-width:0}
+.account-settings-v23 #asPhone{min-width:0;overflow:hidden;text-overflow:clip;white-space:nowrap}
+.account-settings-v23 .primary.big{margin-top:16px;min-height:50px}
+@media(max-width:390px){
+  .account-settings-v23{padding:16px!important;width:calc(100vw - 12px)}
+  .account-settings-v23 .phone-row{grid-template-columns:72px minmax(0,1fr)!important}
+  .account-settings-v23 #asPhone{font-size:13px;padding-left:10px;padding-right:8px}
+}
+
+/* Payment: one canonical entry point, no duplicated cards. */
+.payment-page-premium{min-width:0;padding-bottom:20px}
+.payment-hero{margin-bottom:12px}
+.payment-method-card{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:16px;border:1px solid var(--line);border-radius:18px;background:linear-gradient(145deg,rgba(18,31,53,.94),rgba(10,18,32,.96));margin-bottom:18px;min-width:0}
+.payment-method-card>div{min-width:0;display:flex;flex-direction:column;gap:5px}
+.payment-method-card b{font-size:13px;line-height:1.3}.payment-method-card small{font-size:10px;color:var(--muted);line-height:1.45}
+.payment-method-card .primary{flex:0 0 auto;min-height:44px;padding:0 14px}
+.payment-history-row{min-width:0}
+@media(max-width:520px){.payment-method-card{align-items:stretch;flex-direction:column}.payment-method-card .primary{width:100%}}
+
+/* Safe-area and small-screen protection: nothing disappears under the bottom nav. */
+.bottom-nav{height:auto!important;min-height:66px;padding-bottom:env(safe-area-inset-bottom)!important}
+.bottom-nav button{min-height:62px!important}
+@media(max-width:360px){.content{padding-bottom:calc(105px + env(safe-area-inset-bottom))!important}.bottom-nav button{min-height:60px!important}.bottom-nav button small{font-size:8.5px!important}}

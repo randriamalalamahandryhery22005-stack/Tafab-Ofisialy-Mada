@@ -1,18 +1,16 @@
-# Tafaß — V28 STABLE CLEAN
+# Tafaß V30 STABLE
 
-## Fanamboarana lehibe
-- Profile editor responsive: Bio / Lieu / Pdp / Pdc, misy scroll anatiny ary bouton Enregistrer tsy voasarona.
-- PDP feno tsara ao anaty rond (`object-fit: cover`).
-- Pays sy code téléphone automatique; ny numéro soratana dia national ihany (oh: Madagascar: `330000000`, tsy misy `+261`).
-- Ville actuelle: recherche amin'ny lisitra voafetra amin'ireo villes/communes fantatra ao amin'ny app, anisan'izany Ambohimanambola.
-- Ville d'origine: recherche amin'ny 6 provinces de Madagascar.
-- Nom/prénom, date de naissance, genre, e-mail ary numéro ao Paramètres; Bio/Lieu/PDP/PDC ao Profil.
-- Navigation mobile 6 onglets: Actualités, Amis, Messages, Pages, Groupes, Tafaß. Tsy misy Videos standalone.
-- Responsive amin'ny écran kely sy lehibe; ny contenu farany sy boutons dia manana toerana ampy ambonin'ny bottom navigation.
-- Supabase auth callback tsy manao opérations async mivantana ao amin'ny `onAuthStateChange`, hisorohana auth-lock/deadlock.
+V30 is based on the last working Tafaß V29 build and applies only stability/UI fixes:
 
-## Google / Apple
-Raha efa misy compte e-mail voamarina ary mitovy amin'ny e-mail Google/Apple, ny Supabase dia mila **Automatic Identity Linking** alefa ao amin'ny Authentication settings. Rehefa mandeha io, ny OAuth dia mampifandray amin'ilay compte efa misy fa tsy mamorona doublon. Tsy azo atao amin'ny frontend irery ny mampifandray identity tsy misy an'io sécurité Supabase io.
+- readable light mode;
+- profile editor with visible fixed Save/Cancel actions on small screens;
+- account information UI with non-clipped phone field;
+- splash gate so the app is revealed only after the splash has finished;
+- one canonical payment interface and duplicate pending-request protection;
+- payment requests stored in Supabase (not a fake success screen);
+- responsive safe-area spacing for small phones.
 
-## Database
-Aza alefa intsony ireo SQL version taloha. Ampiasao ny `TAFASS_NEW_PROJECT.sql` raha installation vaovao. Raha database efa mandeha no ampiasaina, jereo aloha fa misy ireo colonnes ampiasain'ny app: `first_name,last_name,email,phone,phone_code,birth,gender,country,city_current,city_origin,location,avatar_url,cover_url,name_changed_at`.
+## Supabase
+Run `TAFASS_PAYMENT_SETUP.sql` once if `payment_transactions` does not already exist.
+
+A payment request is database-backed and auditable. Actual Airtel Money/Yas Money settlement requires the merchant/provider API and credentials; the app never marks a request as `paid` by itself.

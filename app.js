@@ -825,29 +825,42 @@
   async function saveProfile() {
     const p = state.profile || {};
     const patch = {
-      country:phoneMeta().name,
-      city_current:$('pfCityCurrent')?.value.trim() || "",
-      city_origin:$('pfCityOrigin')?.value.trim() || "",
-      bio:$('pfBio')?.value.trim() || "",
-      location:$('pfCityCurrent')?.value.trim() || "",
+      country: phoneMeta().name,
+      city_current: $('pfCityCurrent')?.value.trim() || "",
+      city_origin: $('pfCityOrigin')?.value.trim() || "",
+      bio: $('pfBio')?.value.trim() || "",
+      location: $('pfCityCurrent')?.value.trim() || "",
     };
     const currentInput=$("pfCityCurrent"), originInput=$("pfCityOrigin");
     if (!patch.city_current || currentInput?.dataset.placeValid !== "true") return toast('Recherchez puis sélectionnez une ville actuelle réelle dans la liste.');
     if (!patch.city_origin || originInput?.dataset.placeValid !== "true") return toast('Recherchez puis sélectionnez une ville d’origine réelle dans la liste.');
+    const btn=document.querySelector('[data-action="save-profile"]');
+    setLoading(btn,true,'Enregistrer');
     try {
       for (const [file,key] of [[$('pfAvatar')?.files?.[0],"avatar_url"],[$('pfCover')?.files?.[0],"cover_url"]]) {
         if (!file) continue;
+        if (!file.type.startsWith('image/')) throw new Error('Choisissez uniquement une image.');
+        if (file.size > 8*1024*1024) throw new Error('Image trop volumineuse (maximum 8 Mo).');
         const ext=(file.name.split('.').pop()||'jpg').toLowerCase();
         const path=`${state.user.id}/${key.replace('_url','')}-${crypto.randomUUID()}.${ext}`;
         const up=await sb.storage.from('profile-media').upload(path,file,{upsert:false,contentType:file.type||'image/jpeg'});
         if(up.error) throw new Error('Upload : '+up.error.message);
         patch[key]=sb.storage.from('profile-media').getPublicUrl(path).data.publicUrl;
       }
-      const {error}=await sb.from('profiles').update(patch).eq('id',state.user.id);
-      if(error) throw new Error(error.message);
-      closeModal(); await loadProfile(); toast('Profil mis à jour');
+      const r=await sb.from('profiles').update(patch).eq('id',state.user.id);
+      if(r.error) throw new Error(r.error.message);
+      const verify=await sb.from('profiles').select('bio,city_current,city_origin,avatar_url,cover_url').eq('id',state.user.id).maybeSingle();
+      if(verify.error) throw new Error('Vérification : '+verify.error.message);
+      if(!verify.data) throw new Error('Le profil n’a pas pu être vérifié après l’enregistrement.');
+      setLoading(btn,false,'Enregistrer');
+      closeModal();
+      await loadProfile();
+      toast('Profil mis à jour avec succès');
       if (state.route === "profile") await profilePage(state.profileTab);
-    } catch(e) { toast(e.message); }
+    } catch(e) {
+      setLoading(btn,false,'Enregistrer');
+      toast(e?.message || 'Impossible d’enregistrer le profil.');
+    }
   }
 
   async function genericListPage(route) {
@@ -962,13 +975,20 @@
     if(service === "help") return simplePage("Aide", `<div class="clean-section"><h3 class="menu-section-title">Centre d'aide</h3><div class="settings-grid"><button class="setting-card" data-action="help-item" data-name="Compte"><span><b>Compte</b><small>Connexion, profil et paramètres</small></span><span>›</span></button><button class="setting-card" data-action="help-item" data-name="Sécurité"><span><b>Sécurité</b><small>Accès et protection du compte</small></span><span>›</span></button><button class="setting-card" data-action="help-item" data-name="Signalement"><span><b>Signalement</b><small>Signaler un compte ou une publication</small></span><span>›</span></button></div></div>`);
     if(service === "payment") {
       const r=await sb.from("payment_transactions").select("*").eq("user_id",state.user.id).order("created_at",{ascending:false}).limit(50);
-      return simplePage("Paiement", `<div class="premium-hero"><span class="eyebrow">TAFAß • PAIEMENT</span><h3>Transactions de votre compte</h3><p class="page-subtitle">Aucune transaction n'est créée automatiquement. Les opérations affichées proviennent uniquement de la base Tafaß.</p></div><div class="settings-grid"><button class="setting-card" data-action="payment-request" data-method="Airtel Money"><span><b>Airtel Money</b><small>Créer une demande de paiement</small></span><span>›</span></button><button class="setting-card" data-action="payment-request" data-method="Yas Money"><span><b>Yas Money</b><small>Créer une demande de paiement</small></span><span>›</span></button></div><div class="clean-section"><h3 class="menu-section-title">Historique</h3><div class="clean-list">${(r.data||[]).map(x=>`<div class="list-row"><div class="grow"><b>${esc(x.method)}</b><small>${esc(x.status)} · ${esc(String(x.amount))} ${esc(x.currency||"MGA")} · ${timeAgo(x.created_at)}</small></div></div>`).join("")||`<div class="empty">Aucune transaction.</div>`}</div></div>`);
+      if(r.error) return simplePage("Paiement", `<section class="payment-page-premium"><div class="premium-hero payment-hero"><span class="eyebrow">TAFAß • PAIEMENT</span><h3>Paiement sécurisé</h3><p class="page-subtitle">Les demandes sont enregistrées dans Tafaß et traitées après vérification. Aucun paiement fictif n’est affiché comme réussi.</p></div><div class="payment-method-card"><div><b>Airtel Money / Yas Money</b><small>Choisissez un moyen et créez une seule demande vérifiable.</small></div><button class="primary" data-action="payment-request" data-method="Airtel Money">Créer une demande</button></div><div class="clean-section"><h3 class="menu-section-title">Historique</h3><div class="clean-list"><div class="empty">Le service de paiement n’est pas encore configuré côté Supabase. Exécutez TAFASS_PAYMENT_SETUP.sql.</div></div></div></section>`);
+      const rows=(r.data||[]);
+      const unique=[]; const seen=new Set();
+      for(const x of rows){ const key=`${x.id||''}|${x.method||''}|${x.amount||''}|${x.created_at||''}`; if(!seen.has(key)){seen.add(key);unique.push(x);} }
+      return simplePage("Paiement", `<section class="payment-page-premium"><div class="premium-hero payment-hero"><span class="eyebrow">TAFAß • PAIEMENT</span><h3>Paiement sécurisé</h3><p class="page-subtitle">Une seule interface de paiement. Les demandes restent en attente jusqu’à validation réelle.</p></div><div class="payment-method-card"><div><b>Airtel Money / Yas Money</b><small>Créer une demande de paiement réelle enregistrée dans votre compte.</small></div><button class="primary" data-action="payment-request" data-method="Airtel Money">Nouvelle demande</button></div><div class="clean-section"><h3 class="menu-section-title">Historique</h3><div class="clean-list">${unique.map(x=>`<div class="list-row payment-history-row"><div class="grow"><b>${esc(x.method||"Paiement")}</b><small>${esc(x.status||"pending")} · ${esc(String(x.amount||0))} ${esc(x.currency||"MGA")} · ${timeAgo(x.created_at)}</small></div></div>`).join("")||`<div class="empty">Aucune transaction.</div>`}</div></div></section>`);
     }
   }
   async function createPaymentRequest(method) {
     const amount=prompt(`Montant en MGA pour ${method} :`, ""); if(amount===null)return; const n=Number(amount); if(!Number.isFinite(n)||n<=0)return toast("Montant invalide.");
+    const existing=await sb.from("payment_transactions").select("id,status").eq("user_id",state.user.id).eq("method",method).eq("amount",n).eq("status","pending").limit(1);
+    if(existing.error) return toast("Le service de paiement n’est pas configuré. Exécutez TAFASS_PAYMENT_SETUP.sql.");
+    if((existing.data||[]).length) return toast("Une demande identique est déjà en attente.");
     const r=await sb.from("payment_transactions").insert({user_id:state.user.id,method,amount:n,currency:"MGA",status:"pending"});
-    if(r.error)return toast(r.error.message); await logActivity("payment_request_created",`Demande de paiement ${method}`,"payment"); toast("Demande enregistrée"); return servicePage("payment");
+    if(r.error)return toast(r.error.message); await logActivity("payment_request_created",`Demande de paiement ${method}`,"payment"); toast("Demande enregistrée et en attente de validation"); return servicePage("payment");
   }
 
   async function settingsPage() {
@@ -1350,6 +1370,7 @@
       showOAuthOnboarding();
       return;
     }
+    await splashReady;
     $("auth").classList.add("hidden"); $("app").classList.remove("hidden");
     await loadPosts(); await setupRealtime();
     state.entering = false;
@@ -1704,6 +1725,8 @@
   // Splash: durée minimale pour laisser le chargement des points être visible.
   const splashStartedAt = Date.now();
   let splashFinished = false;
+  let splashResolve;
+  const splashReady = new Promise(resolve => { splashResolve = resolve; });
   let splashTimer = null;
   const finishSplash = () => {
     if (splashFinished) return;
@@ -1712,6 +1735,7 @@
     splashTimer = setTimeout(() => {
       if (splashFinished) return;
       splashFinished = true;
+      splashResolve?.(true);
       const splash = $("splash");
       if (!splash) return;
       splash.classList.add("splash-hide");
