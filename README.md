@@ -33,3 +33,8 @@ Pour Google et Apple, renseignez aussi leurs Client ID / Secret / clés demandé
 - Mobile bottom spacing reduced and Tafaß brand restored.
 - Standalone Videos destination removed; Reels remains.
 - Run `TAFASS_V23_PROFILE_ONBOARDING.sql` in Supabase.
+
+## V25 FIX
+- OAuth Google/Apple onboarding uses `tafa_complete_oauth_profile` to avoid RLS-related validation freezes.
+- Mobile bottom navigation contains Actualités, Amis, Messages, Pages, Groupes and Tafaß.
+- Extra bottom padding prevents the fixed navigation from covering the last content/buttons.

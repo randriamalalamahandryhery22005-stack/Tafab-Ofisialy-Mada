@@ -89,11 +89,11 @@
       id: state.user.id, first_name: state.user.user_metadata?.first_name || "",
       last_name: state.user.user_metadata?.last_name || "", email: authEmail
     };
-    // The authenticated email is the source of truth for the profile.
-    if (authEmail && state.profile.email !== authEmail) {
-      state.profile.email = authEmail;
-      await sb.from("profiles").update({ email: authEmail }).eq("id", state.user.id);
-    }
+    // The authenticated email is the source of truth for the UI.
+    // Do not write to profiles during every app bootstrap: this can be blocked by RLS
+    // and can make OAuth onboarding appear frozen. Email synchronization is handled
+    // by the dedicated onboarding/account RPC instead.
+    if (authEmail) state.profile.email = authEmail;
     const settings=(await sb.from("user_settings").select("theme").eq("user_id",state.user.id).maybeSingle()).data;
     if(settings?.theme==="light" || settings?.theme==="dark") state.theme=settings.theme;
     const sideName = $("sideName"); if (sideName) sideName.textContent = nameOf(state.profile);
@@ -1231,17 +1231,34 @@
     const age=now.getFullYear()-d.getFullYear()-((now.getMonth()<d.getMonth()||(now.getMonth()===d.getMonth()&&now.getDate()<d.getDate()))?1:0);
     if(age<13) return toast('Vous devez avoir au moins 13 ans.');
     const btn=document.querySelector('[data-action="complete-onboarding"]'); setLoading(btn,true,'Déverrouiller Tafaß');
-    const patch={first_name:first,last_name:last,email:state.user.email||'',birth,gender,phone,country,city_current:current,city_origin:origin};
+    const patch={p_first_name:first,p_last_name:last,p_email:state.user.email||'',p_birth:birth,p_gender:gender,p_phone:phone,p_country:country,p_city_current:current,p_city_origin:origin};
     try {
-      const r=await Promise.race([
-        sb.from('profiles').update(patch).eq('id',state.user.id),
-        new Promise(resolve=>setTimeout(()=>resolve({error:{message:'La validation prend trop de temps. Vérifiez la connexion à Supabase puis réessayez.'}}),12000))
+      // Use a SECURITY DEFINER RPC so a profile created by OAuth can be completed
+      // even when the normal profiles UPDATE policy is restrictive.
+      let result = await Promise.race([
+        sb.rpc('tafa_complete_oauth_profile', patch),
+        new Promise(resolve=>setTimeout(()=>resolve({error:{message:'La validation prend trop de temps. Vérifiez la connexion à Supabase puis réessayez.'}}),15000))
       ]);
-      if(r?.error){ setLoading(btn,false,'Déverrouiller Tafaß'); return toast(r.error.message); }
+      // Graceful fallback for projects that have not run the V25 SQL yet.
+      if (result?.error && /does not exist|schema cache|could not find|fonction/i.test(String(result.error.message||''))) {
+        const fallback={first_name:first,last_name:last,email:state.user.email||'',birth,gender,phone,country,city_current:current,city_origin:origin};
+        result = await Promise.race([
+          sb.from('profiles').update(fallback).eq('id',state.user.id),
+          new Promise(resolve=>setTimeout(()=>resolve({error:{message:'La validation prend trop de temps. Vérifiez la connexion à Supabase puis réessayez.'}}),15000))
+        ]);
+      }
+      if(result?.error){ setLoading(btn,false,'Déverrouiller Tafaß'); return toast(result.error.message); }
       await loadProfile();
-      if (!(await profileIsComplete())) { setLoading(btn,false,'Déverrouiller Tafaß'); return toast('Les informations n’ont pas été enregistrées complètement. Réessayez.'); }
-      closeModal();
-      $("oauthOnboardingView")?.classList.add("hidden");
+      const complete = Boolean(
+        String(state.user.email || state.profile?.email || '').trim() &&
+        String(state.profile?.first_name || '').trim() &&
+        String(state.profile?.last_name || '').trim() &&
+        state.profile?.birth && String(state.profile?.gender || '').trim() &&
+        String(state.profile?.phone || '').trim() && String(state.profile?.country || '').trim() &&
+        String(state.profile?.city_current || '').trim() && String(state.profile?.city_origin || '').trim()
+      );
+      if (!complete) { setLoading(btn,false,'Déverrouiller Tafaß'); return toast('Les informations n’ont pas été enregistrées complètement. Vérifiez Supabase puis réessayez.'); }
+      $("oauthOnboardingView")?.remove();
       $("auth")?.classList.add("hidden");
       $("app")?.classList.remove("hidden");
       state.entering=false;

@@ -1184,3 +1184,37 @@ body.light .profile-edit-modal{background:linear-gradient(155deg,#fff,#f3f7fd)!i
 .profile-cover-wrap{position:relative!important;margin-top:0!important;border-top:0!important;border-bottom:0!important}
 .profile-cover-wrap + .profile-main-premium{margin-top:0!important;border-top:0!important}
 .profile-cover-wrap + .profile-main-premium:before{display:none!important;content:none!important}
+
+/* =========================================================
+   Tafaß V25 — full mobile navigation / no hidden bottom content
+   ========================================================= */
+@media(max-width:720px){
+  .main-layout{padding-bottom:calc(92px + env(safe-area-inset-bottom))!important;}
+  .bottom-nav{
+    height:auto!important;
+    min-height:68px!important;
+    padding:5px 3px calc(5px + env(safe-area-inset-bottom))!important;
+    grid-template-columns:repeat(6,minmax(0,1fr))!important;
+  }
+  .bottom-nav button{min-width:0!important;padding:4px 1px!important;gap:3px!important;}
+  .bottom-nav button .nav-svg{width:21px!important;height:21px!important;}
+  .bottom-nav button small{font-size:8.5px!important;white-space:nowrap;letter-spacing:-.2px;}
+  .bottom-nav button[data-route="tafab"]{font-weight:800;}
+  .bottom-nav button[data-route="tafab"] .nav-svg{filter:drop-shadow(0 0 6px rgba(55,126,255,.25));}
+}
+@media(max-width:390px){
+  .main-layout{padding-bottom:calc(88px + env(safe-area-inset-bottom))!important;}
+  .bottom-nav{min-height:64px!important;}
+  .bottom-nav button .nav-svg{width:19px!important;height:19px!important;}
+  .bottom-nav button small{font-size:8px!important;}
+}
+
+/* OAuth onboarding must be a single clean view; never duplicate an old form underneath. */
+.oauth-onboarding-view-v24{box-sizing:border-box;}
+.oauth-onboarding-view-v24 .onboarding-submit-v24{position:relative;z-index:2;}
+.auth-shell:has(.oauth-onboarding-view-v24:not(.hidden)){overflow-y:auto;max-height:calc(100dvh - 20px);}
+
+/* Prevent fixed navigation from covering the final buttons/content. */
+.content{min-height:0;}
+.profile-page-premium{padding-bottom:18px!important;}
+.clean-page-shell,.clean-page{padding-bottom:18px;}
