@@ -1769,8 +1769,13 @@ document.documentElement.classList.add("app-boot");
     const { data, error } = await sb.auth.signUp({ email, password, data: meta });
     if (error) { $("signupMsg").textContent = error.message; return; }
     if (data.session) {
-      const patch = { first_name:first,last_name:last,email,phone:signupPhone,phone_code:'+261',country:'Madagascar',birth:$("birth").value||null };
-      await sb.from("profiles").update(patch).eq("id",data.user.id);
+      const patch = { first_name:first,last_name:last,email,phone:signupPhone,phone_code:'+261',country:'Madagascar',birth:$("birth").value||null,updated_at:new Date().toISOString() };
+      const profileResult = await sb.from("profiles").upsert(patch, { onConflict:"id" });
+      if (profileResult.error) {
+        console.error("Tafaß profile creation:", profileResult.error);
+        $("signupMsg").textContent = "Compte créé, mais le profil n'a pas pu être finalisé. Reconnectez-vous pour terminer la configuration.";
+        return;
+      }
       $("signupMsg").textContent="Compte créé.";
     } else $("signupMsg").textContent="Compte créé. Vérifiez votre e-mail si la confirmation est activée.";
   });
