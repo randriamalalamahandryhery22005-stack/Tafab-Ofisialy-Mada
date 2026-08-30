@@ -758,27 +758,24 @@
     if (route === "pages") {
       const { data, error } = await sb.from("pages").select("*").order("created_at",{ascending:false}).limit(50);
       if (token !== state.renderToken || state.route !== route) return;
-      if (error) return simplePage("Pages", `<div class="empty">${esc(error.message)}</div>`);
-      const rows = data || [], ids = rows.map(x=>x.id);
-      let followers = [];
-      if(ids.length){ const f=await sb.from("page_followers").select("page_id,user_id").in("page_id",ids); followers=f.data||[]; }
+      if (error) return simplePage("Pages", `<div class="empty-block"><b>Impossible de charger les Pages.</b><small>${esc(error.message)}</small><button class="primary big" data-action="retry-route" data-route-target="pages">Réessayer</button></div>`);
+      const rows=data||[], ids=rows.map(x=>x.id);
+      let followers=[];
+      if(ids.length){ const f=await sb.from("page_followers").select("page_id,user_id").in("page_id",ids); if(!f.error) followers=f.data||[]; }
       const counts=new Map(); followers.forEach(x=>counts.set(x.page_id,(counts.get(x.page_id)||0)+1));
-      return simplePage("Pages", `<div class="entity-hero premium-hero"><div class="entity-hero-mark">▣</div><div><span class="eyebrow">TAFAß • PAGES</span><h3>Pages et communautés publiques</h3><p class="page-subtitle">Découvrez les Pages réelles, suivez-les et gérez vos propres Pages.</p></div></div>
-        <div class="page-header-actions"><button class="primary premium-create-button" data-action="create-page">＋ Créer une Page</button></div>
-        <div class="entity-grid">${rows.map(x=>`<article class="entity-card"><div class="entity-cover" ${x.cover_url?`style="background-image:url('${esc(x.cover_url)}')"`:""}></div><div class="entity-body">${entityAvatarHTML(x,"page")}<h3>${esc(x.name)}</h3><p>${esc(x.bio||"Aucune présentation.")}</p><div class="entity-meta"><span>${esc(x.category||"Autre")}</span><span>${counts.get(x.id)||0} abonné${(counts.get(x.id)||0)>1?"s":""}</span></div><div class="entity-actions"><button class="primary" data-action="page-open" data-id="${esc(x.id)}">Ouvrir</button></div></div></article>`).join("") || `<div class="empty entity-empty">Aucune Page disponible pour le moment.</div>`}</div>`);
+      const mine=new Set(rows.filter(x=>x.owner_id===state.user.id).map(x=>x.id));
+      return simplePage("Pages", `<section class="entity-hub premium-entity-hub"><div class="entity-hero premium-hero"><div class="entity-hero-mark">▣</div><div class="grow"><span class="eyebrow">TAFAß • PAGES</span><h3>Pages</h3><p class="page-subtitle">Découvrez les Pages et ouvrez chaque espace directement.</p></div></div><div class="page-header-actions"><button class="primary premium-create-button" data-action="create-page">＋ Créer une Page</button></div><div class="entity-grid">${rows.map(x=>`<article class="entity-card premium-entity-card"><button class="entity-card-main" type="button" data-action="page-open" data-id="${esc(x.id)}"><div class="entity-cover" ${x.cover_url?`style="background-image:url('${esc(x.cover_url)}')"`:''}></div><div class="entity-body">${entityAvatarHTML(x,"page")}<h3>${esc(x.name)}</h3><p>${esc(x.bio||"Aucune présentation.")}</p><div class="entity-meta"><span>${esc(x.category||"Autre")}</span><span>${counts.get(x.id)||0} abonné${(counts.get(x.id)||0)>1?"s":""}</span></div></div></button><div class="entity-actions"><button class="primary" data-action="page-open" data-id="${esc(x.id)}">${mine.has(x.id)?"Gérer la Page":"Ouvrir"}</button></div></article>`).join("") || `<div class="empty entity-empty">Aucune Page disponible pour le moment.</div>`}</div></section>`);
     }
     if (route === "groups") {
       const { data, error } = await sb.from("groups").select("*").order("created_at",{ascending:false}).limit(50);
       if (token !== state.renderToken || state.route !== route) return;
-      if (error) return simplePage("Groupes", `<div class="empty">${esc(error.message)}</div>`);
+      if (error) return simplePage("Groupes", `<div class="empty-block"><b>Impossible de charger les Groupes.</b><small>${esc(error.message)}</small><button class="primary big" data-action="retry-route" data-route-target="groups">Réessayer</button></div>`);
       const rows=data||[], ids=rows.map(x=>x.id);
       let members=[];
-      if(ids.length){ const r=await sb.from("group_members").select("group_id,user_id").in("group_id",ids); members=r.data||[]; }
+      if(ids.length){ const r=await sb.from("group_members").select("group_id,user_id").in("group_id",ids); if(!r.error) members=r.data||[]; }
       const counts=new Map(); members.forEach(x=>counts.set(x.group_id,(counts.get(x.group_id)||0)+1));
       const mineIds=new Set(members.filter(x=>x.user_id===state.user.id).map(x=>x.group_id));
-      return simplePage("Groupes", `<div class="entity-hero premium-hero"><div class="entity-hero-mark">◎</div><div><span class="eyebrow">TAFAß • GROUPES</span><h3>Communautés réelles</h3><p class="page-subtitle">Rejoignez, quittez et gérez les groupes disponibles sur Tafaß.</p></div></div>
-        <div class="page-header-actions"><button class="primary premium-create-button" data-action="create-group">＋ Créer un groupe</button></div>
-        <div class="entity-grid">${rows.map(x=>`<article class="entity-card"><div class="entity-cover" ${x.cover_url?`style="background-image:url('${esc(x.cover_url)}')"`:""}></div><div class="entity-body">${entityAvatarHTML(x,"group")}<h3>${esc(x.name)}</h3><p>${esc(x.description||"Aucune description.")}</p><div class="entity-meta"><span>${esc(x.privacy||"public")}</span><span>${counts.get(x.id)||0} membre${(counts.get(x.id)||0)>1?"s":""}</span></div><div class="entity-actions"><button class="primary" data-action="group-open" data-id="${esc(x.id)}">${mineIds.has(x.id)?"Ouvrir":"Voir le groupe"}</button></div></div></article>`).join("") || `<div class="empty entity-empty">Aucun groupe disponible pour le moment.</div>`}</div>`);
+      return simplePage("Groupes", `<section class="entity-hub premium-entity-hub"><div class="entity-hero premium-hero"><div class="entity-hero-mark">◎</div><div class="grow"><span class="eyebrow">TAFAß • GROUPES</span><h3>Groupes</h3><p class="page-subtitle">Découvrez les communautés et ouvrez chaque groupe directement.</p></div></div><div class="page-header-actions"><button class="primary premium-create-button" data-action="create-group">＋ Créer un groupe</button></div><div class="entity-grid">${rows.map(x=>`<article class="entity-card premium-entity-card"><button class="entity-card-main" type="button" data-action="group-open" data-id="${esc(x.id)}"><div class="entity-cover" ${x.cover_url?`style="background-image:url('${esc(x.cover_url)}')"`:''}></div><div class="entity-body">${entityAvatarHTML(x,"group")}<h3>${esc(x.name)}</h3><p>${esc(x.description||"Aucune description.")}</p><div class="entity-meta"><span>${esc(x.privacy||"public")}</span><span>${counts.get(x.id)||0} membre${(counts.get(x.id)||0)>1?"s":""}</span></div></div></button><div class="entity-actions"><button class="primary" data-action="group-open" data-id="${esc(x.id)}">${mineIds.has(x.id)?"Ouvrir":"Voir le groupe"}</button></div></article>`).join("") || `<div class="empty entity-empty">Aucun groupe disponible pour le moment.</div>`}</div></section>`);
     }
     if (route === "saved") {
       const { data } = await sb.from("saved_posts").select("post_id").eq("user_id", state.user.id);
@@ -1158,6 +1155,27 @@
     state.entering = false;
     await render();
   }
+  async function signInWithProvider(provider) {
+    const allowed = ["google", "apple"];
+    if (!allowed.includes(provider)) return;
+    const btn = document.querySelector(`[data-oauth="${provider}"]`);
+    if (btn) { btn.disabled = true; btn.classList.add("loading"); }
+    try {
+      const redirectTo = `${window.location.origin}${window.location.pathname}`;
+      const { error } = await sb.auth.signInWithOAuth({
+        provider,
+        options: { redirectTo, queryParams: provider === "google" ? { access_type: "offline", prompt: "select_account" } : undefined }
+      });
+      if (error) throw error;
+    } catch (e) {
+      if (btn) { btn.disabled = false; btn.classList.remove("loading"); }
+      const msg = String(e?.message || e || "Connexion impossible.");
+      if ($("authMsg")) $("authMsg").textContent = msg.includes("provider") || msg.includes("not enabled")
+        ? `La connexion ${provider === "google" ? "Google" : "Apple"} n’est pas encore activée dans Supabase.`
+        : msg;
+    }
+  }
+
   function showLogin() { ["signupView","forgotPasswordView","resetPasswordView"].forEach(id => $(id)?.classList.add("hidden")); $("loginView").classList.remove("hidden"); $("auth").classList.remove("hidden"); }
   let signupStep = 1;
   function setSignupStep(step) {
@@ -1276,6 +1294,7 @@
       return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">PUBLICATION</span><h3>Actions</h3><div class="menu-grid"><button class="menu-card" data-action="save-post" data-id="${esc(id)}"><span class="menu-icon">♡</span><span><b>Enregistrer</b><small>Disponible pour tous</small></span></button>${owner ? `<button class="menu-card" data-action="edit-post" data-id="${esc(id)}"><span class="menu-icon">✎</span><span><b>Modifier</b><small>Uniquement votre publication</small></span></button><button class="menu-card danger-card" data-action="delete-post" data-id="${esc(id)}"><span class="menu-icon">⌫</span><span><b>Supprimer</b><small>Vous êtes le propriétaire</small></span></button>` : `<button class="menu-card" data-action="report-post" data-id="${esc(id)}"><span class="menu-icon">⚑</span><span><b>Signaler</b><small>Signaler cette publication</small></span></button>`}</div></div>`);
     }
     if (action === "menu-route") { const target = actionEl.dataset.routeTarget; if (target) navigate(target); return; }
+    if (action === "retry-route") { const target = actionEl.dataset.routeTarget; if (target) { state.renderToken++; state.route=target; await render(); } return; }
     if (action === "menu-info") { settingInfo(actionEl.dataset.name || "Menu"); return; }
     if (action === "menu-service") return servicePage(actionEl.dataset.service);
     if (action === "help-item") return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><h3>${esc(actionEl.dataset.name||"Aide")}</h3><p class="muted">Consultez les réglages de Tafaß ou utilisez les boutons de signalement disponibles sur les profils et publications.</p><button class="primary big" data-action="close-modal">Fermer</button></div>`);
@@ -1465,6 +1484,7 @@
       $("signupMsg").textContent="Compte créé.";
     } else $("signupMsg").textContent="Compte créé. Vérifiez votre e-mail si la confirmation est activée.";
   });
+  document.querySelectorAll("[data-oauth]").forEach(btn => btn.addEventListener("click", () => signInWithProvider(btn.dataset.oauth)));
   $("themeBtn").addEventListener("click", toggleTheme);
   syncThemeButton();
   $("modal").addEventListener("click", e => { if (e.target.id === "modal") closeModal(); });

@@ -1,10 +1,18 @@
-Tafaß V12.9 — PREMIUM REAL
+# Tafaß V13.1 — Premium Real
 
-Auth update:
-- Mot de passe oublié est maintenant une page séparée de Connexion.
-- L'utilisateur saisit son e-mail sur l'écran de récupération, puis Supabase Auth envoie le lien sécurisé.
-- Le lien ouvre l'écran de définition du nouveau mot de passe.
-- Inscription renforcée: prénom, nom, e-mail, téléphone, mot de passe + confirmation, date de naissance, pays et acceptation des conditions.
-- Validation côté interface du mot de passe et de l'âge minimum de 13 ans.
+## Corrections
+- Navigation Pages et Groupes renforcée : cartes ouvrables directement, retry en cas d'erreur, aucune donnée demo ajoutée.
+- Les sous-options du Menu continuent d'utiliser les actions réelles Supabase.
+- Connexion Google et Apple utilise `supabase.auth.signInWithOAuth()` avec le domaine courant comme redirect URL.
+- Les boutons OAuth ne sont plus désactivés.
 
-Conserver les réglages Supabase Auth Email et l'URL de redirection configurée pour le domaine de production.
+## Configuration OAuth obligatoire dans Supabase
+Le code lance réellement OAuth, mais les fournisseurs doivent être activés dans Supabase :
+Authentication → Providers → Google / Apple.
+
+Dans Authentication → URL Configuration, ajoutez le domaine de production, par exemple :
+https://tafab-ofisialy-mada.vercel.app
+
+Utilisez exactement votre vrai domaine Vercel, sans l'espace éventuel de l'exemple ci-dessus.
+
+Pour Google et Apple, renseignez aussi leurs Client ID / Secret / clés demandées par Supabase. Sans cette configuration côté fournisseur, aucun frontend ne peut effectuer une authentification OAuth réelle.
