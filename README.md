@@ -1,9 +1,10 @@
-# Tafaß V12.7 — Premium Real
+Tafaß V12.9 — PREMIUM REAL
 
-Correctifs V12.7 :
-- Éditeur de profil mobile réorganisé avec espaces réguliers et zone formulaire réellement scrollable.
-- Boutons du profil public alignés : Ajouter à gauche, Messages au centre, Trois points à droite.
-- Plus de 60 catégories de Page proposées dans une liste déroulante.
-- Catégorie de Page obligatoire lors de la création (sélection unique).
-- Sélecteur de catégorie également utilisé lors de la modification d'une Page.
-- Interface responsive et anti-débordement renforcée.
+Auth update:
+- Mot de passe oublié est maintenant une page séparée de Connexion.
+- L'utilisateur saisit son e-mail sur l'écran de récupération, puis Supabase Auth envoie le lien sécurisé.
+- Le lien ouvre l'écran de définition du nouveau mot de passe.
+- Inscription renforcée: prénom, nom, e-mail, téléphone, mot de passe + confirmation, date de naissance, pays et acceptation des conditions.
+- Validation côté interface du mot de passe et de l'âge minimum de 13 ans.
+
+Conserver les réglages Supabase Auth Email et l'URL de redirection configurée pour le domaine de production.

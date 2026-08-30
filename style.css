@@ -1045,3 +1045,25 @@ body.light .profile-edit-modal{background:linear-gradient(155deg,#fff,#f3f7fd)!i
 #forgotPassword:disabled{opacity:.55;cursor:wait}
 #resetPasswordView .text-link{margin-top:5px}
 @media(max-width:480px){.auth-security-badge{width:58px;height:58px;border-radius:18px;margin-bottom:16px}.auth-subtitle{line-height:1.55}}
+
+/* V12.9 — Auth pages: separate recovery screen + complete signup */
+.auth-view{width:100%;animation:authViewIn .22s ease both}
+@keyframes authViewIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.auth-form .password-wrap{width:100%}
+.auth-form .password-wrap input{box-sizing:border-box;width:100%}
+.auth-form input,.auth-form select{box-sizing:border-box;width:100%;min-width:0}
+.auth-shell{max-height:calc(100vh - 28px);overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
+.auth-shell::-webkit-scrollbar{width:5px}.auth-shell::-webkit-scrollbar-thumb{background:rgba(120,150,200,.28);border-radius:99px}
+#forgotPasswordView .auth-security-badge{margin-inline:auto}
+#forgotPasswordView .auth-title,#forgotPasswordView .auth-subtitle{text-align:center}
+#forgotPasswordView .auth-subtitle{max-width:390px;margin-left:auto;margin-right:auto}
+#forgotPasswordView .text-link{display:block;margin:8px auto 0}
+.signup-form{padding-bottom:4px}
+.signup-form .check-row{font-size:11px}
+@media(max-width:480px){
+  .auth-shell{max-height:calc(100vh - 18px);padding:24px 15px}
+  .auth-logo-row{margin-bottom:22px}
+  .auth-form{gap:14px}
+  .grid2{grid-template-columns:1fr;gap:14px}
+  .phone-row{grid-template-columns:96px minmax(0,1fr)}
+}

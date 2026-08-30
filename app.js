@@ -1158,10 +1158,17 @@
     state.entering = false;
     await render();
   }
-  function showLogin() { ["signupView","resetPasswordView"].forEach(id => $(id)?.classList.add("hidden")); $("loginView").classList.remove("hidden"); $("auth").classList.remove("hidden"); }
-  function showSignup() { ["loginView","resetPasswordView"].forEach(id => $(id)?.classList.add("hidden")); $("signupView").classList.remove("hidden"); $("auth").classList.remove("hidden"); }
+  function showLogin() { ["signupView","forgotPasswordView","resetPasswordView"].forEach(id => $(id)?.classList.add("hidden")); $("loginView").classList.remove("hidden"); $("auth").classList.remove("hidden"); }
+  function showSignup() { ["loginView","forgotPasswordView","resetPasswordView"].forEach(id => $(id)?.classList.add("hidden")); $("signupView").classList.remove("hidden"); $("auth").classList.remove("hidden"); }
+  function showForgotPassword() {
+    ["loginView","signupView","resetPasswordView"].forEach(id => $(id)?.classList.add("hidden"));
+    $("forgotPasswordView")?.classList.remove("hidden");
+    $("auth")?.classList.remove("hidden");
+    if ($("forgotEmail") && $("loginEmail")?.value.includes("@")) $("forgotEmail").value = $("loginEmail").value.trim();
+    $("forgotEmail")?.focus();
+  }
   function showResetPassword(message="") {
-    ["loginView","signupView"].forEach(id => $(id)?.classList.add("hidden"));
+    ["loginView","signupView","forgotPasswordView"].forEach(id => $(id)?.classList.add("hidden"));
     $("resetPasswordView")?.classList.remove("hidden");
     $("auth")?.classList.remove("hidden");
     if ($("resetMsg")) $("resetMsg").textContent = message;
@@ -1169,20 +1176,21 @@
   function resetRedirectUrl() {
     return `${window.location.origin}${window.location.pathname}?reset=1`;
   }
-  async function sendPasswordReset() {
-    const email = $("loginEmail")?.value.trim() || "";
+  async function sendPasswordReset(e) {
+    if (e) e.preventDefault();
+    const email = $("forgotEmail")?.value.trim() || "";
     if (!email || !email.includes("@")) {
-      toast("Entrez l’adresse e-mail utilisée pour votre compte.");
-      $("loginEmail")?.focus();
+      if ($("forgotMsg")) $("forgotMsg").textContent = "Entrez une adresse e-mail valide.";
+      $("forgotEmail")?.focus();
       return;
     }
-    const btn=$("forgotPassword");
+    const btn=$("forgotPasswordSubmit");
     if(btn){ btn.disabled=true; btn.textContent="Envoi en cours…"; }
+    if ($("forgotMsg")) $("forgotMsg").textContent="";
     const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: resetRedirectUrl() });
-    if(btn){ btn.disabled=false; btn.textContent="Mot de passe oublié ?"; }
-    if(error) return toast(error.message);
-    toast("Un lien sécurisé vient d’être envoyé à votre adresse e-mail.");
-    if($("authMsg")) $("authMsg").textContent="Vérifiez votre boîte e-mail et ouvrez le lien Tafaß pour choisir un nouveau mot de passe.";
+    if(btn){ btn.disabled=false; btn.textContent="Envoyer le lien de récupération"; }
+    if(error) { if ($("forgotMsg")) $("forgotMsg").textContent = error.message; return; }
+    if($("forgotMsg")) $("forgotMsg").textContent="Lien envoyé. Vérifiez votre boîte e-mail et vos spams, puis ouvrez le lien Tafaß pour définir votre nouveau mot de passe.";
   }
   async function saveResetPassword(e) {
     e.preventDefault();
@@ -1381,7 +1389,9 @@
   $("showSignup").addEventListener("click", showSignup);
   $("showLogin").addEventListener("click", showLogin);
   $("resetBackLogin")?.addEventListener("click", showLogin);
-  $("forgotPassword").addEventListener("click", sendPasswordReset);
+  $("forgotPassword")?.addEventListener("click", showForgotPassword);
+  $("forgotBackLogin")?.addEventListener("click", showLogin);
+  $("forgotPasswordForm")?.addEventListener("submit", sendPasswordReset);
   $("resetPasswordForm")?.addEventListener("submit", saveResetPassword);
   $("loginForm").addEventListener("submit", async e => {
     e.preventDefault();
@@ -1398,7 +1408,12 @@
   });
   $("signupForm").addEventListener("submit", async e => {
     e.preventDefault();
-    const first=$("firstName").value.trim(), last=$("lastName").value.trim(), email=$("signupEmail").value.trim(), password=$("signupPassword").value;
+    const first=$("firstName").value.trim(), last=$("lastName").value.trim(), email=$("signupEmail").value.trim(), password=$("signupPassword").value, confirm=$("signupPasswordConfirm")?.value || "";
+    if (first.length < 2 || last.length < 2) return toast("Indiquez votre prénom et votre nom.");
+    if (!email || !email.includes("@")) return toast("Entrez une adresse e-mail valide.");
+    if (password.length < 8) return toast("Le mot de passe doit contenir au moins 8 caractères.");
+    if (password !== confirm) return toast("Les deux mots de passe ne correspondent pas.");
+    if ($("birth")?.value) { const d=new Date($("birth").value+"T00:00:00"); const age=new Date().getFullYear()-d.getFullYear()-((new Date().getMonth()<d.getMonth() || (new Date().getMonth()===d.getMonth() && new Date().getDate()<d.getDate()))?1:0); if(age<13) return toast("Vous devez avoir au moins 13 ans pour créer un compte."); }
     if (!$("terms").checked) return toast("Acceptez les conditions pour continuer.");
     $("signupMsg").textContent = "Création du compte…";
     const meta = { first_name:first, last_name:last, phone:$("phone").value.trim(), phone_code:$("phoneCode").value, country:$("country").value, birth:$("birth").value||null };
