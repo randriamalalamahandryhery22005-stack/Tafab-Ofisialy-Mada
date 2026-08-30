@@ -1159,7 +1159,44 @@
     await render();
   }
   function showLogin() { ["signupView","forgotPasswordView","resetPasswordView"].forEach(id => $(id)?.classList.add("hidden")); $("loginView").classList.remove("hidden"); $("auth").classList.remove("hidden"); }
-  function showSignup() { ["loginView","forgotPasswordView","resetPasswordView"].forEach(id => $(id)?.classList.add("hidden")); $("signupView").classList.remove("hidden"); $("auth").classList.remove("hidden"); }
+  let signupStep = 1;
+  function setSignupStep(step) {
+    signupStep = Math.max(1, Math.min(5, Number(step) || 1));
+    document.querySelectorAll("[data-signup-step]").forEach(el => el.classList.toggle("active", Number(el.dataset.signupStep) === signupStep));
+    document.querySelectorAll(".auth-step-indicator span").forEach((el, i) => el.classList.toggle("active", i < signupStep));
+    const subtitles = {1:"Commençons par votre identité",2:"Ajoutez vos coordonnées",3:"Sécurisez votre compte",4:"Complétez votre profil",5:"Une dernière confirmation avant de créer votre compte"};
+    if ($("signupStepSubtitle")) $("signupStepSubtitle").textContent = subtitles[signupStep];
+    $("signupView")?.scrollIntoView({block:"start",behavior:"smooth"});
+    const shell = document.querySelector(".auth-shell"); if (shell) shell.scrollTop = 0;
+  }
+  function validateSignupStep(step) {
+    if (step === 1) {
+      const first=$("firstName").value.trim(), last=$("lastName").value.trim();
+      if(first.length < 2 || last.length < 2){ toast("Indiquez votre prénom et votre nom."); return false; }
+    }
+    if (step === 2) {
+      const email=$("signupEmail").value.trim();
+      if(!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ toast("Entrez une adresse e-mail valide."); return false; }
+    }
+    if (step === 3) {
+      const password=$("signupPassword").value, confirm=$("signupPasswordConfirm").value;
+      if(password.length < 8){ toast("Le mot de passe doit contenir au moins 8 caractères."); return false; }
+      if(password !== confirm){ toast("Les deux mots de passe ne correspondent pas."); return false; }
+    }
+    if (step === 4 && $("birth")?.value) {
+      const d=new Date($("birth").value+"T00:00:00");
+      const now=new Date(); const age=now.getFullYear()-d.getFullYear()-((now.getMonth()<d.getMonth() || (now.getMonth()===d.getMonth() && now.getDate()<d.getDate()))?1:0);
+      if(age<13){ toast("Vous devez avoir au moins 13 ans pour créer un compte."); return false; }
+    }
+    return true;
+  }
+  function showSignup() {
+    ["loginView","forgotPasswordView","resetPasswordView"].forEach(id => $(id)?.classList.add("hidden"));
+    $("signupView").classList.remove("hidden"); $("auth").classList.remove("hidden");
+    setSignupStep(1);
+    $("signupMsg").textContent="";
+    $("firstName")?.focus();
+  }
   function showForgotPassword() {
     ["loginView","signupView","resetPasswordView"].forEach(id => $(id)?.classList.add("hidden"));
     $("forgotPasswordView")?.classList.remove("hidden");
@@ -1201,12 +1238,15 @@
     if(btn){ btn.disabled=true; btn.textContent="Enregistrement…"; }
     const { error } = await sb.auth.updateUser({ password });
     if(error){ if(btn){btn.disabled=false;btn.textContent="Enregistrer le nouveau mot de passe";} return toast(error.message); }
-    if($("resetMsg")) $("resetMsg").textContent="Mot de passe modifié avec succès. Vous pouvez maintenant utiliser votre compte.";
+    if($("resetMsg")) $("resetMsg").textContent="Mot de passe modifié avec succès. Ouverture de votre compte…";
     toast("Mot de passe modifié avec succès.");
     $("resetPassword").value=""; $("resetPasswordConfirm").value="";
-    await sb.auth.signOut({ scope:"global" });
-    showLogin();
-    if($("authMsg")) $("authMsg").textContent="Votre mot de passe a été réinitialisé. Connectez-vous avec votre nouveau mot de passe.";
+    // La session de récupération reste valide : aucune reconnexion manuelle n'est nécessaire.
+    history.replaceState(null, "", window.location.pathname);
+    $("auth")?.classList.add("hidden");
+    $("app")?.classList.remove("hidden");
+    state.user = (await sb.auth.getUser()).data.user || state.user;
+    await enterApp();
   }
 
   document.addEventListener("click", async e => {
@@ -1388,11 +1428,14 @@
   }));
   $("showSignup").addEventListener("click", showSignup);
   $("showLogin").addEventListener("click", showLogin);
-  $("resetBackLogin")?.addEventListener("click", showLogin);
   $("forgotPassword")?.addEventListener("click", showForgotPassword);
   $("forgotBackLogin")?.addEventListener("click", showLogin);
   $("forgotPasswordForm")?.addEventListener("submit", sendPasswordReset);
   $("resetPasswordForm")?.addEventListener("submit", saveResetPassword);
+  document.querySelectorAll(".signup-next").forEach(btn => btn.addEventListener("click", () => {
+    if (validateSignupStep(signupStep)) setSignupStep(Number(btn.dataset.nextStep));
+  }));
+  document.querySelectorAll(".signup-prev").forEach(btn => btn.addEventListener("click", () => setSignupStep(Number(btn.dataset.prevStep))));
   $("loginForm").addEventListener("submit", async e => {
     e.preventDefault();
     const value = $("loginEmail").value.trim(), password = $("loginPassword").value;
@@ -1409,10 +1452,7 @@
   $("signupForm").addEventListener("submit", async e => {
     e.preventDefault();
     const first=$("firstName").value.trim(), last=$("lastName").value.trim(), email=$("signupEmail").value.trim(), password=$("signupPassword").value, confirm=$("signupPasswordConfirm")?.value || "";
-    if (first.length < 2 || last.length < 2) return toast("Indiquez votre prénom et votre nom.");
-    if (!email || !email.includes("@")) return toast("Entrez une adresse e-mail valide.");
-    if (password.length < 8) return toast("Le mot de passe doit contenir au moins 8 caractères.");
-    if (password !== confirm) return toast("Les deux mots de passe ne correspondent pas.");
+    if (!validateSignupStep(1) || !validateSignupStep(2) || !validateSignupStep(3) || !validateSignupStep(4)) return;
     if ($("birth")?.value) { const d=new Date($("birth").value+"T00:00:00"); const age=new Date().getFullYear()-d.getFullYear()-((new Date().getMonth()<d.getMonth() || (new Date().getMonth()===d.getMonth() && new Date().getDate()<d.getDate()))?1:0); if(age<13) return toast("Vous devez avoir au moins 13 ans pour créer un compte."); }
     if (!$("terms").checked) return toast("Acceptez les conditions pour continuer.");
     $("signupMsg").textContent = "Création du compte…";

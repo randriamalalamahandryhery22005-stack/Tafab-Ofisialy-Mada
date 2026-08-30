@@ -1067,3 +1067,24 @@ body.light .profile-edit-modal{background:linear-gradient(155deg,#fff,#f3f7fd)!i
   .grid2{grid-template-columns:1fr;gap:14px}
   .phone-row{grid-template-columns:96px minmax(0,1fr)}
 }
+
+/* V13.0 — Auth premium wizard */
+.auth-step-indicator{display:flex;align-items:center;gap:7px;margin:0 0 18px}
+.auth-step-indicator span{height:4px;flex:1;border-radius:999px;background:rgba(130,150,185,.18);transition:.2s ease}
+.auth-step-indicator span.active{background:linear-gradient(90deg,#2f6fff,#68a0ff);box-shadow:0 0 12px rgba(52,116,255,.25)}
+.signup-wizard{gap:0}
+.signup-step{display:none;gap:15px;animation:authViewIn .2s ease both}
+.signup-step.active{display:grid}
+.signup-step-heading{display:flex;align-items:center;gap:12px;padding:13px 14px;border:1px solid rgba(100,130,180,.18);border-radius:16px;background:linear-gradient(145deg,rgba(23,35,60,.72),rgba(10,18,33,.76));margin-bottom:1px}
+.signup-step-heading strong{display:block;font-size:14px;color:#eef4ff}.signup-step-heading small{display:block;color:#8493aa;font-size:11px;margin-top:3px;line-height:1.4}
+.step-number{width:38px;height:38px;display:grid;place-items:center;flex:0 0 38px;border-radius:12px;background:linear-gradient(145deg,#2469ff,#795cff);color:#fff;font-size:11px;font-weight:900;letter-spacing:.5px;box-shadow:0 8px 22px rgba(50,100,255,.22)}
+.signup-step-actions{display:grid;grid-template-columns:.8fr 1.2fr;gap:10px;margin-top:2px}
+.signup-step-actions .big{width:100%}
+.signup-password-note{font-size:10px;line-height:1.5;color:#7f8da4;padding:11px 12px;border-radius:12px;background:rgba(100,130,180,.07);border:1px solid rgba(100,130,180,.12)}
+.terms-card-premium{display:flex;gap:12px;align-items:flex-start;padding:16px;border-radius:18px;border:1px solid rgba(100,140,210,.2);background:linear-gradient(145deg,rgba(25,39,68,.82),rgba(11,20,37,.9));box-shadow:0 16px 34px rgba(0,0,0,.14)}
+.terms-icon{width:40px;height:40px;flex:0 0 40px;border-radius:13px;display:grid;place-items:center;background:linear-gradient(145deg,#276dff,#6a5cff);color:#fff;font-weight:900;box-shadow:0 8px 20px rgba(52,108,255,.24)}
+.terms-card-premium strong{font-size:13px}.terms-card-premium p{margin:5px 0 0;color:#8e9bb0;font-size:10px;line-height:1.55}
+.terms-final{padding:14px;border:1px solid rgba(100,140,210,.18);border-radius:15px;background:rgba(14,24,42,.72);font-size:11px!important}
+.terms-final input{accent-color:#397cff}
+#resetPasswordView .text-link{display:none}
+@media(max-width:480px){.signup-step-heading{padding:12px}.signup-step-actions{grid-template-columns:1fr 1.35fr}.terms-card-premium{padding:14px}.auth-step-indicator{margin-bottom:15px}}

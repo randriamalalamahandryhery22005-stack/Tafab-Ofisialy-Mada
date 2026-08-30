@@ -60,23 +60,53 @@
           <label>Confirmer le mot de passe<div class="password-wrap"><input id="resetPasswordConfirm" type="password" minlength="6" autocomplete="new-password" placeholder="Répétez le mot de passe" required><button type="button" class="field-eye" data-password-toggle="resetPasswordConfirm">◉</button></div></label>
           <button id="resetPasswordSubmit" class="primary big" type="submit">Enregistrer le nouveau mot de passe</button>
         </form>
-        <button id="resetBackLogin" class="text-link">Retour à la connexion</button>
         <div id="resetMsg" class="auth-message"></div>
       </div>
 
       <div id="signupView" class="auth-view hidden">
+        <div class="auth-step-indicator"><span class="active"></span><span></span><span></span><span></span><span></span></div>
         <div class="auth-title">Créer un compte</div>
-        <p class="auth-subtitle">Rejoignez Tafaß aujourd'hui</p>
-        <form id="signupForm" class="auth-form signup-form">
-          <button type="button" id="avatarPick" class="signup-avatar"><span>⌾</span><small>Ajouter une photo</small></button>
-          <div class="grid2"><label>Prénom<input id="firstName" placeholder="Votre prénom" required></label><label>Nom<input id="lastName" placeholder="Votre nom" required></label></div>
-          <label>Adresse e-mail<input id="signupEmail" type="email" autocomplete="email" placeholder="Entrez votre e-mail" required></label>
-          <label>Téléphone<div class="phone-row"><select id="phoneCode"><option value="+261">🇲🇬 +261</option><option value="+33">🇫🇷 +33</option><option value="+1">🇺🇸 +1</option></select><input id="phone" type="tel" placeholder="Entrez votre numéro"></div></label>
-          <label>Mot de passe<div class="password-wrap"><input id="signupPassword" type="password" minlength="8" autocomplete="new-password" placeholder="Au moins 8 caractères" required><button type="button" class="field-eye" data-password-toggle="signupPassword">◉</button></div></label>
-          <label>Confirmer le mot de passe<div class="password-wrap"><input id="signupPasswordConfirm" type="password" minlength="8" autocomplete="new-password" placeholder="Répétez votre mot de passe" required><button type="button" class="field-eye" data-password-toggle="signupPasswordConfirm">◉</button></div></label>
-          <div class="grid2"><label>Date de naissance<input id="birth" type="date"></label><label>Pays<select id="country"><option value="Madagascar">Madagascar</option><option value="France">France</option><option value="États-Unis">États-Unis</option><option value="Autre">Autre</option></select></label></div>
-          <label class="check-row"><input id="terms" type="checkbox" required><span>J'accepte les conditions d'utilisation et la politique de confidentialité.</span></label>
-          <button class="primary big" type="submit">S'inscrire</button>
+        <p id="signupStepSubtitle" class="auth-subtitle">Commençons par votre identité</p>
+        <form id="signupForm" class="auth-form signup-form signup-wizard">
+          <section class="signup-step active" data-signup-step="1">
+            <div class="signup-step-heading"><span class="step-number">01</span><div><strong>Votre identité</strong><small>Indiquez votre prénom et votre nom.</small></div></div>
+            <label>Prénom<input id="firstName" placeholder="Votre prénom" autocomplete="given-name" required></label>
+            <label>Nom<input id="lastName" placeholder="Votre nom" autocomplete="family-name" required></label>
+            <button type="button" class="primary big signup-next" data-next-step="2">Continuer</button>
+          </section>
+
+          <section class="signup-step" data-signup-step="2">
+            <div class="signup-step-heading"><span class="step-number">02</span><div><strong>Coordonnées</strong><small>Ajoutez les informations de contact.</small></div></div>
+            <label>Adresse e-mail<input id="signupEmail" type="email" autocomplete="email" placeholder="Entrez votre e-mail"></label>
+            <label>Téléphone<div class="phone-row"><select id="phoneCode"><option value="+261">🇲🇬 +261</option><option value="+33">🇫🇷 +33</option><option value="+1">🇺🇸 +1</option></select><input id="phone" type="tel" placeholder="Entrez votre numéro"></div></label>
+            <div class="signup-step-actions"><button type="button" class="ghost-action big signup-prev" data-prev-step="1">Précédent</button><button type="button" class="primary big signup-next" data-next-step="3">Continuer</button></div>
+          </section>
+
+          <section class="signup-step" data-signup-step="3">
+            <div class="signup-step-heading"><span class="step-number">03</span><div><strong>Sécurisez votre compte</strong><small>Créez un mot de passe personnel.</small></div></div>
+            <label>Mot de passe<div class="password-wrap"><input id="signupPassword" type="password" minlength="8" autocomplete="new-password" placeholder="Au moins 8 caractères"><button type="button" class="field-eye" data-password-toggle="signupPassword">◉</button></div></label>
+            <label>Confirmer le mot de passe<div class="password-wrap"><input id="signupPasswordConfirm" type="password" minlength="8" autocomplete="new-password" placeholder="Répétez votre mot de passe"><button type="button" class="field-eye" data-password-toggle="signupPasswordConfirm">◉</button></div></label>
+            <div class="signup-password-note">Utilisez au moins 8 caractères avec une combinaison difficile à deviner.</div>
+            <div class="signup-step-actions"><button type="button" class="ghost-action big signup-prev" data-prev-step="2">Précédent</button><button type="button" class="primary big signup-next" data-next-step="4">Continuer</button></div>
+          </section>
+
+          <section class="signup-step" data-signup-step="4">
+            <div class="signup-step-heading"><span class="step-number">04</span><div><strong>Informations complémentaires</strong><small>Ces informations servent à compléter votre profil.</small></div></div>
+            <label>Date de naissance<input id="birth" type="date"></label>
+            <label>Pays<select id="country"><option value="Madagascar">Madagascar</option><option value="France">France</option><option value="États-Unis">États-Unis</option><option value="Autre">Autre</option></select></label>
+            <div class="signup-step-actions"><button type="button" class="ghost-action big signup-prev" data-prev-step="3">Précédent</button><button type="button" class="primary big signup-next" data-next-step="5">Continuer</button></div>
+          </section>
+
+          <section class="signup-step" data-signup-step="5">
+            <div class="signup-step-heading"><span class="step-number">05</span><div><strong>Dernière étape</strong><small>Validez votre inscription après avoir lu les conditions.</small></div></div>
+            <div class="terms-card-premium">
+              <div class="terms-icon" aria-hidden="true">✓</div>
+              <div><strong>Conditions d'utilisation</strong><p>En créant votre compte, vous confirmez avoir lu et accepté les conditions d'utilisation et la politique de confidentialité de Tafaß.</p></div>
+            </div>
+            <label class="check-row terms-final"><input id="terms" type="checkbox" required><span>J'accepte les conditions d'utilisation et la politique de confidentialité.</span></label>
+            <button class="primary big" type="submit">Créer mon compte</button>
+            <button type="button" class="ghost-action big signup-prev" data-prev-step="4">Précédent</button>
+          </section>
         </form>
         <div class="auth-bottom">Déjà un compte ? <button id="showLogin" class="text-link inline">Se connecter</button></div>
         <div id="signupMsg" class="auth-message"></div>
