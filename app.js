@@ -838,7 +838,7 @@
       ["payment","payment","Paiement","Vos paiements et transactions", "payment"],
       ["help","help","Aide","Assistance et signalement", "help"]
     ];
-    const card = x => `<button class="menu-card premium-menu-card" ${x[4] ? `data-action="menu-service" data-name="${esc(x[2])}" data-service="${esc(x[4])}"` : `data-route="${x[0]}"`} aria-label="${esc(x[2])}"><span class="menu-icon">${menuIcon(x[1])}</span><span class="menu-card-copy"><b>${esc(x[2])}</b><small title="${esc(x[3])}">${esc(x[3])}</small></span><span class="menu-arrow">›</span></button>`;
+    const card = x => `<button type="button" class="menu-card premium-menu-card" ${x[4] ? `data-action="menu-service" data-name="${esc(x[2])}" data-service="${esc(x[4])}"` : `data-action="menu-route" data-route-target="${esc(x[0])}"`} aria-label="${esc(x[2])}"><span class="menu-icon">${menuIcon(x[1])}</span><span class="menu-card-copy"><b>${esc(x[2])}</b><small title="${esc(x[3])}">${esc(x[3])}</small></span><span class="menu-arrow">›</span></button>`;
     simplePage("Menu", `<div class="menu-profile premium-menu-profile" data-route="profile"><button class="profile-link menu-profile-avatar" data-action="view-profile" data-id="${esc(p.id || "")}">${avatarHTML(p)}</button><div class="grow"><b>${esc(nameOf(p))}</b><small title="${esc(p.email || state.user?.email || "")}">${esc(p.email || state.user?.email || "")}</small></div><button class="small-action" data-route="profile">Profil</button></div><div class="menu-section-title">Raccourcis</div><div class="menu-grid premium-menu-grid">${items.map(card).join("")}</div><div class="menu-section-title">Services</div><div class="menu-grid premium-menu-grid">${actions.map(card).join("")}</div><div class="menu-section-title">Compte</div><div class="menu-grid premium-menu-grid"><button class="menu-card premium-menu-card danger-card" data-action="logout"><span class="menu-icon">${menuIcon("logout")}</span><span class="menu-card-copy"><b>Déconnexion</b><small>Quitter ce compte en toute sécurité</small></span><span class="menu-arrow">›</span></button></div>`);
   }
 
@@ -1023,31 +1023,43 @@
   async function render() {
     if (!state.user) return;
     const token = ++state.renderToken;
-    const route = state.route;
+    const route = routes.includes(state.route) ? state.route : "home";
+    state.route = route;
     beginPageLoading();
     document.querySelectorAll("[data-route]").forEach(el => el.classList.toggle("active", el.dataset.route === route));
     window.scrollTo({ top: 0, behavior: "auto" });
-    if (route === "home") await renderFeed();
-    else if (route === "friends") await friendsPage();
-    else if (route === "search") await searchPage("");
-    else if (route === "messages") await messagesPage();
-    else if (route === "notifications") await notificationsPage();
-    else if (route === "profile") await profilePage();
-    else if (["videos","reels","pages","groups","saved"].includes(route)) await genericListPage(route);
-    else if (route === "menu") menuPage();
-    else if (route === "tafab") tafabPage();
-    else if (route === "settings") settingsPage();
-    if (token !== state.renderToken || route !== state.route) { endPageLoading(); return; }
-    const pageRoot = $("content")?.firstElementChild;
-    if (pageRoot) pageRoot.dataset.pageRoute = route;
-    document.querySelectorAll("[data-route]").forEach(el => el.classList.toggle("active", el.dataset.route === state.route));
-    updateBadges();
-    endPageLoading();
+    try {
+      if (route === "home") await renderFeed();
+      else if (route === "friends") await friendsPage();
+      else if (route === "search") await searchPage("");
+      else if (route === "messages") await messagesPage();
+      else if (route === "notifications") await notificationsPage();
+      else if (route === "profile") await profilePage(state.profileTab);
+      else if (["videos","reels","pages","groups","saved"].includes(route)) await genericListPage(route);
+      else if (route === "menu") menuPage();
+      else if (route === "tafab") await tafabPage();
+      else if (route === "settings") await settingsPage();
+      if (token !== state.renderToken || route !== state.route) return;
+      const pageRoot = $("content")?.firstElementChild;
+      if (pageRoot) pageRoot.dataset.pageRoute = route;
+      document.querySelectorAll("[data-route]").forEach(el => el.classList.toggle("active", el.dataset.route === state.route));
+      updateBadges();
+    } catch (err) {
+      console.error("Tafaß render:", err);
+      if (token === state.renderToken && state.route === route) {
+        $("content").innerHTML = `<section class="clean-page clean-page-shell error-page"><div class="page-header clean-page-header"><h2>${esc(route === "profile" ? "Profil" : route === "settings" ? "Para & Conf" : "Tafaß")}</h2></div><div class="empty-block"><b>Impossible d’afficher cette section.</b><small>${esc(err?.message || "Une erreur est survenue.")}</small><button class="primary big" data-route="home">Retour à l’accueil</button></div></section>`;
+      }
+    } finally {
+      endPageLoading();
+    }
   }
 
   function navigate(route) {
     if (!routes.includes(route)) route = "home";
-    if (state.route === route && document.querySelector(`#content [data-page-route="${route}"]`)) return;
+    if (state.route === route && document.querySelector(`#content [data-page-route="${route}"]`)) {
+      // A route can have been rendered partially after a failed async query; allow a second tap to retry.
+      if (pageLoading) return;
+    }
     state.renderToken++;
     state.route = route;
     if (route === "profile") state.viewingProfileId = null;
@@ -1076,7 +1088,15 @@
   }
 
   function logout() {
-    openModal(`<div class="modal-box logout-modal"><button class="modal-close" data-action="close-modal">×</button><div class="logout-icon">↪</div><span class="eyebrow">TAFAß • DÉCONNEXION</span><h3>Quitter votre compte ?</h3><p class="muted">Vous pouvez fermer la session maintenant ou rester dans l’application.</p><div class="logout-actions"><button class="ghost-action big" data-action="close-modal">Rester dans l’application</button><button class="danger-button big" data-action="confirm-logout">Se déconnecter</button></div></div>`);
+    openModal(`<div class="modal-box logout-modal premium-logout-modal">
+      <button class="modal-close" data-action="close-modal" aria-label="Fermer">×</button>
+      <div class="logout-visual"><span>↪</span></div>
+      <span class="eyebrow">TAFAß • COMPTE</span>
+      <h3>Déconnexion</h3>
+      <p class="logout-question">Voulez-vous vraiment vous déconnecter de votre compte ?</p>
+      <div class="logout-choice"><div><b>Rester dans l’application</b><small>Votre session reste ouverte.</small></div><button class="ghost-action" data-action="close-modal">Rester</button></div>
+      <div class="logout-choice danger-choice"><div><b>Se déconnecter</b><small>Vous devrez vous reconnecter pour accéder au compte.</small></div><button class="danger-button" data-action="confirm-logout">Déconnexion</button></div>
+    </div>`);
   }
   async function confirmLogout() {
     const { error } = await sb.auth.signOut();
@@ -1128,9 +1148,15 @@
   function showSignup() { $("loginView").classList.add("hidden"); $("signupView").classList.remove("hidden"); $("auth").classList.remove("hidden"); }
 
   document.addEventListener("click", async e => {
-    const routeEl = e.target.closest("[data-route]");
-    if (routeEl) { e.preventDefault(); if (pageLoading) return; navigate(routeEl.dataset.route); return; }
-    const actionEl = e.target.closest("[data-action]"); if (!actionEl) return;
+    const actionEl = e.target.closest("[data-action]");
+    if (actionEl) {
+      e.preventDefault();
+      if (pageLoading && !["close-modal","confirm-logout"].includes(actionEl.dataset.action)) return;
+    } else {
+      const routeEl = e.target.closest("[data-route]");
+      if (routeEl) { e.preventDefault(); if (pageLoading) return; navigate(routeEl.dataset.route); return; }
+      return;
+    }
     const action = actionEl.dataset.action, id = actionEl.dataset.id;
     const notificationId = actionEl.dataset.notification;
     if (notificationId && action !== "mark-read") { await sb.from("notifications").update({is_read:true}).eq("id",notificationId).eq("user_id",state.user.id); updateBadges(); }
@@ -1147,6 +1173,7 @@
       const owner = post?.user_id === state.user.id;
       return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">PUBLICATION</span><h3>Actions</h3><div class="menu-grid"><button class="menu-card" data-action="save-post" data-id="${esc(id)}"><span class="menu-icon">♡</span><span><b>Enregistrer</b><small>Disponible pour tous</small></span></button>${owner ? `<button class="menu-card" data-action="edit-post" data-id="${esc(id)}"><span class="menu-icon">✎</span><span><b>Modifier</b><small>Uniquement votre publication</small></span></button><button class="menu-card danger-card" data-action="delete-post" data-id="${esc(id)}"><span class="menu-icon">⌫</span><span><b>Supprimer</b><small>Vous êtes le propriétaire</small></span></button>` : `<button class="menu-card" data-action="report-post" data-id="${esc(id)}"><span class="menu-icon">⚑</span><span><b>Signaler</b><small>Signaler cette publication</small></span></button>`}</div></div>`);
     }
+    if (action === "menu-route") { const target = actionEl.dataset.routeTarget; if (target) navigate(target); return; }
     if (action === "menu-info") { settingInfo(actionEl.dataset.name || "Menu"); return; }
     if (action === "menu-service") return servicePage(actionEl.dataset.service);
     if (action === "help-item") return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><h3>${esc(actionEl.dataset.name||"Aide")}</h3><p class="muted">Consultez les réglages de Tafaß ou utilisez les boutons de signalement disponibles sur les profils et publications.</p><button class="primary big" data-action="close-modal">Fermer</button></div>`);
