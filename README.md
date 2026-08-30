@@ -1,15 +1,19 @@
-# Tafaß — Supabase Realtime V4
+# Tafaß — version réelle
 
-Version corrigée du projet Tafaß.
+Cette version utilise Supabase comme source de données et de temps réel.
 
-- Correction RLS : suppression de la récursion infinie sur `conversation_members` et `group_members`.
-- Messages : conversations et messages réellement liés à l'utilisateur connecté.
-- Realtime : tables principales configurées pour Supabase Realtime.
-- Tafaß : aucune annonce de démonstration créée automatiquement ; les offres/publicités sont des données Supabase réelles.
-- Profil : compteurs Amis/Abonnés et informations venant de Supabase, sans valeurs fictives.
-- Interface : navigation premium, notamment Actualités, Amis, Messages, Alertes, Tafaß, Menu et Profil.
-- Mobile : le bouton inférieur `Tafaß` reste Tafaß ; `Menu` est accessible depuis le bouton menu supérieur/latéral.
+## Mise à jour V12
 
-## SQL
-Exécuter `TAFASS_NEW_PROJECT.sql` dans Supabase SQL Editor.
-Le script est prévu pour être relancé sans supprimer les tables ni les données.
+Exécuter `TAFASS_V12_REAL_SOCIAL.sql` dans Supabase **après** les SQL déjà présents (`TAFASS_NEW_PROJECT.sql`, `TAFASS_V10_PROFILE_ACTUALITES.sql` et `TAFASS_V11_REACTIONS.sql`).
+
+La V12 ajoute notamment :
+- profil public : Ajouter, Messages, options de compte ;
+- signalement et blocage de comptes ;
+- conversations privées A ↔ B avec messages et lecture en temps réel ;
+- alertes automatiques pour réactions, commentaires, partages, demandes/acceptations d'amis, messages, abonnements, Pages et groupes ;
+- recherche de comptes et de publications réelles ;
+- historique d'activité réel ;
+- enregistrement des demandes de paiement Airtel Money / Yas Money sans simuler un paiement ;
+- synchronisation Realtime des principales tables sociales.
+
+Aucun jeu de données de démonstration n'est ajouté.

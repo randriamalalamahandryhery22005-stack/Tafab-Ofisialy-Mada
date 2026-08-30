@@ -12,7 +12,7 @@
   const routes = ["home","friends","search","messages","notifications","profile","videos","reels","pages","groups","saved","menu","tafab","settings"];
   const state = {
     user: null, profile: null, route: "home", posts: [], friends: [], stories: [],
-    channel: null, theme: localStorage.getItem("tafa-theme") || "dark", entering: false,
+    channel: null, theme: "dark", entering: false,
     profileTab: "posts", friendsTab: "suggestions", selectedConversation: null, viewingProfileId: null, renderToken: 0
   };
 
@@ -115,19 +115,12 @@
     return rows.map(x => ({ ...x, user: map.get(x.user_id) })).filter(x => x.user);
   }
 
-  function storyStrip() {
-    const profiles = [state.profile, ...state.posts.map(p => p.author).filter(Boolean)].filter(Boolean);
-    const unique = [...new Map(profiles.map(p => [p.id, p])).values()].slice(0, 8);
-    return `<div class="story-strip-clean"><div class="stories"><button class="story story-add" data-action="add-story"><div class="story-ring"><span class="avatar">+</span></div><small>Votre story</small></button>${unique.map((p,i)=>`<button class="story" data-action="story" data-id="${esc(p.id)}"><div class="story-ring">${avatarHTML(p)}</div><small>${esc(i===0?"Votre story":(p.first_name||nameOf(p)).slice(0,10))}</small></button>`).join("")}</div></div>`;
-  }
-
   async function renderFeed() {
     const token = state.renderToken;
-    let html = storyStrip();
-    html += `<div class="composer composer-clean">
+    let html = `<div class="composer composer-clean">
       <div class="composer-top">${avatarHTML(state.profile)}<b>${esc(nameOf(state.profile))}</b></div>
       <textarea id="postText" placeholder="Quoi de neuf, ${esc((state.profile?.first_name || "").trim() || "vous")} ?"></textarea>
-      <div class="composer-actions"><label class="file-label">▧ Photo/Vidéo<input id="postFile" type="file" accept="image/*,video/*" hidden></label><button type="button" data-action="mood">◎ Humeur</button><button type="button" class="primary" id="publishBtn">Publier</button></div>
+      <div class="composer-actions"><label class="file-label">▧ Photo/Vidéo<input id="postFile" type="file" accept="image/*,video/*" hidden></label><button type="button" class="primary" id="publishBtn">Publier</button></div>
     </div>`;
     if (!state.posts.length) html += `<div class="card empty">Aucune publication pour le moment.<br><span>Publiez la première sur Tafaß.</span></div>`;
     for (const p of state.posts) {
@@ -181,7 +174,6 @@
     const { error } = await sb.rpc("tafa_set_post_reaction", { p_post_id: postId, p_reaction_type: reaction });
     if (error) return toast(error.message);
     const post = state.posts.find(x => x.id === postId);
-    if (post && post.user_id !== state.user.id) await createNotification(post.user_id, "reaction", "Nouvelle réaction", `${nameOf(state.profile)} a réagi à votre publication.`, "post", postId);
     toast("Réaction enregistrée"); await loadPosts();
     if (state.route === "profile") await profilePage(state.profileTab);
   }
@@ -192,13 +184,13 @@
     const { error } = await sb.from("comments").insert(payload);
     if (error) return toast(error.message);
     const post = state.posts.find(x => x.id === postId);
-    if (post && post.user_id !== state.user.id) await createNotification(post.user_id, "comment", "Nouveau commentaire", `${nameOf(state.profile)} a commenté votre publication.`, "post", postId);
     input.value = ""; toast(parentId ? "Réponse publiée" : "Commentaire publié"); await loadPosts();
     if (state.route === "profile") await profilePage(state.profileTab);
   }
   async function sharePost(id) {
     const { error } = await sb.rpc("tafa_share_post", { p_post_id: id, p_share_message: "" });
     if (error) return toast(error.message);
+    await logActivity("post_shared", "Publication partagée", "post", id);
     toast("Publication partagée"); await loadPosts();
     if (state.route === "profile") await profilePage(state.profileTab);
   }
@@ -280,11 +272,17 @@
     return `<div class="list-row friend-row">${avatarHTML(p)}<div class="grow"><b>${esc(nameOf(p))}</b><small>${p.username ? "@"+esc(p.username) : "Membre Tafaß"}</small></div>${action}</div>`;
   }
   async function addFriend(id) {
-    const { error } = await sb.from("friend_requests").insert({ sender_id: state.user.id, receiver_id: id, status: "pending" });
+    if (!id || id === state.user.id) return;
+    const settings = (await sb.from("user_settings").select("allow_friend_requests").eq("user_id", id).maybeSingle()).data;
+    if (settings?.allow_friend_requests === false) return toast("Ce compte n’accepte pas les demandes d’ami.");
+    const existing = await sb.from("friend_requests").select("id,status,sender_id,receiver_id").or(`and(sender_id.eq.${state.user.id},receiver_id.eq.${id}),and(sender_id.eq.${id},receiver_id.eq.${state.user.id})`).maybeSingle();
+    if (existing.data?.status === "pending") return toast(existing.data.sender_id === state.user.id ? "Demande déjà envoyée." : "Cette personne vous a déjà envoyé une demande.");
+    const { error } = await sb.from("friend_requests").upsert({ sender_id: state.user.id, receiver_id: id, status: "pending", updated_at: new Date().toISOString() }, { onConflict: "sender_id,receiver_id" });
     if (error) return toast(error.message);
-    await createNotification(id, "friend_request", "Nouvelle demande d’ami", `${nameOf(state.profile)} vous a envoyé une demande d’ami.`, "friend_request");
+    await logActivity("friend_request_sent", "Demande d’ami envoyée", "profile", id);
     toast("Invitation envoyée");
     if (state.route === "friends") await friendsPage();
+    if (state.viewingProfileId === id) await openUserProfile(id);
   }
   async function handleFriend(id, status) {
     const { error } = await sb.from("friend_requests").update({ status }).eq("sender_id", id).eq("receiver_id", state.user.id).eq("status", "pending");
@@ -292,26 +290,31 @@
     if (status === "accepted") {
       await sb.from("friendships").upsert([{ user_id: state.user.id, friend_id: id }, { user_id: id, friend_id: state.user.id }], { onConflict: "user_id,friend_id" });
     }
-    await createNotification(id, status === "accepted" ? "friend_accepted" : "friend_declined",
-      status === "accepted" ? "Demande acceptée" : "Demande refusée",
-      `${nameOf(state.profile)} a ${status === "accepted" ? "accepté" : "refusé"} votre demande.`,
-      "friend_request");
     toast(status === "accepted" ? "Ami ajouté" : "Demande supprimée");
     if (state.route === "friends") await friendsPage();
   }
 
+  let searchTimer = null;
   async function searchPage(q = "") {
     const token = state.renderToken;
-    const term = q.trim(); let data = [];
+    const term = q.trim();
+    let people = [], posts = [];
     if (term) {
-      const r = await sb.from("profiles").select("*")
-        .or(`first_name.ilike.%${term}%,last_name.ilike.%${term}%,username.ilike.%${term}%`).limit(30);
-      data = r.data || [];
-      await sb.from("search_history").insert({ user_id: state.user.id, search_text: term, result_type: "profiles" });
+      const safe = term.replace(/[%_]/g, "");
+      const r = await sb.from("profiles").select("*").or(`first_name.ilike.%${safe}%,last_name.ilike.%${safe}%,username.ilike.%${safe}%`).limit(30);
+      people = r.data || [];
+      const pr = await sb.from("posts").select("*").or(`content.ilike.%${safe}%`).order("created_at", {ascending:false}).limit(30);
+      posts = pr.data || [];
+      if (state.user) await sb.from("search_history").insert({ user_id: state.user.id, search_text: term, result_type: "all" });
+      const ids=[...new Set(posts.map(x=>x.user_id).filter(Boolean))];
+      const pp=ids.length ? await sb.from("profiles").select("*").in("id",ids) : {data:[]};
+      const map=new Map((pp.data||[]).map(x=>[x.id,x])); posts=posts.map(x=>({...x,author:map.get(x.user_id)}));
     }
-    if (token !== state.renderToken) return;
-    $("content").innerHTML = `<div class="card search-page"><div class="page-header"><h2>Rechercher</h2></div><input id="searchInput" value="${esc(term)}" placeholder="Compte, pseudo..."><div id="searchResults">${term ? (data.length ? data.map(p=>`<div class="list-row">${avatarHTML(p)}<div class="grow"><b>${esc(nameOf(p))}</b><small>@${esc(p.username||"")}</small></div><button class="small-action" data-action="view-profile" data-id="${esc(p.id)}">Voir</button></div>`).join("") : `<div class="empty">Aucun résultat.</div>`) : `<div class="empty">Recherchez un utilisateur.</div>`}</div></div>`;
-    $("searchInput").addEventListener("keydown", e => { if (e.key === "Enter") searchPage(e.target.value); });
+    if (token !== state.renderToken || state.route !== "search") return;
+    const peopleHtml=people.length ? people.map(p=>`<div class="list-row search-result-row">${avatarHTML(p)}<div class="grow"><b>${esc(nameOf(p))}</b><small>${esc(usernameOf(p) || "Membre Tafaß")}</small></div><button class="small-action" data-action="view-profile" data-id="${esc(p.id)}">Voir le profil</button></div>`).join("") : `<div class="empty">Aucun compte trouvé.</div>`;
+    const postHtml=posts.length ? posts.map(p=>`<div class="list-row search-result-row"><div class="grow"><b>${esc(nameOf(p.author||{}))}</b><small>${esc((p.content||"Publication sans texte").slice(0,140))}</small></div><button class="small-action" data-action="search-post" data-id="${esc(p.id)}">Voir</button></div>`).join("") : `<div class="empty">Aucune publication trouvée.</div>`;
+    $("content").innerHTML = `<section class="clean-page search-page-premium"><div class="page-header clean-page-header"><div><h2>Rechercher</h2><p class="page-kicker">Comptes et publications réels de Tafaß</p></div></div><div class="clean-search searchbox"><span class="icon">⌕</span><input id="searchInput" value="${esc(term)}" placeholder="Nom, pseudo ou publication..."></div><div class="clean-section"><h3 class="menu-section-title">Comptes</h3><div class="clean-list" id="searchPeople">${peopleHtml}</div></div><div class="clean-section"><h3 class="menu-section-title">Publications</h3><div class="clean-list" id="searchPosts">${postHtml}</div></div></section>`;
+    $("searchInput").addEventListener("input", e=>{ clearTimeout(searchTimer); searchTimer=setTimeout(()=>searchPage(e.target.value),280); });
   }
 
   async function messagesPage() {
@@ -371,6 +374,9 @@
     openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><h3>Nouvelle conversation</h3><div>${(people||[]).map(p=>`<button class="list-row" style="width:100%;text-align:left" data-action="start-conversation" data-id="${esc(p.id)}">${avatarHTML(p)}<div class="grow"><b>${esc(nameOf(p))}</b><small>${esc(p.username||"")}</small></div><span>›</span></button>`).join("")}</div></div>`);
   }
   async function startConversation(otherId) {
+    if(!otherId || otherId===state.user.id)return;
+    const cfg=(await sb.from("user_settings").select("allow_messages").eq("user_id",otherId).maybeSingle()).data;
+    if(cfg?.allow_messages===false)return toast("Ce compte n’accepte pas les messages.");
     const { data: mine } = await sb.from("conversation_members").select("conversation_id").eq("user_id", state.user.id);
     for (const m of mine || []) {
       const r = await sb.from("conversation_members").select("user_id").eq("conversation_id", m.conversation_id);
@@ -385,13 +391,16 @@
   async function openConversation(id) {
     const token = state.renderToken;
     state.selectedConversation = id;
-    const { data: msgs } = await sb.from("messages").select("*").eq("conversation_id", id).order("created_at", { ascending: true }).limit(100);
+    const { data: memberCheck } = await sb.from("conversation_members").select("user_id").eq("conversation_id", id).eq("user_id", state.user.id).maybeSingle();
+    if (!memberCheck) return toast("Conversation inaccessible.");
+    const { data: msgs } = await sb.from("messages").select("*").eq("conversation_id", id).order("created_at", { ascending: true }).limit(200);
+    await sb.rpc("tafa_mark_conversation_read", { p_conversation_id:id });
     const ids = [...new Set((msgs || []).map(m => m.sender_id))];
     const { data: profiles } = ids.length ? await sb.from("profiles").select("*").in("id", ids) : { data: [] };
     if (token !== state.renderToken) return;
     const map = new Map((profiles || []).map(p => [p.id, p]));
     $("content").innerHTML = `<section class="clean-page messages-page conversation-page"><div class="page-header clean-page-header"><button class="text-button" data-route="messages">‹ Messages</button><h2>Discussion</h2><span></span></div><div class="message-list clean-message-list">${(msgs||[]).map(m=>`<div class="message ${m.sender_id===state.user.id?"mine":""}"><div>${esc(m.content)}</div><small>${timeAgo(m.created_at)}</small></div>`).join("")||`<div class="empty">Dites bonjour 👋</div>`}</div><form id="messageForm" class="comment-form clean-message-form"><input id="messageText" placeholder="Écrire un message..." required><button>Envoyer</button></form></section>`;
-    $("messageForm").addEventListener("submit", async e => { e.preventDefault(); const text=$("messageText").value.trim(); if(!text)return; const r=await sb.from("messages").insert({conversation_id:id,sender_id:state.user.id,content:text}); if(r.error)toast(r.error.message); else {$("messageText").value=""; await openConversation(id);} });
+    $("messageForm").addEventListener("submit", async e => { e.preventDefault(); const text=$("messageText").value.trim(); if(!text)return; const r=await sb.from("messages").insert({conversation_id:id,sender_id:state.user.id,content:text,is_read:false}); if(r.error)toast(r.error.message); else {$("messageText").value=""; await openConversation(id);} });
   }
 
   async function notificationsPage() {
@@ -419,15 +428,6 @@
       }).join("") || `<div class="empty">Aucune alerte pour le moment.</div>`}</div></section>`;
   }
 
-  async function createNotification(userId, type, title, message, entityType = "", entityId = null) {
-    if (!userId || userId === state.user?.id) return;
-    const { error } = await sb.from("notifications").insert({
-      user_id: userId, actor_id: state.user.id, type, title, message,
-      entity_type: entityType, entity_id: entityId
-    });
-    if (error) console.warn("Notification:", error.message);
-  }
-
   async function markRead() {
     const { error } = await sb.from("notifications").update({ is_read: true })
       .eq("user_id", state.user.id).eq("is_read", false);
@@ -440,6 +440,8 @@
   async function updateBadges() {
     const n = await sb.from("notifications").select("id", { count:"exact", head:true })
       .eq("user_id", state.user.id).eq("is_read", false);
+    const m = await sb.from("messages").select("id", { count:"exact", head:true }).neq("sender_id", state.user.id).eq("is_read", false);
+    const mb = $("msgBadge"); if (mb) { mb.textContent=String(m.count||0); mb.classList.toggle("hidden", !(m.count||0)); }
     const el = $("notifBadge");
     if (el) {
       el.textContent = String(n.count || 0);
@@ -465,7 +467,13 @@
     const followersR = await sb.from("follows").select("id", { count:"exact", head:true }).eq("following_id", userId);
     const cover = p.cover_url ? `style="background-image:url('${esc(p.cover_url)}')"` : "";
     const isMe = userId === state.user.id;
-    const actions = isMe ? `<button class="primary" data-action="edit-profile">Modifier le profil</button>` : `<button class="ghost-action" data-action="message-user" data-id="${esc(userId)}">Message</button><button class="ghost-action" data-action="view-profile-friend" data-id="${esc(userId)}">Amis</button>`;
+    const [friendR, sentR, receivedR] = isMe ? [{data:null},{data:null},{data:null}] : await Promise.all([
+      sb.from("friendships").select("id").eq("user_id",state.user.id).eq("friend_id",userId).maybeSingle(),
+      sb.from("friend_requests").select("id,status").eq("sender_id",state.user.id).eq("receiver_id",userId).eq("status","pending").maybeSingle(),
+      sb.from("friend_requests").select("id,status").eq("sender_id",userId).eq("receiver_id",state.user.id).eq("status","pending").maybeSingle()
+    ]);
+    const relationAction = isMe ? `<button class="primary" data-action="edit-profile">Modifier le profil</button>` : friendR.data ? `<button class="ghost-action" data-action="remove-friend" data-id="${esc(userId)}">Retirer des amis</button>` : receivedR.data ? `<button class="small-action" data-action="accept-friend" data-id="${esc(userId)}">Confirmer</button><button class="ghost-action" data-action="decline-friend" data-id="${esc(userId)}">Refuser</button>` : sentR.data ? `<button class="ghost-action" disabled>Demande envoyée</button>` : `<button class="primary" data-action="add-friend" data-id="${esc(userId)}">Ajouter</button>`;
+    const actions = isMe ? relationAction : `${relationAction}<button class="ghost-action" data-action="message-user" data-id="${esc(userId)}">Messages</button><button class="round-button" data-action="profile-more" data-id="${esc(userId)}" aria-label="Plus d'options">⋯</button>`;
 
     let body = "";
     for (const post of postRows) {
@@ -489,6 +497,34 @@
         <section class="profile-content-section profile-publications-section">${body}</section>
       </div>
     </section>`;
+  }
+
+  async function removeFriend(id) {
+    const r1=await sb.from("friendships").delete().eq("user_id",state.user.id).eq("friend_id",id);
+    const r2=await sb.from("friendships").delete().eq("user_id",id).eq("friend_id",state.user.id);
+    if(r1.error&&r2.error)return toast(r1.error.message);
+    await logActivity("friend_removed","Ami retiré","profile",id); toast("Ami retiré");
+    if(state.route==="friends") await friendsPage();
+    if(state.viewingProfileId===id) await openUserProfile(id);
+  }
+  async function profileMore(id) {
+    if(!id || id===state.user.id)return;
+    const blocked=(await sb.from("blocked_profiles").select("id").eq("blocker_id",state.user.id).eq("blocked_id",id).maybeSingle()).data;
+    openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">COMPTE</span><h3>Options du profil</h3><div class="menu-grid"><button class="menu-card" data-action="report-profile" data-id="${esc(id)}"><span class="menu-icon">⚑</span><span><b>Signaler le compte</b><small>Signaler un comportement ou un contenu</small></span></button><button class="menu-card ${blocked?"":"danger-card"}" data-action="${blocked?"unblock-profile":"block-profile"}" data-id="${esc(id)}"><span class="menu-icon">${blocked?"✓":"⊘"}</span><span><b>${blocked?"Débloquer le compte":"Bloquer le compte"}</b><small>${blocked?"Autoriser à nouveau les interactions":"Empêcher les interactions avec ce compte"}</small></span></button></div></div>`);
+  }
+  async function reportProfile(id) {
+    const reason=prompt("Pourquoi souhaitez-vous signaler ce compte ?", "Comportement ou contenu inapproprié");
+    if(reason===null)return;
+    const r=await sb.from("profile_reports").upsert({reporter_id:state.user.id,reported_id:id,reason:reason.trim()||"Contenu à vérifier",status:"pending"},{onConflict:"reporter_id,reported_id"});
+    if(r.error)return toast(r.error.message); closeModal(); toast("Signalement envoyé"); await logActivity("profile_reported","Compte signalé","profile",id);
+  }
+  async function blockProfile(id) {
+    const r=await sb.from("blocked_profiles").upsert({blocker_id:state.user.id,blocked_id:id},{onConflict:"blocker_id,blocked_id"});
+    if(r.error)return toast(r.error.message); closeModal(); toast("Compte bloqué"); await logActivity("profile_blocked","Compte bloqué","profile",id);
+  }
+  async function unblockProfile(id) {
+    const r=await sb.from("blocked_profiles").delete().eq("blocker_id",state.user.id).eq("blocked_id",id);
+    if(r.error)return toast(r.error.message); closeModal(); toast("Compte débloqué");
   }
 
   async function profilePage(tab = state.profileTab) {
@@ -638,13 +674,31 @@
       ["settings","settings","Para & Conf","Compte et confidentialité"]
     ];
     const actions = [
-      ["history","history","Historique d'activité","Consulter vos activités",true],
-      ["payment","payment","Paiement","Paiements et transactions",true],
-      ["privacy","privacy","Confidentialité","Gérer vos données et accès",true],
-      ["help","help","Aide","Assistance Tafaß",true]
+      ["history","history","Historique d'activité","Vos actions enregistrées", "activity"],
+      ["payment","payment","Paiement","Vos paiements et transactions", "payment"],
+      ["privacy","privacy","Confidentialité","Vos réglages de confidentialité", "privacy"],
+      ["help","help","Aide","Assistance et signalement", "help"]
     ];
-    const card = x => `<button class="menu-card premium-menu-card" ${x[4] ? `data-action="menu-info" data-name="${esc(x[2])}"` : `data-route="${x[0]}"`} aria-label="${esc(x[2])}"><span class="menu-icon">${menuIcon(x[1])}</span><span class="menu-card-copy"><b>${esc(x[2])}</b><small title="${esc(x[3])}">${esc(x[3])}</small></span><span class="menu-arrow">›</span></button>`;
+    const card = x => `<button class="menu-card premium-menu-card" ${x[4] ? `data-action="menu-service" data-name="${esc(x[2])}" data-service="${esc(x[4])}"` : `data-route="${x[0]}"`} aria-label="${esc(x[2])}"><span class="menu-icon">${menuIcon(x[1])}</span><span class="menu-card-copy"><b>${esc(x[2])}</b><small title="${esc(x[3])}">${esc(x[3])}</small></span><span class="menu-arrow">›</span></button>`;
     simplePage("Menu", `<div class="menu-profile premium-menu-profile" data-route="profile"><button class="profile-link menu-profile-avatar" data-action="view-profile" data-id="${esc(p.id || "")}">${avatarHTML(p)}</button><div class="grow"><b>${esc(nameOf(p))}</b><small title="${esc(p.email || state.user?.email || "")}">${esc(p.email || state.user?.email || "")}</small></div><button class="small-action" data-route="profile">Profil</button></div><div class="menu-section-title">Raccourcis</div><div class="menu-grid premium-menu-grid">${items.map(card).join("")}</div><div class="menu-section-title">Services</div><div class="menu-grid premium-menu-grid">${actions.map(card).join("")}</div><div class="menu-section-title">Compte</div><div class="menu-grid premium-menu-grid"><button class="menu-card premium-menu-card danger-card" data-action="logout"><span class="menu-icon">${menuIcon("logout")}</span><span class="menu-card-copy"><b>Déconnexion</b><small>Quitter ce compte en toute sécurité</small></span><span class="menu-arrow">›</span></button></div>`);
+  }
+
+  async function servicePage(service) {
+    if(service === "activity") {
+      const r=await sb.from("activity_history").select("*").eq("user_id",state.user.id).order("created_at",{ascending:false}).limit(100);
+      return simplePage("Historique d'activité", `<div class="clean-list">${(r.data||[]).map(x=>`<div class="list-row"><div class="grow"><b>${esc(x.description||x.action_type)}</b><small>${esc(x.entity_type||"")} · ${timeAgo(x.created_at)}</small></div></div>`).join("")||`<div class="empty">Aucune activité enregistrée.</div>`}</div>`);
+    }
+    if(service === "privacy") return settingsPage();
+    if(service === "help") return simplePage("Aide", `<div class="clean-section"><h3 class="menu-section-title">Centre d'aide</h3><div class="settings-grid"><button class="setting-card" data-action="help-item" data-name="Compte"><span><b>Compte</b><small>Connexion, profil et paramètres</small></span><span>›</span></button><button class="setting-card" data-action="help-item" data-name="Sécurité"><span><b>Sécurité</b><small>Accès et protection du compte</small></span><span>›</span></button><button class="setting-card" data-action="help-item" data-name="Signalement"><span><b>Signalement</b><small>Signaler un compte ou une publication</small></span><span>›</span></button></div></div>`);
+    if(service === "payment") {
+      const r=await sb.from("payment_transactions").select("*").eq("user_id",state.user.id).order("created_at",{ascending:false}).limit(50);
+      return simplePage("Paiement", `<div class="premium-hero"><span class="eyebrow">TAFAß • PAIEMENT</span><h3>Transactions de votre compte</h3><p class="page-subtitle">Aucune transaction n'est créée automatiquement. Les opérations affichées proviennent uniquement de la base Tafaß.</p></div><div class="settings-grid"><button class="setting-card" data-action="payment-request" data-method="Airtel Money"><span><b>Airtel Money</b><small>Créer une demande de paiement</small></span><span>›</span></button><button class="setting-card" data-action="payment-request" data-method="Yas Money"><span><b>Yas Money</b><small>Créer une demande de paiement</small></span><span>›</span></button></div><div class="clean-section"><h3 class="menu-section-title">Historique</h3><div class="clean-list">${(r.data||[]).map(x=>`<div class="list-row"><div class="grow"><b>${esc(x.method)}</b><small>${esc(x.status)} · ${esc(String(x.amount))} ${esc(x.currency||"MGA")} · ${timeAgo(x.created_at)}</small></div></div>`).join("")||`<div class="empty">Aucune transaction.</div>`}</div></div>`);
+    }
+  }
+  async function createPaymentRequest(method) {
+    const amount=prompt(`Montant en MGA pour ${method} :`, ""); if(amount===null)return; const n=Number(amount); if(!Number.isFinite(n)||n<=0)return toast("Montant invalide.");
+    const r=await sb.from("payment_transactions").insert({user_id:state.user.id,method,amount:n,currency:"MGA",status:"pending"});
+    if(r.error)return toast(r.error.message); await logActivity("payment_request_created",`Demande de paiement ${method}`,"payment"); toast("Demande enregistrée"); return servicePage("payment");
   }
 
   async function settingsPage() {
@@ -686,7 +740,7 @@
       "Historique d'activité":"Les actions enregistrées par Tafaß peuvent être consultées dans votre historique.",
       "Recherche":"Les recherches effectuées peuvent être enregistrées dans votre historique de recherche."
     };
-    openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><h3>${esc(name)}</h3><p class="muted" style="font-size:12px;line-height:1.65">${esc(bodies[name] || "Option Tafaß")}</p><button class="primary big" data-action="close-modal">Fermer</button></div>`);
+    openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><h3>${esc(name)}</h3><p class="muted" style="font-size:12px;line-height:1.65">${esc(bodies[name] || "Cette section est disponible dans les paramètres de votre compte.")}</p><button class="primary big" data-action="close-modal">Fermer</button></div>`);
   }
 
   async function logActivity(action_type, description, entity_type = "", entity_id = null) {
@@ -810,7 +864,6 @@
   function toggleTheme() {
     state.theme = state.theme === "dark" ? "light" : "dark";
     document.body.classList.toggle("light", state.theme === "light");
-    localStorage.setItem("tafa-theme", state.theme);
     syncThemeButton();
     if (state.user && state.route === "settings") settingsPage();
   }
@@ -820,31 +873,26 @@
   async function setupRealtime() {
     if (state.channel) await sb.removeChannel(state.channel);
     state.channel = sb.channel("tafa-live-ui")
-      .on("postgres_changes", { event:"*", schema:"public", table:"profiles" }, () => { loadProfile(); if (state.route==="search") searchPage(""); if (state.viewingProfileId && state.route==="profile") openUserProfile(state.viewingProfileId); })
+      .on("postgres_changes", { event:"*", schema:"public", table:"profiles" }, () => { loadProfile(); if (state.route==="search") searchPage($("searchInput")?.value||""); if (state.viewingProfileId && state.route==="profile") openUserProfile(state.viewingProfileId); })
       .on("postgres_changes", { event:"*", schema:"public", table:"posts" }, async () => { await loadPosts(); if (["home","profile","videos","reels","saved"].includes(state.route)) render(); })
       .on("postgres_changes", { event:"*", schema:"public", table:"comments" }, async () => { await loadPosts(); if (["home","profile"].includes(state.route)) render(); })
       .on("postgres_changes", { event:"*", schema:"public", table:"comment_likes" }, async () => { if (["home","profile"].includes(state.route)) render(); })
       .on("postgres_changes", { event:"*", schema:"public", table:"post_reactions" }, async () => { await loadPosts(); if (["home","profile"].includes(state.route)) render(); })
       .on("postgres_changes", { event:"*", schema:"public", table:"post_shares" }, async () => { await loadPosts(); if (["home","profile"].includes(state.route)) render(); })
       .on("postgres_changes", { event:"*", schema:"public", table:"notifications" }, () => { updateBadges(); if (state.route==="notifications") notificationsPage(); })
-      .on("postgres_changes", { event:"*", schema:"public", table:"messages" }, () => {
-        if (state.route==="messages") state.selectedConversation ? openConversation(state.selectedConversation) : messagesPage();
-      })
-      .on("postgres_changes", { event:"*", schema:"public", table:"friend_requests" }, () => { if (state.route==="friends") friendsPage(); })
-      .on("postgres_changes", { event:"*", schema:"public", table:"friendships" }, () => { if (state.route==="friends") friendsPage(); })
+      .on("postgres_changes", { event:"*", schema:"public", table:"messages" }, payload => { updateBadges(); if (state.route==="messages") state.selectedConversation ? openConversation(state.selectedConversation) : messagesPage(); })
+      .on("postgres_changes", { event:"*", schema:"public", table:"friend_requests" }, () => { updateBadges(); if (state.route==="friends") friendsPage(); if (state.viewingProfileId && state.route==="profile") openUserProfile(state.viewingProfileId); })
+      .on("postgres_changes", { event:"*", schema:"public", table:"friendships" }, () => { if (state.route==="friends") friendsPage(); if (state.viewingProfileId && state.route==="profile") openUserProfile(state.viewingProfileId); })
+      .on("postgres_changes", { event:"*", schema:"public", table:"follows" }, () => { if (state.route==="profile") state.viewingProfileId ? openUserProfile(state.viewingProfileId) : profilePage(state.profileTab); })
       .on("postgres_changes", { event:"*", schema:"public", table:"groups" }, () => { if (state.route==="groups") genericListPage("groups"); })
       .on("postgres_changes", { event:"*", schema:"public", table:"group_members" }, () => { if (state.route==="groups") genericListPage("groups"); })
       .on("postgres_changes", { event:"*", schema:"public", table:"pages" }, () => { if (state.route==="pages") genericListPage("pages"); })
       .on("postgres_changes", { event:"*", schema:"public", table:"page_followers" }, () => { if (state.route==="pages") genericListPage("pages"); })
       .on("postgres_changes", { event:"*", schema:"public", table:"saved_posts" }, () => { if (state.route==="saved") genericListPage("saved"); })
       .on("postgres_changes", { event:"*", schema:"public", table:"user_settings" }, () => { if (state.route==="settings") settingsPage(); })
-      .on("postgres_changes", { event:"*", schema:"public", table:"tafab_listings" }, () => { if (state.route==="tafab") tafabPage(); })
-      .on("postgres_changes", { event:"*", schema:"public", table:"tafab_listing_messages" }, () => { if (state.route==="tafab") tafabPage(); })
-      .on("postgres_changes", { event:"*", schema:"public", table:"tafab_ads" }, () => { if (state.route==="tafab") tafabPage(); })
-      .subscribe((status) => {
-        if (status === "SUBSCRIBED") console.info("Tafaß Realtime: connecté");
-        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") console.warn("Tafaß Realtime: reconnexion nécessaire", status);
-      });
+      .on("postgres_changes", { event:"*", schema:"public", table:"search_history" }, () => { if (state.route==="search") searchPage($("searchInput")?.value||""); })
+      .on("postgres_changes", { event:"*", schema:"public", table:"activity_history" }, () => { if (state.route==="menu") menuPage(); })
+      .subscribe(status => { if(status==="SUBSCRIBED") console.info("Tafaß Realtime: connecté"); });
   }
 
   async function enterApp() {
@@ -879,6 +927,9 @@
       return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">PUBLICATION</span><h3>Actions</h3><div class="menu-grid"><button class="menu-card" data-action="save-post" data-id="${esc(id)}"><span class="menu-icon">♡</span><span><b>Enregistrer</b><small>Disponible pour tous</small></span></button>${owner ? `<button class="menu-card" data-action="edit-post" data-id="${esc(id)}"><span class="menu-icon">✎</span><span><b>Modifier</b><small>Uniquement votre publication</small></span></button><button class="menu-card danger-card" data-action="delete-post" data-id="${esc(id)}"><span class="menu-icon">⌫</span><span><b>Supprimer</b><small>Vous êtes le propriétaire</small></span></button>` : `<button class="menu-card" data-action="report-post" data-id="${esc(id)}"><span class="menu-icon">⚑</span><span><b>Signaler</b><small>Signaler cette publication</small></span></button>`}</div></div>`);
     }
     if (action === "menu-info") { settingInfo(actionEl.dataset.name || "Menu"); return; }
+    if (action === "menu-service") return servicePage(actionEl.dataset.service);
+    if (action === "help-item") return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><h3>${esc(actionEl.dataset.name||"Aide")}</h3><p class="muted">Consultez les réglages de Tafaß ou utilisez les boutons de signalement disponibles sur les profils et publications.</p><button class="primary big" data-action="close-modal">Fermer</button></div>`);
+    if (action === "payment-request") return createPaymentRequest(actionEl.dataset.method);
     if (action === "save-post") { const r=await sb.from("saved_posts").upsert({user_id:state.user.id,post_id:id},{onConflict:"user_id,post_id"}); toast(r.error?r.error.message:"Publication enregistrée"); closeModal(); return; }
     if (action === "edit-post") return editPost(id);
     if (action === "save-post-edit") return savePostEdit(id);
@@ -891,10 +942,21 @@
     if (action === "view-profile") {
       return openUserProfile(id);
     }
+    if (action === "search-post") {
+      const p=(await sb.from("posts").select("*").eq("id",id).maybeSingle()).data;
+      if(!p)return toast("Publication introuvable");
+      const ids=[p.user_id].filter(Boolean); const pp=ids.length?await sb.from("profiles").select("*").in("id",ids):{data:[]}; const author=(pp.data||[])[0]||state.profile;
+      return openModal(`<div class="modal-box post-preview-modal"><button class="modal-close" data-action="close-modal">×</button>${await postHTML({...p,author})}</div>`);
+    }
     if (action === "profile-tab") return profilePage(actionEl.dataset.tab);
     if (action === "edit-profile") return editProfile();
     if (action === "save-profile") return saveProfile();
-    if (action === "profile-more") return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><h3>Profil</h3><p class="muted" style="font-size:11px">Votre profil Tafaß est visible selon vos réglages de confidentialité.</p></div>`);
+    if (action === "profile-more") return profileMore(id);
+    if (action === "message-user") return startConversation(id);
+    if (action === "remove-friend") return removeFriend(id);
+    if (action === "report-profile") return reportProfile(id);
+    if (action === "block-profile") return blockProfile(id);
+    if (action === "unblock-profile") return unblockProfile(id);
     if (action === "new-message") return newMessage();
     if (action === "start-conversation") return startConversation(id);
     if (action === "open-conversation") return openConversation(id);
@@ -930,7 +992,10 @@
       if(r.error)return toast(r.error.message);
       closeModal(); toast("Page créée"); return genericListPage("pages");
     }
-    if (action === "page-open" || action === "group-open") return toast("Élément sélectionné");
+    if (action === "page-open") { const x=(await sb.from("pages").select("*").eq("id",id).maybeSingle()).data; if(!x)return toast("Page introuvable"); const f=(await sb.from("page_followers").select("id").eq("page_id",id).eq("user_id",state.user.id).maybeSingle()).data; return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">PAGE</span><h3>${esc(x.name)}</h3><p>${esc(x.bio||"")}</p><p class="muted">${esc(x.category||"Autre")}</p><button class="primary big" data-action="toggle-page-follow" data-id="${esc(id)}">${f?"Ne plus suivre":"Suivre la Page"}</button></div>`); }
+    if (action === "group-open") { const x=(await sb.from("groups").select("*").eq("id",id).maybeSingle()).data; if(!x)return toast("Groupe introuvable"); const m=(await sb.from("group_members").select("id").eq("group_id",id).eq("user_id",state.user.id).maybeSingle()).data; return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">GROUPE</span><h3>${esc(x.name)}</h3><p>${esc(x.description||"")}</p><p class="muted">${esc(x.privacy||"public")}</p><button class="primary big" data-action="toggle-group-member" data-id="${esc(id)}">${m?"Quitter le groupe":"Rejoindre le groupe"}</button></div>`); }
+    if (action === "toggle-page-follow") { const f=(await sb.from("page_followers").select("id").eq("page_id",id).eq("user_id",state.user.id).maybeSingle()).data; const r=f?await sb.from("page_followers").delete().eq("id",f.id):await sb.from("page_followers").insert({page_id:id,user_id:state.user.id}); if(r.error)return toast(r.error.message); closeModal(); toast(f?"Page retirée de vos suivis":"Page suivie"); if(state.route==="pages") await genericListPage("pages"); return; }
+    if (action === "toggle-group-member") { const m=(await sb.from("group_members").select("id").eq("group_id",id).eq("user_id",state.user.id).maybeSingle()).data; const r=m?await sb.from("group_members").delete().eq("id",m.id):await sb.from("group_members").insert({group_id:id,user_id:state.user.id,role:"member"}); if(r.error)return toast(r.error.message); closeModal(); toast(m?"Vous avez quitté le groupe":"Vous avez rejoint le groupe"); if(state.route==="groups") await genericListPage("groups"); return; }
     if (action === "tafab-ad") {
       const a=(await sb.from("tafab_ads").select("*").eq("id",id).maybeSingle()).data;
       if(!a)return toast("Publication introuvable");
@@ -938,9 +1003,6 @@
     }
     if (action === "logout") return logout();
     if (action === "close-modal") return closeModal();
-    if (action === "add-story") return toast("Les stories seront disponibles après activation du stockage dédié.");
-    if (action === "story") return toast("Story consultable prochainement.");
-    if (action === "mood") return toast("Choisissez une humeur dans une prochaine version.");
   });
 
   document.querySelectorAll("[data-password-toggle]").forEach(btn => btn.addEventListener("click", () => {
