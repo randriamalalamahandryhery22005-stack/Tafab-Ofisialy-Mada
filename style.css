@@ -1533,3 +1533,29 @@ body.light .profile-edit-modal.premium-profile-editor-v4 .profile-field-card-v2 
 /* Auth must not flash over the splash or appear for a frame during bootstrap. */
 html.app-boot #auth,html.app-boot #app{visibility:hidden!important;opacity:0!important;pointer-events:none!important}
 html.app-boot #splash{display:flex!important;visibility:visible!important;opacity:1!important}
+
+/* =========================================================
+   TAFASS FINAL STABILITY LAYER — navigation, back, titles
+   ========================================================= */
+.auth-back:not(.hidden){display:grid;place-items:center;width:40px;height:40px;border-radius:13px;background:rgba(255,255,255,.055);border:1px solid var(--line);color:var(--text);font-size:28px;line-height:1;z-index:3;transition:transform .16s ease,background .16s ease}
+.auth-back:not(.hidden):hover{transform:translateX(-2px);background:rgba(61,123,255,.12)}
+.clean-page-header{align-items:center;gap:12px}
+.clean-page-header > .page-back,.page-header > .page-back{flex:0 0 auto}
+.page-back{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-width:74px;height:38px;padding:0 10px;border:1px solid var(--line);border-radius:12px;background:rgba(18,29,49,.72);color:var(--text-2);font-weight:800;transition:transform .16s ease,background .16s ease,border-color .16s ease}
+.page-back:hover{transform:translateX(-2px);background:rgba(48,110,255,.12);border-color:var(--line-strong)}
+.page-back > span{font-size:24px;line-height:1;margin-top:-2px}.page-back small{font-size:10px;font-weight:800}
+.page-title-logo{display:inline-grid;place-items:center;width:30px;height:30px;margin-right:8px;vertical-align:-7px;border-radius:10px;background:linear-gradient(145deg,#1c67ff,#7953ff);color:#fff;box-shadow:0 8px 20px rgba(36,107,255,.22)}
+.page-title-logo svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.clean-page-header h2{display:flex;align-items:center;gap:0;min-width:0}
+body.light .page-back{background:#f2f6fc;color:#253954;border-color:#d5dfec}
+body.light .auth-back:not(.hidden){background:#f0f4fa;color:#253954;border-color:#d5dfec}
+/* One primary desktop navigation source: the left rail. */
+@media(min-width:721px){.desktop-nav{display:none!important}.topbar{gap:14px}.top-left{flex:1}.top-actions{margin-left:auto}}
+/* Never allow the bottom navigation to compete with desktop navigation. */
+@media(min-width:721px){.bottom-nav{display:none!important}}
+@media(max-width:720px){.desktop-nav{display:none!important}.desktop-search{display:none!important}.page-back{min-width:66px;height:36px;padding:0 8px}.page-back small{font-size:9px}.page-title-logo{width:27px;height:27px;border-radius:9px;margin-right:7px}.page-title-logo svg{width:15px;height:15px}.clean-page-header{gap:8px}}
+/* Stable splash: no indefinite wait and no accidental scroll behind it. */
+html.app-boot,html.app-boot body{overflow:hidden!important}
+.splash-screen.splash-hide{opacity:0;visibility:hidden;pointer-events:none;transition:opacity .42s ease,visibility 0s linear .42s}
+.splash-screen{transition:opacity .2s ease}
+.auth-onboarding-back{margin-bottom:14px}

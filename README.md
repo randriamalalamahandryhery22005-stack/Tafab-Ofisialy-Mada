@@ -1,16 +1,26 @@
-# Tafaß V30 STABLE
+# Tafaß — ZIP final stable
 
-V30 is based on the last working Tafaß V29 build and applies only stability/UI fixes:
+Ce ZIP contient la version finale web/APK de Tafaß avec une interface premium responsive et une navigation unifiée.
 
-- readable light mode;
-- profile editor with visible fixed Save/Cancel actions on small screens;
-- account information UI with non-clipped phone field;
-- splash gate so the app is revealed only after the splash has finished;
-- one canonical payment interface and duplicate pending-request protection;
-- payment requests stored in Supabase (not a fake success screen);
-- responsive safe-area spacing for small phones.
+## Runtime
+- `index.html` — Splash, Connexion, Inscription, récupération de mot de passe et shell de l'application.
+- `style.css` — interface premium, sombre/clair, responsive Android/web.
+- `app.js` — Supabase Auth, navigation, Actualités, Amis, Messages, Alertes, Pages, Groupes, Reels, Tafaß, Recherche, Menu et Paramètres.
 
 ## Supabase
-Run `TAFASS_PAYMENT_SETUP.sql` once if `payment_transactions` does not already exist.
+- `TAFASS_COMPLETE_SCHEMA.sql` — schéma consolidé et objets complémentaires utilisés par cette version.
 
-A payment request is database-backed and auditable. Actual Airtel Money/Yas Money settlement requires the merchant/provider API and credentials; the app never marks a request as `paid` by itself.
+Le ZIP ne contient plus les anciens scripts SQL versionnés ni les copies de setup qui pouvaient provoquer des doublons. Si votre projet Supabase est déjà configuré, ne relancez pas un ancien script supprimé.
+
+## Points de stabilité
+- Splash limité dans le temps et libéré dès que l'initialisation est prête.
+- L'application complète reste cachée pendant l'authentification.
+- Authentification e-mail/téléphone avec récupération du mot de passe par lien Supabase.
+- OAuth Google/Apple conservé si les providers sont activés dans Supabase.
+- Une seule navigation desktop et une seule navigation mobile.
+- Bouton Retour avec pile de navigation pour les pages secondaires et les options du Menu.
+- Titres de pages avec identité visuelle Tafaß.
+- Mode sombre et mode clair.
+- Realtime Supabase pour les sections qui le supportent.
+
+> Important : aucune interface cliente ne peut garantir « zéro problème » sans tester les règles RLS, les buckets Storage, les providers OAuth et les données réelles du projet Supabase cible. Le code fourni évite les erreurs connues côté front et le schéma consolide les objets nécessaires, mais la configuration Supabase reste indispensable.

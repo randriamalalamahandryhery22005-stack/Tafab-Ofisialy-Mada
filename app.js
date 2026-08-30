@@ -12,7 +12,7 @@ document.documentElement.classList.add("app-boot");
   const esc = s => String(s ?? "").replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]));
   const routes = ["home","friends","search","messages","notifications","profile","reels","pages","groups","saved","menu","tafab","settings"];
   const state = {
-    user: null, profile: null, route: "home", posts: [], friends: [], stories: [],
+    user: null, profile: null, route: "home", navStack: ["home"], backOverride: null, posts: [], friends: [], stories: [],
     channel: null, theme: "dark", entering: false,
     profileTab: "posts", friendsTab: "suggestions", selectedConversation: null, viewingProfileId: null, renderToken: 0
   };
@@ -528,7 +528,10 @@ document.documentElement.classList.add("app-boot");
   async function openConversation(id) {
     const token = state.renderToken;
     state.selectedConversation = id;
-    if (state.route !== "messages") { state.route = "messages"; history.replaceState(null, "", "#messages"); document.querySelectorAll("[data-route]").forEach(el => el.classList.toggle("active", el.dataset.route === "messages")); }
+    if (state.route !== "messages") {
+      if (state.navStack[state.navStack.length - 1] !== "messages") state.navStack.push("messages");
+      state.route = "messages"; history.replaceState(null, "", "#messages"); document.querySelectorAll("[data-route]").forEach(el => el.classList.toggle("active", el.dataset.route === "messages"));
+    }
     const { data: memberCheck } = await sb.from("conversation_members").select("user_id").eq("conversation_id", id).eq("user_id", state.user.id).maybeSingle();
     if (!memberCheck) return toast("Conversation inaccessible.");
     const { data: msgs } = await sb.from("messages").select("*").eq("conversation_id", id).order("created_at", { ascending: true }).limit(200);
@@ -539,7 +542,7 @@ document.documentElement.classList.add("app-boot");
     const map = new Map((profiles || []).map(p => [p.id, p]));
     const otherId = (await sb.from("conversation_members").select("user_id").eq("conversation_id", id).neq("user_id", state.user.id).maybeSingle()).data?.user_id;
     const otherProfile = otherId ? (await sb.from("profiles").select("*").eq("id", otherId).maybeSingle()).data : null;
-    $("content").innerHTML = `<section class="clean-page messages-page conversation-page"><div class="page-header clean-page-header"><button class="text-button" data-route="messages">‹ Messages</button><div class="conversation-title">${avatarHTML(otherProfile || state.profile,"avatar conversation-avatar")}<h2>${esc(otherProfile ? nameOf(otherProfile) : "Discussion")}</h2></div><span></span></div><div class="message-list clean-message-list">${(msgs||[]).map(m=>`<div class="message ${m.sender_id===state.user.id?"mine":""}"><div>${esc(m.content)}</div><small>${timeAgo(m.created_at)}</small></div>`).join("")||`<div class="empty">Dites bonjour 👋</div>`}</div><form id="messageForm" class="comment-form clean-message-form"><input id="messageText" placeholder="Écrire un message..." required><button>Envoyer</button></form></section>`;
+    $("content").innerHTML = `<section class="clean-page messages-page conversation-page"><div class="page-header clean-page-header"><button class="page-back" data-action="page-back" type="button"><span aria-hidden="true">‹</span><small>Messages</small></button><div class="conversation-title">${avatarHTML(otherProfile || state.profile,"avatar conversation-avatar")}<h2>${esc(otherProfile ? nameOf(otherProfile) : "Discussion")}</h2></div><span></span></div><div class="message-list clean-message-list">${(msgs||[]).map(m=>`<div class="message ${m.sender_id===state.user.id?"mine":""}"><div>${esc(m.content)}</div><small>${timeAgo(m.created_at)}</small></div>`).join("")||`<div class="empty">Dites bonjour 👋</div>`}</div><form id="messageForm" class="comment-form clean-message-form"><input id="messageText" placeholder="Écrire un message..." required><button>Envoyer</button></form></section>`;
     $("messageForm").addEventListener("submit", async e => { e.preventDefault(); const text=$("messageText").value.trim(); if(!text)return; const r=await sb.from("messages").insert({conversation_id:id,sender_id:state.user.id,content:text,is_read:false}); if(r.error)toast(r.error.message); else {$("messageText").value=""; await openConversation(id);} });
   }
 
@@ -945,6 +948,7 @@ document.documentElement.classList.add("app-boot");
   }
 
   function menuPage() {
+    state.backOverride = null;
     const p = state.profile || {};
     const items = [
       ["profile","profile","Profil","Voir votre profil"],
@@ -968,6 +972,7 @@ document.documentElement.classList.add("app-boot");
   }
 
   async function servicePage(service) {
+    state.backOverride = "menu";
     if(service === "activity") {
       const r=await sb.from("activity_history").select("*").eq("user_id",state.user.id).order("created_at",{ascending:false}).limit(100);
       return simplePage("Historique d'activité", `<div class="clean-list">${(r.data||[]).map(x=>`<div class="list-row"><div class="grow"><b>${esc(x.description||x.action_type)}</b><small>${esc(x.entity_type||"")} · ${timeAgo(x.created_at)}</small></div></div>`).join("")||`<div class="empty">Aucune activité enregistrée.</div>`}</div>`);
@@ -1126,11 +1131,52 @@ document.documentElement.classList.add("app-boot");
     closeModal(); toast("Message envoyé en temps réel");
   }
 
+  const PAGE_ICONS = {
+    home:"home", friends:"friends", messages:"messages", notifications:"history", profile:"profile",
+    reels:"reels", pages:"pages", groups:"groups", saved:"saved", menu:"settings", tafab:"tafab",
+    settings:"settings", search:"search", activity:"history", payment:"payment", help:"help"
+  };
+  function pageTitleIcon(routeOrTitle) {
+    const type = PAGE_ICONS[routeOrTitle] || (String(routeOrTitle).toLowerCase().includes("message") ? "messages" : String(routeOrTitle).toLowerCase().includes("ami") ? "friends" : "settings");
+    return menuIcon(type);
+  }
+  function decoratePageHeader(route = state.route) {
+    const root = $("content")?.firstElementChild;
+    if (!root || route === "home") return;
+    const header = root.querySelector(".page-header");
+    if (!header) return;
+    const h = header.querySelector("h1,h2,h3");
+    if (h && !h.querySelector(".page-title-logo")) h.insertAdjacentHTML("afterbegin", `<span class="page-title-logo" aria-hidden="true">${pageTitleIcon(route)}</span>`);
+    if (!header.querySelector('[data-action="page-back"]') && !header.querySelector("[data-page-back]")) {
+      const back = document.createElement("button");
+      back.type = "button"; back.className = "page-back"; back.dataset.action = "page-back";
+      back.setAttribute("aria-label", "Retour"); back.innerHTML = `<span aria-hidden="true">‹</span><small>Retour</small>`;
+      header.insertBefore(back, header.firstChild);
+    }
+  }
+  function goBack() {
+    if (state.backOverride) {
+      const target = state.backOverride; state.backOverride = null;
+      state.renderToken++; state.route = target; state.selectedConversation = null;
+      state.navStack = [...state.navStack.filter(r => r !== target), target];
+      history.replaceState(null, "", "#" + target);
+      return render();
+    }
+    if (state.navStack.length > 1) {
+      state.navStack.pop();
+      const previous = state.navStack[state.navStack.length - 1] || "home";
+      state.renderToken++; state.route = previous; state.selectedConversation = null;
+      history.replaceState(null, "", "#" + previous);
+      return render();
+    }
+    return navigate("home", { replaceStack: true });
+  }
   function simplePage(title, body) {
-    const clean = ["Amis","Messages","Alertes","Tafaß","Menu"].includes(title);
+    const clean = ["Amis","Messages","Alertes","Tafaß","Menu","Rechercher","Pages","Groupes","Reels","Enregistrements","Para & Conf","Profil","Aide","Paiement","Historique d'activité"].includes(title);
     $("content").innerHTML = clean
-      ? `<section class="clean-page clean-page-shell"><div class="page-header clean-page-header"><h2>${esc(title)}</h2></div>${body}</section>`
+      ? `<section class="clean-page clean-page-shell"><div class="page-header clean-page-header"><div><h2>${esc(title)}</h2></div></div>${body}</section>`
       : `<div class="card"><div class="page-header"><h2>${esc(title)}</h2></div>${body}</div>`;
+    decoratePageHeader(state.route);
   }
   function openModal(html) { $("modal").className = "modal"; $("modal").innerHTML = html; }
   function closeModal() { $("modal").className = "modal hidden"; $("modal").innerHTML = ""; }
@@ -1172,6 +1218,7 @@ document.documentElement.classList.add("app-boot");
       else if (route === "tafab") await tafabPage();
       else if (route === "settings") await settingsPage();
       if (token !== state.renderToken || route !== state.route) return;
+      decoratePageHeader(route);
       const pageRoot = $("content")?.firstElementChild;
       if (pageRoot) pageRoot.dataset.pageRoute = route;
       document.querySelectorAll("[data-route]").forEach(el => el.classList.toggle("active", el.dataset.route === state.route));
@@ -1186,12 +1233,17 @@ document.documentElement.classList.add("app-boot");
     }
   }
 
-  function navigate(route) {
+  function navigate(route, options = {}) {
     if (!routes.includes(route)) route = "home";
     if (state.route === route && document.querySelector(`#content [data-page-route="${route}"]`)) {
-      // A route can have been rendered partially after a failed async query; allow a second tap to retry.
       if (pageLoading) return;
+      return;
     }
+    if (!options.replaceStack && state.route !== route) {
+      const last = state.navStack[state.navStack.length - 1];
+      if (last !== route) state.navStack.push(route);
+    }
+    if (options.replaceStack) state.navStack = [route];
     state.renderToken++;
     state.route = route;
     if (route === "profile") state.viewingProfileId = null;
@@ -1303,7 +1355,7 @@ document.documentElement.classList.add("app-boot");
       view.className = "auth-view oauth-onboarding-view-v24";
       shell.appendChild(view);
     }
-    view.innerHTML = `<div class="oauth-onboarding-head-v24">
+    view.innerHTML = `<button type="button" class="page-back auth-onboarding-back" data-action="auth-onboarding-back"><span aria-hidden="true">‹</span><small>Connexion</small></button><div class="oauth-onboarding-head-v24">
       <span class="eyebrow">TAFAß • PREMIÈRE CONNEXION</span>
       <h1>Complétez votre compte</h1>
       <p class="muted">Votre connexion Google/Apple est réussie. Complétez les informations obligatoires pour déverrouiller Tafaß.</p>
@@ -1402,7 +1454,12 @@ document.documentElement.classList.add("app-boot");
     }
   }
 
-  function showLogin() { ["signupView","forgotPasswordView","resetPasswordView"].forEach(id => $(id)?.classList.add("hidden")); $("loginView").classList.remove("hidden"); $("auth").classList.remove("hidden"); }
+  function syncAuthBack() {
+    const b = document.querySelector("[data-auth-back]");
+    const loginVisible = !$("loginView")?.classList.contains("hidden");
+    if (b) b.classList.toggle("hidden", loginVisible);
+  }
+  function showLogin() { ["signupView","forgotPasswordView","resetPasswordView"].forEach(id => $(id)?.classList.add("hidden")); $("loginView").classList.remove("hidden"); $("auth").classList.remove("hidden"); syncAuthBack(); }
   state.detectedCountry = detectCountry();
   let signupStep = 1;
   function setSignupStep(step) {
@@ -1438,21 +1495,21 @@ document.documentElement.classList.add("app-boot");
   function showSignup() {
     ["loginView","forgotPasswordView","resetPasswordView"].forEach(id => $(id)?.classList.add("hidden"));
     $("signupView").classList.remove("hidden"); $("auth").classList.remove("hidden");
-    setSignupStep(1);
+    syncAuthBack(); setSignupStep(1);
     $("signupMsg").textContent="";
     $("firstName")?.focus();
   }
   function showForgotPassword() {
     ["loginView","signupView","resetPasswordView"].forEach(id => $(id)?.classList.add("hidden"));
     $("forgotPasswordView")?.classList.remove("hidden");
-    $("auth")?.classList.remove("hidden");
+    $("auth")?.classList.remove("hidden"); syncAuthBack();
     if ($("forgotEmail") && $("loginEmail")?.value.includes("@")) $("forgotEmail").value = $("loginEmail").value.trim();
     $("forgotEmail")?.focus();
   }
   function showResetPassword(message="") {
     ["loginView","signupView","forgotPasswordView"].forEach(id => $(id)?.classList.add("hidden"));
     $("resetPasswordView")?.classList.remove("hidden");
-    $("auth")?.classList.remove("hidden");
+    $("auth")?.classList.remove("hidden"); syncAuthBack();
     if ($("resetMsg")) $("resetMsg").textContent = message;
   }
   function resetRedirectUrl() {
@@ -1520,6 +1577,8 @@ document.documentElement.classList.add("app-boot");
       const owner = post?.user_id === state.user.id;
       return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">PUBLICATION</span><h3>Actions</h3><div class="menu-grid"><button class="menu-card" data-action="save-post" data-id="${esc(id)}"><span class="menu-icon">♡</span><span><b>Enregistrer</b><small>Disponible pour tous</small></span></button>${owner ? `<button class="menu-card" data-action="edit-post" data-id="${esc(id)}"><span class="menu-icon">✎</span><span><b>Modifier</b><small>Uniquement votre publication</small></span></button><button class="menu-card danger-card" data-action="delete-post" data-id="${esc(id)}"><span class="menu-icon">⌫</span><span><b>Supprimer</b><small>Vous êtes le propriétaire</small></span></button>` : `<button class="menu-card" data-action="report-post" data-id="${esc(id)}"><span class="menu-icon">⚑</span><span><b>Signaler</b><small>Signaler cette publication</small></span></button>`}</div></div>`);
     }
+    if (action === "page-back") return goBack();
+    if (action === "auth-onboarding-back") { state.entering=false; state.user=null; sb.auth.signOut().catch(()=>{}); return showLogin(); }
     if (action === "menu-route") { const target = actionEl.dataset.routeTarget; if (target) navigate(target); return; }
     if (action === "retry-route") { const target = actionEl.dataset.routeTarget; if (target) { state.renderToken++; state.route=target; await render(); } return; }
     if (action === "menu-info") { settingInfo(actionEl.dataset.name || "Menu"); return; }
@@ -1676,6 +1735,7 @@ document.documentElement.classList.add("app-boot");
     input.type = input.type === "password" ? "text" : "password";
   }));
   $("showSignup").addEventListener("click", showSignup);
+  document.querySelector("[data-auth-back]")?.addEventListener("click", showLogin);
   $("showLogin").addEventListener("click", showLogin);
   $("forgotPassword")?.addEventListener("click", showForgotPassword);
   $("forgotBackLogin")?.addEventListener("click", showLogin);
@@ -1718,20 +1778,25 @@ document.documentElement.classList.add("app-boot");
   $("themeBtn").addEventListener("click", toggleTheme);
   syncThemeButton();
   $("modal").addEventListener("click", e => { if (e.target.id === "modal") closeModal(); });
-  $("globalSearch").addEventListener("keydown", e => { if (e.key === "Enter") { state.route="search"; history.replaceState(null,"","#search"); searchPage(e.target.value); } });
+  $("globalSearch").addEventListener("keydown", e => { if (e.key === "Enter") { const q=e.target.value; navigate("search"); setTimeout(()=>{ const input=$("searchInput"); if(input){input.value=q; searchPage(q);} },0); } });
   window.addEventListener("hashchange", () => { const r=location.hash.slice(1); if(routes.includes(r) && r !== state.route) navigate(r); });
+  const initialRoute = routes.includes(location.hash.slice(1)) ? location.hash.slice(1) : "home";
+  state.route = initialRoute; state.navStack = [initialRoute];
 
   document.body.classList.toggle("light", state.theme === "light");
 
-  // Splash: durée minimale pour laisser le chargement des points être visible.
+  // Splash stable : animation courte, puis sortie dès que l'initialisation est prête.
   const splashStartedAt = Date.now();
+  const SPLASH_MIN_MS = 900;
+  const SPLASH_MAX_MS = 4500;
   let splashFinished = false;
   let splashResolve;
   const splashReady = new Promise(resolve => { splashResolve = resolve; });
   let splashTimer = null;
   const finishSplash = () => {
     if (splashFinished) return;
-    const wait = Math.max(0, 3200 - (Date.now() - splashStartedAt));
+    const elapsed = Date.now() - splashStartedAt;
+    const wait = Math.max(0, SPLASH_MIN_MS - elapsed);
     clearTimeout(splashTimer);
     splashTimer = setTimeout(() => {
       if (splashFinished) return;
@@ -1741,10 +1806,10 @@ document.documentElement.classList.add("app-boot");
       const splash = $("splash");
       if (!splash) return;
       splash.classList.add("splash-hide");
-      setTimeout(() => splash.remove(), 520);
+      setTimeout(() => splash.remove(), 420);
     }, wait);
   };
-  const splashFallback = setTimeout(finishSplash, 6500);
+  const splashFallback = setTimeout(finishSplash, SPLASH_MAX_MS);
 
   sb.auth.onAuthStateChange((event, session) => {
     state.user = session?.user || null;
