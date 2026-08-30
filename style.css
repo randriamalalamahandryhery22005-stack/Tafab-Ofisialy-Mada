@@ -611,3 +611,52 @@ body.light .profile-main-premium .profile-avatar{border-color:#f3f6fb}
   .menu-card b{font-size:10px}
   .menu-card small{font-size:8px}
 }
+
+/* =========================================================
+   TAFAß V10 — PROFIL / RÉACTIONS / COMMENTAIRES PREMIUM
+   ========================================================= */
+.profile-edit-top{display:none!important}
+.profile-edit-modal{max-width:620px!important}
+.premium-profile-editor .profile-editor-preview{position:relative;height:145px;border-radius:18px;overflow:hidden;margin-bottom:16px;background:var(--surface-2);border:1px solid var(--line)}
+.editor-cover-preview{position:absolute;inset:0;background-size:cover;background-position:center;background-color:#13213b}
+.editor-cover-preview:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(4,8,17,.08),rgba(4,8,17,.65))}
+.editor-avatar-preview{position:absolute;left:20px;bottom:-18px;width:86px;height:86px;border-radius:50%;overflow:hidden;border:4px solid var(--bg);background:var(--surface-2);z-index:2}
+.editor-avatar-preview .avatar{width:100%;height:100%}
+.premium-profile-editor .profile-media-pickers{margin-top:28px}
+.premium-picker{position:relative;display:flex!important;flex-direction:column;gap:4px!important;align-items:flex-start!important;padding:14px!important;border:1px solid var(--line)!important;border-radius:14px!important;background:var(--surface-2)!important;cursor:pointer}
+.premium-picker span{font-size:12px;font-weight:800;color:var(--text)}
+.premium-picker small{font-size:9px;color:var(--muted)}
+.premium-picker input{width:100%;font-size:10px}
+.premium-textarea{width:100%;min-height:150px;margin:12px 0 16px;resize:vertical}
+
+/* Réactions visuelles */
+.reaction-summary{display:flex;align-items:center;gap:4px;min-width:0;flex-wrap:wrap}
+.reaction-chip{display:inline-flex;align-items:center;gap:3px;font-size:10px}
+.reaction-chip i{font-style:normal;font-size:14px;line-height:1}
+.reaction-chip b{font-size:9px;color:var(--muted)}
+.reaction-picker-premium{display:flex;gap:6px;flex-wrap:wrap;padding:10px 15px;border-top:1px solid var(--line);background:rgba(20,31,52,.55)}
+.reaction-picker-premium button{display:flex;align-items:center;gap:5px;padding:7px 9px;border-radius:12px;border:1px solid var(--line);background:var(--surface-2);color:var(--text);cursor:pointer}
+.reaction-picker-premium button span{font-size:18px;line-height:1}
+.reaction-picker-premium button small{font-size:9px;font-weight:700}
+.reaction-picker-premium button:hover{transform:translateY(-1px);border-color:#397fff}
+.share-summary{display:block;padding:6px 15px 0;color:var(--muted);font-size:9px;overflow-wrap:anywhere}
+.comment-actions{display:flex;gap:10px;margin-top:6px}
+.comment-actions button{font-size:9px;color:var(--muted);padding:0;background:none;border:0;cursor:pointer}
+.comment-actions button:hover{color:var(--text)}
+.comment-author-line{display:flex;align-items:center;gap:7px}
+.comment-author-line small{font-size:8px;color:var(--muted)}
+.comment-text{margin-top:3px;white-space:pre-wrap;overflow-wrap:anywhere}
+.comment-depth-1{margin-left:28px}.comment-depth-2{margin-left:48px}.comment-depth-3{margin-left:68px}
+.reply-form{display:flex;gap:6px;margin-top:7px}.reply-form input{height:32px;font-size:10px}.reply-form button{height:32px;padding:0 9px;border-radius:8px;background:#1d68ff;color:#fff;font-size:9px;font-weight:750}
+
+/* Tafaß: aucune donnée locale, rendu uniquement depuis Supabase */
+.clean-tafab-hero{margin-bottom:12px}
+
+@media(max-width:720px){
+  .premium-profile-editor .profile-editor-preview{height:125px}
+  .editor-avatar-preview{width:76px;height:76px;left:14px}
+  .reaction-picker-premium{padding:9px 10px}
+  .reaction-picker-premium button{padding:7px 8px}
+  .reaction-picker-premium button small{display:none}
+  .comment-depth-1{margin-left:16px}.comment-depth-2{margin-left:28px}.comment-depth-3{margin-left:38px}
+}

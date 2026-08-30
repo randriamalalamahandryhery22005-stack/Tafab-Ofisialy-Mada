@@ -84,13 +84,29 @@
     state.posts = state.posts.map(p => ({ ...p, author: map.get(p.user_id) }));
   }
 
+  const reactionMeta = {
+    like: ["J’aime", "👍"], love: ["J’adore", "❤️"], haha: ["Haha", "😂"],
+    wow: ["Waouh", "😮"], sad: ["Triste", "😢"], angry: ["En colère", "😡"]
+  };
   async function reactionsFor(postId) {
     const { data } = await sb.from("post_reactions").select("reaction_type,user_id").eq("post_id", postId);
     return data || [];
   }
   async function commentsFor(postId) {
-    const { data } = await sb.from("comments").select("*").eq("post_id", postId).order("created_at", { ascending: true }).limit(50);
-    return data || [];
+    const { data } = await sb.from("comments").select("*").eq("post_id", postId).order("created_at", { ascending: true }).limit(100);
+    const rows = data || [];
+    const ids = [...new Set(rows.map(c => c.user_id).filter(Boolean))];
+    const { data: profiles } = ids.length ? await sb.from("profiles").select("*").in("id", ids) : { data: [] };
+    const map = new Map((profiles || []).map(x => [x.id, x]));
+    return rows.map(c => ({ ...c, author: map.get(c.user_id) }));
+  }
+  async function sharersFor(postId) {
+    const { data } = await sb.from("post_shares").select("user_id,created_at").eq("post_id", postId).order("created_at", { ascending: false }).limit(20);
+    const rows = data || [];
+    const ids = [...new Set(rows.map(x => x.user_id).filter(Boolean))];
+    const { data: profiles } = ids.length ? await sb.from("profiles").select("*").in("id", ids) : { data: [] };
+    const map = new Map((profiles || []).map(x => [x.id, x]));
+    return rows.map(x => ({ ...x, user: map.get(x.user_id) })).filter(x => x.user);
   }
 
   function storyStrip() {
@@ -113,55 +129,96 @@
   }
 
   async function postHTML(p) {
-    const [rs, cs] = await Promise.all([reactionsFor(p.id), commentsFor(p.id)]);
+    const [rs, cs, sh] = await Promise.all([reactionsFor(p.id), commentsFor(p.id), sharersFor(p.id)]);
     const counts = {}; rs.forEach(r => counts[r.reaction_type] = (counts[r.reaction_type] || 0) + 1);
     const mine = rs.find(r => r.user_id === state.user.id)?.reaction_type;
+    const totalReactions = Object.values(counts).reduce((a,b) => a+b, 0);
+    const reactionVisual = Object.entries(counts).map(([k,v]) => `<span class="reaction-chip"><i>${reactionMeta[k]?.[1] || "👍"}</i><b>${v}</b></span>`).join("");
     const media = p.media_url
       ? (p.media_type === "video" || p.media_type === "reel"
         ? `<video class="post-media" src="${esc(p.media_url)}" controls preload="metadata"></video>`
         : `<img class="post-media" src="${esc(p.media_url)}" alt="Publication">`)
       : "";
-    const comments = cs.map(c => `<div class="comment">${avatarHTML(c.user_id === state.user.id ? state.profile : null)}<div class="bubble"><b>${esc(c.user_id === state.user.id ? nameOf(state.profile) : "Utilisateur")}</b><br>${esc(c.text || c.content || "")}</div></div>`).join("");
-    const reactions = Object.entries(counts).map(([k,v]) => `${esc(k)} ${v}`).join(" · ") || "Aucune réaction";
+    const byParent = new Map();
+    cs.forEach(c => { const k = c.parent_id || "root"; if (!byParent.has(k)) byParent.set(k, []); byParent.get(k).push(c); });
+    const commentHTML = (parentId = null, depth = 0) => (byParent.get(parentId || "root") || []).map(c => {
+      const own = c.user_id === state.user.id;
+      const postOwner = p.user_id === state.user.id;
+      const actions = `<div class="comment-actions"><button data-action="reply-comment" data-id="${esc(c.id)}">Répondre</button>${own || postOwner ? `<button data-action="delete-comment" data-id="${esc(c.id)}">Supprimer</button>` : ""}</div>`;
+      return `<div class="comment comment-depth-${Math.min(depth,3)}" data-comment-id="${esc(c.id)}">${avatarHTML(c.author || (own ? state.profile : null))}<div class="bubble"><div class="comment-author-line"><b>${esc(nameOf(c.author || (own ? state.profile : null)))}</b><small>${timeAgo(c.created_at)}</small></div><div class="comment-text">${esc(c.content || c.text || "")}</div>${actions}<div class="reply-box" id="reply-${esc(c.id)}"></div>${commentHTML(c.id, depth+1)}</div></div>`;
+    }).join("");
+    const shareNames = sh.slice(0,3).map(x => esc(nameOf(x.user))).join(", ");
+    const shareSummary = sh.length ? `<span class="share-summary">↗ ${shareNames}${sh.length > 3 ? ` +${sh.length-3}` : ""}</span>` : "";
     return `<article class="post" id="post-${esc(p.id)}">
-      <div class="post-head">${avatarHTML(p.author)}<div class="meta"><b>${esc(nameOf(p.author))}</b><small>${timeAgo(p.created_at)} · Public</small></div><button class="post-menu" data-action="post-menu" data-id="${esc(p.id)}">⋯</button></div>
+      <div class="post-head">${avatarHTML(p.author)}<div class="meta"><b>${esc(nameOf(p.author))}</b><small>${timeAgo(p.created_at)} · ${esc(p.visibility || "public")}</small></div><button class="post-menu" data-action="post-menu" data-id="${esc(p.id)}">⋯</button></div>
       ${p.content ? `<div class="post-body">${esc(p.content)}</div>` : ""}${media}
-      <div class="post-stats"><span>${reactions}</span><span>${cs.length} commentaire(s) · ${Number(p.shares || 0)} partage(s)</span></div>
-      <div class="post-actions"><button class="react-btn" data-action="react" data-id="${esc(p.id)}">♡ ${esc(mine || "J’aime")}</button><button data-action="comment" data-id="${esc(p.id)}">▢ Commenter</button><button data-action="share" data-id="${esc(p.id)}">↗ Partager</button></div>
+      <div class="post-stats"><span class="reaction-summary">${reactionVisual || "<span class='muted-inline'>Aucune réaction</span>"}</span><span>${cs.length} commentaire(s) · ${Number(p.shares || sh.length || 0)} partage(s)</span></div>
+      ${shareSummary}
+      <div class="post-actions"><button class="react-btn" data-action="react" data-id="${esc(p.id)}">${reactionMeta[mine]?.[1] || "👍"} ${esc(reactionMeta[mine]?.[0] || "J’aime")}</button><button data-action="comment" data-id="${esc(p.id)}">💬 Commenter</button><button data-action="share" data-id="${esc(p.id)}">↗ Partager</button></div>
       <div id="reaction-${esc(p.id)}"></div>
-      <div class="comments">${comments}<div class="comment-form"><input id="comment-${esc(p.id)}" placeholder="Écrire un commentaire..."><button data-action="send-comment" data-id="${esc(p.id)}">Envoyer</button></div></div>
+      <div class="comments">${commentHTML()}<div class="comment-form"><input id="comment-${esc(p.id)}" placeholder="Écrire un commentaire..."><button data-action="send-comment" data-id="${esc(p.id)}">Envoyer</button></div></div>
     </article>`;
   }
 
   async function showReactions(id) {
     const box = $("reaction-" + id); if (!box) return;
-    box.innerHTML = `<div class="reaction-picker">${["J’aime","J’adore","Solidaire","Haha","Waouh","Triste","En colère"].map(x => `<button data-reaction="${esc(x)}">${esc(x)}</button>`).join("")}</div>`;
+    box.innerHTML = `<div class="reaction-picker-premium">${Object.entries(reactionMeta).map(([key,[label,icon]]) => `<button data-reaction="${key}" title="${esc(label)}"><span>${icon}</span><small>${esc(label)}</small></button>`).join("")}</div>`;
     box.querySelectorAll("[data-reaction]").forEach(b => b.addEventListener("click", () => setReaction(id, b.dataset.reaction), { once: true }));
   }
   async function setReaction(postId, reaction) {
     const { error } = await sb.rpc("tafa_set_post_reaction", { p_post_id: postId, p_reaction_type: reaction });
     if (error) return toast(error.message);
     const post = state.posts.find(x => x.id === postId);
-    if (post) await createNotification(post.user_id, "reaction", "Nouvelle réaction", `${nameOf(state.profile)} a réagi à votre publication.`, "post", postId);
+    if (post && post.user_id !== state.user.id) await createNotification(post.user_id, "reaction", "Nouvelle réaction", `${nameOf(state.profile)} a réagi à votre publication.`, "post", postId);
     toast("Réaction enregistrée"); await loadPosts();
+    if (state.route === "profile") await profilePage(state.profileTab);
   }
-  async function addComment(postId) {
-    const input = $("comment-" + postId), text = input?.value.trim(); if (!text) return;
-    const { error } = await sb.from("comments").insert({ post_id: postId, user_id: state.user.id, text, content: text });
+  async function addComment(postId, parentId = null) {
+    const input = $(parentId ? "reply-input-" + parentId : "comment-" + postId);
+    const text = input?.value.trim(); if (!text) return;
+    const payload = { post_id: postId, user_id: state.user.id, content: text, parent_id: parentId || null };
+    const { error } = await sb.from("comments").insert(payload);
     if (error) return toast(error.message);
     const post = state.posts.find(x => x.id === postId);
-    if (post) await createNotification(post.user_id, "comment", "Nouveau commentaire", `${nameOf(state.profile)} a commenté votre publication.`, "post", postId);
-    input.value = ""; toast("Commentaire publié"); await loadPosts();
+    if (post && post.user_id !== state.user.id) await createNotification(post.user_id, "comment", "Nouveau commentaire", `${nameOf(state.profile)} a commenté votre publication.`, "post", postId);
+    input.value = ""; toast(parentId ? "Réponse publiée" : "Commentaire publié"); await loadPosts();
+    if (state.route === "profile") await profilePage(state.profileTab);
   }
   async function sharePost(id) {
-    const { error } = await sb.rpc("tafa_increment_post_share", { p_post_id: id });
-    if (error) {
-      const p = state.posts.find(x => x.id === id);
-      if (!p) return toast(error.message);
-      const r = await sb.from("posts").update({ shares: Number(p.shares || 0) + 1 }).eq("id", id);
-      if (r.error) return toast(r.error.message);
-    }
+    const { error } = await sb.rpc("tafa_share_post", { p_post_id: id, p_share_message: "" });
+    if (error) return toast(error.message);
     toast("Publication partagée"); await loadPosts();
+    if (state.route === "profile") await profilePage(state.profileTab);
+  }
+
+  async function deleteComment(id) {
+    const { error } = await sb.rpc("tafa_delete_comment", { p_comment_id: id });
+    if (error) return toast(error.message);
+    toast("Commentaire supprimé"); await loadPosts();
+    if (state.route === "profile") await profilePage(state.profileTab);
+  }
+  async function editPost(id) {
+    const p = state.posts.find(x => x.id === id) || (await sb.from("posts").select("*").eq("id",id).maybeSingle()).data;
+    if (!p || p.user_id !== state.user.id) return toast("Vous ne pouvez modifier que vos publications.");
+    openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">PUBLICATION</span><h3>Modifier la publication</h3><textarea id="editPostText" class="premium-textarea">${esc(p.content || "")}</textarea><button class="primary big" data-action="save-post-edit" data-id="${esc(id)}">Enregistrer</button></div>`);
+  }
+  async function savePostEdit(id) {
+    const content = $("editPostText")?.value.trim() || "";
+    const { error } = await sb.rpc("tafa_update_post", { p_post_id: id, p_content: content });
+    if (error) return toast(error.message);
+    closeModal(); toast("Publication modifiée"); await loadPosts();
+    if (state.route === "profile") await profilePage(state.profileTab);
+  }
+  async function deletePost(id) {
+    const { error } = await sb.rpc("tafa_delete_post", { p_post_id: id });
+    if (error) return toast(error.message);
+    closeModal(); toast("Publication supprimée"); await loadPosts();
+    if (state.route === "profile") await profilePage(state.profileTab);
+  }
+  async function reportPost(id) {
+    const { error } = await sb.rpc("tafa_report_post", { p_post_id: id, p_reason: "Contenu à vérifier" });
+    if (error) return toast(error.message);
+    closeModal(); toast("Signalement envoyé");
   }
   async function publishPost() {
     if (!state.user) return;
@@ -399,13 +456,15 @@
     } else if (tab === "friends") {
       tabBody = `<section class="profile-content-section profile-network-section"><div class="profile-network-stat"><b>${friendsCount}</b><span>amis</span></div><p>Votre réseau Tafaß et vos relations réelles.</p><button class="primary big" data-route="friends">Voir mes amis</button></section>`;
     } else {
-      tabBody = `<section class="profile-content-section profile-publications-section">${mine.length ? mine.map(x => `<article class="profile-publication">${avatarHTML(p) ? `<div class="profile-publication-head">${avatarHTML(p)}<div class="grow"><b>${esc(nameOf(p))}</b><small>${timeAgo(x.created_at)} · Public</small></div><span class="publication-status">Publié</span></div>` : ""}${x.content ? `<p class="profile-publication-text">${esc(x.content)}</p>` : ""}${x.media_url ? (x.media_type === "video" || x.media_type === "reel" ? `<video class="post-media" src="${esc(x.media_url)}" controls preload="metadata"></video>` : `<img class="post-media" src="${esc(x.media_url)}" alt="Publication" loading="lazy">`) : ""}</article>`).join("") : `<div class="empty profile-empty">Aucune publication pour le moment.</div>`}</section>`;
+      const renderedMine = [];
+      for (const x of mine) renderedMine.push(await postHTML(x));
+      tabBody = `<section class="profile-content-section profile-publications-section">${renderedMine.length ? renderedMine.join("") : `<div class="empty profile-empty">Aucune publication pour le moment.</div>`}</section>`;
     }
 
     $("content").innerHTML = `<section class="profile-page-premium">
       <div class="profile-cover-wrap"><div class="profile-cover" ${cover}></div></div>
       <div class="profile-main-premium">
-        <div class="profile-identity-row">${avatarHTML(p,"avatar profile-avatar")}<div class="profile-identity"><h2 class="profile-name">${esc(nameOf(p))}</h2><div class="profile-handle">${p.username ? "@"+esc(p.username) : ""}</div></div><button class="ghost-action profile-edit-top" data-action="edit-profile">Modifier</button></div>
+        <div class="profile-identity-row">${avatarHTML(p,"avatar profile-avatar")}<div class="profile-identity"><h2 class="profile-name">${esc(nameOf(p))}</h2><div class="profile-handle">${p.username ? "@"+esc(p.username) : ""}</div></div></div>
         <p class="profile-bio">${esc(p.bio || "")}</p>
         <div class="profile-actions"><button class="primary" data-action="edit-profile">Modifier le profil</button></div>
         <div class="profile-stats"><div class="profile-stat"><b>${mine.length}</b><small>Publications</small></div><div class="profile-stat"><b>${friendsCount}</b><small>Amis</small></div><div class="profile-stat"><b>${followersCount}</b><small>Abonnés</small></div></div>
@@ -417,7 +476,7 @@
 
   function editProfile() {
     const p = state.profile || {};
-    openModal(`<div class="modal-box profile-edit-modal"><button class="modal-close" data-action="close-modal">×</button><h3>Modifier le profil</h3><div class="profile-media-pickers"><label class="media-picker"><span>Photo de profil</span><input id="pfAvatar" type="file" accept="image/*"></label><label class="media-picker"><span>Photo de couverture</span><input id="pfCover" type="file" accept="image/*"></label></div><div class="form-stack"><label>Prénom<input id="pfFirst" value="${esc(p.first_name||"")}"></label><label>Nom<input id="pfLast" value="${esc(p.last_name||"")}"></label><label>Pseudo<input id="pfUsername" value="${esc(p.username||"")}"></label><label>Bio<textarea id="pfBio">${esc(p.bio||"")}</textarea></label><label>Ville / pays<input id="pfLocation" value="${esc(p.location||"")}"></label><button class="primary big" data-action="save-profile">Enregistrer</button></div></div>`);
+    openModal(`<div class="modal-box profile-edit-modal premium-profile-editor"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • PROFIL</span><h3>Personnaliser votre profil</h3><div class="profile-editor-preview"><div class="editor-cover-preview" style="background-image:url('${esc(p.cover_url || "")}')"></div><div class="editor-avatar-preview">${avatarHTML(p,"avatar")}</div></div><div class="profile-media-pickers"><label class="media-picker premium-picker"><span>Photo de profil</span><small>JPG, PNG ou WEBP</small><input id="pfAvatar" type="file" accept="image/*"></label><label class="media-picker premium-picker"><span>Photo de couverture</span><small>Grande image de couverture</small><input id="pfCover" type="file" accept="image/*"></label></div><div class="form-stack"><label>Prénom<input id="pfFirst" value="${esc(p.first_name||"")}"></label><label>Nom<input id="pfLast" value="${esc(p.last_name||"")}"></label><label>Pseudo<input id="pfUsername" value="${esc(p.username||"")}"></label><label>Bio<textarea id="pfBio">${esc(p.bio||"")}</textarea></label><label>Ville / pays<input id="pfLocation" value="${esc(p.location||"")}"></label><button class="primary big" data-action="save-profile">Enregistrer les modifications</button></div></div>`);
   }
   async function saveProfile() {
     const patch = { first_name:$('pfFirst').value.trim(), last_name:$('pfLast').value.trim(), username:$('pfUsername').value.trim().replace(/^@/,"") || null, bio:$('pfBio').value.trim(), location:$('pfLocation').value.trim() };
@@ -641,9 +700,10 @@
     state.channel = sb.channel("tafa-live-ui")
       .on("postgres_changes", { event:"*", schema:"public", table:"profiles" }, () => { loadProfile(); if (state.route==="search") searchPage(""); })
       .on("postgres_changes", { event:"*", schema:"public", table:"posts" }, async () => { await loadPosts(); if (["home","profile","videos","reels","saved"].includes(state.route)) render(); })
-      .on("postgres_changes", { event:"*", schema:"public", table:"comments" }, async () => { await loadPosts(); if (state.route === "home") render(); })
-      .on("postgres_changes", { event:"*", schema:"public", table:"post_reactions" }, async () => { await loadPosts(); if (state.route === "home") render(); })
-      .on("postgres_changes", { event:"*", schema:"public", table:"post_shares" }, async () => { await loadPosts(); if (state.route === "home") render(); })
+      .on("postgres_changes", { event:"*", schema:"public", table:"comments" }, async () => { await loadPosts(); if (["home","profile"].includes(state.route)) render(); })
+      .on("postgres_changes", { event:"*", schema:"public", table:"comment_likes" }, async () => { if (["home","profile"].includes(state.route)) render(); })
+      .on("postgres_changes", { event:"*", schema:"public", table:"post_reactions" }, async () => { await loadPosts(); if (["home","profile"].includes(state.route)) render(); })
+      .on("postgres_changes", { event:"*", schema:"public", table:"post_shares" }, async () => { await loadPosts(); if (["home","profile"].includes(state.route)) render(); })
       .on("postgres_changes", { event:"*", schema:"public", table:"notifications" }, () => { updateBadges(); if (state.route==="notifications") notificationsPage(); })
       .on("postgres_changes", { event:"*", schema:"public", table:"messages" }, () => {
         if (state.route==="messages") state.selectedConversation ? openConversation(state.selectedConversation) : messagesPage();
@@ -686,9 +746,21 @@
     if (action === "react") return showReactions(id);
     if (action === "comment") { $("comment-"+id)?.focus(); return; }
     if (action === "send-comment") return addComment(id);
+    if (action === "reply-comment") { const box = $("reply-"+id); if (box) { box.innerHTML = `<div class="reply-form"><input id="reply-input-${esc(id)}" placeholder="Votre réponse..."><button data-action="send-reply" data-id="${esc(id)}">Envoyer</button></div>`; $("reply-input-"+id)?.focus(); } return; }
+    if (action === "send-reply") { const c = await sb.from("comments").select("post_id").eq("id",id).maybeSingle(); if(c.error || !c.data) return toast("Commentaire introuvable"); return addComment(c.data.post_id,id); }
+    if (action === "delete-comment") return deleteComment(id);
     if (action === "share") return sharePost(id);
-    if (action === "post-menu") return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><h3>Publication</h3><div class="menu-grid"><button class="menu-card" data-action="save-post" data-id="${esc(id)}"><span class="menu-icon">♡</span><span><b>Enregistrer</b><small>Retrouver plus tard</small></span></button><button class="menu-card" data-action="close-modal"><span class="menu-icon">×</span><span><b>Fermer</b><small>Retour à l'accueil</small></span></button></div></div>`);
+    if (action === "post-menu") {
+      let post = state.posts.find(x => x.id === id);
+      if (!post) post = (await sb.from("posts").select("*").eq("id", id).maybeSingle()).data;
+      const owner = post?.user_id === state.user.id;
+      return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">PUBLICATION</span><h3>Actions</h3><div class="menu-grid"><button class="menu-card" data-action="save-post" data-id="${esc(id)}"><span class="menu-icon">♡</span><span><b>Enregistrer</b><small>Disponible pour tous</small></span></button>${owner ? `<button class="menu-card" data-action="edit-post" data-id="${esc(id)}"><span class="menu-icon">✎</span><span><b>Modifier</b><small>Uniquement votre publication</small></span></button><button class="menu-card danger-card" data-action="delete-post" data-id="${esc(id)}"><span class="menu-icon">⌫</span><span><b>Supprimer</b><small>Vous êtes le propriétaire</small></span></button>` : `<button class="menu-card" data-action="report-post" data-id="${esc(id)}"><span class="menu-icon">⚑</span><span><b>Signaler</b><small>Signaler cette publication</small></span></button>`}</div></div>`);
+    }
     if (action === "save-post") { const r=await sb.from("saved_posts").upsert({user_id:state.user.id,post_id:id},{onConflict:"user_id,post_id"}); toast(r.error?r.error.message:"Publication enregistrée"); closeModal(); return; }
+    if (action === "edit-post") return editPost(id);
+    if (action === "save-post-edit") return savePostEdit(id);
+    if (action === "delete-post") return deletePost(id);
+    if (action === "report-post") return reportPost(id);
     if (action === "add-friend") return addFriend(id);
     if (action === "accept-friend") return handleFriend(id,"accepted");
     if (action === "decline-friend") return handleFriend(id,"declined");
@@ -793,18 +865,24 @@
 
   document.body.classList.toggle("light", state.theme === "light");
 
-  // Splash: reste visible pendant l'initialisation puis disparaît proprement.
+  // Splash: durée minimale pour laisser le chargement des points être visible.
+  const splashStartedAt = Date.now();
   let splashFinished = false;
+  let splashTimer = null;
   const finishSplash = () => {
     if (splashFinished) return;
-    splashFinished = true;
-    const splash = $("splash");
-    if (!splash) return;
-    splash.classList.add("splash-hide");
-    setTimeout(() => splash.remove(), 420);
+    const wait = Math.max(0, 3200 - (Date.now() - splashStartedAt));
+    clearTimeout(splashTimer);
+    splashTimer = setTimeout(() => {
+      if (splashFinished) return;
+      splashFinished = true;
+      const splash = $("splash");
+      if (!splash) return;
+      splash.classList.add("splash-hide");
+      setTimeout(() => splash.remove(), 520);
+    }, wait);
   };
-  // Filet de sécurité si Supabase met trop longtemps à répondre.
-  const splashFallback = setTimeout(finishSplash, 4500);
+  const splashFallback = setTimeout(finishSplash, 6500);
 
   sb.auth.onAuthStateChange(async (_event, session) => {
     state.user = session?.user || null;
