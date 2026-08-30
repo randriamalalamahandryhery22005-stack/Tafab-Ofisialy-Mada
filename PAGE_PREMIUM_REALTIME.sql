@@ -89,6 +89,11 @@ alter table public.page_messages add column if not exists media_type text;
 alter table public.page_messages add column if not exists is_read boolean default false;
 
 -- Security
+-- PostgreSQL table privileges (RLS is still enforced below).
+grant usage on schema public to authenticated;
+grant select, insert, update, delete on table public.page_members, public.page_posts, public.page_post_reactions, public.page_post_comments, public.page_post_shares, public.page_messages to authenticated;
+grant select, insert, delete on table public.page_followers to authenticated;
+
 alter table public.page_members enable row level security;
 alter table public.page_posts enable row level security;
 alter table public.page_post_reactions enable row level security;
