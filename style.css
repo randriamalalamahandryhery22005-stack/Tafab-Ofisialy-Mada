@@ -1727,3 +1727,61 @@ body.light .profile-visual-card-v5,body.light .redesign-section-v5{background:li
     width:42px!important;height:42px!important;min-width:42px!important;
   }
 }
+
+
+/* =========================================================
+   TAFAß FINAL — PROFILE SPACING / NO SCROLLBAR / NO BOTTOM GAP
+   Requested UI-only correction. Existing functionality untouched.
+   ========================================================= */
+
+/* Profile editor: keep the avatar completely inside its visual card.
+   The avatar may still overlap the cover visually, but never the next section. */
+.profile-redesign-v5 .profile-visual-card-v5{
+  padding-bottom:47px!important;
+  box-sizing:border-box!important;
+}
+.profile-redesign-v5 .profile-visual-meta-v5{
+  position:relative!important;
+  z-index:6!important;
+}
+@media(max-width:620px){
+  .profile-redesign-v5 .profile-visual-card-v5{
+    padding-bottom:37px!important;
+  }
+}
+
+/* Remove the visible browser/native scrollbar line while preserving scrolling. */
+html,body,#app,.main-layout,.content,
+.clean-page,.profile-page-premium,
+.profile-redesign-body,.account-redesign-body-v5{
+  scrollbar-width:none!important;
+  -ms-overflow-style:none!important;
+}
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+#app::-webkit-scrollbar,
+.main-layout::-webkit-scrollbar,
+.content::-webkit-scrollbar,
+.clean-page::-webkit-scrollbar,
+.profile-page-premium::-webkit-scrollbar,
+.profile-redesign-body::-webkit-scrollbar,
+.account-redesign-body-v5::-webkit-scrollbar{
+  width:0!important;
+  height:0!important;
+  display:none!important;
+}
+
+/* Fixed mobile navigation needs only its real height, not a large empty tail. */
+@media(max-width:720px){
+  .main-layout{
+    padding-bottom:calc(70px + env(safe-area-inset-bottom))!important;
+  }
+  .content{
+    padding-bottom:0!important;
+  }
+}
+@media(max-width:390px){
+  .main-layout{
+    padding-bottom:calc(66px + env(safe-area-inset-bottom))!important;
+  }
+}
