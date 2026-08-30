@@ -1188,23 +1188,40 @@
 
   function showOAuthOnboarding() {
     const p = state.profile || {};
-    openModal(`<div class="modal-box onboarding-modal-v23">
+    // OAuth onboarding is a dedicated locked auth view, never a modal.
+    // This prevents the old form from remaining underneath and appearing duplicated.
+    closeModal();
+    ["loginView","signupView","forgotPasswordView","resetPasswordView"].forEach(id => $(id)?.classList.add("hidden"));
+    const shell = document.querySelector(".auth-shell");
+    if (!shell) return;
+    let view = $("oauthOnboardingView");
+    if (!view) {
+      view = document.createElement("div");
+      view.id = "oauthOnboardingView";
+      view.className = "auth-view oauth-onboarding-view-v24";
+      shell.appendChild(view);
+    }
+    view.innerHTML = `<div class="oauth-onboarding-head-v24">
       <span class="eyebrow">TAFAß • PREMIÈRE CONNEXION</span>
-      <h3>Complétez votre compte</h3>
-      <p class="muted">Pour terminer votre connexion Google/Apple, renseignez toutes les informations obligatoires. L’application restera verrouillée jusqu’à validation.</p>
-      <div class="onboarding-grid-v23">
-        <label>Prénom<input id="onFirst" value="${esc(p.first_name||state.user?.user_metadata?.first_name||'')}" autocomplete="given-name"></label>
-        <label>Nom<input id="onLast" value="${esc(p.last_name||state.user?.user_metadata?.last_name||'')}" autocomplete="family-name"></label>
-        <label>Date de naissance<input id="onBirth" type="date" value="${esc(p.birth||'')}"></label>
-        <label>Genre<select id="onGender"><option value="">Choisir</option><option value="Homme" ${p.gender==='Homme'?'selected':''}>Homme</option><option value="Femme" ${p.gender==='Femme'?'selected':''}>Femme</option><option value="Autre" ${p.gender==='Autre'?'selected':''}>Autre</option></select></label>
-        <label class="wide">E-mail<input value="${esc(state.user?.email||p.email||'')}" type="email" readonly disabled></label>
-        <label>Téléphone<input id="onPhone" value="${esc(p.phone||'')}" type="tel" autocomplete="tel" placeholder="+261…"></label>
-        <label>Pays actuel<input id="onCountry" value="${esc(p.country||'')}" placeholder="Madagascar"></label>
-        <label>Ville actuelle<input id="onCityCurrent" value="${esc(p.city_current||'')}" placeholder="Antananarivo"></label>
-        <label>Ville d’origine<input id="onCityOrigin" value="${esc(p.city_origin||'')}" placeholder="Votre ville d’origine"></label>
-      </div>
-      <button class="primary big onboarding-submit-v23" data-action="complete-onboarding">Continuer vers Tafaß</button>
-    </div>`);
+      <h1>Complétez votre compte</h1>
+      <p class="muted">Votre connexion Google/Apple est réussie. Complétez les informations obligatoires pour déverrouiller Tafaß.</p>
+    </div>
+    <div class="onboarding-grid-v24">
+      <label>Prénom<input id="onFirst" value="${esc(p.first_name||state.user?.user_metadata?.first_name||'')}" autocomplete="given-name" required></label>
+      <label>Nom<input id="onLast" value="${esc(p.last_name||state.user?.user_metadata?.last_name||'')}" autocomplete="family-name" required></label>
+      <label>Date de naissance<input id="onBirth" type="date" value="${esc(p.birth||'')}" required></label>
+      <label>Genre<select id="onGender" required><option value="">Choisir</option><option value="Homme" ${p.gender==='Homme'?'selected':''}>Homme</option><option value="Femme" ${p.gender==='Femme'?'selected':''}>Femme</option><option value="Autre" ${p.gender==='Autre'?'selected':''}>Autre</option></select></label>
+      <label class="wide">E-mail<input value="${esc(state.user?.email||p.email||'')}" type="email" readonly disabled></label>
+      <label>Téléphone<input id="onPhone" value="${esc(p.phone||'')}" type="tel" autocomplete="tel" placeholder="+261…" required></label>
+      <label>Pays actuel<input id="onCountry" value="${esc(p.country||'')}" placeholder="Madagascar" required></label>
+      <label>Ville actuelle<input id="onCityCurrent" value="${esc(p.city_current||'')}" placeholder="Antananarivo" required></label>
+      <label>Ville d’origine<input id="onCityOrigin" value="${esc(p.city_origin||'')}" placeholder="Votre ville d’origine" required></label>
+    </div>
+    <button class="primary big onboarding-submit-v24" data-action="complete-onboarding">Déverrouiller Tafaß</button>
+    <p class="onboarding-lock-note-v24">🔒 Cette étape est obligatoire. L’application reste verrouillée tant que les informations ne sont pas validées.</p>`;
+    view.classList.remove("hidden");
+    $("auth")?.classList.remove("hidden");
+    shell.scrollTop = 0;
   }
 
   async function completeOnboarding() {
@@ -1213,11 +1230,29 @@
     const d=new Date(birth+'T00:00:00'), now=new Date();
     const age=now.getFullYear()-d.getFullYear()-((now.getMonth()<d.getMonth()||(now.getMonth()===d.getMonth()&&now.getDate()<d.getDate()))?1:0);
     if(age<13) return toast('Vous devez avoir au moins 13 ans.');
-    const btn=document.querySelector('[data-action="complete-onboarding"]'); setLoading(btn,true,'Continuer vers Tafaß');
+    const btn=document.querySelector('[data-action="complete-onboarding"]'); setLoading(btn,true,'Déverrouiller Tafaß');
     const patch={first_name:first,last_name:last,email:state.user.email||'',birth,gender,phone,country,city_current:current,city_origin:origin};
-    const r=await sb.from('profiles').update(patch).eq('id',state.user.id);
-    if(r.error){ setLoading(btn,false,'Continuer vers Tafaß'); return toast(r.error.message); }
-    closeModal(); await loadProfile(); await setupRealtime(); await render(); toast('Compte complété. Bienvenue sur Tafaß.');
+    try {
+      const r=await Promise.race([
+        sb.from('profiles').update(patch).eq('id',state.user.id),
+        new Promise(resolve=>setTimeout(()=>resolve({error:{message:'La validation prend trop de temps. Vérifiez la connexion à Supabase puis réessayez.'}}),12000))
+      ]);
+      if(r?.error){ setLoading(btn,false,'Déverrouiller Tafaß'); return toast(r.error.message); }
+      await loadProfile();
+      if (!(await profileIsComplete())) { setLoading(btn,false,'Déverrouiller Tafaß'); return toast('Les informations n’ont pas été enregistrées complètement. Réessayez.'); }
+      closeModal();
+      $("oauthOnboardingView")?.classList.add("hidden");
+      $("auth")?.classList.add("hidden");
+      $("app")?.classList.remove("hidden");
+      state.entering=false;
+      await loadPosts();
+      await setupRealtime();
+      await render();
+      toast('Compte complété. Bienvenue sur Tafaß.');
+    } catch(e) {
+      setLoading(btn,false,'Déverrouiller Tafaß');
+      toast(e?.message || 'Impossible de valider le compte.');
+    }
   }
 
   async function enterApp() {

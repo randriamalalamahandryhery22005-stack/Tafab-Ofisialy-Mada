@@ -1150,3 +1150,37 @@ body.light .profile-edit-modal{background:linear-gradient(155deg,#fff,#f3f7fd)!i
 .profile-cover-wrap .profile-cover{display:block!important;margin:0!important;border:0!important;outline:0!important;box-shadow:none!important;}
 .profile-cover-wrap .profile-cover:after{display:none!important;}
 .profile-main-premium{background:transparent!important;border:0!important;}
+
+/* =========================================================
+   Tafaß V24 — locked OAuth onboarding / mobile shell cleanup
+   ========================================================= */
+.oauth-onboarding-view-v24{width:100%;animation:authViewIn .22s ease both}
+.oauth-onboarding-head-v24{margin-bottom:18px}
+.oauth-onboarding-head-v24 h1{font-size:27px;line-height:1.12;margin:6px 0 8px;letter-spacing:-.6px}
+.oauth-onboarding-head-v24 p{font-size:11px;line-height:1.55;margin:0}
+.onboarding-grid-v24{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:18px 0}
+.onboarding-grid-v24 label{display:grid;gap:7px;font-size:10px;font-weight:800;color:#aebbd0}
+.onboarding-grid-v24 .wide{grid-column:1/-1}
+.onboarding-grid-v24 input,.onboarding-grid-v24 select{width:100%;box-sizing:border-box;min-height:46px}
+.onboarding-grid-v24 input:disabled{opacity:.72}
+.onboarding-submit-v24{width:100%;min-height:50px}
+.onboarding-lock-note-v24{margin:12px 0 0;padding:11px 12px;border-radius:12px;background:rgba(64,111,180,.08);border:1px solid rgba(100,140,210,.12);font-size:10px;line-height:1.45;color:#8da1be}
+@media(max-width:620px){
+  .onboarding-grid-v24{grid-template-columns:1fr;gap:11px}
+  .onboarding-grid-v24 .wide{grid-column:auto}
+  .oauth-onboarding-head-v24 h1{font-size:24px}
+  .oauth-onboarding-view-v24{padding-bottom:4px}
+}
+/* The mobile header keeps the Tafaß brand visible. */
+@media(max-width:720px){
+  .logo-button strong{display:inline!important;visibility:visible!important}
+  .topbar{min-height:62px}
+  .main-layout{padding-bottom:74px!important}
+}
+/* No standalone Videos destination in the mobile shell. */
+.bottom-nav button[data-route="videos"],.bottom-nav button[data-route="video"]{display:none!important}
+/* Profile cover must touch the content above it: no black cap/separator. */
+.profile-page-premium,.public-profile-page{border-top:0!important;margin-top:0!important;padding-top:0!important}
+.profile-cover-wrap{position:relative!important;margin-top:0!important;border-top:0!important;border-bottom:0!important}
+.profile-cover-wrap + .profile-main-premium{margin-top:0!important;border-top:0!important}
+.profile-cover-wrap + .profile-main-premium:before{display:none!important;content:none!important}
