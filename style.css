@@ -726,3 +726,40 @@ body.light .profile-main-premium .profile-avatar{border-color:#f3f6fb}
 }
 body.light .reaction-picker-premium { background: rgba(255,255,255,.98); }
 body.light .reaction-picker-premium button { background: #eef3fa; }
+
+/* =========================================================
+   V12 — PREMIUM NAVIGATION / PROFILE LINKS / PAGE LOADER
+   ========================================================= */
+.profile-link{appearance:none;border:0;background:none;color:inherit;padding:0;margin:0;text-decoration:none;font:inherit;cursor:pointer;display:inline-flex;min-width:0;text-align:left}
+.profile-avatar-link{flex:0 0 auto;border-radius:50%}
+.profile-meta-link{display:flex!important;flex-direction:column;min-width:0;max-width:100%;gap:2px}
+.profile-comment-name:hover,.profile-meta-link:hover .post-author-name,.profile-handle:hover{color:var(--accent,#5a9aff)}
+.post-author-name{font-weight:800;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.post-author-handle{font-size:10px;color:var(--muted,#8290a5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.post-time{display:block;min-width:0}
+.post-time small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.profile-comment-name{font-weight:800;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.premium-menu-profile{cursor:pointer}
+.premium-menu-card{position:relative;min-width:0;display:grid!important;grid-template-columns:auto minmax(0,1fr) auto;align-items:center!important;text-align:left!important}
+.premium-menu-card .menu-card-copy{min-width:0;overflow:hidden}
+.premium-menu-card .menu-card-copy b,.premium-menu-card .menu-card-copy small{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.premium-menu-card .menu-arrow{opacity:.55;font-size:22px;line-height:1}
+.premium-menu-card .menu-icon svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.menu-profile-avatar{border-radius:50%}
+
+.page-loader{position:fixed;left:0;right:0;top:0;height:3px;z-index:10000;pointer-events:none;opacity:0;overflow:hidden;background:transparent;transition:opacity .12s ease}
+.page-loader.active{opacity:1}
+.page-loader span{display:block;height:100%;width:22%;border-radius:999px;background:linear-gradient(90deg,transparent,rgba(91,150,255,.95),transparent);animation:pageLoaderRun .72s ease-in-out infinite}
+.page-loader.done span{width:100%;animation:none;transition:width .18s ease}
+@keyframes pageLoaderRun{0%{transform:translateX(-120%)}100%{transform:translateX(520%)}}
+body.page-loading{cursor:progress}
+body.page-loading [data-route]{pointer-events:none!important}
+
+@media(max-width:560px){
+  .premium-menu-card{grid-template-columns:36px minmax(0,1fr) 16px;gap:8px;padding:11px}
+  .premium-menu-card .menu-icon{width:36px!important;height:36px!important;flex-basis:36px!important}
+  .premium-menu-card .menu-card-copy b{font-size:10.5px;line-height:1.25}
+  .premium-menu-card .menu-card-copy small{font-size:8.5px;line-height:1.35}
+  .post-head .meta{min-width:0;max-width:calc(100% - 72px)}
+}

@@ -13,7 +13,7 @@
   const state = {
     user: null, profile: null, route: "home", posts: [], friends: [], stories: [],
     channel: null, theme: localStorage.getItem("tafa-theme") || "dark", entering: false,
-    profileTab: "posts", friendsTab: "suggestions", selectedConversation: null, renderToken: 0
+    profileTab: "posts", friendsTab: "suggestions", selectedConversation: null, viewingProfileId: null, renderToken: 0
   };
 
   function avatarHTML(p, cls = "avatar") {
@@ -23,6 +23,11 @@
       : `<span class="${cls}">${esc(letter)}</span>`;
   }
   function nameOf(p) { return [p?.first_name, p?.last_name].filter(Boolean).join(" ") || p?.username || "Utilisateur"; }
+  function usernameOf(p) { return p?.username ? "@" + p.username.replace(/^@/, "") : ""; }
+  function profileLink(p, inner, cls="profile-link") {
+    if (!p?.id) return inner;
+    return `<button type="button" class="${cls}" data-action="view-profile" data-id="${esc(p.id)}">${inner}</button>`;
+  }
   function timeAgo(date) {
     const t = new Date(date || Date.now()).getTime(), d = Math.max(0, Date.now() - t);
     const m = Math.floor(d / 60000);
@@ -151,12 +156,13 @@
       const own = c.user_id === state.user.id;
       const postOwner = p.user_id === state.user.id;
       const actions = `<div class="comment-actions"><button data-action="reply-comment" data-id="${esc(c.id)}">Répondre</button>${own || postOwner ? `<button data-action="delete-comment" data-id="${esc(c.id)}">Supprimer</button>` : ""}</div>`;
-      return `<div class="comment comment-depth-${Math.min(depth,3)}" data-comment-id="${esc(c.id)}">${avatarHTML(c.author || (own ? state.profile : null))}<div class="bubble"><div class="comment-author-line"><b>${esc(nameOf(c.author || (own ? state.profile : null)))}</b><small>${timeAgo(c.created_at)}</small></div><div class="comment-text">${esc(c.content || c.text || "")}</div>${actions}<div class="reply-box" id="reply-${esc(c.id)}"></div>${commentHTML(c.id, depth+1)}</div></div>`;
+      const commentAuthor = c.author || (own ? state.profile : null);
+      return `<div class="comment comment-depth-${Math.min(depth,3)}" data-comment-id="${esc(c.id)}">${profileLink(commentAuthor, avatarHTML(commentAuthor), "profile-link profile-avatar-link") }<div class="bubble"><div class="comment-author-line">${profileLink(commentAuthor, `<b>${esc(nameOf(commentAuthor))}</b>`, "profile-link profile-comment-name")}<small>${timeAgo(c.created_at)}</small></div><div class="comment-text">${esc(c.content || c.text || "")}</div>${actions}<div class="reply-box" id="reply-${esc(c.id)}"></div>${commentHTML(c.id, depth+1)}</div></div>`;
     }).join("");
     const shareNames = sh.slice(0,3).map(x => esc(nameOf(x.user))).join(", ");
     const shareSummary = sh.length ? `<span class="share-summary">↗ ${shareNames}${sh.length > 3 ? ` +${sh.length-3}` : ""}</span>` : "";
     return `<article class="post" id="post-${esc(p.id)}">
-      <div class="post-head">${avatarHTML(p.author)}<div class="meta"><b>${esc(nameOf(p.author))}</b><small>${timeAgo(p.created_at)} · ${esc(p.visibility || "public")}</small></div><button class="post-menu" data-action="post-menu" data-id="${esc(p.id)}">⋯</button></div>
+      <div class="post-head">${profileLink(p.author, avatarHTML(p.author), "profile-link profile-avatar-link")}<div class="meta">${profileLink(p.author, `<span class="post-author-name">${esc(nameOf(p.author))}</span><span class="post-author-handle">${esc(usernameOf(p.author))}</span>`, "profile-link profile-meta-link")}<span class="post-time"><small>${timeAgo(p.created_at)} · ${esc(p.visibility || "public")}</small></span></div><button class="post-menu" data-action="post-menu" data-id="${esc(p.id)}">⋯</button></div>
       ${p.content ? `<div class="post-body">${esc(p.content)}</div>` : ""}${media}
       <div class="post-stats"><span class="reaction-summary">${reactionVisual || "<span class='muted-inline'>Aucune réaction</span>"}</span><span>${cs.length} commentaire(s) · ${Number(p.shares || sh.length || 0)} partage(s)</span></div>
       ${shareSummary}
@@ -441,6 +447,50 @@
     }
   }
 
+  async function openUserProfile(userId) {
+    if (!userId || !state.user) return;
+    state.viewingProfileId = userId;
+    state.route = "profile";
+    history.replaceState(null, "", "#profile");
+    document.querySelectorAll("[data-route]").forEach(el => el.classList.toggle("active", el.dataset.route === "profile"));
+    state.profileTab = "posts";
+    state.renderToken++;
+    const token = state.renderToken;
+    const { data: p, error } = await sb.from("profiles").select("*").eq("id", userId).maybeSingle();
+    if (error || !p || token !== state.renderToken) return toast("Profil indisponible");
+
+    const { data: mine } = await sb.from("posts").select("*").eq("user_id", userId).order("created_at", { ascending:false }).limit(100);
+    const postRows = mine || [];
+    const friendsR = await sb.from("friendships").select("id", { count:"exact", head:true }).or(`user_id.eq.${userId},friend_id.eq.${userId}`);
+    const followersR = await sb.from("follows").select("id", { count:"exact", head:true }).eq("following_id", userId);
+    const cover = p.cover_url ? `style="background-image:url('${esc(p.cover_url)}')"` : "";
+    const isMe = userId === state.user.id;
+    const actions = isMe ? `<button class="primary" data-action="edit-profile">Modifier le profil</button>` : `<button class="ghost-action" data-action="message-user" data-id="${esc(userId)}">Message</button><button class="ghost-action" data-action="view-profile-friend" data-id="${esc(userId)}">Amis</button>`;
+
+    let body = "";
+    for (const post of postRows) {
+      body += await postHTML({ ...post, author:p });
+    }
+    if (!body) body = `<div class="empty profile-empty">Aucune publication pour le moment.</div>`;
+
+    if (token !== state.renderToken) return;
+    $("content").innerHTML = `<section class="profile-page-premium public-profile-page" data-page-route="profile">
+      <div class="profile-cover-wrap"><div class="profile-cover" ${cover}></div></div>
+      <div class="profile-main-premium">
+        <div class="profile-identity-row">
+          ${avatarHTML(p,"avatar profile-avatar")}
+          <div class="profile-identity"><h2 class="profile-name">${esc(nameOf(p))}</h2><div class="profile-handle">${esc(usernameOf(p))}</div></div>
+        </div>
+        <p class="profile-bio">${esc(p.bio || "")}</p>
+        <div class="profile-actions">${actions}</div>
+        <div class="profile-stats"><div class="profile-stat"><b>${postRows.length}</b><small>Publications</small></div><div class="profile-stat"><b>${friendsR.count || 0}</b><small>Amis</small></div><div class="profile-stat"><b>${followersR.count || 0}</b><small>Abonnés</small></div></div>
+        <div class="profile-info">${p.location ? `<div>⌖ ${esc(p.location)}</div>` : ""}${p.created_at ? `<div>◷ Membre depuis ${new Date(p.created_at).toLocaleDateString("fr-FR", {month:"long", year:"numeric"})}</div>` : ""}</div>
+        <div class="profile-tabs"><button class="active">Publications</button><button>Photos</button><button>Vidéos</button><button>Amis</button></div>
+        <section class="profile-content-section profile-publications-section">${body}</section>
+      </div>
+    </section>`;
+  }
+
   async function profilePage(tab = state.profileTab) {
     const token = state.renderToken;
     state.profileTab = tab;
@@ -510,7 +560,7 @@
       const wanted = route === "reels" ? ["reel","video"] : ["video"];
       const rows = state.posts.filter(p => wanted.includes(p.media_type));
       if (token !== state.renderToken || state.route !== route) return;
-      $("content").innerHTML = `<div class="card"><div class="page-header"><h2>${route === "reels" ? "Reels" : "Vidéos"}</h2><span class="muted">Découvrir</span></div>${rows.length?rows.map(p=>`<article class="post"><div class="post-head">${avatarHTML(p.author)}<div class="meta"><b>${esc(nameOf(p.author))}</b><small>${timeAgo(p.created_at)}</small></div></div>${p.content?`<div class="post-body">${esc(p.content)}</div>`:""}${p.media_type==="video"||p.media_type==="reel"?`<video class="post-media" src="${esc(p.media_url)}" controls></video>`:""}</article>`).join(""):`<div class="empty">Aucun contenu pour le moment.</div>`}</div>`;
+      $("content").innerHTML = `<div class="card"><div class="page-header"><h2>${route === "reels" ? "Reels" : "Vidéos"}</h2><span class="muted">Découvrir</span></div>${rows.length?rows.map(p=>`<article class="post"><div class="post-head">${profileLink(p.author, avatarHTML(p.author), "profile-link profile-avatar-link")}<div class="meta">${profileLink(p.author, `<span class="post-author-name">${esc(nameOf(p.author))}</span><span class="post-author-handle">${esc(usernameOf(p.author))}</span>`, "profile-link profile-meta-link")}<span class="post-time"><small>${timeAgo(p.created_at)}</small></span></div></div>${p.content?`<div class="post-body">${esc(p.content)}</div>`:""}${p.media_type==="video"||p.media_type==="reel"?`<video class="post-media" src="${esc(p.media_url)}" controls></video>`:""}</article>`).join(""):`<div class="empty">Aucun contenu pour le moment.</div>`}</div>`;
       return;
     }
     if (route === "pages") {
@@ -552,13 +602,49 @@
       </div>`);
   }
 
+  function menuIcon(type) {
+    const paths = {
+      profile:'<circle cx="12" cy="8" r="3"/><path d="M5 20c.7-4 2.9-6 7-6s6.3 2 7 6"/>',
+      friends:'<circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3.5 20c.6-3.5 2.6-5.5 5.5-5.5s4.9 2 5.5 5.5M14.5 15c3.2-.2 5.2 1.4 6 4.5"/>',
+      groups:'<circle cx="12" cy="8" r="3"/><path d="M4 20c.8-3.7 3.5-5.5 8-5.5s7.2 1.8 8 5.5"/>',
+      pages:'<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 7h6M9 11h6M9 15h4"/>',
+      saved:'<path d="M6 4h12v17l-6-3.5L6 21z"/>',
+      videos:'<rect x="3" y="5" width="18" height="14" rx="3"/><path d="m10 9 5 3-5 3z"/>',
+      reels:'<rect x="4" y="4" width="16" height="16" rx="4"/><path d="m8 4 3 4m2-4 3 4M4 9h16M10 12l5 3-5 3z"/>',
+      settings:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.8 1.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-2.5V20a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1-1.8-1.8.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H6v-2.5h.2a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1 1.8-1.8.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.6V4h2.5v.2a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1 1.8 1.8-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v2.5h-.2a1.7 1.7 0 0 0-1.6 1z"/>',
+      search:'<circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/>',
+      history:'<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5M12 7v5l3 2"/>',
+      help:'<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.7 2.7 0 1 1 4.2 2.2c-1.1.7-1.7 1.2-1.7 2.6M12 17h.01"/>',
+      privacy:'<rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
+      payment:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h4"/>',
+      logout:'<path d="M10 5H5v14h5M14 8l5 4-5 4M19 12H9"/>'
+    };
+    return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[type] || paths.settings}</svg>`;
+  }
+
   function menuPage() {
     const p = state.profile || {};
     const items = [
-      ["profile","◉","Profil","Voir votre profil"],["friends","♧","Amis","Votre réseau"],["groups","◎","Groupes","Communautés"],["pages","▣","Pages","Pages que vous gérez"],
-      ["saved","♡","Enregistrements","Publications sauvegardées"],["videos","▷","Vidéos","Regarder et publier"],["reels","◉","Reels","Formats courts"],["settings","⚙","Para & Conf","Compte, sécurité et préférences"]
+      ["profile","profile","Profil","Voir votre profil"],
+      ["friends","friends","Amis","Votre réseau"],
+      ["messages","messages","Messages","Vos conversations"],
+      ["notifications","history","Alertes","Vos notifications"],
+      ["groups","groups","Groupes","Communautés"],
+      ["pages","pages","Pages","Pages et gestion"],
+      ["videos","videos","Vidéos","Regarder et publier"],
+      ["reels","reels","Reels","Formats courts"],
+      ["saved","saved","Enregistrements","Vos contenus sauvegardés"],
+      ["search","search","Rechercher","Trouver un compte ou contenu"],
+      ["settings","settings","Para & Conf","Compte et confidentialité"]
     ];
-    simplePage("Menu", `<div class="menu-profile">${avatarHTML(p)}<div class="grow"><b>${esc(nameOf(p))}</b><small>${esc(p.email || state.user?.email || "")}</small></div><button class="small-action" data-route="profile">Profil</button></div><div class="menu-section-title">Raccourcis</div><div class="menu-grid">${items.map(x=>`<button class="menu-card" data-route="${x[0]}"><span class="menu-icon">${x[1]}</span><span><b>${x[2]}</b><small>${x[3]}</small></span></button>`).join("")}</div><div class="menu-section-title">Actions</div><div class="menu-grid"><button class="menu-card danger-card" data-action="logout"><span class="menu-icon">↪</span><span><b>Déconnexion</b><small>Quitter ce compte</small></span></button></div>`);
+    const actions = [
+      ["history","history","Historique d'activité","Consulter vos activités",true],
+      ["payment","payment","Paiement","Paiements et transactions",true],
+      ["privacy","privacy","Confidentialité","Gérer vos données et accès",true],
+      ["help","help","Aide","Assistance Tafaß",true]
+    ];
+    const card = x => `<button class="menu-card premium-menu-card" ${x[4] ? `data-action="menu-info" data-name="${esc(x[2])}"` : `data-route="${x[0]}"`} aria-label="${esc(x[2])}"><span class="menu-icon">${menuIcon(x[1])}</span><span class="menu-card-copy"><b>${esc(x[2])}</b><small title="${esc(x[3])}">${esc(x[3])}</small></span><span class="menu-arrow">›</span></button>`;
+    simplePage("Menu", `<div class="menu-profile premium-menu-profile" data-route="profile"><button class="profile-link menu-profile-avatar" data-action="view-profile" data-id="${esc(p.id || "")}">${avatarHTML(p)}</button><div class="grow"><b>${esc(nameOf(p))}</b><small title="${esc(p.email || state.user?.email || "")}">${esc(p.email || state.user?.email || "")}</small></div><button class="small-action" data-route="profile">Profil</button></div><div class="menu-section-title">Raccourcis</div><div class="menu-grid premium-menu-grid">${items.map(card).join("")}</div><div class="menu-section-title">Services</div><div class="menu-grid premium-menu-grid">${actions.map(card).join("")}</div><div class="menu-section-title">Compte</div><div class="menu-grid premium-menu-grid"><button class="menu-card premium-menu-card danger-card" data-action="logout"><span class="menu-icon">${menuIcon("logout")}</span><span class="menu-card-copy"><b>Déconnexion</b><small>Quitter ce compte en toute sécurité</small></span><span class="menu-arrow">›</span></button></div>`);
   }
 
   async function settingsPage() {
@@ -657,10 +743,28 @@
   function openModal(html) { $("modal").className = "modal"; $("modal").innerHTML = html; }
   function closeModal() { $("modal").className = "modal hidden"; $("modal").innerHTML = ""; }
 
+  function ensurePageLoader() {
+    let el = document.getElementById("pageLoader");
+    if (!el) { el = document.createElement("div"); el.id = "pageLoader"; el.className = "page-loader"; el.innerHTML = '<span></span>'; document.body.appendChild(el); }
+    return el;
+  }
+  let pageLoading = false;
+  function beginPageLoading() {
+    pageLoading = true;
+    ensurePageLoader().classList.add("active");
+    document.body.classList.add("page-loading");
+  }
+  function endPageLoading() {
+    const el = ensurePageLoader();
+    el.classList.add("done");
+    setTimeout(() => { el.classList.remove("active","done"); document.body.classList.remove("page-loading"); pageLoading = false; }, 220);
+  }
+
   async function render() {
     if (!state.user) return;
     const token = ++state.renderToken;
     const route = state.route;
+    beginPageLoading();
     document.querySelectorAll("[data-route]").forEach(el => el.classList.toggle("active", el.dataset.route === route));
     window.scrollTo({ top: 0, behavior: "auto" });
     if (route === "home") await renderFeed();
@@ -673,11 +777,12 @@
     else if (route === "menu") menuPage();
     else if (route === "tafab") tafabPage();
     else if (route === "settings") settingsPage();
-    if (token !== state.renderToken || route !== state.route) return;
+    if (token !== state.renderToken || route !== state.route) { endPageLoading(); return; }
     const pageRoot = $("content")?.firstElementChild;
     if (pageRoot) pageRoot.dataset.pageRoute = route;
     document.querySelectorAll("[data-route]").forEach(el => el.classList.toggle("active", el.dataset.route === state.route));
     updateBadges();
+    endPageLoading();
   }
 
   function navigate(route) {
@@ -685,6 +790,7 @@
     if (state.route === route && document.querySelector(`#content [data-page-route="${route}"]`)) return;
     state.renderToken++;
     state.route = route;
+    if (route === "profile") state.viewingProfileId = null;
     state.selectedConversation = route === "messages" ? state.selectedConversation : null;
     history.replaceState(null, "", "#" + route);
     render().catch(err => {
@@ -714,7 +820,7 @@
   async function setupRealtime() {
     if (state.channel) await sb.removeChannel(state.channel);
     state.channel = sb.channel("tafa-live-ui")
-      .on("postgres_changes", { event:"*", schema:"public", table:"profiles" }, () => { loadProfile(); if (state.route==="search") searchPage(""); })
+      .on("postgres_changes", { event:"*", schema:"public", table:"profiles" }, () => { loadProfile(); if (state.route==="search") searchPage(""); if (state.viewingProfileId && state.route==="profile") openUserProfile(state.viewingProfileId); })
       .on("postgres_changes", { event:"*", schema:"public", table:"posts" }, async () => { await loadPosts(); if (["home","profile","videos","reels","saved"].includes(state.route)) render(); })
       .on("postgres_changes", { event:"*", schema:"public", table:"comments" }, async () => { await loadPosts(); if (["home","profile"].includes(state.route)) render(); })
       .on("postgres_changes", { event:"*", schema:"public", table:"comment_likes" }, async () => { if (["home","profile"].includes(state.route)) render(); })
@@ -756,7 +862,7 @@
 
   document.addEventListener("click", async e => {
     const routeEl = e.target.closest("[data-route]");
-    if (routeEl) { e.preventDefault(); navigate(routeEl.dataset.route); return; }
+    if (routeEl) { e.preventDefault(); if (pageLoading) return; navigate(routeEl.dataset.route); return; }
     const actionEl = e.target.closest("[data-action]"); if (!actionEl) return;
     const action = actionEl.dataset.action, id = actionEl.dataset.id;
     if (action === "react") return showReactions(id);
@@ -772,6 +878,7 @@
       const owner = post?.user_id === state.user.id;
       return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">PUBLICATION</span><h3>Actions</h3><div class="menu-grid"><button class="menu-card" data-action="save-post" data-id="${esc(id)}"><span class="menu-icon">♡</span><span><b>Enregistrer</b><small>Disponible pour tous</small></span></button>${owner ? `<button class="menu-card" data-action="edit-post" data-id="${esc(id)}"><span class="menu-icon">✎</span><span><b>Modifier</b><small>Uniquement votre publication</small></span></button><button class="menu-card danger-card" data-action="delete-post" data-id="${esc(id)}"><span class="menu-icon">⌫</span><span><b>Supprimer</b><small>Vous êtes le propriétaire</small></span></button>` : `<button class="menu-card" data-action="report-post" data-id="${esc(id)}"><span class="menu-icon">⚑</span><span><b>Signaler</b><small>Signaler cette publication</small></span></button>`}</div></div>`);
     }
+    if (action === "menu-info") { settingInfo(actionEl.dataset.name || "Menu"); return; }
     if (action === "save-post") { const r=await sb.from("saved_posts").upsert({user_id:state.user.id,post_id:id},{onConflict:"user_id,post_id"}); toast(r.error?r.error.message:"Publication enregistrée"); closeModal(); return; }
     if (action === "edit-post") return editPost(id);
     if (action === "save-post-edit") return savePostEdit(id);
@@ -781,7 +888,9 @@
     if (action === "accept-friend") return handleFriend(id,"accepted");
     if (action === "decline-friend") return handleFriend(id,"declined");
     if (action === "friends-tab") return friendsPage(actionEl.dataset.tab);
-    if (action === "view-profile") { return toast("Profil sélectionné"); }
+    if (action === "view-profile") {
+      return openUserProfile(id);
+    }
     if (action === "profile-tab") return profilePage(actionEl.dataset.tab);
     if (action === "edit-profile") return editProfile();
     if (action === "save-profile") return saveProfile();
