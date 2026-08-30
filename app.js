@@ -4,7 +4,7 @@
   const SUPABASE_URL = "https://qvxmaeepwrprtoaipoir.supabase.co";
   const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_OxmDXLn69jclSWnYtdjsxQ_TMfMI4X-";
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, lock: async (_n, _t, fn) => await fn() }
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, lock: async (_n, _t, fn) => await fn() }
   });
 
   const $ = id => document.getElementById(id);
@@ -1158,8 +1158,48 @@
     state.entering = false;
     await render();
   }
-  function showLogin() { $("signupView").classList.add("hidden"); $("loginView").classList.remove("hidden"); $("auth").classList.remove("hidden"); }
-  function showSignup() { $("loginView").classList.add("hidden"); $("signupView").classList.remove("hidden"); $("auth").classList.remove("hidden"); }
+  function showLogin() { ["signupView","resetPasswordView"].forEach(id => $(id)?.classList.add("hidden")); $("loginView").classList.remove("hidden"); $("auth").classList.remove("hidden"); }
+  function showSignup() { ["loginView","resetPasswordView"].forEach(id => $(id)?.classList.add("hidden")); $("signupView").classList.remove("hidden"); $("auth").classList.remove("hidden"); }
+  function showResetPassword(message="") {
+    ["loginView","signupView"].forEach(id => $(id)?.classList.add("hidden"));
+    $("resetPasswordView")?.classList.remove("hidden");
+    $("auth")?.classList.remove("hidden");
+    if ($("resetMsg")) $("resetMsg").textContent = message;
+  }
+  function resetRedirectUrl() {
+    return `${window.location.origin}${window.location.pathname}?reset=1`;
+  }
+  async function sendPasswordReset() {
+    const email = $("loginEmail")?.value.trim() || "";
+    if (!email || !email.includes("@")) {
+      toast("Entrez l’adresse e-mail utilisée pour votre compte.");
+      $("loginEmail")?.focus();
+      return;
+    }
+    const btn=$("forgotPassword");
+    if(btn){ btn.disabled=true; btn.textContent="Envoi en cours…"; }
+    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: resetRedirectUrl() });
+    if(btn){ btn.disabled=false; btn.textContent="Mot de passe oublié ?"; }
+    if(error) return toast(error.message);
+    toast("Un lien sécurisé vient d’être envoyé à votre adresse e-mail.");
+    if($("authMsg")) $("authMsg").textContent="Vérifiez votre boîte e-mail et ouvrez le lien Tafaß pour choisir un nouveau mot de passe.";
+  }
+  async function saveResetPassword(e) {
+    e.preventDefault();
+    const password=$("resetPassword")?.value || "", confirm=$("resetPasswordConfirm")?.value || "";
+    if(password.length < 6) return toast("Le mot de passe doit contenir au moins 6 caractères.");
+    if(password !== confirm) return toast("Les deux mots de passe ne correspondent pas.");
+    const btn=$("resetPasswordSubmit");
+    if(btn){ btn.disabled=true; btn.textContent="Enregistrement…"; }
+    const { error } = await sb.auth.updateUser({ password });
+    if(error){ if(btn){btn.disabled=false;btn.textContent="Enregistrer le nouveau mot de passe";} return toast(error.message); }
+    if($("resetMsg")) $("resetMsg").textContent="Mot de passe modifié avec succès. Vous pouvez maintenant utiliser votre compte.";
+    toast("Mot de passe modifié avec succès.");
+    $("resetPassword").value=""; $("resetPasswordConfirm").value="";
+    await sb.auth.signOut({ scope:"global" });
+    showLogin();
+    if($("authMsg")) $("authMsg").textContent="Votre mot de passe a été réinitialisé. Connectez-vous avec votre nouveau mot de passe.";
+  }
 
   document.addEventListener("click", async e => {
     const actionEl = e.target.closest("[data-action]");
@@ -1340,12 +1380,9 @@
   }));
   $("showSignup").addEventListener("click", showSignup);
   $("showLogin").addEventListener("click", showLogin);
-  $("forgotPassword").addEventListener("click", async () => {
-    const email = $("loginEmail").value.trim();
-    if (!email || !email.includes("@")) return toast("Entrez votre adresse e-mail.");
-    const { error } = await sb.auth.resetPasswordForEmail(email);
-    toast(error ? error.message : "Lien de réinitialisation envoyé par e-mail.");
-  });
+  $("resetBackLogin")?.addEventListener("click", showLogin);
+  $("forgotPassword").addEventListener("click", sendPasswordReset);
+  $("resetPasswordForm")?.addEventListener("submit", saveResetPassword);
   $("loginForm").addEventListener("submit", async e => {
     e.preventDefault();
     const value = $("loginEmail").value.trim(), password = $("loginPassword").value;
@@ -1400,8 +1437,13 @@
   };
   const splashFallback = setTimeout(finishSplash, 6500);
 
-  sb.auth.onAuthStateChange(async (_event, session) => {
+  sb.auth.onAuthStateChange(async (event, session) => {
     state.user = session?.user || null;
+    if (event === "PASSWORD_RECOVERY" || (location.search.includes("reset=1") && state.user)) {
+      $("app").classList.add("hidden");
+      showResetPassword();
+      return;
+    }
     if (state.user) await enterApp(); else { $("app").classList.add("hidden"); showLogin(); }
   });
 
@@ -1409,7 +1451,8 @@
     try {
       const { data } = await sb.auth.getSession();
       state.user = data.session?.user || null;
-      if (state.user) await enterApp(); else showLogin();
+      if (state.user && location.search.includes("reset=1")) showResetPassword();
+      else if (state.user) await enterApp(); else showLogin();
     } catch (err) {
       console.error("Tafaß initialisation:", err);
       showLogin();

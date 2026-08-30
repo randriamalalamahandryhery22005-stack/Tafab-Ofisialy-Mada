@@ -1036,3 +1036,12 @@ body.light .profile-edit-modal{background:linear-gradient(155deg,#fff,#f3f7fd)!i
   .profile-edit-modal.premium-profile-editor-v2 .profile-editor-footer-v2{padding:10px 15px 13px;gap:8px}
   .profile-edit-modal.premium-profile-editor-v2 .profile-editor-footer-v2 button{min-height:44px}
 }
+
+/* =========================================================
+   Tafaß — REAL PASSWORD RECOVERY
+   ========================================================= */
+.auth-security-badge{width:64px;height:64px;border-radius:20px;display:grid;place-items:center;margin:0 0 20px;background:linear-gradient(145deg,rgba(37,108,255,.18),rgba(112,78,255,.14));border:1px solid rgba(83,137,255,.24);color:#76a8ff;font-size:28px;font-weight:900;box-shadow:0 14px 35px rgba(25,88,255,.12)}
+#resetPasswordForm .primary{margin-top:5px}
+#forgotPassword:disabled{opacity:.55;cursor:wait}
+#resetPasswordView .text-link{margin-top:5px}
+@media(max-width:480px){.auth-security-badge{width:58px;height:58px;border-radius:18px;margin-bottom:16px}.auth-subtitle{line-height:1.55}}
