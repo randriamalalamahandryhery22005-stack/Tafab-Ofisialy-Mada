@@ -420,3 +420,129 @@ body.light .clean-filter{border-bottom-color:#dce5f1}
 .clean-message-form input{min-width:0;flex:1;height:44px;border-radius:13px}
 .clean-message-form button{height:44px;padding:0 16px;border-radius:13px;font-size:10px;font-weight:800}
 @media(max-width:720px){.clean-message-list{min-height:calc(100dvh - 300px);max-height:calc(100dvh - 220px)}.clean-message-form{padding-bottom:4px}.clean-message-form button{padding:0 14px}}
+
+
+/* =========================================================
+   TAFAß — ACTUALITÉS PREMIUM CLEAN
+   ========================================================= */
+.post{
+  position:relative;
+  overflow:hidden;
+  border:1px solid var(--line);
+  border-radius:22px;
+  background:linear-gradient(180deg,var(--surface),var(--surface-2));
+  box-shadow:var(--shadow);
+}
+.post-head{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:17px 18px 12px;
+}
+.post-head .meta{min-width:0;flex:1;display:grid;gap:3px}
+.post-head .meta b{font-size:14px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.post-head .meta small{font-size:11px;color:var(--muted)}
+.post-menu{
+  width:36px;height:36px;border-radius:11px;
+  display:grid;place-items:center;
+  color:var(--muted);font-size:22px;
+}
+.post-menu:hover{background:var(--surface-3);color:var(--text)}
+.post-body{
+  padding:2px 18px 15px;
+  font-size:14px;
+  line-height:1.65;
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
+}
+.post-media{
+  display:block;width:100%;max-height:560px;object-fit:cover;
+  background:#050812;
+}
+.post-stats{
+  display:flex;justify-content:space-between;gap:12px;
+  padding:12px 18px;
+  border-bottom:1px solid var(--line);
+  color:var(--muted);font-size:11px;
+}
+.post-stats span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.post-actions{
+  display:grid;grid-template-columns:repeat(3,1fr);
+  border-bottom:1px solid var(--line);
+}
+.post-actions button{
+  min-height:46px;padding:0 8px;
+  color:var(--text-2);font-weight:700;font-size:12px;
+  transition:background .15s,color .15s;
+}
+.post-actions button:hover{background:var(--surface-3);color:var(--text)}
+.comments{padding:10px 14px 14px}
+.comment{
+  display:flex;align-items:flex-start;gap:9px;
+  padding:7px 2px;
+}
+.comment .avatar{width:32px;height:32px;font-size:11px}
+.comment .bubble{
+  max-width:calc(100% - 42px);
+  padding:9px 12px;
+  border-radius:15px;
+  background:var(--surface-3);
+  color:var(--text-2);
+  font-size:12px;line-height:1.45;
+  overflow-wrap:anywhere;
+}
+.comment .bubble b{color:var(--text);font-size:11px}
+.comment-time{display:block;margin-top:4px;color:var(--muted);font-size:9px}
+.comment-form{
+  display:flex;align-items:center;gap:8px;
+  margin-top:8px;
+}
+.comment-form input{min-width:0;min-height:42px;padding:10px 12px}
+.comment-form button{
+  flex:0 0 auto;min-height:42px;padding:0 14px;
+  border-radius:11px;background:var(--blue);color:#fff;font-weight:800;font-size:12px;
+}
+.reaction-picker{
+  display:flex;flex-wrap:wrap;gap:7px;
+  padding:10px 14px;
+  background:var(--surface-2);
+  border-bottom:1px solid var(--line);
+}
+.reaction-picker button{
+  border:1px solid var(--line);
+  background:var(--surface);
+  border-radius:999px;
+  padding:8px 11px;
+  color:var(--text-2);
+  font-size:11px;font-weight:750;
+}
+.reaction-picker button:hover{
+  border-color:var(--line-strong);
+  background:var(--surface-3);
+}
+.composer{
+  border-radius:22px;
+  overflow:hidden;
+}
+.composer-top{
+  display:flex;align-items:center;gap:10px;
+}
+.composer-actions{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+}
+.composer-actions .file-label,
+.composer-actions button:not(.primary){
+  min-height:40px;padding:0 12px;
+  display:inline-flex;align-items:center;justify-content:center;
+  border:1px solid var(--line);border-radius:11px;
+  color:var(--text-2);font-size:11px;font-weight:700;
+}
+.composer-actions .primary{margin-left:auto;min-height:40px;padding:0 18px}
+@media(max-width:560px){
+  .post-head{padding:14px 14px 10px}
+  .post-body{padding-left:14px;padding-right:14px}
+  .post-stats{padding:10px 14px;font-size:10px}
+  .post-actions button{font-size:11px}
+  .comments{padding-left:10px;padding-right:10px}
+  .composer-actions .primary{margin-left:0}
+}

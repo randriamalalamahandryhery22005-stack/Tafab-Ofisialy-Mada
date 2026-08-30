@@ -71,12 +71,37 @@
   }
 
   async function reactionsFor(postId) {
-    const { data } = await sb.from("post_reactions").select("reaction_type,user_id").eq("post_id", postId);
+    const { data, error } = await sb.from("post_reactions")
+      .select("reaction_type,user_id")
+      .eq("post_id", postId);
+    if (error) {
+      console.warn("Réactions:", error.message);
+      return [];
+    }
     return data || [];
   }
+
   async function commentsFor(postId) {
-    const { data } = await sb.from("comments").select("*").eq("post_id", postId).order("created_at", { ascending: true }).limit(50);
-    return data || [];
+    const { data, error } = await sb.from("comments")
+      .select("*")
+      .eq("post_id", postId)
+      .order("created_at", { ascending: true })
+      .limit(100);
+    if (error) {
+      console.warn("Commentaires:", error.message);
+      return [];
+    }
+
+    const comments = data || [];
+    const ids = [...new Set(comments.map(c => c.user_id).filter(Boolean))];
+    if (!ids.length) return comments;
+
+    const { data: profiles } = await sb.from("profiles")
+      .select("id,first_name,last_name,username,avatar_url,email")
+      .in("id", ids);
+
+    const map = new Map((profiles || []).map(p => [p.id, p]));
+    return comments.map(c => ({ ...c, author: map.get(c.user_id) || null }));
   }
 
   function storyStrip() {
@@ -86,11 +111,11 @@
   }
 
   async function renderFeed() {
-    let html = storyStrip();
+    let html = "";
     html += `<div class="card composer">
       <div class="composer-top">${avatarHTML(state.profile)}<b>${esc(nameOf(state.profile))}</b></div>
       <textarea id="postText" placeholder="Quoi de neuf, ${esc((state.profile?.first_name || "").trim() || "vous")} ?"></textarea>
-      <div class="composer-actions"><label class="file-label">▧ Photo/Vidéo<input id="postFile" type="file" accept="image/*,video/*" hidden></label><button type="button" data-action="mood">◎ Humeur</button><button type="button" class="primary" id="publishBtn">Publier</button></div>
+      <div class="composer-actions"><label class="file-label">▧ Photo/Vidéo<input id="postFile" type="file" accept="image/*,video/*" hidden></label><button type="button" class="primary" id="publishBtn">Publier</button></div>
     </div>`;
     if (!state.posts.length) html += `<div class="card empty">Aucune publication pour le moment.<br><span>Publiez la première sur Tafaß.</span></div>`;
     for (const p of state.posts) html += await postHTML(p);
@@ -100,55 +125,193 @@
 
   async function postHTML(p) {
     const [rs, cs] = await Promise.all([reactionsFor(p.id), commentsFor(p.id)]);
-    const counts = {}; rs.forEach(r => counts[r.reaction_type] = (counts[r.reaction_type] || 0) + 1);
-    const mine = rs.find(r => r.user_id === state.user.id)?.reaction_type;
+
+    const counts = {};
+    rs.forEach(r => {
+      const type = String(r.reaction_type || "").toLowerCase();
+      counts[type] = (counts[type] || 0) + 1;
+    });
+
+    const mine = rs.find(r => r.user_id === state.user.id)?.reaction_type || "";
     const media = p.media_url
       ? (p.media_type === "video" || p.media_type === "reel"
         ? `<video class="post-media" src="${esc(p.media_url)}" controls preload="metadata"></video>`
         : `<img class="post-media" src="${esc(p.media_url)}" alt="Publication">`)
       : "";
-    const comments = cs.map(c => `<div class="comment">${avatarHTML(c.user_id === state.user.id ? state.profile : null)}<div class="bubble"><b>${esc(c.user_id === state.user.id ? nameOf(state.profile) : "Utilisateur")}</b><br>${esc(c.text || c.content || "")}</div></div>`).join("");
-    const reactions = Object.entries(counts).map(([k,v]) => `${esc(k)} ${v}`).join(" · ") || "Aucune réaction";
+
+    const comments = cs.map(c => {
+      const author = c.author || (c.user_id === state.user.id ? state.profile : null);
+      return `<div class="comment">
+        ${avatarHTML(author)}
+        <div class="bubble">
+          <b>${esc(nameOf(author))}</b>
+          <br>${esc(c.text || c.content || "")}
+          <small class="comment-time">${esc(timeAgo(c.created_at))}</small>
+        </div>
+      </div>`;
+    }).join("");
+
+    const reactionLabels = {
+      like: "J’aime",
+      love: "J’adore",
+      haha: "Haha",
+      wow: "Waouh",
+      sad: "Triste",
+      angry: "En colère"
+    };
+
+    const reactions = Object.entries(counts)
+      .map(([k,v]) => `${esc(reactionLabels[k] || k)} ${v}`)
+      .join(" · ") || "Aucune réaction";
+
+    const totalComments = Number(p.comments_count ?? cs.length);
+    const totalShares = Number(p.shares_count ?? p.shares ?? 0);
+    const mineLabel = reactionLabels[String(mine).toLowerCase()] || "J’aime";
+
     return `<article class="post" id="post-${esc(p.id)}">
-      <div class="post-head">${avatarHTML(p.author)}<div class="meta"><b>${esc(nameOf(p.author))}</b><small>${timeAgo(p.created_at)} · Public</small></div><button class="post-menu" data-action="post-menu" data-id="${esc(p.id)}">⋯</button></div>
-      ${p.content ? `<div class="post-body">${esc(p.content)}</div>` : ""}${media}
-      <div class="post-stats"><span>${reactions}</span><span>${cs.length} commentaire(s) · ${Number(p.shares || 0)} partage(s)</span></div>
-      <div class="post-actions"><button class="react-btn" data-action="react" data-id="${esc(p.id)}">♡ ${esc(mine || "J’aime")}</button><button data-action="comment" data-id="${esc(p.id)}">▢ Commenter</button><button data-action="share" data-id="${esc(p.id)}">↗ Partager</button></div>
+      <div class="post-head">
+        ${avatarHTML(p.author)}
+        <div class="meta">
+          <b>${esc(nameOf(p.author))}</b>
+          <small>${esc(timeAgo(p.created_at))} · Public</small>
+        </div>
+        <button class="post-menu" data-action="post-menu" data-id="${esc(p.id)}" aria-label="Options">⋯</button>
+      </div>
+      ${p.content ? `<div class="post-body">${esc(p.content)}</div>` : ""}
+      ${media}
+      <div class="post-stats">
+        <span>${reactions}</span>
+        <span>${totalComments} commentaire${totalComments > 1 ? "s" : ""} · ${totalShares} partage${totalShares > 1 ? "s" : ""}</span>
+      </div>
+      <div class="post-actions">
+        <button class="react-btn" data-action="react" data-id="${esc(p.id)}" aria-label="Réagir">♡ ${esc(mineLabel)}</button>
+        <button data-action="comment" data-id="${esc(p.id)}">▢ Commenter</button>
+        <button data-action="share" data-id="${esc(p.id)}">↗ Partager</button>
+      </div>
       <div id="reaction-${esc(p.id)}"></div>
-      <div class="comments">${comments}<div class="comment-form"><input id="comment-${esc(p.id)}" placeholder="Écrire un commentaire..."><button data-action="send-comment" data-id="${esc(p.id)}">Envoyer</button></div></div>
+      <div class="comments">
+        ${comments}
+        <div class="comment-form">
+          <input id="comment-${esc(p.id)}" placeholder="Écrire un commentaire..." autocomplete="off">
+          <button data-action="send-comment" data-id="${esc(p.id)}">Envoyer</button>
+        </div>
+      </div>
     </article>`;
   }
 
   async function showReactions(id) {
-    const box = $("reaction-" + id); if (!box) return;
-    box.innerHTML = `<div class="reaction-picker">${["J’aime","J’adore","Solidaire","Haha","Waouh","Triste","En colère"].map(x => `<button data-reaction="${esc(x)}">${esc(x)}</button>`).join("")}</div>`;
-    box.querySelectorAll("[data-reaction]").forEach(b => b.addEventListener("click", () => setReaction(id, b.dataset.reaction), { once: true }));
+    const box = $("reaction-" + id);
+    if (!box) return;
+
+    const choices = [
+      ["like", "J’aime"],
+      ["love", "J’adore"],
+      ["haha", "Haha"],
+      ["wow", "Waouh"],
+      ["sad", "Triste"],
+      ["angry", "En colère"]
+    ];
+
+    box.innerHTML = `<div class="reaction-picker">
+      ${choices.map(([value,label]) =>
+        `<button type="button" data-reaction="${value}">${label}</button>`
+      ).join("")}
+    </div>`;
+
+    box.querySelectorAll("[data-reaction]").forEach(button => {
+      button.addEventListener("click", () => setReaction(id, button.dataset.reaction), { once: true });
+    });
   }
+
   async function setReaction(postId, reaction) {
-    const { error } = await sb.rpc("tafa_set_post_reaction", { p_post_id: postId, p_reaction_type: reaction });
-    if (error) return toast(error.message);
-    const post = state.posts.find(x => x.id === postId);
-    if (post) await createNotification(post.user_id, "reaction", "Nouvelle réaction", `${nameOf(state.profile)} a réagi à votre publication.`, "post", postId);
-    toast("Réaction enregistrée"); await loadPosts();
-  }
-  async function addComment(postId) {
-    const input = $("comment-" + postId), text = input?.value.trim(); if (!text) return;
-    const { error } = await sb.from("comments").insert({ post_id: postId, user_id: state.user.id, text, content: text });
-    if (error) return toast(error.message);
-    const post = state.posts.find(x => x.id === postId);
-    if (post) await createNotification(post.user_id, "comment", "Nouveau commentaire", `${nameOf(state.profile)} a commenté votre publication.`, "post", postId);
-    input.value = ""; toast("Commentaire publié"); await loadPosts();
-  }
-  async function sharePost(id) {
-    const { error } = await sb.rpc("tafa_increment_post_share", { p_post_id: id });
+    const { error } = await sb.rpc("tafa_set_post_reaction", {
+      p_post_id: postId,
+      p_reaction_type: reaction
+    });
+
     if (error) {
-      const p = state.posts.find(x => x.id === id);
-      if (!p) return toast(error.message);
-      const r = await sb.from("posts").update({ shares: Number(p.shares || 0) + 1 }).eq("id", id);
-      if (r.error) return toast(r.error.message);
+      toast(error.message);
+      return;
     }
-    toast("Publication partagée"); await loadPosts();
+
+    const post = state.posts.find(x => x.id === postId);
+    if (post && post.user_id !== state.user.id) {
+      await createNotification(
+        post.user_id,
+        "reaction",
+        "Nouvelle réaction",
+        `${nameOf(state.profile)} a réagi à votre publication.`,
+        "post",
+        postId
+      );
+    }
+
+    toast("Réaction enregistrée");
+    await loadPosts();
   }
+
+  async function addComment(postId) {
+    const input = $("comment-" + postId);
+    const text = input?.value.trim();
+
+    if (!text) return;
+
+    const { error } = await sb.from("comments").insert({
+      post_id: postId,
+      user_id: state.user.id,
+      text,
+      content: text
+    });
+
+    if (error) {
+      toast(error.message);
+      return;
+    }
+
+    const post = state.posts.find(x => x.id === postId);
+    if (post && post.user_id !== state.user.id) {
+      await createNotification(
+        post.user_id,
+        "comment",
+        "Nouveau commentaire",
+        `${nameOf(state.profile)} a commenté votre publication.`,
+        "post",
+        postId
+      );
+    }
+
+    input.value = "";
+    toast("Commentaire publié");
+    await loadPosts();
+  }
+
+  async function sharePost(id) {
+    const { error } = await sb.rpc("tafa_share_post", {
+      p_post_id: id,
+      p_share_message: ""
+    });
+
+    if (error) {
+      toast(error.message);
+      return;
+    }
+
+    const post = state.posts.find(x => x.id === id);
+    if (post && post.user_id !== state.user.id) {
+      await createNotification(
+        post.user_id,
+        "share",
+        "Publication partagée",
+        `${nameOf(state.profile)} a partagé votre publication.`,
+        "post",
+        id
+      );
+    }
+
+    toast("Publication partagée");
+    await loadPosts();
+  }
+
   async function publishPost() {
     if (!state.user) return;
     const text = $("postText")?.value.trim() || "", file = $("postFile")?.files?.[0];
@@ -563,8 +726,18 @@
     state.channel = sb.channel("tafa-live-ui")
       .on("postgres_changes", { event:"*", schema:"public", table:"profiles" }, () => { loadProfile(); if (state.route==="search") searchPage(""); })
       .on("postgres_changes", { event:"*", schema:"public", table:"posts" }, () => loadPosts())
-      .on("postgres_changes", { event:"*", schema:"public", table:"comments" }, () => loadPosts())
-      .on("postgres_changes", { event:"*", schema:"public", table:"post_reactions" }, () => loadPosts())
+      .on("postgres_changes", { event:"*", schema:"public", table:"comments" }, () => {
+        if (state.route === "home" || state.route === "profile") loadPosts();
+      })
+      .on("postgres_changes", { event:"*", schema:"public", table:"post_reactions" }, () => {
+        if (state.route === "home" || state.route === "profile") loadPosts();
+      })
+      .on("postgres_changes", { event:"*", schema:"public", table:"comment_likes" }, () => {
+        if (state.route === "home" || state.route === "profile") loadPosts();
+      })
+      .on("postgres_changes", { event:"*", schema:"public", table:"post_shares" }, () => {
+        if (state.route === "home" || state.route === "profile") loadPosts();
+      })
       .on("postgres_changes", { event:"*", schema:"public", table:"notifications" }, () => { updateBadges(); if (state.route==="notifications") notificationsPage(); })
       .on("postgres_changes", { event:"*", schema:"public", table:"messages" }, () => {
         if (state.route==="messages") state.selectedConversation ? openConversation(state.selectedConversation) : messagesPage();
@@ -661,9 +834,6 @@
     }
     if (action === "logout") return logout();
     if (action === "close-modal") return closeModal();
-    if (action === "add-story") return toast("Les stories seront disponibles après activation du stockage dédié.");
-    if (action === "story") return toast("Story consultable prochainement.");
-    if (action === "mood") return toast("Choisissez une humeur dans une prochaine version.");
   });
 
   document.querySelectorAll("[data-password-toggle]").forEach(btn => btn.addEventListener("click", () => {
