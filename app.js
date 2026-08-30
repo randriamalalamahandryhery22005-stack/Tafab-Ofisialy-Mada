@@ -13,7 +13,7 @@
   const state = {
     user: null, profile: null, route: "home", posts: [], friends: [], stories: [],
     channel: null, theme: localStorage.getItem("tafa-theme") || "dark", entering: false,
-    profileTab: "posts", selectedConversation: null, renderToken: 0
+    profileTab: "posts", friendsTab: "suggestions", selectedConversation: null, renderToken: 0
   };
 
   function avatarHTML(p, cls = "avatar") {
@@ -170,19 +170,31 @@
     finally { setLoading(button, false, "Publier"); }
   }
 
-  async function friendsPage() {
-    const { data, error } = await sb.from("profiles").select("*").neq("id", state.user.id).limit(40);
+  async function friendsPage(tab = state.friendsTab) {
+    state.friendsTab = tab || "suggestions";
+    const token = state.renderToken;
+    const { data: people, error } = await sb.from("profiles").select("*").neq("id", state.user.id).limit(80);
+    if (token !== state.renderToken) return;
     if (error) return simplePage("Amis", `<div class="empty">${esc(error.message)}</div>`);
-    const people = data || [];
-    const incoming = await sb.from("friend_requests").select("*").eq("receiver_id", state.user.id).eq("status", "pending");
-    const sent = await sb.from("friend_requests").select("receiver_id,status").eq("sender_id", state.user.id);
-    const sentIds = new Set((sent.data || []).map(x => x.receiver_id));
-    const pending = new Set((incoming.data || []).map(x => x.sender_id));
-    $("content").innerHTML = `<section class="clean-page friends-page"><div class="page-header clean-page-header"><div><h2>Amis</h2><p class="page-kicker">Votre réseau, vos demandes et vos suggestions</p></div><span class="count-label">${people.length} personnes</span></div><div class="friends-filter clean-filter"><button class="active">Suggestions</button><button>Amis</button><button>Demandes</button></div>${pending.size ? `<div class="clean-section"><h3 class="menu-section-title">Demandes reçues</h3>${people.filter(p=>pending.has(p.id)).map(p=>friendRow(p,"incoming")).join("")}</div>` : ""}<div class="clean-section"><h3 class="menu-section-title">Suggestions pour vous</h3>${people.map(p=>friendRow(p,sentIds.has(p.id)?"sent":"add")).join("")}</div></section>`;
+    const incomingR = await sb.from("friend_requests").select("sender_id,status").eq("receiver_id", state.user.id).eq("status", "pending");
+    const sentR = await sb.from("friend_requests").select("receiver_id,status").eq("sender_id", state.user.id).eq("status", "pending");
+    const mineR = await sb.from("friendships").select("friend_id").eq("user_id", state.user.id);
+    if (token !== state.renderToken) return;
+    const incoming = new Set((incomingR.data || []).map(x => x.sender_id));
+    const sent = new Set((sentR.data || []).map(x => x.receiver_id));
+    const friendIds = new Set((mineR.data || []).map(x => x.friend_id));
+    const map = new Map((people || []).map(p => [p.id, p]));
+    const friends = [...friendIds].map(id => map.get(id)).filter(Boolean);
+    const requests = [...incoming].map(id => map.get(id)).filter(Boolean);
+    const suggestions = (people || []).filter(p => !friendIds.has(p.id) && !incoming.has(p.id) && !sent.has(p.id));
+    const tabButton = (key, label, count) => `<button class="${state.friendsTab === key ? "active" : ""}" data-action="friends-tab" data-tab="${key}">${label}${count ? ` <span class="tab-count">${count}</span>` : ""}</button>`;
+    const body = state.friendsTab === "friends" ? (friends.length ? friends.map(p => friendRow(p,"friend")).join("") : `<div class="empty">Vous n'avez pas encore d'amis.</div>`) : state.friendsTab === "requests" ? (requests.length ? requests.map(p => friendRow(p,"incoming")).join("") : `<div class="empty">Aucune demande en attente.</div>`) : (suggestions.length ? suggestions.map(p => friendRow(p,sent.has(p.id)?"sent":"add")).join("") : `<div class="empty">Aucune suggestion pour le moment.</div>`);
+    const title = state.friendsTab === "friends" ? "Vos amis" : state.friendsTab === "requests" ? "Demandes reçues" : "Suggestions pour vous";
+    $("content").innerHTML = `<section class="clean-page friends-page"><div class="page-header clean-page-header"><div><h2>Amis</h2><p class="page-kicker">Votre réseau, vos demandes et vos suggestions</p></div><span class="count-label">${friends.length} amis</span></div><div class="friends-filter clean-filter">${tabButton("suggestions","Suggestions",suggestions.length)}${tabButton("friends","Amis",friends.length)}${tabButton("requests","Demandes",requests.length)}</div><div class="clean-section friends-section"><h3 class="menu-section-title">${title}</h3><div class="friends-list">${body}</div></div></section>`;
   }
-  function friendRow(p, type) {
-    const action = type === "sent" ? `<button class="ghost-action" disabled>Envoyée</button>` : type === "incoming" ? `<div><button class="small-action" data-action="accept-friend" data-id="${esc(p.id)}">Confirmer</button><button class="ghost-action" data-action="decline-friend" data-id="${esc(p.id)}">Supprimer</button></div>` : `<button class="small-action" data-action="add-friend" data-id="${esc(p.id)}">Ajouter</button>`;
-    return `<div class="list-row">${avatarHTML(p)}<div class="grow"><b>${esc(nameOf(p))}</b><small>${p.username ? "@"+esc(p.username) : "Membre Tafaß"}</small></div>${action}</div>`;
+  function friendRow(p,type) {
+    const action = type === "friend" ? `<button class="ghost-action" data-action="view-profile" data-id="${esc(p.id)}">Profil</button>` : type === "sent" ? `<button class="ghost-action" disabled>Demande envoyée</button>` : type === "incoming" ? `<div class="friend-actions"><button class="small-action" data-action="accept-friend" data-id="${esc(p.id)}">Confirmer</button><button class="ghost-action" data-action="decline-friend" data-id="${esc(p.id)}">Refuser</button></div>` : `<button class="small-action" data-action="add-friend" data-id="${esc(p.id)}">Ajouter</button>`;
+    return `<div class="list-row friend-row">${avatarHTML(p)}<div class="grow"><b>${esc(nameOf(p))}</b><small>${p.username ? "@"+esc(p.username) : "Membre Tafaß"}</small></div>${action}</div>`;
   }
   async function addFriend(id) {
     const { error } = await sb.from("friend_requests").insert({ sender_id: state.user.id, receiver_id: id, status: "pending" });
@@ -205,6 +217,7 @@
   }
 
   async function searchPage(q = "") {
+    const token = state.renderToken;
     const term = q.trim(); let data = [];
     if (term) {
       const r = await sb.from("profiles").select("*")
@@ -212,16 +225,19 @@
       data = r.data || [];
       await sb.from("search_history").insert({ user_id: state.user.id, search_text: term, result_type: "profiles" });
     }
+    if (token !== state.renderToken) return;
     $("content").innerHTML = `<div class="card search-page"><div class="page-header"><h2>Rechercher</h2></div><input id="searchInput" value="${esc(term)}" placeholder="Compte, pseudo..."><div id="searchResults">${term ? (data.length ? data.map(p=>`<div class="list-row">${avatarHTML(p)}<div class="grow"><b>${esc(nameOf(p))}</b><small>@${esc(p.username||"")}</small></div><button class="small-action" data-action="view-profile" data-id="${esc(p.id)}">Voir</button></div>`).join("") : `<div class="empty">Aucun résultat.</div>`) : `<div class="empty">Recherchez un utilisateur.</div>`}</div></div>`;
     $("searchInput").addEventListener("keydown", e => { if (e.key === "Enter") searchPage(e.target.value); });
   }
 
   async function messagesPage() {
+    const token = state.renderToken;
     const { data: memberships, error } = await sb.from("conversation_members")
       .select("conversation_id")
       .eq("user_id", state.user.id);
 
     if (error) return simplePage("Messages", `<div class="empty">${esc(error.message)}</div>`);
+    if (token !== state.renderToken) return;
 
     const ids = [...new Set((memberships || []).map(x => x.conversation_id))];
     let conversations = [];
@@ -251,6 +267,7 @@
       </button>`);
     }
 
+    if (token !== state.renderToken) return;
     $("content").innerHTML = `<section class="clean-page messages-page">
       <div class="page-header clean-page-header"><div><h2>Messages</h2><p class="page-kicker">Vos conversations, simplement et en temps réel</p></div><button class="round-button clean-new-button" data-action="new-message" aria-label="Nouvelle conversation">＋</button></div>
       <div class="clean-search searchbox"><span class="icon">⌕</span><input id="messageSearch" placeholder="Rechercher une conversation"></div>
@@ -282,16 +299,19 @@
     closeModal(); await openConversation(conv.id);
   }
   async function openConversation(id) {
+    const token = state.renderToken;
     state.selectedConversation = id;
     const { data: msgs } = await sb.from("messages").select("*").eq("conversation_id", id).order("created_at", { ascending: true }).limit(100);
     const ids = [...new Set((msgs || []).map(m => m.sender_id))];
     const { data: profiles } = ids.length ? await sb.from("profiles").select("*").in("id", ids) : { data: [] };
+    if (token !== state.renderToken) return;
     const map = new Map((profiles || []).map(p => [p.id, p]));
     $("content").innerHTML = `<section class="clean-page messages-page conversation-page"><div class="page-header clean-page-header"><button class="text-button" data-route="messages">‹ Messages</button><h2>Discussion</h2><span></span></div><div class="message-list clean-message-list">${(msgs||[]).map(m=>`<div class="message ${m.sender_id===state.user.id?"mine":""}"><div>${esc(m.content)}</div><small>${timeAgo(m.created_at)}</small></div>`).join("")||`<div class="empty">Dites bonjour 👋</div>`}</div><form id="messageForm" class="comment-form clean-message-form"><input id="messageText" placeholder="Écrire un message..." required><button>Envoyer</button></form></section>`;
     $("messageForm").addEventListener("submit", async e => { e.preventDefault(); const text=$("messageText").value.trim(); if(!text)return; const r=await sb.from("messages").insert({conversation_id:id,sender_id:state.user.id,content:text}); if(r.error)toast(r.error.message); else {$("messageText").value=""; await openConversation(id);} });
   }
 
   async function notificationsPage() {
+    const token = state.renderToken;
     const { data, error } = await sb.from("notifications").select("*")
       .eq("user_id", state.user.id).order("created_at", { ascending: false }).limit(80);
     if (error) return simplePage("Alertes", `<div class="empty">${esc(error.message)}</div>`);
@@ -299,6 +319,7 @@
     const actorIds = [...new Set((data || []).map(n => n.actor_id).filter(Boolean))];
     const { data: actors } = actorIds.length ? await sb.from("profiles").select("*").in("id", actorIds) : { data: [] };
     const amap = new Map((actors || []).map(p => [p.id,p]));
+    if (token !== state.renderToken) return;
 
     $("content").innerHTML = `<section class="clean-page alerts-page"><div class="page-header clean-page-header"><div><h2>Alertes</h2><p class="page-kicker">Les activités importantes de votre compte</p></div>
       <button class="text-button clean-read-button" data-action="mark-read">Tout lire</button></div>
@@ -342,6 +363,7 @@
   }
 
   async function profilePage(tab = state.profileTab) {
+    const token = state.renderToken;
     state.profileTab = tab;
     const p = state.profile || {}, mine = state.posts.filter(x => x.user_id === state.user.id);
     const photos = mine.filter(x => x.media_url && x.media_type === "image");
@@ -351,6 +373,7 @@
       sb.from("follows").select("id", { count:"exact", head:true }).eq("following_id", state.user.id)
     ]);
     const friendsCount = friendsCountR.count || 0, followersCount = followersCountR.count || 0;
+    if (token !== state.renderToken) return;
     let tabBody = "";
     if (tab === "photos") tabBody = `<div class="card"><div class="photo-grid">${photos.map(x=>`<img src="${esc(x.media_url)}" alt="Photo">`).join("") || `<div class="empty" style="grid-column:1/-1">Aucune photo publiée.</div>`}</div></div>`;
     else if (tab === "friends") tabBody = `<div class="card"><div class="list-row">${avatarHTML(p)}<div class="grow"><b>Votre réseau</b><small>Découvrez vos amis et les personnes que vous suivez.</small></div></div><button class="primary big" data-route="friends">Voir mes amis</button></div>`;
@@ -361,13 +384,23 @@
 
   function editProfile() {
     const p = state.profile || {};
-    openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><h3>Modifier le profil</h3><div class="form-stack"><label>Prénom<input id="pfFirst" value="${esc(p.first_name||"")}"></label><label>Nom<input id="pfLast" value="${esc(p.last_name||"")}"></label><label>Pseudo<input id="pfUsername" value="${esc(p.username||"")}"></label><label>Bio<textarea id="pfBio">${esc(p.bio||"")}</textarea></label><label>Ville / pays<input id="pfLocation" value="${esc(p.location||"")}"></label><button class="primary big" data-action="save-profile">Enregistrer</button></div></div>`);
+    openModal(`<div class="modal-box profile-edit-modal"><button class="modal-close" data-action="close-modal">×</button><h3>Modifier le profil</h3><div class="profile-media-pickers"><label class="media-picker"><span>Photo de profil</span><input id="pfAvatar" type="file" accept="image/*"></label><label class="media-picker"><span>Photo de couverture</span><input id="pfCover" type="file" accept="image/*"></label></div><div class="form-stack"><label>Prénom<input id="pfFirst" value="${esc(p.first_name||"")}"></label><label>Nom<input id="pfLast" value="${esc(p.last_name||"")}"></label><label>Pseudo<input id="pfUsername" value="${esc(p.username||"")}"></label><label>Bio<textarea id="pfBio">${esc(p.bio||"")}</textarea></label><label>Ville / pays<input id="pfLocation" value="${esc(p.location||"")}"></label><button class="primary big" data-action="save-profile">Enregistrer</button></div></div>`);
   }
   async function saveProfile() {
-    const patch = { first_name:$("pfFirst").value.trim(), last_name:$("pfLast").value.trim(), username:$("pfUsername").value.trim().replace(/^@/,"") || null, bio:$("pfBio").value.trim(), location:$("pfLocation").value.trim() };
-    const { error } = await sb.from("profiles").update(patch).eq("id", state.user.id);
-    if (error) return toast(error.message);
-    closeModal(); await loadProfile(); toast("Profil mis à jour"); await profilePage();
+    const patch = { first_name:$('pfFirst').value.trim(), last_name:$('pfLast').value.trim(), username:$('pfUsername').value.trim().replace(/^@/,"") || null, bio:$('pfBio').value.trim(), location:$('pfLocation').value.trim() };
+    try {
+      for (const [file,key] of [[$('pfAvatar')?.files?.[0],"avatar_url"],[$('pfCover')?.files?.[0],"cover_url"]]) {
+        if (!file) continue;
+        const ext=(file.name.split('.').pop()||'jpg').toLowerCase();
+        const path=`${state.user.id}/${key.replace('_url','')}-${crypto.randomUUID()}.${ext}`;
+        const up=await sb.storage.from('profile-media').upload(path,file,{upsert:false,contentType:file.type||'image/jpeg'});
+        if(up.error) throw new Error('Upload : '+up.error.message);
+        patch[key]=sb.storage.from('profile-media').getPublicUrl(path).data.publicUrl;
+      }
+      const {error}=await sb.from('profiles').update(patch).eq('id',state.user.id);
+      if(error) throw new Error(error.message);
+      closeModal(); await loadProfile(); toast('Profil mis à jour'); await profilePage();
+    } catch(e) { toast(e.message); }
   }
 
   async function genericListPage(route) {
@@ -393,11 +426,13 @@
   }
 
   async function tafabPage() {
+    const token = state.renderToken;
     const [listR, adsR] = await Promise.all([
       sb.from("tafab_listings").select("*").eq("status","active").order("created_at",{ascending:false}).limit(30),
       sb.from("tafab_ads").select("*").eq("status","active").order("created_at",{ascending:false}).limit(20)
     ]);
     if (listR.error) return simplePage("Tafaß", `<div class="empty">${esc(listR.error.message)}</div>`);
+    if (token !== state.renderToken) return;
     const listings=listR.data||[], ads=adsR.data||[];
     simplePage("Tafaß", `
       <div class="tafab-hero premium-hero clean-tafab-hero">
@@ -421,12 +456,14 @@
   }
 
   async function settingsPage() {
+    const token = state.renderToken;
     let cfg = state.user ? (await sb.from("user_settings").select("*").eq("user_id", state.user.id).maybeSingle()).data : null;
     if (!cfg && state.user) {
       const r = await sb.from("user_settings").insert({ user_id: state.user.id }).select().single();
       cfg = r.data || {};
     }
     const dark = state.theme === "dark";
+    if (token !== state.renderToken) return;
     simplePage("Paramètres & Confidentialité", `<p class="page-subtitle">Gérez votre compte, votre confidentialité et vos préférences.</p>
       <div class="settings-grid">
         <button class="setting-card" data-action="setting" data-name="Compte"><span><b>Compte</b><small>Informations personnelles</small></span><span>›</span></button>
@@ -619,7 +656,8 @@
     if (action === "add-friend") return addFriend(id);
     if (action === "accept-friend") return handleFriend(id,"accepted");
     if (action === "decline-friend") return handleFriend(id,"declined");
-    if (action === "view-profile") { state.profileTab="posts"; return toast("Profil consultable depuis la recherche."); }
+    if (action === "friends-tab") return friendsPage(actionEl.dataset.tab);
+    if (action === "view-profile") { return toast("Profil sélectionné"); }
     if (action === "profile-tab") return profilePage(actionEl.dataset.tab);
     if (action === "edit-profile") return editProfile();
     if (action === "save-profile") return saveProfile();
