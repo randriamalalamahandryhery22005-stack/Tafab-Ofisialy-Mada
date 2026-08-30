@@ -660,3 +660,69 @@ body.light .profile-main-premium .profile-avatar{border-color:#f3f6fb}
   .reaction-picker-premium button small{display:none}
   .comment-depth-1{margin-left:16px}.comment-depth-2{margin-left:28px}.comment-depth-3{margin-left:38px}
 }
+
+
+/* =========================================================
+   TAFAß V11 — TEXT CONTAINMENT / NAVIGATION / REACTIONS
+   ========================================================= */
+.menu-card > span:last-child, .setting-card > span:last-child {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+.menu-card b, .setting-card b {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.menu-card small, .setting-card small {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.page-header, .page-header > div, .page-header h2, .page-kicker, .page-subtitle {
+  min-width: 0;
+  max-width: 100%;
+}
+.page-kicker, .page-subtitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.reaction-picker-premium {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(44px, 1fr));
+  gap: 7px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(8,14,27,.96);
+  box-shadow: 0 16px 36px rgba(0,0,0,.24);
+  overflow-x: auto;
+}
+.reaction-picker-premium button {
+  min-width: 44px;
+  min-height: 54px;
+  display: grid;
+  place-items: center;
+  gap: 2px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: rgba(24,38,62,.72);
+}
+.reaction-picker-premium button:hover {
+  border-color: rgba(87,145,255,.35);
+  transform: translateY(-1px);
+}
+.reaction-picker-premium button span { font-size: 24px; line-height: 1; }
+.reaction-picker-premium button small { font-size: 8px; max-width: 52px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 600px) {
+  .reaction-picker-premium { grid-template-columns: repeat(4, minmax(48px, 1fr)); }
+}
+body.light .reaction-picker-premium { background: rgba(255,255,255,.98); }
+body.light .reaction-picker-premium button { background: #eef3fa; }

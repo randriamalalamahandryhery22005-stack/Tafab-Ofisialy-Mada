@@ -86,7 +86,8 @@
 
   const reactionMeta = {
     like: ["J’aime", "👍"], love: ["J’adore", "❤️"], haha: ["Haha", "😂"],
-    wow: ["Waouh", "😮"], sad: ["Triste", "😢"], angry: ["En colère", "😡"]
+    wow: ["Waouh", "😮"], sad: ["Triste", "😢"], angry: ["En colère", "😡"],
+    care: ["J’adore 🥰", "🥰"], eye_roll: ["🙄", "🙄"]
   };
   async function reactionsFor(postId) {
     const { data } = await sb.from("post_reactions").select("reaction_type,user_id").eq("post_id", postId);
@@ -116,6 +117,7 @@
   }
 
   async function renderFeed() {
+    const token = state.renderToken;
     let html = storyStrip();
     html += `<div class="composer composer-clean">
       <div class="composer-top">${avatarHTML(state.profile)}<b>${esc(nameOf(state.profile))}</b></div>
@@ -123,7 +125,11 @@
       <div class="composer-actions"><label class="file-label">▧ Photo/Vidéo<input id="postFile" type="file" accept="image/*,video/*" hidden></label><button type="button" data-action="mood">◎ Humeur</button><button type="button" class="primary" id="publishBtn">Publier</button></div>
     </div>`;
     if (!state.posts.length) html += `<div class="card empty">Aucune publication pour le moment.<br><span>Publiez la première sur Tafaß.</span></div>`;
-    for (const p of state.posts) html += await postHTML(p);
+    for (const p of state.posts) {
+      if (token !== state.renderToken || state.route !== "home") return;
+      html += await postHTML(p);
+    }
+    if (token !== state.renderToken || state.route !== "home") return;
     $("content").innerHTML = html;
     $("publishBtn")?.addEventListener("click", publishPost);
   }
@@ -272,7 +278,7 @@
     if (error) return toast(error.message);
     await createNotification(id, "friend_request", "Nouvelle demande d’ami", `${nameOf(state.profile)} vous a envoyé une demande d’ami.`, "friend_request");
     toast("Invitation envoyée");
-    await friendsPage();
+    if (state.route === "friends") await friendsPage();
   }
   async function handleFriend(id, status) {
     const { error } = await sb.from("friend_requests").update({ status }).eq("sender_id", id).eq("receiver_id", state.user.id).eq("status", "pending");
@@ -284,7 +290,8 @@
       status === "accepted" ? "Demande acceptée" : "Demande refusée",
       `${nameOf(state.profile)} a ${status === "accepted" ? "accepté" : "refusé"} votre demande.`,
       "friend_request");
-    toast(status === "accepted" ? "Ami ajouté" : "Demande supprimée"); await friendsPage();
+    toast(status === "accepted" ? "Ami ajouté" : "Demande supprimée");
+    if (state.route === "friends") await friendsPage();
   }
 
   async function searchPage(q = "") {
@@ -307,8 +314,8 @@
       .select("conversation_id")
       .eq("user_id", state.user.id);
 
+    if (token !== state.renderToken || state.route !== "messages") return;
     if (error) return simplePage("Messages", `<div class="empty">${esc(error.message)}</div>`);
-    if (token !== state.renderToken) return;
 
     const ids = [...new Set((memberships || []).map(x => x.conversation_id))];
     let conversations = [];
@@ -385,6 +392,7 @@
     const token = state.renderToken;
     const { data, error } = await sb.from("notifications").select("*")
       .eq("user_id", state.user.id).order("created_at", { ascending: false }).limit(80);
+    if (token !== state.renderToken || state.route !== "notifications") return;
     if (error) return simplePage("Alertes", `<div class="empty">${esc(error.message)}</div>`);
 
     const actorIds = [...new Set((data || []).map(n => n.actor_id).filter(Boolean))];
@@ -491,27 +499,33 @@
       }
       const {error}=await sb.from('profiles').update(patch).eq('id',state.user.id);
       if(error) throw new Error(error.message);
-      closeModal(); await loadProfile(); toast('Profil mis à jour'); await profilePage();
+      closeModal(); await loadProfile(); toast('Profil mis à jour');
+      if (state.route === "profile") await profilePage(state.profileTab);
     } catch(e) { toast(e.message); }
   }
 
   async function genericListPage(route) {
+    const token = state.renderToken;
     if (route === "videos" || route === "reels") {
       const wanted = route === "reels" ? ["reel","video"] : ["video"];
       const rows = state.posts.filter(p => wanted.includes(p.media_type));
+      if (token !== state.renderToken || state.route !== route) return;
       $("content").innerHTML = `<div class="card"><div class="page-header"><h2>${route === "reels" ? "Reels" : "Vidéos"}</h2><span class="muted">Découvrir</span></div>${rows.length?rows.map(p=>`<article class="post"><div class="post-head">${avatarHTML(p.author)}<div class="meta"><b>${esc(nameOf(p.author))}</b><small>${timeAgo(p.created_at)}</small></div></div>${p.content?`<div class="post-body">${esc(p.content)}</div>`:""}${p.media_type==="video"||p.media_type==="reel"?`<video class="post-media" src="${esc(p.media_url)}" controls></video>`:""}</article>`).join(""):`<div class="empty">Aucun contenu pour le moment.</div>`}</div>`;
       return;
     }
     if (route === "pages") {
       const { data } = await sb.from("pages").select("*").limit(30);
+      if (token !== state.renderToken || state.route !== route) return;
       return simplePage("Pages", `<div class="page-header-actions"><button class="primary" data-action="create-page">＋ Créer une Page</button></div><div class="menu-grid">${(data||[]).map(p=>`<button class="menu-card" data-action="page-open" data-id="${esc(p.id)}"><span class="menu-icon">▣</span><span><b>${esc(p.name)}</b><small>${esc(p.category||"Page")}</small></span></button>`).join("") || `<div class="empty" style="grid-column:1/-1">Aucune Page disponible.</div>`}</div>`);
     }
     if (route === "groups") {
       const { data } = await sb.from("groups").select("*").limit(30);
+      if (token !== state.renderToken || state.route !== route) return;
       return simplePage("Groupes", `<div class="page-header-actions"><button class="primary" data-action="create-group">＋ Créer un groupe</button></div><div class="menu-grid">${(data||[]).map(g=>`<button class="menu-card" data-action="group-open" data-id="${esc(g.id)}"><span class="menu-icon">◎</span><span><b>${esc(g.name)}</b><small>${esc(g.privacy)}</small></span></button>`).join("") || `<div class="empty" style="grid-column:1/-1">Aucun groupe disponible.</div>`}</div>`);
     }
     if (route === "saved") {
       const { data } = await sb.from("saved_posts").select("post_id").eq("user_id", state.user.id);
+      if (token !== state.renderToken || state.route !== route) return;
       const ids = (data||[]).map(x=>x.post_id), saved = state.posts.filter(p=>ids.includes(p.id));
       return simplePage("Enregistrements", saved.length ? saved.map(p=>`<div class="list-row">${avatarHTML(p.author)}<div class="grow"><b>${esc(nameOf(p.author))}</b><small>${esc(p.content||"Publication enregistrée")}</small></div></div>`).join("") : `<div class="empty">Vos publications enregistrées apparaîtront ici.</div>`);
     }
@@ -542,7 +556,7 @@
     const p = state.profile || {};
     const items = [
       ["profile","◉","Profil","Voir votre profil"],["friends","♧","Amis","Votre réseau"],["groups","◎","Groupes","Communautés"],["pages","▣","Pages","Pages que vous gérez"],
-      ["saved","♡","Enregistrements","Publications sauvegardées"],["videos","▷","Vidéos","Regarder et publier"],["reels","◉","Reels","Formats courts"],["settings","⚙","Paramètres & Confidentialité","Compte, sécurité et préférences"]
+      ["saved","♡","Enregistrements","Publications sauvegardées"],["videos","▷","Vidéos","Regarder et publier"],["reels","◉","Reels","Formats courts"],["settings","⚙","Para & Conf","Compte, sécurité et préférences"]
     ];
     simplePage("Menu", `<div class="menu-profile">${avatarHTML(p)}<div class="grow"><b>${esc(nameOf(p))}</b><small>${esc(p.email || state.user?.email || "")}</small></div><button class="small-action" data-route="profile">Profil</button></div><div class="menu-section-title">Raccourcis</div><div class="menu-grid">${items.map(x=>`<button class="menu-card" data-route="${x[0]}"><span class="menu-icon">${x[1]}</span><span><b>${x[2]}</b><small>${x[3]}</small></span></button>`).join("")}</div><div class="menu-section-title">Actions</div><div class="menu-grid"><button class="menu-card danger-card" data-action="logout"><span class="menu-icon">↪</span><span><b>Déconnexion</b><small>Quitter ce compte</small></span></button></div>`);
   }
@@ -556,7 +570,7 @@
     }
     const dark = state.theme === "dark";
     if (token !== state.renderToken) return;
-    simplePage("Paramètres & Confidentialité", `<p class="page-subtitle">Gérez votre compte, votre confidentialité et vos préférences.</p>
+    simplePage("Para & Conf", `<p class="page-subtitle">Gérez votre compte, votre confidentialité et vos préférences.</p>
       <div class="settings-grid">
         <button class="setting-card" data-action="setting" data-name="Compte"><span><b>Compte</b><small>Informations personnelles</small></span><span>›</span></button>
         <button class="setting-card" data-action="setting" data-name="Paiement"><span><b>Paiement</b><small>Moyens et historique</small></span><span>›</span></button>
@@ -673,7 +687,9 @@
     state.route = route;
     state.selectedConversation = route === "messages" ? state.selectedConversation : null;
     history.replaceState(null, "", "#" + route);
-    render().catch(err => { console.error("Tafaß navigation:", err); });
+    render().catch(err => {
+      if (state.route === route) console.error("Tafaß navigation:", err);
+    });
   }
 
   function syncThemeButton() {
