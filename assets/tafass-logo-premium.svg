@@ -1,1 +1,9 @@
-
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Tafaß">
+ <defs><linearGradient id="g" x1="12" y1="8" x2="116" y2="120" gradientUnits="userSpaceOnUse"><stop stop-color="#69a7ff"/><stop offset=".48" stop-color="#3978ff"/><stop offset="1" stop-color="#7658ff"/></linearGradient><linearGradient id="s" x1="28" y1="18" x2="102" y2="110" gradientUnits="userSpaceOnUse"><stop stop-color="#ffffff"/><stop offset="1" stop-color="#dfeaff"/></linearGradient></defs>
+ <rect x="5" y="5" width="118" height="118" rx="34" fill="#09152b"/>
+ <rect x="7" y="7" width="114" height="114" rx="32" fill="url(#g)" opacity=".98"/>
+ <rect x="12" y="12" width="104" height="104" rx="28" fill="#0b1932" opacity=".92"/>
+ <path d="M28 34h52c5 0 9 4 9 9v3H68v40H53V46H28z" fill="url(#s)"/>
+ <path d="M81 57c13 0 22 8 22 20 0 13-10 21-25 21H62V85h15c7 0 11-3 11-8 0-4-3-7-9-7H65V57z" fill="url(#s)"/>
+ <circle cx="103" cy="25" r="5" fill="#9cc5ff" opacity=".9"/>
+</svg>
