@@ -13,7 +13,3 @@ Version corrigée du projet Tafaß.
 ## SQL
 Exécuter `TAFASS_NEW_PROJECT.sql` dans Supabase SQL Editor.
 Le script est prévu pour être relancé sans supprimer les tables ni les données.
-
-
-## Actualités V6
-Actualités connectée à Supabase : publications, réactions, commentaires et partages réels avec synchronisation Realtime. Aucun contenu de démonstration n'est généré par l'interface.
