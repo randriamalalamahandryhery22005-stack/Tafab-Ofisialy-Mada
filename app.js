@@ -17,10 +17,17 @@
   };
 
   function avatarHTML(p, cls = "avatar") {
-    const letter = (p?.first_name || p?.last_name || "T").trim().slice(0, 1).toUpperCase() || "T";
+    const letter = (p?.first_name || p?.last_name || p?.name || "T").trim().slice(0, 1).toUpperCase() || "T";
     return p?.avatar_url
       ? `<span class="${cls}"><img src="${esc(p.avatar_url)}" alt=""></span>`
-      : `<span class="${cls}">${esc(letter)}</span>`;
+      : `<span class="${cls} default-avatar" aria-label="Avatar par défaut">${esc(letter)}</span>`;
+  }
+  function entityAvatarHTML(entity, type = "page", cls = "entity-logo") {
+    const url = entity?.logo_url || entity?.avatar_url || "";
+    const icon = type === "group" ? "◎" : "▣";
+    return url
+      ? `<div class="${cls}"><img src="${esc(url)}" alt=""></div>`
+      : `<div class="${cls} entity-default-avatar ${type}" aria-label="Avatar par défaut">${icon}</div>`;
   }
   function nameOf(p) { return [p?.first_name, p?.last_name].filter(Boolean).join(" ") || "Membre Tafaß"; }
   function notificationAction(n) {
@@ -685,21 +692,23 @@
     const p = state.profile || {};
     openModal(`<div class="modal-box profile-edit-modal premium-profile-editor">
       <button class="modal-close" data-action="close-modal" aria-label="Fermer">×</button>
-      <div class="editor-heading"><span class="eyebrow">TAFAß • PROFIL</span><h3>Personnaliser votre profil</h3><p>Présentez votre profil avec vos propres photos et informations.</p></div>
+      <div class="editor-heading"><span class="eyebrow">TAFAß • PROFIL</span><h3>Personnaliser votre profil</h3><p>Gérez votre identité, votre photo de profil et votre couverture dans un espace clair et sécurisé.</p></div>
       <div class="profile-editor-preview premium-editor-preview">
         <label class="editor-cover-preview" id="editorCoverPreview" style="${p.cover_url?`background-image:url('${esc(p.cover_url)}')`:""}">
-          <span class="editor-cover-overlay">Modifier la couverture</span>
+          <span class="editor-cover-overlay">📷 &nbsp; Modifier la couverture</span>
           <input id="pfCover" type="file" accept="image/jpeg,image/png,image/webp" hidden>
         </label>
-        <label class="editor-avatar-preview" id="editorAvatarPreview">${avatarHTML(p,"avatar")}<span class="editor-avatar-edit">＋</span><input id="pfAvatar" type="file" accept="image/jpeg,image/png,image/webp" hidden></label>
+        <label class="editor-avatar-preview" id="editorAvatarPreview">${avatarHTML(p,"avatar")}<span class="editor-avatar-edit">📷</span><input id="pfAvatar" type="file" accept="image/jpeg,image/png,image/webp" hidden></label>
       </div>
-      <div class="profile-editor-hint">Photo de profil et couverture • JPG, PNG ou WEBP</div>
+      <div class="profile-editor-hint"><b>Photo de profil</b><span>Votre avatar apparaît ici et dans vos publications.</span><em>JPG, PNG ou WEBP</em></div>
       <div class="form-stack profile-form-premium">
-        <label><span>Prénom</span><input id="pfFirst" value="${esc(p.first_name||"")}" autocomplete="given-name"></label>
-        <label><span>Nom</span><input id="pfLast" value="${esc(p.last_name||"")}" autocomplete="family-name"></label>
-        <label><span>Bio</span><textarea id="pfBio" maxlength="500">${esc(p.bio||"")}</textarea><small class="field-help">Décrivez-vous en quelques mots.</small></label>
-        <label><span>Ville / pays</span><input id="pfLocation" value="${esc(p.location||"")}" autocomplete="address-level2"></label>
-        <button class="primary big profile-save-button" data-action="save-profile">Enregistrer les modifications</button>
+        <div class="profile-name-fields">
+          <label><span>Prénom</span><input id="pfFirst" value="${esc(p.first_name||"")}" autocomplete="given-name" placeholder="Votre prénom"></label>
+          <label><span>Nom</span><input id="pfLast" value="${esc(p.last_name||"")}" autocomplete="family-name" placeholder="Votre nom"></label>
+        </div>
+        <label><span>Bio</span><textarea id="pfBio" maxlength="500" placeholder="Présentez-vous en quelques mots…">${esc(p.bio||"")}</textarea><small class="field-help">500 caractères maximum.</small></label>
+        <label><span>Ville / pays</span><input id="pfLocation" value="${esc(p.location||"")}" autocomplete="address-level2" placeholder="Ex. Antananarivo, Madagascar"></label>
+        <button class="primary big profile-save-button" data-action="save-profile"><span>✓</span> Enregistrer les modifications</button>
       </div>
     </div>`);
     $("pfAvatar")?.addEventListener("change", e => {
@@ -754,7 +763,7 @@
       const counts=new Map(); followers.forEach(x=>counts.set(x.page_id,(counts.get(x.page_id)||0)+1));
       return simplePage("Pages", `<div class="entity-hero premium-hero"><div class="entity-hero-mark">▣</div><div><span class="eyebrow">TAFAß • PAGES</span><h3>Pages et communautés publiques</h3><p class="page-subtitle">Découvrez les Pages réelles, suivez-les et gérez vos propres Pages.</p></div></div>
         <div class="page-header-actions"><button class="primary" data-action="create-page">＋ Créer une Page</button></div>
-        <div class="entity-grid">${rows.map(x=>`<article class="entity-card"><div class="entity-cover" ${x.cover_url?`style="background-image:url('${esc(x.cover_url)}')"`:""}></div><div class="entity-body"><div class="entity-logo">${x.logo_url?`<img src="${esc(x.logo_url)}" alt="">`:"▣"}</div><h3>${esc(x.name)}</h3><p>${esc(x.bio||"Aucune présentation.")}</p><div class="entity-meta"><span>${esc(x.category||"Autre")}</span><span>${counts.get(x.id)||0} abonné${(counts.get(x.id)||0)>1?"s":""}</span></div><div class="entity-actions"><button class="primary" data-action="page-open" data-id="${esc(x.id)}">Ouvrir</button></div></div></article>`).join("") || `<div class="empty entity-empty">Aucune Page disponible pour le moment.</div>`}</div>`);
+        <div class="entity-grid">${rows.map(x=>`<article class="entity-card"><div class="entity-cover" ${x.cover_url?`style="background-image:url('${esc(x.cover_url)}')"`:""}></div><div class="entity-body">${entityAvatarHTML(x,"page")}<h3>${esc(x.name)}</h3><p>${esc(x.bio||"Aucune présentation.")}</p><div class="entity-meta"><span>${esc(x.category||"Autre")}</span><span>${counts.get(x.id)||0} abonné${(counts.get(x.id)||0)>1?"s":""}</span></div><div class="entity-actions"><button class="primary" data-action="page-open" data-id="${esc(x.id)}">Ouvrir</button></div></div></article>`).join("") || `<div class="empty entity-empty">Aucune Page disponible pour le moment.</div>`}</div>`);
     }
     if (route === "groups") {
       const { data, error } = await sb.from("groups").select("*").order("created_at",{ascending:false}).limit(50);
@@ -767,7 +776,7 @@
       const mineIds=new Set(members.filter(x=>x.user_id===state.user.id).map(x=>x.group_id));
       return simplePage("Groupes", `<div class="entity-hero premium-hero"><div class="entity-hero-mark">◎</div><div><span class="eyebrow">TAFAß • GROUPES</span><h3>Communautés réelles</h3><p class="page-subtitle">Rejoignez, quittez et gérez les groupes disponibles sur Tafaß.</p></div></div>
         <div class="page-header-actions"><button class="primary" data-action="create-group">＋ Créer un groupe</button></div>
-        <div class="entity-grid">${rows.map(x=>`<article class="entity-card"><div class="entity-cover" ${x.cover_url?`style="background-image:url('${esc(x.cover_url)}')"`:""}></div><div class="entity-body"><div class="entity-logo">◎</div><h3>${esc(x.name)}</h3><p>${esc(x.description||"Aucune description.")}</p><div class="entity-meta"><span>${esc(x.privacy||"public")}</span><span>${counts.get(x.id)||0} membre${(counts.get(x.id)||0)>1?"s":""}</span></div><div class="entity-actions"><button class="primary" data-action="group-open" data-id="${esc(x.id)}">${mineIds.has(x.id)?"Ouvrir":"Voir le groupe"}</button></div></div></article>`).join("") || `<div class="empty entity-empty">Aucun groupe disponible pour le moment.</div>`}</div>`);
+        <div class="entity-grid">${rows.map(x=>`<article class="entity-card"><div class="entity-cover" ${x.cover_url?`style="background-image:url('${esc(x.cover_url)}')"`:""}></div><div class="entity-body">${entityAvatarHTML(x,"group")}<h3>${esc(x.name)}</h3><p>${esc(x.description||"Aucune description.")}</p><div class="entity-meta"><span>${esc(x.privacy||"public")}</span><span>${counts.get(x.id)||0} membre${(counts.get(x.id)||0)>1?"s":""}</span></div><div class="entity-actions"><button class="primary" data-action="group-open" data-id="${esc(x.id)}">${mineIds.has(x.id)?"Ouvrir":"Voir le groupe"}</button></div></div></article>`).join("") || `<div class="empty entity-empty">Aucun groupe disponible pour le moment.</div>`}</div>`);
     }
     if (route === "saved") {
       const { data } = await sb.from("saved_posts").select("post_id").eq("user_id", state.user.id);
@@ -1259,7 +1268,7 @@
       return openModal(`<div class="modal-box entity-detail-modal">
         <button class="modal-close" data-action="close-modal">×</button>
         <div class="detail-cover" ${x.cover_url?`style="background-image:url('${esc(x.cover_url)}')"`:""}></div>
-        <div class="detail-logo">${x.logo_url?`<img src="${esc(x.logo_url)}" alt="">`:"▣"}</div>
+        ${entityAvatarHTML(x,"page","detail-logo")}
         <span class="eyebrow">TAFAß • PAGE</span><h3>${esc(x.name)}</h3><p>${esc(x.bio||"Aucune présentation.")}</p>
         <div class="detail-stats"><span><b>${c.count||0}</b> abonnés</span><span>${esc(x.category||"Autre")}</span></div>
         <div class="detail-actions">${owner?`<button class="ghost-action" data-action="edit-page" data-id="${esc(id)}">Modifier</button>`:""}<button class="primary big" data-action="toggle-page-follow" data-id="${esc(id)}">${f.data?"Ne plus suivre":"Suivre la Page"}</button></div>
@@ -1276,7 +1285,7 @@
       return openModal(`<div class="modal-box entity-detail-modal">
         <button class="modal-close" data-action="close-modal">×</button>
         <div class="detail-cover" ${x.cover_url?`style="background-image:url('${esc(x.cover_url)}')"`:""}></div>
-        <div class="detail-logo">◎</div><span class="eyebrow">TAFAß • GROUPE</span><h3>${esc(x.name)}</h3>
+        ${entityAvatarHTML(x,"group","detail-logo")}<span class="eyebrow">TAFAß • GROUPE</span><h3>${esc(x.name)}</h3>
         <p>${esc(x.description||"Aucune description.")}</p>
         <div class="detail-stats"><span><b>${c.count||0}</b> membres</span><span>${esc(x.privacy||"public")}</span></div>
         <div class="detail-actions">${owner?`<button class="ghost-action" data-action="edit-group" data-id="${esc(id)}">Modifier</button>`:""}<button class="primary big" data-action="toggle-group-member" data-id="${esc(id)}">${m.data?"Quitter le groupe":"Rejoindre le groupe"}</button></div>

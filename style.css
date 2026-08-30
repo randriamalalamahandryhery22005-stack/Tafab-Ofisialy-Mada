@@ -851,3 +851,60 @@ body.light .profile-edit-modal{background:linear-gradient(155deg,#fff,#f3f7fd)!i
 .error-page .empty-block{display:grid;gap:10px}.error-page .empty-block button{margin-top:5px}
 .menu-card,.setting-card{cursor:pointer}.menu-card:active,.setting-card:active{transform:scale(.985)}
 @media(max-width:640px){.premium-logout-modal{padding:20px}.logout-choice{align-items:flex-start;flex-direction:column}.logout-choice button{width:100%}}
+
+/* =========================================================
+   V12.4 — PREMIUM ENTITIES + PROFILE EDITOR SPACING
+   ========================================================= */
+.default-avatar{
+  display:grid!important;place-items:center!important;
+  background:linear-gradient(145deg,#246bff,#7657ff)!important;
+  color:#fff!important;font-weight:900!important;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.12),0 8px 22px rgba(38,98,240,.22);
+}
+.entity-card,.entity-body,.entity-hero,.entity-hero>div,.entity-detail-modal{min-width:0}
+.entity-card{height:100%;display:flex;flex-direction:column}
+.entity-body{flex:1;display:flex;flex-direction:column}
+.entity-body h3,.entity-body p,.entity-meta span,.entity-hero h3,.entity-hero p,.detail-stats span,
+.detail-actions button,.page-subtitle{overflow-wrap:anywhere;word-break:break-word}
+.entity-body h3{line-height:1.25;max-width:100%}
+.entity-body p{min-height:0;flex:1;margin-bottom:8px}
+.entity-meta{flex-wrap:wrap;justify-content:flex-start}
+.entity-meta span{max-width:100%}
+.entity-actions{margin-top:auto;flex-wrap:wrap}
+.entity-actions button{min-width:0}
+.entity-default-avatar{display:grid;place-items:center;background:linear-gradient(145deg,#172d55,#0c1930)!important;color:#76a8ff;font-weight:950}
+.entity-default-avatar.group{background:linear-gradient(145deg,#1b2847,#11192b)!important}
+.entity-logo img,.detail-logo img{width:100%;height:100%;object-fit:cover;display:block}
+.detail-logo{display:grid;place-items:center}
+
+.profile-edit-modal{max-height:min(92dvh,900px);overflow-y:auto;overscroll-behavior:contain}
+.profile-edit-modal::-webkit-scrollbar{width:5px}
+.profile-edit-modal::-webkit-scrollbar-thumb{background:rgba(115,157,231,.28);border-radius:99px}
+.profile-editor-preview{margin-bottom:0!important}
+.profile-editor-hint{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding-top:58px!important;padding-bottom:10px!important;line-height:1.35}
+.profile-editor-hint b{color:#eaf2ff;font-size:11px}
+.profile-editor-hint span{color:#7f8da5;font-size:10px}
+.profile-editor-hint em{font-style:normal;margin-left:auto;padding:5px 8px;border-radius:8px;background:rgba(92,137,220,.09);color:#7696c6;font-size:9px}
+.profile-name-fields{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.profile-form-premium{gap:16px!important}
+.profile-form-premium label{min-width:0}
+.profile-form-premium label>span{line-height:1.2}
+.profile-form-premium input,.profile-form-premium textarea{box-sizing:border-box;width:100%;display:block}
+.profile-save-button{display:flex!important;align-items:center;justify-content:center;gap:7px}
+.editor-cover-overlay{white-space:nowrap;max-width:calc(100% - 28px);overflow:hidden;text-overflow:ellipsis}
+
+/* Pages & Groupes: never let long text escape the app viewport */
+.entity-grid{align-items:stretch}
+.entity-hero{overflow:hidden}
+.premium-hero{border-radius:20px;padding:16px;border:1px solid rgba(111,160,255,.13);background:linear-gradient(145deg,rgba(19,34,61,.96),rgba(8,16,30,.96));box-shadow:0 16px 40px rgba(0,0,0,.16)}
+.entity-cover{flex:0 0 92px}
+@media(max-width:620px){
+  .profile-edit-modal{width:min(720px,calc(100vw - 18px))!important}
+  .profile-name-fields{grid-template-columns:1fr;gap:13px}
+  .profile-editor-hint{padding-left:16px!important;padding-right:16px!important}
+  .profile-editor-hint em{margin-left:0}
+  .premium-editor-preview{margin-left:10px;margin-right:10px}
+  .entity-hero{align-items:flex-start}
+  .entity-hero-mark{width:48px;height:48px;flex-basis:48px}
+  .entity-body{padding-left:13px;padding-right:13px}
+}
