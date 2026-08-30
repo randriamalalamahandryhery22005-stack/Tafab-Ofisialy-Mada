@@ -4,7 +4,7 @@
   const SUPABASE_URL = "https://qvxmaeepwrprtoaipoir.supabase.co";
   const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_OxmDXLn69jclSWnYtdjsxQ_TMfMI4X-";
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, lock: async (_n, _t, fn) => await fn() }
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
   });
 
   const $ = id => document.getElementById(id);
@@ -81,23 +81,50 @@
     button.textContent = loading ? "Patientez…" : (button.dataset.oldLabel || label || button.textContent);
   }
 
+  function withTimeout(promise, ms = 7000, message = "Le serveur met trop de temps à répondre. Vérifiez votre connexion.") {
+    let timer;
+    return Promise.race([
+      promise,
+      new Promise(resolve => { timer = setTimeout(() => resolve({ data: null, error: { message } }), ms); })
+    ]).finally(() => clearTimeout(timer));
+  }
+
   async function loadProfile() {
-    if (!state.user) return;
-    const { data } = await sb.from("profiles").select("*").eq("id", state.user.id).maybeSingle();
+    if (!state.user) return false;
     const authEmail = state.user.email || "";
-    state.profile = data || {
-      id: state.user.id, first_name: state.user.user_metadata?.first_name || "",
-      last_name: state.user.user_metadata?.last_name || "", email: authEmail
-    };
-    // The authenticated email is the source of truth for the UI.
-    // Do not write to profiles during every app bootstrap: this can be blocked by RLS
-    // and can make OAuth onboarding appear frozen. Email synchronization is handled
-    // by the dedicated onboarding/account RPC instead.
-    if (authEmail) state.profile.email = authEmail;
-    const settings=(await sb.from("user_settings").select("theme").eq("user_id",state.user.id).maybeSingle()).data;
-    if(settings?.theme==="light" || settings?.theme==="dark") state.theme=settings.theme;
+    try {
+      const result = await withTimeout(
+        sb.from("profiles").select("*").eq("id", state.user.id).maybeSingle(),
+        7000
+      );
+      const data = result?.data || null;
+      state.profile = data || {
+        id: state.user.id,
+        first_name: state.user.user_metadata?.first_name || "",
+        last_name: state.user.user_metadata?.last_name || "",
+        email: authEmail
+      };
+      if (authEmail) state.profile.email = authEmail;
+      if ((!state.profile.city_current || !state.profile.city_origin) && typeof state.profile.location === "string" && state.profile.location.startsWith("TAFAß_LOC:")) {
+        try {
+          const loc = JSON.parse(state.profile.location.slice(9));
+          state.profile.city_current = state.profile.city_current || loc.current || "";
+          state.profile.city_origin = state.profile.city_origin || loc.origin || "";
+        } catch (_) {}
+      }
+    } catch (e) {
+      console.warn("Tafaß profil temporairement indisponible:", e);
+      state.profile = state.profile || { id: state.user.id, first_name: "", last_name: "", email: authEmail };
+      if (authEmail) state.profile.email = authEmail;
+    }
+    try {
+      const settings = (await withTimeout(sb.from("user_settings").select("theme").eq("user_id", state.user.id).maybeSingle(), 4000)).data;
+      if (settings?.theme === "light" || settings?.theme === "dark") state.theme = settings.theme;
+    } catch (_) {}
     const sideName = $("sideName"); if (sideName) sideName.textContent = nameOf(state.profile);
-    const sideAvatar = $("sideAvatar"); if (sideAvatar) { sideAvatar.outerHTML = avatarHTML(state.profile, "avatar").replace("<span ", '<span id="sideAvatar" '); }
+    const sideAvatar = $("sideAvatar");
+    if (sideAvatar) sideAvatar.outerHTML = avatarHTML(state.profile, "avatar").replace("<span ", '<span id="sideAvatar" ');
+    return !!state.profile;
   }
 
   async function loadPosts() {
@@ -764,8 +791,12 @@
         if(up.error) throw new Error('Upload : '+up.error.message);
         patch[key]=sb.storage.from('profile-media').getPublicUrl(path).data.publicUrl;
       }
-      const {error}=await sb.from('profiles').update(patch).eq('id',state.user.id);
-      if(error) throw new Error(error.message);
+      let result=await sb.from('profiles').update(patch).eq('id',state.user.id);
+      if(result.error && /city_current|city_origin|schema cache|column/i.test(result.error.message||'')) {
+        const fallback={...patch}; delete fallback.city_current; delete fallback.city_origin; fallback.location='TAFAß_LOC:'+JSON.stringify({current:patch.city_current,origin:patch.city_origin});
+        result=await sb.from('profiles').update(fallback).eq('id',state.user.id);
+      }
+      if(result.error) throw new Error(result.error.message);
       closeModal(); await loadProfile(); toast('Profil mis à jour');
       if (state.route === "profile") await profilePage(state.profileTab);
     } catch(e) { toast(e.message); }
@@ -1171,7 +1202,6 @@
 
   async function profileIsComplete() {
     if (!state.user) return false;
-    await loadProfile();
     const p = state.profile || {};
     return Boolean(
       String(state.user.email || p.email || '').trim() &&
@@ -1226,36 +1256,62 @@
   }
 
   async function completeOnboarding() {
-    const first=$('onFirst')?.value.trim()||'', last=$('onLast')?.value.trim()||'', birth=$('onBirth')?.value||'', gender=$('onGender')?.value||'', phone=$('onPhone')?.value.trim()||'', country=$('onCountry')?.value.trim()||'', current=$('onCityCurrent')?.value.trim()||'', origin=$('onCityOrigin')?.value.trim()||'';
-    if(!first||!last||!birth||!gender||!phone||!country||!current||!origin) return toast('Remplissez toutes les informations obligatoires.');
-    const d=new Date(birth+'T00:00:00'), now=new Date();
-    const age=now.getFullYear()-d.getFullYear()-((now.getMonth()<d.getMonth()||(now.getMonth()===d.getMonth()&&now.getDate()<d.getDate()))?1:0);
-    if(age<13) return toast('Vous devez avoir au moins 13 ans.');
-    const btn=document.querySelector('[data-action="complete-onboarding"]'); setLoading(btn,true,'Déverrouiller Tafaß');
-    const row={id:state.user.id,first_name:first,last_name:last,email:state.user.email||'',birth,gender,phone,country,city_current:current,city_origin:origin,location:current,updated_at:new Date().toISOString()};
+    const first = $("onFirst")?.value.trim() || "";
+    const last = $("onLast")?.value.trim() || "";
+    const birth = $("onBirth")?.value || "";
+    const gender = $("onGender")?.value || "";
+    const phone = $("onPhone")?.value.trim() || "";
+    const country = $("onCountry")?.value.trim() || "";
+    const current = $("onCityCurrent")?.value.trim() || "";
+    const origin = $("onCityOrigin")?.value.trim() || "";
+    if (!first || !last || !birth || !gender || !phone || !country || !current || !origin) return toast("Remplissez toutes les informations obligatoires.");
+    const d = new Date(birth + "T00:00:00"), now = new Date();
+    const age = now.getFullYear() - d.getFullYear() - ((now.getMonth() < d.getMonth() || (now.getMonth() === d.getMonth() && now.getDate() < d.getDate())) ? 1 : 0);
+    if (!Number.isFinite(d.getTime()) || d > now) return toast("Date de naissance invalide.");
+    if (age < 13) return toast("Vous devez avoir au moins 13 ans.");
+    const btn = document.querySelector('[data-action="complete-onboarding"]');
+    setLoading(btn, true, "Déverrouiller Tafaß");
+    const base = { id: state.user.id, first_name: first, last_name: last, email: state.user.email || "", birth, gender, phone, country, location: current, updated_at: new Date().toISOString() };
+    const full = { ...base, city_current: current, city_origin: origin };
     try {
-      const result=await Promise.race([
-        sb.from('profiles').upsert(row,{onConflict:'id',ignoreDuplicates:false}),
-        new Promise(resolve=>setTimeout(()=>resolve({error:{message:'Supabase ne répond pas. Vérifiez votre connexion puis réessayez.'}}),10000))
-      ]);
-      if(result?.error){ setLoading(btn,false,'Déverrouiller Tafaß'); return toast('Impossible d’enregistrer le profil : '+result.error.message); }
+      let result = await withTimeout(sb.from("profiles").upsert(full, { onConflict: "id" }), 8000);
+      // Older databases may not yet have the two city columns. Never hang or leave the user locked.
+      if (result?.error && /city_current|city_origin|schema cache|column/i.test(result.error.message || "")) {
+        const fallback = { ...base, location: "TAFAß_LOC:" + JSON.stringify({ current, origin }) };
+        result = await withTimeout(sb.from("profiles").upsert(fallback, { onConflict: "id" }), 8000);
+        if (!result?.error) toast("Profil enregistré.");
+      }
+      if (result?.error) { setLoading(btn, false, "Déverrouiller Tafaß"); return toast("Impossible d’enregistrer le profil : " + result.error.message); }
       await loadProfile();
-      const complete=Boolean(state.profile&&String(state.user.email||state.profile.email||'').trim()&&String(state.profile.first_name||'').trim()&&String(state.profile.last_name||'').trim()&&state.profile.birth&&String(state.profile.gender||'').trim()&&String(state.profile.phone||'').trim()&&String(state.profile.country||'').trim()&&String(state.profile.city_current||'').trim()&&String(state.profile.city_origin||'').trim());
-      if(!complete){ setLoading(btn,false,'Déverrouiller Tafaß'); return toast('Le profil n’a pas été enregistré complètement. Réessayez.'); }
-      $('oauthOnboardingView')?.remove(); $('auth')?.classList.add('hidden'); $('app')?.classList.remove('hidden'); state.entering=false;
-      await loadPosts(); await setupRealtime(); await render(); toast('Compte complété. Bienvenue sur Tafaß.');
-    } catch(e){ setLoading(btn,false,'Déverrouiller Tafaß'); toast(e?.message||'Impossible de valider le compte.'); }
+      const p = state.profile || {};
+      const complete = Boolean(
+        String(state.user.email || p.email || "").trim() && String(p.first_name || "").trim() && String(p.last_name || "").trim() &&
+        p.birth && String(p.gender || "").trim() && String(p.phone || "").trim() && String(p.country || "").trim() &&
+        (String(p.city_current || "").trim() || current) && (String(p.city_origin || "").trim() || origin)
+      );
+      if (!complete) { setLoading(btn, false, "Déverrouiller Tafaß"); return toast("Le profil n’a pas été enregistré complètement. Réessayez."); }
+      $("oauthOnboardingView")?.remove(); $("auth")?.classList.add("hidden"); $("app")?.classList.remove("hidden"); state.entering = false;
+      await loadPosts(); await setupRealtime(); await render(); toast("Compte complété. Bienvenue sur Tafaß.");
+    } catch (e) {
+      setLoading(btn, false, "Déverrouiller Tafaß");
+      toast(e?.message || "Impossible de valider le compte.");
+    }
+  }
+
+  function isOAuthUser(user) {
+    const provider = String(user?.app_metadata?.provider || "").toLowerCase();
+    return provider === "google" || provider === "apple" || (user?.identities || []).some(i => ["google", "apple"].includes(String(i?.provider || "").toLowerCase()));
   }
 
   async function enterApp() {
-    if (state.entering) return;
+    if (state.entering || !state.user) return;
     state.entering = true;
     $("app").classList.add("hidden");
     $("auth").classList.remove("hidden");
     document.body.classList.toggle("light", state.theme === "light");
     syncThemeButton();
     await loadProfile();
-    if (!(await profileIsComplete())) {
+    if (isOAuthUser(state.user) && !(await profileIsComplete())) {
       state.entering = false;
       showOAuthOnboarding();
       return;
@@ -1265,6 +1321,7 @@
     state.entering = false;
     await render();
   }
+
   async function signInWithProvider(provider) {
     const allowed = ["google", "apple"];
     if (!allowed.includes(provider)) return;
@@ -1625,25 +1682,32 @@
   };
   const splashFallback = setTimeout(finishSplash, 6500);
 
-  sb.auth.onAuthStateChange(async (event, session) => {
+  let authGeneration = 0;
+  function scheduleSession(session, event) {
     state.user = session?.user || null;
-    if (event === "PASSWORD_RECOVERY" || (location.search.includes("reset=1") && state.user)) {
-      $("app").classList.add("hidden");
-      showResetPassword();
-      return;
-    }
-    if (state.user) await enterApp(); else { $("app").classList.add("hidden"); showLogin(); }
+    const generation = ++authGeneration;
+    setTimeout(() => {
+      if (generation !== authGeneration) return;
+      if (event === "PASSWORD_RECOVERY" || (location.search.includes("reset=1") && state.user)) {
+        $("app").classList.add("hidden"); showResetPassword(); return;
+      }
+      if (state.user) enterApp().catch(err => console.error("Tafaß session:", err));
+      else { $("app").classList.add("hidden"); showLogin(); }
+    }, 0);
+  }
+
+  sb.auth.onAuthStateChange((event, session) => {
+    // Never await Supabase queries inside this callback: Supabase holds its auth lock here.
+    scheduleSession(session, event);
   });
 
   (async () => {
     try {
       const { data } = await sb.auth.getSession();
-      state.user = data.session?.user || null;
-      if (state.user && location.search.includes("reset=1")) showResetPassword();
-      else if (state.user) await enterApp(); else showLogin();
+      scheduleSession(data.session, "GET_SESSION");
     } catch (err) {
       console.error("Tafaß initialisation:", err);
-      showLogin();
+      scheduleSession(null, "GET_SESSION");
     } finally {
       clearTimeout(splashFallback);
       finishSplash();

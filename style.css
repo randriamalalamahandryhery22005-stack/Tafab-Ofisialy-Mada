@@ -1241,3 +1241,31 @@ body.light .profile-edit-modal{background:linear-gradient(155deg,#fff,#f3f7fd)!i
 /* OAuth completion is a single full view; never leave the old login/onboarding form underneath. */
 .oauth-onboarding-view-v24{position:relative!important;z-index:3!important;}
 .oauth-onboarding-view-v24~*{display:none!important;}
+
+/* Tafaß V27 STABLE — final mobile shell */
+@media (max-width:720px){
+  html,body{width:100%;max-width:100%;overflow-x:hidden;}
+  #app.app-shell{min-height:100dvh;}
+  .topbar{position:sticky!important;top:0!important;z-index:1000!important;min-height:58px!important;}
+  .logo-button strong{display:inline!important;visibility:visible!important;opacity:1!important;}
+  .main-layout{padding-bottom:calc(78px + env(safe-area-inset-bottom))!important;min-height:calc(100dvh - 58px);}
+  .content{width:100%;min-width:0;overflow:visible;padding-bottom:8px!important;}
+  .bottom-nav{display:grid!important;position:fixed!important;left:0!important;right:0!important;bottom:0!important;z-index:99999!important;width:100%!important;height:68px!important;min-height:68px!important;grid-template-columns:repeat(6,minmax(0,1fr))!important;padding:4px 2px calc(4px + env(safe-area-inset-bottom))!important;box-sizing:border-box!important;}
+  .bottom-nav button{display:grid!important;place-items:center!important;align-content:center!important;gap:2px!important;width:100%!important;min-width:0!important;height:58px!important;padding:2px 0!important;overflow:visible!important;}
+  .bottom-nav button .nav-svg{width:20px!important;height:20px!important;display:block!important;}
+  .bottom-nav button small{display:block!important;font-size:8px!important;line-height:1.1!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;max-width:100%!important;}
+  .bottom-nav button[data-route="tafab"]{display:grid!important;visibility:visible!important;opacity:1!important;color:#6ea3ff!important;}
+}
+@media (max-width:390px){
+  .main-layout{padding-bottom:calc(76px + env(safe-area-inset-bottom))!important;}
+  .bottom-nav{height:64px!important;min-height:64px!important;}
+  .bottom-nav button{height:54px!important;}
+  .bottom-nav button .nav-svg{width:18px!important;height:18px!important;}
+  .bottom-nav button small{font-size:7.5px!important;}
+}
+/* No standalone Videos destination. */
+.bottom-nav button[data-route="videos"],.bottom-nav button[data-route="video"]{display:none!important;}
+/* Profile cover: no black cap/separator. */
+.profile-page-premium,.profile-cover-wrap,.profile-cover-wrap .profile-cover{border-top:0!important;outline:0!important;box-shadow:none!important;}
+.profile-cover-wrap{margin-top:0!important;border-bottom:0!important;}
+.profile-main-premium{margin-top:0!important;border-top:0!important;}

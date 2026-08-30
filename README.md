@@ -1,40 +1,19 @@
-# Tafaß V13.1 — Premium Real
+# Tafaß — Stable Clean Build V27
 
-## Corrections
-- Navigation Pages et Groupes renforcée : cartes ouvrables directement, retry en cas d'erreur, aucune donnée demo ajoutée.
-- Les sous-options du Menu continuent d'utiliser les actions réelles Supabase.
-- Connexion Google et Apple utilise `supabase.auth.signInWithOAuth()` avec le domaine courant comme redirect URL.
-- Les boutons OAuth ne sont plus désactivés.
+Cette archive contient la version web nettoyée de Tafaß.
 
-## Configuration OAuth obligatoire dans Supabase
-Le code lance réellement OAuth, mais les fournisseurs doivent être activés dans Supabase :
-Authentication → Providers → Google / Apple.
+## Installation
+1. Déployer `index.html`, `app.js` et `style.css` sur le même hébergement.
+2. Pour une nouvelle base Supabase, exécuter `TAFASS_NEW_PROJECT.sql`.
+3. Exécuter ensuite `TAFASS_STABLE_SETUP.sql` une fois. Il est ré-exécutable et ne supprime aucune donnée utilisateur.
 
-Dans Authentication → URL Configuration, ajoutez le domaine de production, par exemple :
-https://tafab-ofisialy-mada.vercel.app
-
-Utilisez exactement votre vrai domaine Vercel, sans l'espace éventuel de l'exemple ci-dessus.
-
-Pour Google et Apple, renseignez aussi leurs Client ID / Secret / clés demandées par Supabase. Sans cette configuration côté fournisseur, aucun frontend ne peut effectuer une authentification OAuth réelle.
-
-
-## Tafaß V22
-- Navigation mobile: Pages et Groupes accessibles directement dans la barre inférieure.
-- Suppression de la destination/navigation autonome « Vidéos » (les médias vidéo peuvent toujours être publiés et les Reels restent disponibles).
-- Profil: couverture sans séparation noire, informations synchronisées avec l’e-mail du compte, et changement prénom/nom limité à une fois tous les 15 jours.
-- Exécuter `TAFASS_V22_PROFILE_IDENTITY.sql` une seule fois dans Supabase pour activer la règle 15 jours côté base de données.
-
-
-## V23 FIX
-- Google/Apple: mandatory first-connection onboarding before app access.
-- Account data moved to Settings; public profile keeps bio, location and photos.
-- Name/prénom cooldown: 15 days.
-- Separate current/origin city fields.
-- Mobile bottom spacing reduced and Tafaß brand restored.
-- Standalone Videos destination removed; Reels remains.
-- Run `TAFASS_V23_PROFILE_ONBOARDING.sql` in Supabase.
-
-## V25 FIX
-- OAuth Google/Apple onboarding uses `tafa_complete_oauth_profile` to avoid RLS-related validation freezes.
-- Mobile bottom navigation contains Actualités, Amis, Messages, Pages, Groupes and Tafaß.
-- Extra bottom padding prevents the fixed navigation from covering the last content/buttons.
+## Points corrigés
+- Blocage OAuth Google/Apple dû à un appel Supabase attendu directement dans `onAuthStateChange`.
+- Validation onboarding avec délai maximum et gestion d'erreur.
+- Détection OAuth uniquement pour Google/Apple; les comptes e-mail existants ne sont pas bloqués par l'onboarding OAuth.
+- Profil public séparé des informations du compte.
+- Nom/prénom limité à une modification tous les 15 jours côté base.
+- Navigation mobile fixe et toujours visible avec Tafaß.
+- Pas de destination Vidéos standalone.
+- PDC sans barre noire/separator.
+- Compatibilité avec les bases anciennes: les deux villes peuvent temporairement être conservées dans `location` si les colonnes ne sont pas encore dans le cache PostgREST.
