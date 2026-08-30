@@ -1798,54 +1798,72 @@ document.documentElement.classList.add("app-boot");
     if (action === "page-open") {
       const x=(await sb.from("pages").select("*").eq("id",id).maybeSingle()).data;
       if(!x)return toast("Page introuvable");
-      const [f,c]=await Promise.all([
+      const [f,c,owner,posts]=await Promise.all([
         sb.from("page_followers").select("id").eq("page_id",id).eq("user_id",state.user.id).maybeSingle(),
-        sb.from("page_followers").select("id",{count:"exact",head:true}).eq("page_id",id)
+        sb.from("page_followers").select("id",{count:"exact",head:true}).eq("page_id",id),
+        sb.from("profiles").select("first_name,last_name,username,avatar_url,email,phone,country,city_current,bio").eq("id",x.owner_id).maybeSingle(),
+        sb.from("page_posts").select("*").eq("page_id",id).order("created_at",{ascending:false}).limit(20)
       ]);
-      const owner=x.owner_id===state.user.id;
-      return openModal(`<div class="modal-box entity-detail-modal">
+      const ownerMe=x.owner_id===state.user.id;
+      const postRows=(posts.data||[]).map(p=>`<article class="post entity-post"><div class="post-body">${esc(p.content||"")}</div>${p.media_url?`<img class="post-media" src="${esc(p.media_url)}" alt="Publication">`:""}<small>${timeAgo(p.created_at)}</small></article>`).join("")||`<div class="empty">Aucune publication sur cette Page.</div>`;
+      return openModal(`<div class="modal-box entity-detail-modal entity-account-modal">
         <button class="modal-close" data-action="close-modal">×</button>
         <div class="detail-cover" ${x.cover_url?`style="background-image:url('${esc(x.cover_url)}')"`:""}></div>
-        ${entityAvatarHTML(x,"page","detail-logo")}
-        <span class="eyebrow">TAFAß • PAGE</span><h3>${esc(x.name)}</h3><p>${esc(x.bio||"Aucune présentation.")}</p>
-        <div class="detail-stats"><span><b>${c.count||0}</b> abonnés</span><span>${esc(x.category||"Autre")}</span></div>
-        <div class="detail-actions">${owner?`<button class="ghost-action" data-action="edit-page" data-id="${esc(id)}">Modifier</button>`:""}<button class="primary big" data-action="toggle-page-follow" data-id="${esc(id)}">${f.data?"Ne plus suivre":"Suivre la Page"}</button></div>
+        ${entityAvatarHTML(x,"page","detail-logo")}<span class="eyebrow">TAFAß • PAGE PROFESSIONNELLE</span><h3>${esc(x.name)}</h3>
+        <p>${esc(x.bio||"Aucune présentation.")}</p>
+        <div class="detail-stats"><span><b>${c.count||0}</b> abonnés</span><span>${esc(x.category||"Autre")}</span><span>${x.username?"@"+esc(x.username):"Page officielle"}</span></div>
+        <div class="entity-about"><b>Informations</b><p>Créée le ${new Date(x.created_at).toLocaleDateString()} · Responsable : ${esc(owner.data?nameOf(owner.data):"Membre Tafaß")}</p>${owner.data?.city_current?`<p>📍 ${esc(owner.data.city_current)}</p>`:""}${owner.data?.email?`<p>✉️ ${esc(owner.data.email)}</p>`:""}${owner.data?.phone?`<p>📞 ${esc(owner.data.phone)}</p>`:""}</div>
+        ${ownerMe?`<div class="entity-composer"><textarea id="pagePostText" maxlength="2000" placeholder="Publier sur votre Page…"></textarea><button class="primary" data-action="page-publish" data-id="${esc(id)}">Publier</button></div>`:""}
+        <h4>Publications</h4><div class="entity-posts">${postRows}</div>
+        <div class="detail-actions">${ownerMe?`<button class="ghost-action" data-action="edit-page" data-id="${esc(id)}">Modifier les informations</button>`:""}<button class="primary big" data-action="toggle-page-follow" data-id="${esc(id)}">${f.data?"Ne plus suivre":"Suivre la Page"}</button></div>
       </div>`);
     }
     if (action === "group-open") {
       const x=(await sb.from("groups").select("*").eq("id",id).maybeSingle()).data;
       if(!x)return toast("Groupe introuvable");
-      const [m,c]=await Promise.all([
-        sb.from("group_members").select("id").eq("group_id",id).eq("user_id",state.user.id).maybeSingle(),
-        sb.from("group_members").select("id",{count:"exact",head:true}).eq("group_id",id)
+      const [m,c,members,owner,posts]=await Promise.all([
+        sb.from("group_members").select("id,role").eq("group_id",id).eq("user_id",state.user.id).maybeSingle(),
+        sb.from("group_members").select("id",{count:"exact",head:true}).eq("group_id",id),
+        sb.from("group_members").select("user_id,role,profiles(first_name,last_name,username,avatar_url)").eq("group_id",id).limit(30),
+        sb.from("profiles").select("first_name,last_name,username,avatar_url,email,phone,country,city_current,bio").eq("id",x.owner_id).maybeSingle(),
+        sb.from("group_posts").select("*").eq("group_id",id).order("created_at",{ascending:false}).limit(20)
       ]);
-      const owner=x.owner_id===state.user.id;
-      return openModal(`<div class="modal-box entity-detail-modal">
-        <button class="modal-close" data-action="close-modal">×</button>
-        <div class="detail-cover" ${x.cover_url?`style="background-image:url('${esc(x.cover_url)}')"`:""}></div>
-        ${entityAvatarHTML(x,"group","detail-logo")}<span class="eyebrow">TAFAß • GROUPE</span><h3>${esc(x.name)}</h3>
-        <p>${esc(x.description||"Aucune description.")}</p>
-        <div class="detail-stats"><span><b>${c.count||0}</b> membres</span><span>${esc(x.privacy||"public")}</span></div>
-        <div class="detail-actions">${owner?`<button class="ghost-action" data-action="edit-group" data-id="${esc(id)}">Modifier</button>`:""}<button class="primary big" data-action="toggle-group-member" data-id="${esc(id)}">${m.data?"Quitter le groupe":"Rejoindre le groupe"}</button></div>
+      const ownerMe=x.owner_id===state.user.id;
+      const memberRows=(members.data||[]).map(v=>`<div class="list-row"><div class="grow"><b>${esc(v.profiles?nameOf(v.profiles):"Membre")}</b><small>${esc(v.role||"member")}</small></div></div>`).join("")||`<div class="empty">Aucun membre.</div>`;
+      const postRows=(posts.data||[]).map(p=>`<article class="post entity-post"><div class="post-body">${esc(p.content||"")}</div>${p.media_url?`<img class="post-media" src="${esc(p.media_url)}" alt="Publication">`:""}<small>${timeAgo(p.created_at)}</small></article>`).join("")||`<div class="empty">Aucune publication dans ce groupe.</div>`;
+      return openModal(`<div class="modal-box entity-detail-modal entity-account-modal">
+        <button class="modal-close" data-action="close-modal">×</button><div class="detail-cover" ${x.cover_url?`style="background-image:url('${esc(x.cover_url)}')"`:""}></div>
+        ${entityAvatarHTML(x,"group","detail-logo")}<span class="eyebrow">TAFAß • GROUPE COMMUNAUTAIRE</span><h3>${esc(x.name)}</h3><p>${esc(x.description||"Aucune description.")}</p>
+        <div class="detail-stats"><span><b>${c.count||0}</b> membres</span><span>${esc(x.privacy||"public")}</span><span>Admin : ${esc(owner.data?nameOf(owner.data):"Membre Tafaß")}</span></div>
+        <div class="entity-about"><b>À propos du groupe</b><p>Créé le ${new Date(x.created_at).toLocaleDateString()} · Communauté ${esc(x.privacy||"publique")}.</p>${owner.data?.city_current?`<p>📍 ${esc(owner.data.city_current)}</p>`:""}</div>
+        ${ownerMe||m.data?`<div class="entity-composer"><textarea id="groupPostText" maxlength="2000" placeholder="Partager une publication dans le groupe…"></textarea><button class="primary" data-action="group-publish" data-id="${esc(id)}">Publier</button></div>`:""}
+        <h4>Membres</h4><div class="entity-members">${memberRows}</div><h4>Publications</h4><div class="entity-posts">${postRows}</div>
+        <div class="detail-actions">${ownerMe?`<button class="ghost-action" data-action="edit-group" data-id="${esc(id)}">Modifier les informations</button>`:""}<button class="primary big" data-action="toggle-group-member" data-id="${esc(id)}">${m.data?"Quitter le groupe":"Rejoindre le groupe"}</button></div>
       </div>`);
     }
+    if (action === "page-publish") {
+      const content=$("pagePostText")?.value.trim(); if(!content)return toast("Écrivez une publication.");
+      const r=await sb.from("page_posts").insert({page_id:id,user_id:state.user.id,content}).select().single(); if(r.error)return toast(r.error.message); toast("Publication publiée sur la Page");
+      return document.querySelector(`[data-action="page-open"][data-id="${id}"]`)?.click() || (closeModal(),null);
+    }
+    if (action === "group-publish") {
+      const content=$("groupPostText")?.value.trim(); if(!content)return toast("Écrivez une publication.");
+      const r=await sb.from("group_posts").insert({group_id:id,user_id:state.user.id,content}).select().single(); if(r.error)return toast(r.error.message); toast("Publication publiée dans le groupe");
+      return document.querySelector(`[data-action="group-open"][data-id="${id}"]`)?.click() || (closeModal(),null);
+    }
     if (action === "edit-page") {
-      const x=(await sb.from("pages").select("*").eq("id",id).maybeSingle()).data;
-      if(!x || x.owner_id!==state.user.id) return toast("Action non autorisée.");
-      return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • PAGE</span><h3>Modifier la Page</h3><label>Nom<input id="editPageName" value="${esc(x.name)}"></label><label>Catégorie<select id="editPageCategory">${pageCategoryOptions(x.category||"Autre")}</select></label><label>Présentation<textarea id="editPageBio">${esc(x.bio||"")}</textarea></label><button class="primary big" data-action="save-page-edit" data-id="${esc(id)}">Enregistrer</button></div>`);
+      const x=(await sb.from("pages").select("*").eq("id",id).maybeSingle()).data; if(!x || x.owner_id!==state.user.id)return toast("Action non autorisée.");
+      return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • PAGE</span><h3>Informations de la Page</h3><label>Nom<input id="editPageName" value="${esc(x.name)}"></label><label>Nom d'utilisateur<input id="editPageUsername" value="${esc(x.username||"")}" placeholder="ma-page"></label><label>Catégorie<select id="editPageCategory">${pageCategoryOptions(x.category||"Autre")}</select></label><label>Présentation<textarea id="editPageBio">${esc(x.bio||"")}</textarea></label><button class="primary big" data-action="save-page-edit" data-id="${esc(id)}">Enregistrer</button></div>`);
     }
     if (action === "save-page-edit") {
-      const r=await sb.from("pages").update({name:$("editPageName")?.value.trim(),category:$("editPageCategory")?.value.trim()||"Autre",bio:$("editPageBio")?.value.trim()||"",updated_at:new Date().toISOString()}).eq("id",id).eq("owner_id",state.user.id);
-      if(r.error)return toast(r.error.message); closeModal(); toast("Page mise à jour"); return genericListPage("pages");
+      const r=await sb.from("pages").update({name:$('editPageName')?.value.trim(),username:$('editPageUsername')?.value.trim()||null,category:$('editPageCategory')?.value||"Autre",bio:$('editPageBio')?.value.trim()||"",updated_at:new Date().toISOString()}).eq("id",id).eq("owner_id",state.user.id); if(r.error)return toast(r.error.message); closeModal(); toast("Page mise à jour"); return genericListPage("pages");
     }
     if (action === "edit-group") {
-      const x=(await sb.from("groups").select("*").eq("id",id).maybeSingle()).data;
-      if(!x || x.owner_id!==state.user.id) return toast("Action non autorisée.");
-      return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • GROUPE</span><h3>Modifier le groupe</h3><label>Nom<input id="editGroupName" value="${esc(x.name)}"></label><label>Description<textarea id="editGroupDesc">${esc(x.description||"")}</textarea></label><label>Confidentialité<select id="editGroupPrivacy"><option value="public" ${x.privacy==="public"?"selected":""}>Public</option><option value="private" ${x.privacy==="private"?"selected":""}>Privé</option></select></label><button class="primary big" data-action="save-group-edit" data-id="${esc(id)}">Enregistrer</button></div>`);
+      const x=(await sb.from("groups").select("*").eq("id",id).maybeSingle()).data; if(!x || x.owner_id!==state.user.id)return toast("Action non autorisée.");
+      return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • GROUPE</span><h3>Informations du groupe</h3><label>Nom<input id="editGroupName" value="${esc(x.name)}"></label><label>Description<textarea id="editGroupDesc">${esc(x.description||"")}</textarea></label><label>Confidentialité<select id="editGroupPrivacy"><option value="public" ${x.privacy==="public"?"selected":""}>Public</option><option value="private" ${x.privacy==="private"?"selected":""}>Privé</option></select></label><button class="primary big" data-action="save-group-edit" data-id="${esc(id)}">Enregistrer</button></div>`);
     }
     if (action === "save-group-edit") {
-      const r=await sb.from("groups").update({name:$("editGroupName")?.value.trim(),description:$("editGroupDesc")?.value.trim()||"",privacy:$("editGroupPrivacy")?.value||"public",updated_at:new Date().toISOString()}).eq("id",id).eq("owner_id",state.user.id);
-      if(r.error)return toast(r.error.message); closeModal(); toast("Groupe mis à jour"); return genericListPage("groups");
+      const r=await sb.from("groups").update({name:$('editGroupName')?.value.trim(),description:$('editGroupDesc')?.value.trim()||"",privacy:$('editGroupPrivacy')?.value||"public",updated_at:new Date().toISOString()}).eq("id",id).eq("owner_id",state.user.id); if(r.error)return toast(r.error.message); closeModal(); toast("Groupe mis à jour"); return genericListPage("groups");
     }
     if (action === "toggle-page-follow") { const f=(await sb.from("page_followers").select("id").eq("page_id",id).eq("user_id",state.user.id).maybeSingle()).data; const r=f?await sb.from("page_followers").delete().eq("id",f.id):await sb.from("page_followers").insert({page_id:id,user_id:state.user.id}); if(r.error)return toast(r.error.message); closeModal(); toast(f?"Page retirée de vos suivis":"Page suivie"); if(state.route==="pages") await genericListPage("pages"); return; }
     if (action === "toggle-group-member") { const m=(await sb.from("group_members").select("id").eq("group_id",id).eq("user_id",state.user.id).maybeSingle()).data; const r=m?await sb.from("group_members").delete().eq("id",m.id):await sb.from("group_members").insert({group_id:id,user_id:state.user.id,role:"member"}); if(r.error)return toast(r.error.message); closeModal(); toast(m?"Vous avez quitté le groupe":"Vous avez rejoint le groupe"); if(state.route==="groups") await genericListPage("groups"); return; }
