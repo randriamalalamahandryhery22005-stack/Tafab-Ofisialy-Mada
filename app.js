@@ -779,7 +779,7 @@ document.documentElement.classList.add("app-boot");
     openModal(`<div class="modal-box profile-redesign-v5">
       <header class="redesign-modal-header">
         <button class="modal-back-v5" data-action="close-modal" aria-label="Retour"><span>‹</span><small>Retour</small></button>
-        <div class="redesign-heading"><span class="brand-kicker"><b>ß</b> TAFAß · PROFIL</span><h3>Modifier le profil</h3><p>Personnalisez votre présence publique avec une présentation claire et élégante.</p></div>
+        <div class="redesign-heading"><span class="brand-kicker"><img src="assets/tafass-logo-premium.svg" alt="Tafaß"> <span>TAFAß · PROFIL</span></span><h3>Modifier le profil</h3><p>Personnalisez votre présence publique avec une présentation claire et élégante.</p></div>
       </header>
       <div class="profile-redesign-body">
         <section class="profile-visual-card-v5">
@@ -822,7 +822,7 @@ document.documentElement.classList.add("app-boot");
     openModal(`<div class="modal-box account-redesign-v5">
       <header class="redesign-modal-header account-header-v5">
         <button class="modal-back-v5" data-action="close-modal" aria-label="Retour"><span>‹</span><small>Retour</small></button>
-        <div class="redesign-heading"><span class="brand-kicker"><b>ß</b> TAFAß · COMPTE</span><h3>Informations du compte</h3><p>Gérez vos informations privées et vos coordonnées de connexion dans un espace sécurisé.</p></div>
+        <div class="redesign-heading"><span class="brand-kicker"><img src="assets/tafass-logo-premium.svg" alt="Tafaß"> <span>TAFAß · COMPTE</span></span><h3>Informations du compte</h3><p>Gérez vos informations privées et vos coordonnées de connexion dans un espace sécurisé.</p></div>
       </header>
       <div class="account-redesign-body-v5">
         <div class="account-identity-banner-v5"><span class="account-mark-v5">${esc((p.first_name||'T').slice(0,1).toUpperCase())}</span><div><b>${esc(nameOf(p))}</b><small>Informations privées · non visibles sur le profil public</small></div><span class="secure-pill-v5">● Sécurisé</span></div>

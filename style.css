@@ -1785,3 +1785,72 @@ body::-webkit-scrollbar,
     padding-bottom:calc(66px + env(safe-area-inset-bottom))!important;
   }
 }
+
+/* =========================================================
+   TAFAß FINAL PATCH — PROFILE EDITOR / LIGHT READABILITY / LOGO IMAGE
+   Only requested UI corrections.
+   ========================================================= */
+
+/* The avatar is decorative inside the visual header; reserve a real
+   vertical lane so it can never collide with the Presentation section. */
+.profile-redesign-v5 .profile-visual-card-v5{
+  margin-bottom:30px!important;
+  padding-bottom:72px!important;
+}
+.profile-redesign-v5 .profile-avatar-wrap-v5{
+  bottom:-47px!important;
+}
+.profile-redesign-v5 .profile-visual-meta-v5{
+  min-height:72px!important;
+  padding-left:145px!important;
+}
+@media(max-width:620px){
+  .profile-redesign-v5 .profile-visual-card-v5{
+    margin-bottom:25px!important;
+    padding-bottom:60px!important;
+  }
+  .profile-redesign-v5 .profile-avatar-wrap-v5{
+    bottom:-37px!important;
+  }
+  .profile-redesign-v5 .profile-visual-meta-v5{
+    min-height:61px!important;
+    padding-left:108px!important;
+  }
+}
+
+/* Light mode: strong readable hierarchy for the whole profile editor. */
+body.light .profile-redesign-v5 .redesign-heading h3,
+body.light .profile-redesign-v5 .redesign-section-head-v5 b,
+body.light .profile-redesign-v5 .profile-visual-meta-v5 b,
+body.light .profile-redesign-v5 .redesign-field-v5 label>span,
+body.light .profile-redesign-v5 .redesign-heading p,
+body.light .profile-redesign-v5 .redesign-section-head-v5 small,
+body.light .profile-redesign-v5 .profile-visual-meta-v5 small,
+body.light .profile-redesign-v5 .redesign-field-v5>label>small,
+body.light .profile-redesign-v5 .field-counter-v5{
+  opacity:1!important;
+}
+body.light .profile-redesign-v5 .redesign-heading p{color:#52647d!important}
+body.light .profile-redesign-v5 .redesign-section-head-v5 small{color:#5b6d85!important}
+body.light .profile-redesign-v5 .profile-visual-meta-v5 small{color:#53667f!important}
+body.light .profile-redesign-v5 .redesign-field-v5 label>span{color:#30445f!important}
+body.light .profile-redesign-v5 .redesign-field-v5>label>small,
+body.light .profile-redesign-v5 .field-counter-v5{color:#5b6d85!important}
+body.light .profile-redesign-v5 .redesign-field-v5 input,
+body.light .profile-redesign-v5 .redesign-field-v5 textarea,
+body.light .profile-redesign-v5 .redesign-field-v5 select{
+  color:#15243a!important;background:#fff!important;border-color:#c9d6e6!important;
+}
+body.light .profile-redesign-v5 .redesign-field-v5 input::placeholder,
+body.light .profile-redesign-v5 .redesign-field-v5 textarea::placeholder{color:#708198!important;opacity:1!important}
+body.light .profile-redesign-v5 .redesign-section-v5{box-shadow:0 7px 22px rgba(35,62,100,.055)!important}
+
+/* Use the actual Tafaß logo image instead of a text-made logo mark. */
+.brand-kicker{display:flex!important;align-items:center!important;gap:7px!important}
+.brand-kicker img{width:24px!important;height:24px!important;display:block!important;flex:0 0 24px!important;border-radius:7px!important;box-shadow:0 6px 16px rgba(42,115,255,.20)}
+.brand-kicker b{display:none!important}
+.auth-logo-row{display:flex;align-items:center;gap:10px}
+.auth-brand-logo{width:42px;height:42px;display:block;border-radius:12px;box-shadow:0 8px 20px rgba(35,102,255,.22)}
+.splash-logo-image{width:112px;height:112px;display:block;object-fit:contain;filter:drop-shadow(0 20px 42px rgba(46,113,255,.34));animation:splashLogoPremium 2.4s ease-in-out infinite}
+@keyframes splashLogoPremium{0%,100%{transform:scale(1) rotate(0deg)}50%{transform:scale(1.045) rotate(.6deg)}}
+@media(max-width:390px){.splash-logo-image{width:94px;height:94px}.auth-brand-logo{width:38px;height:38px}.brand-kicker img{width:20px!important;height:20px!important;flex-basis:20px!important}}
