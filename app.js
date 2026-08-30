@@ -56,10 +56,24 @@
 
   async function loadPosts() {
     if (!state.user) return;
-    const { data, error } = await sb.from("posts").select("*").order("created_at", { ascending: false }).limit(30);
+    const { data, error } = await sb.from("posts").select("*").order("created_at", { ascending: false }).limit(60);
     state.posts = error ? [] : (data || []);
     await hydratePosts();
-    if (state.route === "home" || state.route === "profile") await render();
+  }
+
+  async function loadMyPosts() {
+    if (!state.user) return [];
+    const { data, error } = await sb.from("posts").select("*")
+      .eq("user_id", state.user.id)
+      .order("created_at", { ascending: false })
+      .limit(100);
+    if (error) return [];
+    const rows = data || [];
+    const ids = [...new Set(rows.map(x => x.user_id).filter(Boolean))];
+    if (!ids.length) return rows;
+    const { data: profiles } = await sb.from("profiles").select("*").in("id", ids);
+    const map = new Map((profiles || []).map(x => [x.id, x]));
+    return rows.map(x => ({ ...x, author: map.get(x.user_id) || state.profile }));
   }
 
   async function hydratePosts() {
@@ -82,12 +96,12 @@
   function storyStrip() {
     const profiles = [state.profile, ...state.posts.map(p => p.author).filter(Boolean)].filter(Boolean);
     const unique = [...new Map(profiles.map(p => [p.id, p])).values()].slice(0, 8);
-    return `<div class="card story-card"><div class="stories"><button class="story story-add" data-action="add-story"><div class="story-ring"><span class="avatar">+</span></div><small>Votre story</small></button>${unique.map((p,i)=>`<button class="story" data-action="story" data-id="${esc(p.id)}"><div class="story-ring">${avatarHTML(p)}</div><small>${esc(i===0?"Votre story":(p.first_name||nameOf(p)).slice(0,10))}</small></button>`).join("")}</div></div>`;
+    return `<div class="story-strip-clean"><div class="stories"><button class="story story-add" data-action="add-story"><div class="story-ring"><span class="avatar">+</span></div><small>Votre story</small></button>${unique.map((p,i)=>`<button class="story" data-action="story" data-id="${esc(p.id)}"><div class="story-ring">${avatarHTML(p)}</div><small>${esc(i===0?"Votre story":(p.first_name||nameOf(p)).slice(0,10))}</small></button>`).join("")}</div></div>`;
   }
 
   async function renderFeed() {
     let html = storyStrip();
-    html += `<div class="card composer">
+    html += `<div class="composer composer-clean">
       <div class="composer-top">${avatarHTML(state.profile)}<b>${esc(nameOf(state.profile))}</b></div>
       <textarea id="postText" placeholder="Quoi de neuf, ${esc((state.profile?.first_name || "").trim() || "vous")} ?"></textarea>
       <div class="composer-actions"><label class="file-label">▧ Photo/Vidéo<input id="postFile" type="file" accept="image/*,video/*" hidden></label><button type="button" data-action="mood">◎ Humeur</button><button type="button" class="primary" id="publishBtn">Publier</button></div>
@@ -365,7 +379,8 @@
   async function profilePage(tab = state.profileTab) {
     const token = state.renderToken;
     state.profileTab = tab;
-    const p = state.profile || {}, mine = state.posts.filter(x => x.user_id === state.user.id);
+    const p = state.profile || {};
+    const mine = await loadMyPosts();
     const photos = mine.filter(x => x.media_url && x.media_type === "image");
     const cover = p.cover_url ? `style="background-image:url('${esc(p.cover_url)}')"` : "";
     const [friendsCountR, followersCountR] = await Promise.all([
@@ -373,13 +388,31 @@
       sb.from("follows").select("id", { count:"exact", head:true }).eq("following_id", state.user.id)
     ]);
     const friendsCount = friendsCountR.count || 0, followersCount = followersCountR.count || 0;
-    if (token !== state.renderToken) return;
+    if (token !== state.renderToken || state.route !== "profile") return;
+
     let tabBody = "";
-    if (tab === "photos") tabBody = `<div class="card"><div class="photo-grid">${photos.map(x=>`<img src="${esc(x.media_url)}" alt="Photo">`).join("") || `<div class="empty" style="grid-column:1/-1">Aucune photo publiée.</div>`}</div></div>`;
-    else if (tab === "friends") tabBody = `<div class="card"><div class="list-row">${avatarHTML(p)}<div class="grow"><b>Votre réseau</b><small>Découvrez vos amis et les personnes que vous suivez.</small></div></div><button class="primary big" data-route="friends">Voir mes amis</button></div>`;
-    else if (tab === "videos") tabBody = `<div class="card"><div class="empty">${mine.some(x=>x.media_type==="video"||x.media_type==="reel")?"Vos vidéos sont disponibles ici.":"Aucune vidéo publiée."}</div></div>`;
-    else tabBody = `<div class="card"><div class="profile-post-list">${mine.length?mine.map(x=>`<div class="list-row"><div class="grow"><b>${esc(x.content || "Publication avec média")}</b><small>${timeAgo(x.created_at)}</small></div></div>`).join(""):`<div class="empty">Aucune publication.</div>`}</div></div>`;
-    $("content").innerHTML = `<div class="hero card" style="padding:0;overflow:hidden"><div class="profile-cover" ${cover}></div><div class="profile-main">${avatarHTML(p,"avatar profile-avatar")}<h2 class="profile-name">${esc(nameOf(p))}</h2><div class="profile-handle">${p.username ? "@"+esc(p.username) : ""}</div><p class="profile-bio">${esc(p.bio || "")}</p><div class="profile-actions"><button class="primary" data-action="edit-profile">Modifier le profil</button><button class="ghost-action" data-action="profile-more">•••</button></div><div class="profile-stats"><div class="profile-stat"><b>${mine.length}</b><small>Publications</small></div><div class="profile-stat"><b>${friendsCount}</b><small>Amis</small></div><div class="profile-stat"><b>${followersCount}</b><small>Abonnés</small></div></div><div class="profile-info"><div>⌂ ${esc(p.location || "")}</div><div>◷ ${p.created_at ? "Membre depuis " + new Date(p.created_at).toLocaleDateString("fr-FR", {month:"long", year:"numeric"}) : ""}</div></div><div class="profile-tabs">${[["posts","Publications"],["photos","Photos"],["videos","Vidéos"],["friends","Amis"]].map(([k,v])=>`<button class="${tab===k?"active":""}" data-action="profile-tab" data-tab="${k}">${v}</button>`).join("")}</div></div></div>${tabBody}`;
+    if (tab === "photos") {
+      tabBody = `<section class="profile-content-section"><div class="photo-grid">${photos.map(x => `<img src="${esc(x.media_url)}" alt="Photo publiée" loading="lazy">`).join("") || `<div class="empty profile-empty">Aucune photo publiée.</div>`}</div></section>`;
+    } else if (tab === "videos") {
+      const videos = mine.filter(x => x.media_type === "video" || x.media_type === "reel");
+      tabBody = `<section class="profile-content-section"><div class="profile-video-list">${videos.map(x => `<article class="profile-publication"><div class="profile-publication-head">${avatarHTML(p)}<div class="grow"><b>${esc(nameOf(p))}</b><small>${timeAgo(x.created_at)} · ${x.media_type === "reel" ? "Reel" : "Vidéo"}</small></div></div>${x.content ? `<p>${esc(x.content)}</p>` : ""}<video class="post-media" src="${esc(x.media_url)}" controls preload="metadata"></video></article>`).join("") || `<div class="empty profile-empty">Aucune vidéo publiée.</div>`}</div></section>`;
+    } else if (tab === "friends") {
+      tabBody = `<section class="profile-content-section profile-network-section"><div class="profile-network-stat"><b>${friendsCount}</b><span>amis</span></div><p>Votre réseau Tafaß et vos relations réelles.</p><button class="primary big" data-route="friends">Voir mes amis</button></section>`;
+    } else {
+      tabBody = `<section class="profile-content-section profile-publications-section">${mine.length ? mine.map(x => `<article class="profile-publication">${avatarHTML(p) ? `<div class="profile-publication-head">${avatarHTML(p)}<div class="grow"><b>${esc(nameOf(p))}</b><small>${timeAgo(x.created_at)} · Public</small></div><span class="publication-status">Publié</span></div>` : ""}${x.content ? `<p class="profile-publication-text">${esc(x.content)}</p>` : ""}${x.media_url ? (x.media_type === "video" || x.media_type === "reel" ? `<video class="post-media" src="${esc(x.media_url)}" controls preload="metadata"></video>` : `<img class="post-media" src="${esc(x.media_url)}" alt="Publication" loading="lazy">`) : ""}</article>`).join("") : `<div class="empty profile-empty">Aucune publication pour le moment.</div>`}</section>`;
+    }
+
+    $("content").innerHTML = `<section class="profile-page-premium">
+      <div class="profile-cover-wrap"><div class="profile-cover" ${cover}></div></div>
+      <div class="profile-main-premium">
+        <div class="profile-identity-row">${avatarHTML(p,"avatar profile-avatar")}<div class="profile-identity"><h2 class="profile-name">${esc(nameOf(p))}</h2><div class="profile-handle">${p.username ? "@"+esc(p.username) : ""}</div></div><button class="ghost-action profile-edit-top" data-action="edit-profile">Modifier</button></div>
+        <p class="profile-bio">${esc(p.bio || "")}</p>
+        <div class="profile-actions"><button class="primary" data-action="edit-profile">Modifier le profil</button></div>
+        <div class="profile-stats"><div class="profile-stat"><b>${mine.length}</b><small>Publications</small></div><div class="profile-stat"><b>${friendsCount}</b><small>Amis</small></div><div class="profile-stat"><b>${followersCount}</b><small>Abonnés</small></div></div>
+        <div class="profile-info">${p.location ? `<div>⌖ ${esc(p.location)}</div>` : ""}${p.created_at ? `<div>◷ Membre depuis ${new Date(p.created_at).toLocaleDateString("fr-FR", {month:"long", year:"numeric"})}</div>` : ""}</div>
+        <div class="profile-tabs">${[["posts","Publications"],["photos","Photos"],["videos","Vidéos"],["friends","Amis"]].map(([k,v])=>`<button class="${tab===k?"active":""}" data-action="profile-tab" data-tab="${k}">${v}</button>`).join("")}</div>
+      </div>${tabBody}
+    </section>`;
   }
 
   function editProfile() {
@@ -568,18 +601,20 @@
     else if (route === "tafab") tafabPage();
     else if (route === "settings") settingsPage();
     if (token !== state.renderToken || route !== state.route) return;
+    const pageRoot = $("content")?.firstElementChild;
+    if (pageRoot) pageRoot.dataset.pageRoute = route;
     document.querySelectorAll("[data-route]").forEach(el => el.classList.toggle("active", el.dataset.route === state.route));
     updateBadges();
   }
 
   function navigate(route) {
     if (!routes.includes(route)) route = "home";
-    // Chaque clic lance une navigation indépendante. Une ancienne requête async
-    // ne peut plus réécrire l'écran après un changement de page.
+    if (state.route === route && document.querySelector(`#content [data-page-route="${route}"]`)) return;
     state.renderToken++;
     state.route = route;
+    state.selectedConversation = route === "messages" ? state.selectedConversation : null;
     history.replaceState(null, "", "#" + route);
-    render();
+    render().catch(err => { console.error("Tafaß navigation:", err); });
   }
 
   function syncThemeButton() {
@@ -605,9 +640,10 @@
     if (state.channel) await sb.removeChannel(state.channel);
     state.channel = sb.channel("tafa-live-ui")
       .on("postgres_changes", { event:"*", schema:"public", table:"profiles" }, () => { loadProfile(); if (state.route==="search") searchPage(""); })
-      .on("postgres_changes", { event:"*", schema:"public", table:"posts" }, () => loadPosts())
-      .on("postgres_changes", { event:"*", schema:"public", table:"comments" }, () => loadPosts())
-      .on("postgres_changes", { event:"*", schema:"public", table:"post_reactions" }, () => loadPosts())
+      .on("postgres_changes", { event:"*", schema:"public", table:"posts" }, async () => { await loadPosts(); if (["home","profile","videos","reels","saved"].includes(state.route)) render(); })
+      .on("postgres_changes", { event:"*", schema:"public", table:"comments" }, async () => { await loadPosts(); if (state.route === "home") render(); })
+      .on("postgres_changes", { event:"*", schema:"public", table:"post_reactions" }, async () => { await loadPosts(); if (state.route === "home") render(); })
+      .on("postgres_changes", { event:"*", schema:"public", table:"post_shares" }, async () => { await loadPosts(); if (state.route === "home") render(); })
       .on("postgres_changes", { event:"*", schema:"public", table:"notifications" }, () => { updateBadges(); if (state.route==="notifications") notificationsPage(); })
       .on("postgres_changes", { event:"*", schema:"public", table:"messages" }, () => {
         if (state.route==="messages") state.selectedConversation ? openConversation(state.selectedConversation) : messagesPage();
