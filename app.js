@@ -34,6 +34,36 @@
   }
 
   function nameOf(p) { return [p?.first_name, p?.last_name].filter(Boolean).join(" ") || "Membre Tafaß"; }
+  const MG_CITIES = [
+    "Antananarivo","Ambohimanambola","Ambohidratrimo","Andramasina","Anjozorobe","Ankazobe","Manjakandriana","Arivonimamo","Miarinarivo","Soavinandriana","Tsiroanomandidy","Antsirabe","Betafo","Ambatolampy","Fianarantsoa","Ambalavao","Manakara","Mananjary","Farafangana","Toamasina","Fenerive Est","Vatomandry","Brickaville","Mahajanga","Marovoay","Mitsinjo","Antsiranana","Ambilobe","Nosy Be","Sambava","Antalaha","Toliara","Morondava","Belo sur Tsiribihina","Miandrivazo","Taolagnaro","Amboasary","Ihosy","Ambovombe"
+  ];
+  const MG_PROVINCES = ["Antananarivo","Antsiranana","Fianarantsoa","Mahajanga","Toamasina","Toliara"];
+  const COUNTRY_META = {
+    MG:{name:"Madagascar",code:"+261",digits:9,placeholder:"330000000",test:/^[3-9]\d{8}$/},
+    FR:{name:"France",code:"+33",digits:9,placeholder:"600000000",test:/^[1-9]\d{8}$/},
+    US:{name:"États-Unis",code:"+1",digits:10,placeholder:"2025550123",test:/^[2-9]\d{9}$/}
+  };
+  function detectCountry(){
+    const lang=(navigator.language||"").toUpperCase();
+    if(/(^|[-_])MG\b/.test(lang)) return "MG";
+    if(/(^|[-_])FR\b/.test(lang)) return "FR";
+    if(/(^|[-_])(US|CA)\b/.test(lang)) return "US";
+    const tz=Intl.DateTimeFormat().resolvedOptions().timeZone||"";
+    if(tz.startsWith("Africa/")) return "MG";
+    return "MG";
+  }
+  function phoneMeta(){ return COUNTRY_META[state.detectedCountry||detectCountry()] || COUNTRY_META.MG; }
+  function normalizePhone(value, meta=phoneMeta()){
+    let d=String(value||"").replace(/\D/g,"");
+    if(d.startsWith(meta.code.replace("+",""))) d=d.slice(meta.code.length-1);
+    return d;
+  }
+  function internationalPhone(value, meta=phoneMeta()){
+    const d=normalizePhone(value,meta); return d ? meta.code+d : "";
+  }
+  function cityListHTML(id, values){ return `<datalist id="${id}">${values.map(v=>`<option value="${esc(v)}"></option>`).join("")}</datalist>`; }
+  function validCity(value){ return MG_CITIES.some(c=>c.toLowerCase()===String(value||"").trim().toLowerCase()); }
+  function validProvince(value){ return MG_PROVINCES.some(c=>c.toLowerCase()===String(value||"").trim().toLowerCase()); }
   function notificationAction(n) {
     const map = {
       reaction: "a réagi à votre publication.",
@@ -81,50 +111,23 @@
     button.textContent = loading ? "Patientez…" : (button.dataset.oldLabel || label || button.textContent);
   }
 
-  function withTimeout(promise, ms = 7000, message = "Le serveur met trop de temps à répondre. Vérifiez votre connexion.") {
-    let timer;
-    return Promise.race([
-      promise,
-      new Promise(resolve => { timer = setTimeout(() => resolve({ data: null, error: { message } }), ms); })
-    ]).finally(() => clearTimeout(timer));
-  }
-
   async function loadProfile() {
-    if (!state.user) return false;
+    if (!state.user) return;
+    const { data } = await sb.from("profiles").select("*").eq("id", state.user.id).maybeSingle();
     const authEmail = state.user.email || "";
-    try {
-      const result = await withTimeout(
-        sb.from("profiles").select("*").eq("id", state.user.id).maybeSingle(),
-        7000
-      );
-      const data = result?.data || null;
-      state.profile = data || {
-        id: state.user.id,
-        first_name: state.user.user_metadata?.first_name || "",
-        last_name: state.user.user_metadata?.last_name || "",
-        email: authEmail
-      };
-      if (authEmail) state.profile.email = authEmail;
-      if ((!state.profile.city_current || !state.profile.city_origin) && typeof state.profile.location === "string" && state.profile.location.startsWith("TAFAß_LOC:")) {
-        try {
-          const loc = JSON.parse(state.profile.location.slice(9));
-          state.profile.city_current = state.profile.city_current || loc.current || "";
-          state.profile.city_origin = state.profile.city_origin || loc.origin || "";
-        } catch (_) {}
-      }
-    } catch (e) {
-      console.warn("Tafaß profil temporairement indisponible:", e);
-      state.profile = state.profile || { id: state.user.id, first_name: "", last_name: "", email: authEmail };
-      if (authEmail) state.profile.email = authEmail;
-    }
-    try {
-      const settings = (await withTimeout(sb.from("user_settings").select("theme").eq("user_id", state.user.id).maybeSingle(), 4000)).data;
-      if (settings?.theme === "light" || settings?.theme === "dark") state.theme = settings.theme;
-    } catch (_) {}
+    state.profile = data || {
+      id: state.user.id, first_name: state.user.user_metadata?.first_name || "",
+      last_name: state.user.user_metadata?.last_name || "", email: authEmail
+    };
+    // The authenticated email is the source of truth for the UI.
+    // Do not write to profiles during every app bootstrap: this can be blocked by RLS
+    // and can make OAuth onboarding appear frozen. Email synchronization is handled
+    // by the dedicated onboarding/account RPC instead.
+    if (authEmail) state.profile.email = authEmail;
+    const settings=(await sb.from("user_settings").select("theme").eq("user_id",state.user.id).maybeSingle()).data;
+    if(settings?.theme==="light" || settings?.theme==="dark") state.theme=settings.theme;
     const sideName = $("sideName"); if (sideName) sideName.textContent = nameOf(state.profile);
-    const sideAvatar = $("sideAvatar");
-    if (sideAvatar) sideAvatar.outerHTML = avatarHTML(state.profile, "avatar").replace("<span ", '<span id="sideAvatar" ');
-    return !!state.profile;
+    const sideAvatar = $("sideAvatar"); if (sideAvatar) { sideAvatar.outerHTML = avatarHTML(state.profile, "avatar").replace("<span ", '<span id="sideAvatar" '); }
   }
 
   async function loadPosts() {
@@ -728,44 +731,50 @@
 
   function editProfile() {
     const p = state.profile || {};
-    openModal(`<div class="modal-box profile-edit-modal premium-profile-editor-v2">
+    openModal(`<div class="modal-box profile-edit-modal premium-profile-editor-v3">
       <button class="modal-close" data-action="close-modal" aria-label="Fermer">×</button>
-      <header class="profile-editor-header-v2"><span class="eyebrow">TAFAß • PROFIL</span><h3>Personnaliser votre profil</h3><p>Votre profil public contient uniquement votre présentation, votre lieu et vos photos.</p></header>
-      <section class="profile-editor-stage-v2">
-        <label class="editor-cover-v2" id="editorCoverPreview" style="${p.cover_url?`background-image:url('${esc(p.cover_url)}')`:''}">
-          <span class="cover-placeholder-v2">Votre couverture</span><span class="editor-cover-overlay-v2">📷 Modifier la couverture</span>
-          <input id="pfCover" type="file" accept="image/jpeg,image/png,image/webp" hidden>
-        </label>
-        <label class="editor-avatar-v2" id="editorAvatarPreview">${avatarHTML(p,"avatar")}<span class="editor-avatar-edit-v2">📷</span><input id="pfAvatar" type="file" accept="image/jpeg,image/png,image/webp" hidden></label>
-      </section>
-      <div class="profile-form-v2 profile-form-public-v23">
-        <div class="profile-field-card-v2 profile-field-wide-v2"><label><span>Bio</span><textarea id="pfBio" maxlength="500" placeholder="Présentez-vous en quelques mots…">${esc(p.bio||'')}</textarea></label></div>
-        <div class="profile-section-title-v23">Lieu</div>
-        <div class="profile-field-card-v2"><label><span>Pays</span><input id="pfCountry" value="${esc(p.country||'')}" placeholder="Madagascar"></label></div>
-        <div class="profile-field-card-v2"><label><span>Ville actuelle</span><input id="pfCityCurrent" value="${esc(p.city_current||'')}" placeholder="Antananarivo"></label></div>
-        <div class="profile-field-card-v2 profile-field-wide-v2"><label><span>Ville d’origine</span><input id="pfCityOrigin" value="${esc(p.city_origin||'')}" placeholder="Votre ville d’origine"></label></div>
+      <header class="profile-editor-header-v2"><span class="eyebrow">TAFAß • PROFIL</span><h3>Personnaliser votre profil</h3><p>Bio, lieu et photos sont gérés ici. Les informations personnelles restent dans Paramètres.</p></header>
+      <div class="profile-editor-scroll-v3">
+        <section class="profile-editor-stage-v2">
+          <label class="editor-cover-v2" id="editorCoverPreview" style="${p.cover_url?`background-image:url('${esc(p.cover_url)}')`:''}">
+            <span class="cover-placeholder-v2">Votre couverture</span><span class="editor-cover-overlay-v2">📷 Modifier la couverture</span>
+            <input id="pfCover" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+          </label>
+          <label class="editor-avatar-v2" id="editorAvatarPreview">${avatarHTML(p,"avatar editor-avatar-image-v3")}<span class="editor-avatar-edit-v2">📷</span><input id="pfAvatar" type="file" accept="image/jpeg,image/png,image/webp" hidden></label>
+        </section>
+        <div class="profile-editor-photo-label-v2"><b>Photos du profil</b><span>La photo de profil est toujours recadrée pour remplir parfaitement le rond.</span></div>
+        <div class="profile-form-v2 profile-form-public-v23">
+          <div class="profile-section-title-v23">Présentation</div>
+          <div class="profile-field-card-v2 profile-field-wide-v2"><label><span>Bio</span><textarea id="pfBio" maxlength="500" placeholder="Présentez-vous en quelques mots…">${esc(p.bio||'')}</textarea></label></div>
+          <div class="profile-section-title-v23">Lieu</div>
+          <div class="profile-field-card-v2 profile-field-wide-v2"><label><span>Pays</span><input id="pfCountry" value="Madagascar" readonly disabled></label></div>
+          <div class="profile-field-card-v2"><label><span>Ville actuelle</span><input id="pfCityCurrent" list="mgCitiesCurrent" value="${esc(p.city_current||'')}" placeholder="Rechercher une ville…" autocomplete="off"><small>Choisissez une ville réelle dans la liste.</small></label></div>
+          <div class="profile-field-card-v2"><label><span>Ville d’origine / Province</span><input id="pfCityOrigin" list="mgProvinces" value="${esc(p.city_origin||'')}" placeholder="Rechercher une province…" autocomplete="off"><small>Province de Madagascar.</small></label></div>
+          ${cityListHTML('mgCitiesCurrent',MG_CITIES)}${cityListHTML('mgProvinces',MG_PROVINCES)}
+        </div>
       </div>
-      <footer class="profile-editor-footer-v2"><button class="ghost-action" data-action="close-modal">Annuler</button><button class="primary big profile-save-button" data-action="save-profile"><span>✓</span> Enregistrer</button></footer>
+      <footer class="profile-editor-footer-v3"><button class="ghost-action" data-action="close-modal">Annuler</button><button class="primary big profile-save-button" data-action="save-profile"><span>✓</span> Enregistrer</button></footer>
     </div>`);
-    $("pfAvatar")?.addEventListener("change", e => { const file=e.target.files?.[0]; if(!file)return; if(!file.type.startsWith("image/"))return toast("Choisissez une image."); const img=document.createElement("img"); img.src=URL.createObjectURL(file); img.className="avatar"; $("editorAvatarPreview").querySelector(".avatar")?.replaceWith(img); });
+    $("pfAvatar")?.addEventListener("change", e => { const file=e.target.files?.[0]; if(!file)return; if(!file.type.startsWith("image/"))return toast("Choisissez une image."); const img=document.createElement("img"); img.src=URL.createObjectURL(file); img.className="avatar editor-avatar-image-v3-img"; img.alt="Avatar"; $("editorAvatarPreview").querySelector(".avatar")?.replaceWith(img); });
     $("pfCover")?.addEventListener("change", e => { const file=e.target.files?.[0]; if(!file)return; if(!file.type.startsWith("image/"))return toast("Choisissez une image."); $("editorCoverPreview").style.backgroundImage=`url("${URL.createObjectURL(file)}")`; });
   }
 
   function accountSettings() {
     const p=state.profile||{}, authEmail=state.user?.email||p.email||'';
     const changed=p.name_changed_at?new Date(p.name_changed_at):null, next=changed?new Date(changed.getTime()+15*86400000):null, locked=next&&next.getTime()>Date.now();
-    openModal(`<div class="modal-box settings-modal account-settings-v23"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • COMPTE</span><h3>Informations du compte</h3><p class="muted">Les informations personnelles et de connexion se modifient ici, pas dans le profil public.</p><div class="settings-section-title">Identité</div><div class="settings-account-grid-v23"><label>Prénom<input id="asFirst" value="${esc(p.first_name||'')}" ${locked?'disabled':''}></label><label>Nom<input id="asLast" value="${esc(p.last_name||'')}" ${locked?'disabled':''}></label></div><div class="settings-lock-v23">${locked?'🔒 Nom/prénom verrouillés jusqu’au '+next.toLocaleDateString('fr-FR'):'✓ Nom et prénom : une modification tous les 15 jours.'}</div><div class="settings-section-title">Coordonnées</div><label>E-mail<input id="asEmail" value="${esc(authEmail)}" type="email" autocomplete="email"></label><label>Numéro de téléphone<input id="asPhone" value="${esc(p.phone||'')}" type="tel"></label><div class="settings-section-title">Informations personnelles</div><div class="settings-account-grid-v23"><label>Date de naissance<input id="asBirth" value="${esc(p.birth||'')}" type="date"></label><label>Genre<select id="asGender"><option value="">Choisir</option><option ${p.gender==='Homme'?'selected':''}>Homme</option><option ${p.gender==='Femme'?'selected':''}>Femme</option><option ${p.gender==='Autre'?'selected':''}>Autre</option></select></label></div><button class="primary big" data-action="save-account-settings">Enregistrer les informations</button></div>`);
+    openModal(`<div class="modal-box settings-modal account-settings-v23"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • COMPTE</span><h3>Informations du compte</h3><p class="muted">Les informations personnelles et de connexion se modifient ici, pas dans le profil public.</p><div class="settings-section-title">Identité</div><div class="settings-account-grid-v23"><label>Prénom<input id="asFirst" value="${esc(p.first_name||'')}" ${locked?'disabled':''}></label><label>Nom<input id="asLast" value="${esc(p.last_name||'')}" ${locked?'disabled':''}></label></div><div class="settings-lock-v23">${locked?'🔒 Nom/prénom verrouillés jusqu’au '+next.toLocaleDateString('fr-FR'):'✓ Nom et prénom : une modification tous les 15 jours.'}</div><div class="settings-section-title">Coordonnées</div><label>E-mail<input id="asEmail" value="${esc(authEmail)}" type="email" autocomplete="email"></label><label>Numéro de téléphone<div class="phone-row phone-row-auto-v3"><span class="phone-prefix-v3">${esc(phoneMeta().code)}</span><input id="asPhone" value="${esc(normalizePhone(p.phone||"",phoneMeta()))}" type="tel" inputmode="numeric" maxlength="${phoneMeta().digits}" placeholder="${phoneMeta().placeholder}" autocomplete="tel-national"></div><small class="phone-auto-note-v3">Pays détecté automatiquement : ${esc(phoneMeta().name)}. Entrez uniquement le numéro national.</small></label><div class="settings-section-title">Informations personnelles</div><div class="settings-account-grid-v23"><label>Date de naissance<input id="asBirth" value="${esc(p.birth||'')}" type="date"></label><label>Genre<select id="asGender"><option value="">Choisir</option><option ${p.gender==='Homme'?'selected':''}>Homme</option><option ${p.gender==='Femme'?'selected':''}>Femme</option><option ${p.gender==='Autre'?'selected':''}>Autre</option></select></label></div><button class="primary big" data-action="save-account-settings">Enregistrer les informations</button></div>`);
   }
 
   async function saveAccountSettings() {
     const p=state.profile||{}, first=$("asFirst")?.value.trim()||'', last=$("asLast")?.value.trim()||'', oldFirst=String(p.first_name||'').trim(), oldLast=String(p.last_name||'').trim();
     const changed=first!==oldFirst||last!==oldLast;
     if(changed&&p.name_changed_at&&Date.now()<new Date(p.name_changed_at).getTime()+15*86400000) return toast('Le nom et le prénom sont encore verrouillés.');
-    const birth=$("asBirth")?.value||null, gender=$("asGender")?.value||'', phone=$("asPhone")?.value.trim()||'', newEmail=$("asEmail")?.value.trim()||'', oldEmail=state.user?.email||p.email||'';
-    if(!first||!last||!birth||!gender||!phone||!newEmail||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) return toast('Remplissez correctement toutes les informations obligatoires.');
+    const birth=$("asBirth")?.value||null, gender=$("asGender")?.value||'', phone=normalizePhone($("asPhone")?.value||'',phoneMeta()), newEmail=$("asEmail")?.value.trim()||'', oldEmail=state.user?.email||p.email||'';
+    if(!first||!last||!birth||!gender||!phone||!phoneMeta().test.test(phone)||!newEmail||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) return toast('Remplissez correctement toutes les informations obligatoires.');
     try {
       if(newEmail.toLowerCase()!==oldEmail.toLowerCase()){ const er=await sb.auth.updateUser({email:newEmail}); if(er.error) throw new Error(er.error.message); }
-      const patch={first_name:first,last_name:last,birth,gender,phone,email:newEmail};
+      const patch={first_name:first,last_name:last,birth,gender,phone,phone_code:phoneMeta().code,email:newEmail,country:phoneMeta().name};
+      if(changed) patch.name_changed_at=new Date().toISOString();
       const r=await sb.from('profiles').update(patch).eq('id',state.user.id); if(r.error)throw new Error(r.error.message);
       closeModal(); await loadProfile(); await settingsPage(); toast(newEmail.toLowerCase()!==oldEmail.toLowerCase()?'E-mail mis à jour. Vérifiez votre nouvelle adresse si Supabase demande une confirmation.':'Informations du compte enregistrées.');
     } catch(e){toast(e.message)}
@@ -774,14 +783,14 @@
   async function saveProfile() {
     const p = state.profile || {};
     const patch = {
-      country:$('pfCountry')?.value.trim() || "",
+      country:phoneMeta().name,
       city_current:$('pfCityCurrent')?.value.trim() || "",
       city_origin:$('pfCityOrigin')?.value.trim() || "",
       bio:$('pfBio')?.value.trim() || "",
       location:$('pfCityCurrent')?.value.trim() || "",
-      email: state.user?.email || p.email || ""
     };
-    if (!patch.country || !patch.city_current || !patch.city_origin) return toast('Complétez le lieu : pays, ville actuelle et ville d’origine.');
+    if (!patch.city_current || !validCity(patch.city_current)) return toast('Sélectionnez une ville actuelle réelle dans la liste. Exemple : Ambohimanambola.');
+    if (!patch.city_origin || !validProvince(patch.city_origin)) return toast('Sélectionnez une province réelle de Madagascar dans la liste.');
     try {
       for (const [file,key] of [[$('pfAvatar')?.files?.[0],"avatar_url"],[$('pfCover')?.files?.[0],"cover_url"]]) {
         if (!file) continue;
@@ -791,12 +800,8 @@
         if(up.error) throw new Error('Upload : '+up.error.message);
         patch[key]=sb.storage.from('profile-media').getPublicUrl(path).data.publicUrl;
       }
-      let result=await sb.from('profiles').update(patch).eq('id',state.user.id);
-      if(result.error && /city_current|city_origin|schema cache|column/i.test(result.error.message||'')) {
-        const fallback={...patch}; delete fallback.city_current; delete fallback.city_origin; fallback.location='TAFAß_LOC:'+JSON.stringify({current:patch.city_current,origin:patch.city_origin});
-        result=await sb.from('profiles').update(fallback).eq('id',state.user.id);
-      }
-      if(result.error) throw new Error(result.error.message);
+      const {error}=await sb.from('profiles').update(patch).eq('id',state.user.id);
+      if(error) throw new Error(error.message);
       closeModal(); await loadProfile(); toast('Profil mis à jour');
       if (state.route === "profile") await profilePage(state.profileTab);
     } catch(e) { toast(e.message); }
@@ -1202,6 +1207,7 @@
 
   async function profileIsComplete() {
     if (!state.user) return false;
+    await loadProfile();
     const p = state.profile || {};
     return Boolean(
       String(state.user.email || p.email || '').trim() &&
@@ -1217,6 +1223,7 @@
   }
 
   function showOAuthOnboarding() {
+    state.detectedCountry = detectCountry();
     const p = state.profile || {};
     // OAuth onboarding is a dedicated locked auth view, never a modal.
     // This prevents the old form from remaining underneath and appearing duplicated.
@@ -1243,10 +1250,11 @@
       <label>Date de naissance<input id="onBirth" type="date" value="${esc(p.birth||'')}" required></label>
       <label>Genre<select id="onGender" required><option value="">Choisir</option><option value="Homme" ${p.gender==='Homme'?'selected':''}>Homme</option><option value="Femme" ${p.gender==='Femme'?'selected':''}>Femme</option><option value="Autre" ${p.gender==='Autre'?'selected':''}>Autre</option></select></label>
       <label class="wide">E-mail<input value="${esc(state.user?.email||p.email||'')}" type="email" readonly disabled></label>
-      <label>Téléphone<input id="onPhone" value="${esc(p.phone||'')}" type="tel" autocomplete="tel" placeholder="+261…" required></label>
-      <label>Pays actuel<input id="onCountry" value="${esc(p.country||'')}" placeholder="Madagascar" required></label>
-      <label>Ville actuelle<input id="onCityCurrent" value="${esc(p.city_current||'')}" placeholder="Antananarivo" required></label>
-      <label>Ville d’origine<input id="onCityOrigin" value="${esc(p.city_origin||'')}" placeholder="Votre ville d’origine" required></label>
+      <label>Téléphone<div class="phone-row phone-row-auto-v3"><span class="phone-prefix-v3">${esc(phoneMeta().code)}</span><input id="onPhone" value="${esc(normalizePhone(p.phone||"",phoneMeta()))}" type="tel" inputmode="numeric" maxlength="${phoneMeta().digits}" autocomplete="tel-national" placeholder="${phoneMeta().placeholder}" required></div><small class="phone-auto-note-v3">Pays détecté automatiquement : ${esc(phoneMeta().name)}. Entrez uniquement le numéro national.</small></label>
+      <label>Pays actuel<input id="onCountry" value="${esc(phoneMeta().name)}" readonly disabled required></label>
+      <label>Ville actuelle<input id="onCityCurrent" list="onMgCities" value="${esc(p.city_current||'')}" placeholder="Rechercher une ville…" autocomplete="off" required></label>
+      <label>Ville d’origine / Province<input id="onCityOrigin" list="onMgProvinces" value="${esc(p.city_origin||'')}" placeholder="Rechercher une province…" autocomplete="off" required></label>
+      ${cityListHTML('onMgCities',MG_CITIES)}${cityListHTML('onMgProvinces',MG_PROVINCES)}
     </div>
     <button class="primary big onboarding-submit-v24" data-action="complete-onboarding">Déverrouiller Tafaß</button>
     <p class="onboarding-lock-note-v24">🔒 Cette étape est obligatoire. L’application reste verrouillée tant que les informations ne sont pas validées.</p>`;
@@ -1256,62 +1264,45 @@
   }
 
   async function completeOnboarding() {
-    const first = $("onFirst")?.value.trim() || "";
-    const last = $("onLast")?.value.trim() || "";
-    const birth = $("onBirth")?.value || "";
-    const gender = $("onGender")?.value || "";
-    const phone = $("onPhone")?.value.trim() || "";
-    const country = $("onCountry")?.value.trim() || "";
-    const current = $("onCityCurrent")?.value.trim() || "";
-    const origin = $("onCityOrigin")?.value.trim() || "";
-    if (!first || !last || !birth || !gender || !phone || !country || !current || !origin) return toast("Remplissez toutes les informations obligatoires.");
-    const d = new Date(birth + "T00:00:00"), now = new Date();
-    const age = now.getFullYear() - d.getFullYear() - ((now.getMonth() < d.getMonth() || (now.getMonth() === d.getMonth() && now.getDate() < d.getDate())) ? 1 : 0);
-    if (!Number.isFinite(d.getTime()) || d > now) return toast("Date de naissance invalide.");
-    if (age < 13) return toast("Vous devez avoir au moins 13 ans.");
-    const btn = document.querySelector('[data-action="complete-onboarding"]');
-    setLoading(btn, true, "Déverrouiller Tafaß");
-    const base = { id: state.user.id, first_name: first, last_name: last, email: state.user.email || "", birth, gender, phone, country, location: current, updated_at: new Date().toISOString() };
-    const full = { ...base, city_current: current, city_origin: origin };
+    const first=$('onFirst')?.value.trim()||'', last=$('onLast')?.value.trim()||'', birth=$('onBirth')?.value||'', gender=$('onGender')?.value||'', phone=normalizePhone($('onPhone')?.value||'',phoneMeta()), country=phoneMeta().name, current=$('onCityCurrent')?.value.trim()||'', origin=$('onCityOrigin')?.value.trim()||'';
+    if(!first||!last||!birth||!gender||!phone||!country||!current||!origin) return toast('Remplissez toutes les informations obligatoires.');
+    if(!phoneMeta().test.test(phone)) return toast(`Numéro invalide pour ${phoneMeta().name}. Entrez uniquement les chiffres sans ${phoneMeta().code}.`);
+    if(!validCity(current)) return toast('Sélectionnez une ville actuelle réelle dans la liste.');
+    if(!validProvince(origin)) return toast('Sélectionnez une province réelle de Madagascar dans la liste.');
+    const d=new Date(birth+'T00:00:00'), now=new Date();
+    const age=now.getFullYear()-d.getFullYear()-((now.getMonth()<d.getMonth()||(now.getMonth()===d.getMonth()&&now.getDate()<d.getDate()))?1:0);
+    if(age<13) return toast('Vous devez avoir au moins 13 ans.');
+    const btn=document.querySelector('[data-action="complete-onboarding"]'); setLoading(btn,true,'Déverrouiller Tafaß');
+    const row={id:state.user.id,first_name:first,last_name:last,email:state.user.email||'',birth,gender,phone,phone_code:phoneMeta().code,country,city_current:current,city_origin:origin,location:current,updated_at:new Date().toISOString()};
     try {
-      let result = await withTimeout(sb.from("profiles").upsert(full, { onConflict: "id" }), 8000);
-      // Older databases may not yet have the two city columns. Never hang or leave the user locked.
-      if (result?.error && /city_current|city_origin|schema cache|column/i.test(result.error.message || "")) {
-        const fallback = { ...base, location: "TAFAß_LOC:" + JSON.stringify({ current, origin }) };
-        result = await withTimeout(sb.from("profiles").upsert(fallback, { onConflict: "id" }), 8000);
-        if (!result?.error) toast("Profil enregistré.");
-      }
-      if (result?.error) { setLoading(btn, false, "Déverrouiller Tafaß"); return toast("Impossible d’enregistrer le profil : " + result.error.message); }
+      const savePromise=(async()=>{
+        const u=await sb.from('profiles').update(row).eq('id',state.user.id);
+        if(!u.error && (u.data || u.count !== 0)) return u;
+        const i=await sb.from('profiles').insert(row);
+        return i;
+      })();
+      const result=await Promise.race([
+        savePromise,
+        new Promise(resolve=>setTimeout(()=>resolve({error:{message:'Supabase ne répond pas. Vérifiez votre connexion puis réessayez.'}}),10000))
+      ]);
+      if(result?.error){ setLoading(btn,false,'Déverrouiller Tafaß'); return toast('Impossible d’enregistrer le profil : '+result.error.message); }
       await loadProfile();
-      const p = state.profile || {};
-      const complete = Boolean(
-        String(state.user.email || p.email || "").trim() && String(p.first_name || "").trim() && String(p.last_name || "").trim() &&
-        p.birth && String(p.gender || "").trim() && String(p.phone || "").trim() && String(p.country || "").trim() &&
-        (String(p.city_current || "").trim() || current) && (String(p.city_origin || "").trim() || origin)
-      );
-      if (!complete) { setLoading(btn, false, "Déverrouiller Tafaß"); return toast("Le profil n’a pas été enregistré complètement. Réessayez."); }
-      $("oauthOnboardingView")?.remove(); $("auth")?.classList.add("hidden"); $("app")?.classList.remove("hidden"); state.entering = false;
-      await loadPosts(); await setupRealtime(); await render(); toast("Compte complété. Bienvenue sur Tafaß.");
-    } catch (e) {
-      setLoading(btn, false, "Déverrouiller Tafaß");
-      toast(e?.message || "Impossible de valider le compte.");
-    }
-  }
-
-  function isOAuthUser(user) {
-    const provider = String(user?.app_metadata?.provider || "").toLowerCase();
-    return provider === "google" || provider === "apple" || (user?.identities || []).some(i => ["google", "apple"].includes(String(i?.provider || "").toLowerCase()));
+      const complete=Boolean(state.profile&&String(state.user.email||state.profile.email||'').trim()&&String(state.profile.first_name||'').trim()&&String(state.profile.last_name||'').trim()&&state.profile.birth&&String(state.profile.gender||'').trim()&&String(state.profile.phone||'').trim()&&String(state.profile.country||'').trim()&&String(state.profile.city_current||'').trim()&&String(state.profile.city_origin||'').trim());
+      if(!complete){ setLoading(btn,false,'Déverrouiller Tafaß'); return toast('Le profil n’a pas été enregistré complètement. Réessayez.'); }
+      $('oauthOnboardingView')?.remove(); $('auth')?.classList.add('hidden'); $('app')?.classList.remove('hidden'); state.entering=false;
+      await loadPosts(); await setupRealtime(); await render(); toast('Compte complété. Bienvenue sur Tafaß.');
+    } catch(e){ setLoading(btn,false,'Déverrouiller Tafaß'); toast(e?.message||'Impossible de valider le compte.'); }
   }
 
   async function enterApp() {
-    if (state.entering || !state.user) return;
+    if (state.entering) return;
     state.entering = true;
     $("app").classList.add("hidden");
     $("auth").classList.remove("hidden");
     document.body.classList.toggle("light", state.theme === "light");
     syncThemeButton();
     await loadProfile();
-    if (isOAuthUser(state.user) && !(await profileIsComplete())) {
+    if (!(await profileIsComplete())) {
       state.entering = false;
       showOAuthOnboarding();
       return;
@@ -1321,9 +1312,12 @@
     state.entering = false;
     await render();
   }
-
   async function signInWithProvider(provider) {
     const allowed = ["google", "apple"];
+    // Supabase must have automatic identity linking enabled. When a verified
+    // Google/Apple e-mail already belongs to a confirmed account, Supabase
+    // then reuses that account instead of creating a second profile.
+
     if (!allowed.includes(provider)) return;
     const btn = document.querySelector(`[data-oauth="${provider}"]`);
     if (btn) { btn.disabled = true; btn.classList.add("loading"); }
@@ -1344,6 +1338,7 @@
   }
 
   function showLogin() { ["signupView","forgotPasswordView","resetPasswordView"].forEach(id => $(id)?.classList.add("hidden")); $("loginView").classList.remove("hidden"); $("auth").classList.remove("hidden"); }
+  state.detectedCountry = detectCountry();
   let signupStep = 1;
   function setSignupStep(step) {
     signupStep = Math.max(1, Math.min(5, Number(step) || 1));
@@ -1645,11 +1640,11 @@
     if ($("birth")?.value) { const d=new Date($("birth").value+"T00:00:00"); const age=new Date().getFullYear()-d.getFullYear()-((new Date().getMonth()<d.getMonth() || (new Date().getMonth()===d.getMonth() && new Date().getDate()<d.getDate()))?1:0); if(age<13) return toast("Vous devez avoir au moins 13 ans pour créer un compte."); }
     if (!$("terms").checked) return toast("Acceptez les conditions pour continuer.");
     $("signupMsg").textContent = "Création du compte…";
-    const meta = { first_name:first, last_name:last, phone:$("phone").value.trim(), phone_code:$("phoneCode").value, country:$("country").value, birth:$("birth").value||null };
+    const signupPhone=normalizePhone($("phone").value,COUNTRY_META.MG); if(!COUNTRY_META.MG.test.test(signupPhone)) return toast('Numéro malgache invalide. Exemple : 330000000.'); const meta = { first_name:first, last_name:last, phone:signupPhone, phone_code:'+261', country:'Madagascar', birth:$("birth").value||null };
     const { data, error } = await sb.auth.signUp({ email, password, data: meta });
     if (error) { $("signupMsg").textContent = error.message; return; }
     if (data.session) {
-      const patch = { first_name:first,last_name:last,email,phone:$("phone").value.trim(),phone_code:$("phoneCode").value,country:$("country").value,birth:$("birth").value||null };
+      const patch = { first_name:first,last_name:last,email,phone:signupPhone,phone_code:'+261',country:'Madagascar',birth:$("birth").value||null };
       await sb.from("profiles").update(patch).eq("id",data.user.id);
       $("signupMsg").textContent="Compte créé.";
     } else $("signupMsg").textContent="Compte créé. Vérifiez votre e-mail si la confirmation est activée.";
@@ -1682,32 +1677,27 @@
   };
   const splashFallback = setTimeout(finishSplash, 6500);
 
-  let authGeneration = 0;
-  function scheduleSession(session, event) {
+  sb.auth.onAuthStateChange((event, session) => {
     state.user = session?.user || null;
-    const generation = ++authGeneration;
+    if (event === "PASSWORD_RECOVERY") {
+      setTimeout(() => showResetPassword(), 0);
+      return;
+    }
     setTimeout(() => {
-      if (generation !== authGeneration) return;
-      if (event === "PASSWORD_RECOVERY" || (location.search.includes("reset=1") && state.user)) {
-        $("app").classList.add("hidden"); showResetPassword(); return;
-      }
-      if (state.user) enterApp().catch(err => console.error("Tafaß session:", err));
+      if (state.user) enterApp().catch(err => { console.error("Tafaß auth:", err); state.entering=false; showLogin(); });
       else { $("app").classList.add("hidden"); showLogin(); }
     }, 0);
-  }
-
-  sb.auth.onAuthStateChange((event, session) => {
-    // Never await Supabase queries inside this callback: Supabase holds its auth lock here.
-    scheduleSession(session, event);
   });
 
   (async () => {
     try {
       const { data } = await sb.auth.getSession();
-      scheduleSession(data.session, "GET_SESSION");
+      state.user = data.session?.user || null;
+      if (state.user && location.search.includes("reset=1")) showResetPassword();
+      else if (state.user) await enterApp(); else showLogin();
     } catch (err) {
       console.error("Tafaß initialisation:", err);
-      scheduleSession(null, "GET_SESSION");
+      showLogin();
     } finally {
       clearTimeout(splashFallback);
       finishSplash();

@@ -1242,30 +1242,69 @@ body.light .profile-edit-modal{background:linear-gradient(155deg,#fff,#f3f7fd)!i
 .oauth-onboarding-view-v24{position:relative!important;z-index:3!important;}
 .oauth-onboarding-view-v24~*{display:none!important;}
 
-/* Tafaß V27 STABLE — final mobile shell */
-@media (max-width:720px){
-  html,body{width:100%;max-width:100%;overflow-x:hidden;}
-  #app.app-shell{min-height:100dvh;}
-  .topbar{position:sticky!important;top:0!important;z-index:1000!important;min-height:58px!important;}
-  .logo-button strong{display:inline!important;visibility:visible!important;opacity:1!important;}
-  .main-layout{padding-bottom:calc(78px + env(safe-area-inset-bottom))!important;min-height:calc(100dvh - 58px);}
-  .content{width:100%;min-width:0;overflow:visible;padding-bottom:8px!important;}
-  .bottom-nav{display:grid!important;position:fixed!important;left:0!important;right:0!important;bottom:0!important;z-index:99999!important;width:100%!important;height:68px!important;min-height:68px!important;grid-template-columns:repeat(6,minmax(0,1fr))!important;padding:4px 2px calc(4px + env(safe-area-inset-bottom))!important;box-sizing:border-box!important;}
-  .bottom-nav button{display:grid!important;place-items:center!important;align-content:center!important;gap:2px!important;width:100%!important;min-width:0!important;height:58px!important;padding:2px 0!important;overflow:visible!important;}
-  .bottom-nav button .nav-svg{width:20px!important;height:20px!important;display:block!important;}
-  .bottom-nav button small{display:block!important;font-size:8px!important;line-height:1.1!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;max-width:100%!important;}
-  .bottom-nav button[data-route="tafab"]{display:grid!important;visibility:visible!important;opacity:1!important;color:#6ea3ff!important;}
+
+/* =========================================================
+   Tafaß V28 — stable responsive profile editor / forms
+   ========================================================= */
+html,body{min-height:100%;overflow-x:hidden}
+body{padding-bottom:env(safe-area-inset-bottom)}
+.content{min-height:0!important;overflow:visible!important}
+.main-layout{min-height:calc(100dvh - 62px);box-sizing:border-box}
+.bottom-nav{padding-bottom:max(5px,env(safe-area-inset-bottom))!important}
+
+/* Profile editor: one scroll container, footer always reachable. */
+.modal-box.profile-edit-modal.premium-profile-editor-v3{
+  width:min(720px,calc(100vw - 20px))!important;
+  height:min(900px,calc(100dvh - 20px))!important;
+  max-height:calc(100dvh - 20px)!important;
+  padding:0!important;overflow:hidden!important;
+  display:grid!important;grid-template-rows:auto minmax(0,1fr) auto!important;
 }
-@media (max-width:390px){
-  .main-layout{padding-bottom:calc(76px + env(safe-area-inset-bottom))!important;}
-  .bottom-nav{height:64px!important;min-height:64px!important;}
-  .bottom-nav button{height:54px!important;}
-  .bottom-nav button .nav-svg{width:18px!important;height:18px!important;}
-  .bottom-nav button small{font-size:7.5px!important;}
+.profile-editor-scroll-v3{min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding-bottom:8px}
+.profile-editor-scroll-v3 .profile-editor-stage-v2{margin-bottom:0}
+.profile-editor-scroll-v3 .profile-editor-photo-label-v2{padding-top:18px!important}
+.profile-editor-scroll-v3 .profile-form-v2{padding-bottom:24px!important}
+.profile-editor-footer-v3{position:relative;z-index:20;display:flex;gap:10px;justify-content:flex-end;padding:12px 18px max(14px,env(safe-area-inset-bottom));border-top:1px solid rgba(120,155,215,.16);background:linear-gradient(180deg,rgba(5,12,23,.96),#07101e);box-shadow:0 -10px 30px rgba(0,0,0,.28)}
+.profile-editor-footer-v3 button{min-height:46px}
+.profile-editor-footer-v3 .profile-save-button{min-width:210px}
+.editor-avatar-image-v3,.editor-avatar-image-v3-img{width:100%!important;height:100%!important;display:block!important;object-fit:cover!important;object-position:center!important;border-radius:50%!important}
+.editor-avatar-v2{overflow:visible!important}
+.editor-avatar-v2>.avatar{overflow:hidden!important}
+.phone-row-auto-v3{display:grid!important;grid-template-columns:auto minmax(0,1fr)!important;gap:0!important;align-items:stretch!important}
+.phone-prefix-v3{display:flex;align-items:center;justify-content:center;min-width:62px;padding:0 10px;border:1px solid rgba(111,149,215,.17);border-right:0;border-radius:12px 0 0 12px;background:#101c31;color:#aebbd0;font-size:12px;font-weight:850}
+.phone-row-auto-v3 input{border-radius:0 12px 12px 0!important;min-width:0!important}
+.phone-auto-note-v3{display:block;margin-top:6px;color:#718199;font-size:9px;line-height:1.4}
+
+/* All app screens keep their last controls above the fixed navigation. */
+@media(max-width:720px){
+  .main-layout{padding-bottom:calc(96px + env(safe-area-inset-bottom))!important}
+  .content{padding-bottom:8px!important}
+  .clean-page,.card,.panel{max-width:100%;box-sizing:border-box}
+  .modal{padding:6px!important;align-items:center!important}
+  .modal-box.profile-edit-modal.premium-profile-editor-v3{width:calc(100vw - 12px)!important;height:calc(100dvh - 12px)!important;max-height:calc(100dvh - 12px)!important;border-radius:20px!important}
+  .profile-editor-header-v2{padding:16px 15px 12px!important}
+  .profile-editor-header-v2 h3{font-size:20px!important}
+  .profile-editor-stage-v2{height:155px!important;flex-basis:auto!important;margin:9px 10px 0!important}
+  .editor-avatar-v2{width:82px!important;height:82px!important;left:12px!important;bottom:-31px!important}
+  .profile-editor-scroll-v3 .profile-editor-photo-label-v2{padding:40px 15px 9px!important}
+  .profile-editor-scroll-v3 .profile-form-v2{padding:4px 15px 18px!important;grid-template-columns:1fr!important}
+  .profile-editor-scroll-v3 .profile-field-wide-v2{grid-column:auto!important}
+  .profile-editor-footer-v3{padding-left:15px!important;padding-right:15px!important;flex-direction:row!important}
+  .profile-editor-footer-v3 button{flex:1;min-width:0!important}
 }
-/* No standalone Videos destination. */
-.bottom-nav button[data-route="videos"],.bottom-nav button[data-route="video"]{display:none!important;}
-/* Profile cover: no black cap/separator. */
-.profile-page-premium,.profile-cover-wrap,.profile-cover-wrap .profile-cover{border-top:0!important;outline:0!important;box-shadow:none!important;}
-.profile-cover-wrap{margin-top:0!important;border-bottom:0!important;}
-.profile-main-premium{margin-top:0!important;border-top:0!important;}
+@media(max-width:390px){
+  .bottom-nav{min-height:64px!important}
+  .bottom-nav button{height:54px!important;padding:2px 0!important}
+  .bottom-nav button .nav-svg{width:19px!important;height:19px!important}
+  .bottom-nav button small{font-size:7.5px!important;letter-spacing:-.35px!important}
+  .main-layout{padding-bottom:calc(90px + env(safe-area-inset-bottom))!important}
+  .profile-editor-header-v2 p{font-size:9px!important}
+  .profile-editor-stage-v2{height:135px!important}
+  .editor-avatar-v2{width:74px!important;height:74px!important;bottom:-28px!important}
+  .profile-editor-scroll-v3 .profile-editor-photo-label-v2{padding-top:36px!important}
+  .profile-editor-footer-v3{gap:7px!important;padding-top:9px!important;padding-bottom:10px!important}
+  .profile-editor-footer-v3 button{font-size:10px!important}
+}
+@media(min-width:721px){
+  .bottom-nav{display:none!important}
+}

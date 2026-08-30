@@ -1,19 +1,18 @@
-# Tafaß — Stable Clean Build V27
+# Tafaß — V28 STABLE CLEAN
 
-Cette archive contient la version web nettoyée de Tafaß.
+## Fanamboarana lehibe
+- Profile editor responsive: Bio / Lieu / Pdp / Pdc, misy scroll anatiny ary bouton Enregistrer tsy voasarona.
+- PDP feno tsara ao anaty rond (`object-fit: cover`).
+- Pays sy code téléphone automatique; ny numéro soratana dia national ihany (oh: Madagascar: `330000000`, tsy misy `+261`).
+- Ville actuelle: recherche amin'ny lisitra voafetra amin'ireo villes/communes fantatra ao amin'ny app, anisan'izany Ambohimanambola.
+- Ville d'origine: recherche amin'ny 6 provinces de Madagascar.
+- Nom/prénom, date de naissance, genre, e-mail ary numéro ao Paramètres; Bio/Lieu/PDP/PDC ao Profil.
+- Navigation mobile 6 onglets: Actualités, Amis, Messages, Pages, Groupes, Tafaß. Tsy misy Videos standalone.
+- Responsive amin'ny écran kely sy lehibe; ny contenu farany sy boutons dia manana toerana ampy ambonin'ny bottom navigation.
+- Supabase auth callback tsy manao opérations async mivantana ao amin'ny `onAuthStateChange`, hisorohana auth-lock/deadlock.
 
-## Installation
-1. Déployer `index.html`, `app.js` et `style.css` sur le même hébergement.
-2. Pour une nouvelle base Supabase, exécuter `TAFASS_NEW_PROJECT.sql`.
-3. Exécuter ensuite `TAFASS_STABLE_SETUP.sql` une fois. Il est ré-exécutable et ne supprime aucune donnée utilisateur.
+## Google / Apple
+Raha efa misy compte e-mail voamarina ary mitovy amin'ny e-mail Google/Apple, ny Supabase dia mila **Automatic Identity Linking** alefa ao amin'ny Authentication settings. Rehefa mandeha io, ny OAuth dia mampifandray amin'ilay compte efa misy fa tsy mamorona doublon. Tsy azo atao amin'ny frontend irery ny mampifandray identity tsy misy an'io sécurité Supabase io.
 
-## Points corrigés
-- Blocage OAuth Google/Apple dû à un appel Supabase attendu directement dans `onAuthStateChange`.
-- Validation onboarding avec délai maximum et gestion d'erreur.
-- Détection OAuth uniquement pour Google/Apple; les comptes e-mail existants ne sont pas bloqués par l'onboarding OAuth.
-- Profil public séparé des informations du compte.
-- Nom/prénom limité à une modification tous les 15 jours côté base.
-- Navigation mobile fixe et toujours visible avec Tafaß.
-- Pas de destination Vidéos standalone.
-- PDC sans barre noire/separator.
-- Compatibilité avec les bases anciennes: les deux villes peuvent temporairement être conservées dans `location` si les colonnes ne sont pas encore dans le cache PostgREST.
+## Database
+Aza alefa intsony ireo SQL version taloha. Ampiasao ny `TAFASS_NEW_PROJECT.sql` raha installation vaovao. Raha database efa mandeha no ampiasaina, jereo aloha fa misy ireo colonnes ampiasain'ny app: `first_name,last_name,email,phone,phone_code,birth,gender,country,city_current,city_origin,location,avatar_url,cover_url,name_changed_at`.
