@@ -64,6 +64,47 @@
   function cityListHTML(id, values){ return `<datalist id="${id}">${values.map(v=>`<option value="${esc(v)}"></option>`).join("")}</datalist>`; }
   function validCity(value){ return MG_CITIES.some(c=>c.toLowerCase()===String(value||"").trim().toLowerCase()); }
   function validProvince(value){ return MG_PROVINCES.some(c=>c.toLowerCase()===String(value||"").trim().toLowerCase()); }
+
+  let placeSearchTimer = null;
+  let placeSearchController = null;
+  function placeLabel(item){
+    const a=item?.address||{};
+    const parts=[a.city||a.town||a.municipality||a.village||a.county||a.state_district||a.state, a.state&&a.state!==(a.city||a.town||a.municipality||a.village||a.county||a.state_district)?a.state:null, a.country].filter(Boolean);
+    return [...new Set(parts)].join(", ");
+  }
+  function placeDisplay(item){
+    return String(item?.display_name || placeLabel(item) || "").trim();
+  }
+  function installPlaceSearch(inputId, listId){
+    const input=$(inputId), list=$(listId);
+    if(!input||!list) return;
+    input.dataset.placeValid = input.value.trim() ? "true" : "false";
+    const close=()=>{list.classList.remove("show"); list.innerHTML="";};
+    const render=(items)=>{
+      list.innerHTML = items.length ? items.map((x,i)=>`<button type="button" class="place-result" data-place-index="${i}"><b>${esc(placeLabel(x)||x.name||"Lieu")}</b><small>${esc(placeDisplay(x))}</small></button>`).join("") : `<div class="place-empty">Aucun lieu réel trouvé à Madagascar.</div>`;
+      list._items=items; list.classList.add("show");
+      list.querySelectorAll("[data-place-index]").forEach(btn=>btn.addEventListener("click",()=>{
+        const x=list._items[Number(btn.dataset.placeIndex)];
+        input.value=placeDisplay(x); input.dataset.placeValid="true"; input.dataset.placeLat=x.lat||""; input.dataset.placeLon=x.lon||""; input.dispatchEvent(new Event("change",{bubbles:true})); close();
+      }));
+    };
+    input.addEventListener("input",()=>{
+      input.dataset.placeValid="false";
+      const q=input.value.trim(); clearTimeout(placeSearchTimer);
+      if(q.length<2){close();return;}
+      placeSearchTimer=setTimeout(async()=>{
+        try{
+          placeSearchController?.abort(); placeSearchController=new AbortController();
+          const url=`https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=8&countrycodes=mg&q=${encodeURIComponent(q)}`;
+          const r=await fetch(url,{signal:placeSearchController.signal,headers:{"Accept":"application/json","Accept-Language":"fr"}});
+          if(!r.ok) throw new Error("Recherche indisponible");
+          const items=await r.json(); render(Array.isArray(items)?items:[]);
+        }catch(e){ if(e.name!=="AbortError") render([]); }
+      },350);
+    });
+    input.addEventListener("focus",()=>{ if(input.value.trim().length>=2) input.dispatchEvent(new Event("input")); });
+    document.addEventListener("click",e=>{ if(!input.contains(e.target)&&!list.contains(e.target)) close(); },{once:false});
+  }
   function notificationAction(n) {
     const map = {
       reaction: "a réagi à votre publication.",
@@ -731,10 +772,10 @@
 
   function editProfile() {
     const p = state.profile || {};
-    openModal(`<div class="modal-box profile-edit-modal premium-profile-editor-v3">
+    openModal(`<div class="modal-box profile-edit-modal premium-profile-editor-v4">
       <button class="modal-close" data-action="close-modal" aria-label="Fermer">×</button>
       <header class="profile-editor-header-v2"><span class="eyebrow">TAFAß • PROFIL</span><h3>Personnaliser votre profil</h3><p>Bio, lieu et photos sont gérés ici. Les informations personnelles restent dans Paramètres.</p></header>
-      <div class="profile-editor-scroll-v3">
+      <div class="profile-editor-scroll-v4">
         <section class="profile-editor-stage-v2">
           <label class="editor-cover-v2" id="editorCoverPreview" style="${p.cover_url?`background-image:url('${esc(p.cover_url)}')`:''}">
             <span class="cover-placeholder-v2">Votre couverture</span><span class="editor-cover-overlay-v2">📷 Modifier la couverture</span>
@@ -742,19 +783,20 @@
           </label>
           <label class="editor-avatar-v2" id="editorAvatarPreview">${avatarHTML(p,"avatar editor-avatar-image-v3")}<span class="editor-avatar-edit-v2">📷</span><input id="pfAvatar" type="file" accept="image/jpeg,image/png,image/webp" hidden></label>
         </section>
-        <div class="profile-editor-photo-label-v2"><b>Photos du profil</b><span>La photo de profil est toujours recadrée pour remplir parfaitement le rond.</span></div>
-        <div class="profile-form-v2 profile-form-public-v23">
+        <div class="profile-editor-photo-label-v2"><b>Photos du profil</b><span>La photo de profil remplit toujours parfaitement le rond.</span></div>
+        <div class="profile-form-v2 profile-form-public-v24">
           <div class="profile-section-title-v23">Présentation</div>
           <div class="profile-field-card-v2 profile-field-wide-v2"><label><span>Bio</span><textarea id="pfBio" maxlength="500" placeholder="Présentez-vous en quelques mots…">${esc(p.bio||'')}</textarea></label></div>
           <div class="profile-section-title-v23">Lieu</div>
           <div class="profile-field-card-v2 profile-field-wide-v2"><label><span>Pays</span><input id="pfCountry" value="Madagascar" readonly disabled></label></div>
-          <div class="profile-field-card-v2"><label><span>Ville actuelle</span><input id="pfCityCurrent" list="mgCitiesCurrent" value="${esc(p.city_current||'')}" placeholder="Rechercher une ville…" autocomplete="off"><small>Choisissez une ville réelle dans la liste.</small></label></div>
-          <div class="profile-field-card-v2"><label><span>Ville d’origine / Province</span><input id="pfCityOrigin" list="mgProvinces" value="${esc(p.city_origin||'')}" placeholder="Rechercher une province…" autocomplete="off"><small>Province de Madagascar.</small></label></div>
-          ${cityListHTML('mgCitiesCurrent',MG_CITIES)}${cityListHTML('mgProvinces',MG_PROVINCES)}
+          <div class="profile-field-card-v2 profile-field-wide-v2 place-field-v4"><label><span>Ville actuelle / Lieu</span><div class="place-search-wrap-v4"><input id="pfCityCurrent" value="${esc(p.city_current||'')}" placeholder="Rechercher un lieu réel…" autocomplete="off" data-place-valid="${p.city_current?'true':'false'}"><div id="pfCityCurrentResults" class="place-results-v4"></div></div><small>Recherchez puis sélectionnez un lieu réel à Madagascar. Exemple : Ambohimanambola, Analamanga, Antananarivo.</small></label></div>
+          <div class="profile-field-card-v2 profile-field-wide-v2 place-field-v4"><label><span>Ville d'origine</span><div class="place-search-wrap-v4"><input id="pfCityOrigin" value="${esc(p.city_origin||'')}" placeholder="Rechercher une ville réelle…" autocomplete="off" data-place-valid="${p.city_origin?'true':'false'}"><div id="pfCityOriginResults" class="place-results-v4"></div></div><small>Recherchez puis sélectionnez la ville réelle. Exemple : Antananarivo, Madagascar.</small></label></div>
         </div>
       </div>
-      <footer class="profile-editor-footer-v3"><button class="ghost-action" data-action="close-modal">Annuler</button><button class="primary big profile-save-button" data-action="save-profile"><span>✓</span> Enregistrer</button></footer>
+      <footer class="profile-editor-footer-v4"><button class="ghost-action" data-action="close-modal">Annuler</button><button class="primary big profile-save-button" data-action="save-profile"><span>✓</span> Enregistrer</button></footer>
     </div>`);
+    installPlaceSearch("pfCityCurrent","pfCityCurrentResults");
+    installPlaceSearch("pfCityOrigin","pfCityOriginResults");
     $("pfAvatar")?.addEventListener("change", e => { const file=e.target.files?.[0]; if(!file)return; if(!file.type.startsWith("image/"))return toast("Choisissez une image."); const img=document.createElement("img"); img.src=URL.createObjectURL(file); img.className="avatar editor-avatar-image-v3-img"; img.alt="Avatar"; $("editorAvatarPreview").querySelector(".avatar")?.replaceWith(img); });
     $("pfCover")?.addEventListener("change", e => { const file=e.target.files?.[0]; if(!file)return; if(!file.type.startsWith("image/"))return toast("Choisissez une image."); $("editorCoverPreview").style.backgroundImage=`url("${URL.createObjectURL(file)}")`; });
   }
@@ -789,8 +831,9 @@
       bio:$('pfBio')?.value.trim() || "",
       location:$('pfCityCurrent')?.value.trim() || "",
     };
-    if (!patch.city_current || !validCity(patch.city_current)) return toast('Sélectionnez une ville actuelle réelle dans la liste. Exemple : Ambohimanambola.');
-    if (!patch.city_origin || !validProvince(patch.city_origin)) return toast('Sélectionnez une province réelle de Madagascar dans la liste.');
+    const currentInput=$("pfCityCurrent"), originInput=$("pfCityOrigin");
+    if (!patch.city_current || currentInput?.dataset.placeValid !== "true") return toast('Recherchez puis sélectionnez une ville actuelle réelle dans la liste.');
+    if (!patch.city_origin || originInput?.dataset.placeValid !== "true") return toast('Recherchez puis sélectionnez une ville d’origine réelle dans la liste.');
     try {
       for (const [file,key] of [[$('pfAvatar')?.files?.[0],"avatar_url"],[$('pfCover')?.files?.[0],"cover_url"]]) {
         if (!file) continue;
