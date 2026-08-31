@@ -3074,3 +3074,28 @@ button[data-action],button[data-route]{-webkit-tap-highlight-color:transparent!i
   .fb-style-detail.group-detail .group-action-bar button:nth-child(2){font-size:0!important}
   .fb-style-detail.group-detail .group-action-bar button:nth-child(2):after{content:"↗";font-size:15px}
 }
+
+/* V38 — premium responsive entity/navigation fixes */
+.fb-hub,.fb-entity-list,.fb-entity-row,.fb-entity-main,.fb-entity-copy{min-width:0;max-width:100%;box-sizing:border-box}
+.fb-entity-row{width:100%;overflow:hidden;display:flex;align-items:center}
+.fb-entity-main{flex:1 1 auto;width:auto;overflow:hidden}
+.fb-entity-copy{overflow:hidden;text-align:left}
+.fb-entity-copy b,.fb-entity-copy small,.fb-entity-copy em{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.fb-entity-actions{flex:0 0 auto;max-width:46%;display:flex;align-items:center;gap:7px}
+.fb-entity-actions button{flex:0 0 auto}
+
+.entity-detail-modal,.page-premium-modal{position:relative}
+.entity-detail-modal .entity-back-btn,.page-premium-modal .entity-back-btn{position:sticky!important;top:10px!important;left:14px!important;z-index:100!important;float:left!important;margin:10px 0 -48px 14px!important;pointer-events:auto!important;touch-action:manipulation!important}
+.entity-detail-modal .detail-cover,.page-premium-modal .page-cover{clear:both}
+.entity-back-btn{cursor:pointer!important;user-select:none!important;-webkit-tap-highlight-color:transparent!important}
+
+.page-context-banner{margin:0 0 14px;padding:10px 12px;border:1px solid rgba(94,143,255,.22);border-radius:18px;background:linear-gradient(135deg,rgba(30,72,150,.28),rgba(96,58,190,.2));display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 12px 35px rgba(0,0,0,.2)}
+.page-context-identity{display:flex;align-items:center;gap:10px;min-width:0}.page-context-identity>div:last-child{min-width:0}.page-context-identity span{display:block;font-size:8px;letter-spacing:.12em;color:#7ea9ff;font-weight:900}.page-context-identity b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.page-context-avatar{width:42px!important;height:42px!important;border-radius:13px!important;flex:0 0 42px}.page-context-exit{border:1px solid rgba(255,255,255,.13);background:rgba(255,255,255,.06);color:#fff;border-radius:12px;padding:9px 12px;font-weight:800;cursor:pointer;white-space:nowrap}
+.page-mode-hero,.page-menu-hero{display:flex;align-items:center;gap:14px;padding:18px;border-radius:22px;border:1px solid rgba(100,145,220,.18);background:linear-gradient(135deg,#0c1a32,#10172d);margin-bottom:14px}.page-mode-avatar,.page-menu-avatar{width:68px!important;height:68px!important;border-radius:20px!important;flex:0 0 68px}.page-mode-hero h2,.page-menu-hero h2{margin:3px 0}.page-mode-hero p{margin:0;color:#9eacc2}.page-mode-post{overflow:hidden}.page-mode-composer{margin-bottom:14px}.page-message-hub-row{border-radius:16px!important;margin-bottom:8px}
+
+@media(max-width:600px){
+ .fb-entity-actions{max-width:40%;gap:4px}.fb-entity-actions .fb-more-btn{display:none}.fb-entity-actions .fb-blue-btn,.fb-entity-actions .fb-gray-btn{padding:8px 9px;font-size:10px}
+ .fb-entity-copy em{max-width:100%;font-size:10px}
+ .entity-detail-modal .entity-back-btn,.page-premium-modal .entity-back-btn{top:7px!important;left:8px!important;margin:7px 0 -45px 8px!important;height:38px!important;min-width:82px!important;z-index:200!important}
+ .page-context-banner{border-radius:15px;padding:9px}.page-context-exit{padding:8px 9px;font-size:10px}.page-mode-hero,.page-menu-hero{padding:14px;border-radius:18px}.page-mode-avatar,.page-menu-avatar{width:56px!important;height:56px!important;flex-basis:56px!important;border-radius:16px!important}
+}
