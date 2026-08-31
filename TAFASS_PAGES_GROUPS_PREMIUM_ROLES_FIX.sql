@@ -1,7 +1,7 @@
 -- TAFAß — Pages & Groupes premium roles / permissions / realtime
 -- Safe migration: no DROP TABLE, no DELETE of existing data.
 
-create or replace function public.tafa_is_page_admin(p_page_id uuid, p_user_id uuid)
+create or replace function public.tafa_is_page_admin(p_page_id uuid, p_user_id uuid default auth.uid())
 returns boolean
 language sql
 stable
@@ -16,7 +16,7 @@ as $$
   );
 $$;
 
-create or replace function public.tafa_is_group_admin(p_group_id uuid, p_user_id uuid)
+create or replace function public.tafa_is_group_admin(p_group_id uuid, p_user_id uuid default auth.uid())
 returns boolean
 language sql
 stable
