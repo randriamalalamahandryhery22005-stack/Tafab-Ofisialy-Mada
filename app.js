@@ -947,8 +947,8 @@ document.documentElement.classList.add("app-boot");
 
   // V35: explicit root-table projections prevent ambiguous owner_id references
   // when pages/groups are queried alongside member/profile relations.
-  const PAGE_FIELDS = "id,name,logo_url,cover_url,owner_id,username,category,bio,address,location,contact_email,contact_phone,website_url,created_at";
-  const GROUP_FIELDS = "id,name,description,avatar_url,cover_url,owner_id,privacy,created_at";
+  const PAGE_FIELDS = "id,name,logo_url,cover_url,owner_id,username,category,bio,created_at";
+  const GROUP_FIELDS = "id,name,description,cover_url,owner_id,privacy,created_at";
 
   async function fetchPageById(id) {
     const {data,error}=await sb.from("pages").select(PAGE_FIELDS).eq("id",id).maybeSingle();
