@@ -3272,3 +3272,77 @@ button[data-action],button[data-route]{-webkit-tap-highlight-color:transparent!i
   .page-mode-active .bottom-nav button small{font-size:8px!important;}
 }
 .nav-ico svg,.nav-svg svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}
+
+/* =========================================================
+   TAFAß — PARAMÈTRES & CONFIDENTIALITÉ / FACEBOOK-LIKE DARK UI
+   ========================================================= */
+.fb-settings-page{width:min(760px,100%);margin:0 auto;padding:0 2px 40px}
+.fb-settings-group{margin:0 0 24px}
+.fb-settings-group h3{font-size:13px;letter-spacing:-.1px;color:#e9edf4;margin:0 0 4px}
+.fb-settings-note{font-size:10px;line-height:1.45;color:#8f99a9;margin:0 0 5px}
+.fb-settings-row{min-height:58px;padding:8px 3px;gap:13px;border-radius:9px}
+.fb-settings-row:active{background:rgba(255,255,255,.06)}
+.fb-settings-icon{width:32px;height:32px;flex-basis:32px;border-radius:9px;background:#151d2b;color:#b8c9e5}
+.fb-settings-icon svg{width:19px;height:19px}
+.fb-settings-copy b{font-size:12px;font-weight:720;color:#f2f4f7}
+.fb-settings-copy small{font-size:9.5px;color:#9099a7;line-height:1.4}
+.fb-settings-chevron{font-size:24px;color:#737d8c}
+
+.settings-detail-page{width:min(760px,100%);margin:0 auto;padding:0 2px 40px}
+.settings-detail-intro{padding:0 4px 16px;border-bottom:1px solid var(--line);margin-bottom:10px}
+.settings-detail-intro .eyebrow{display:inline-block;font-size:8px;letter-spacing:1.1px;color:#77a8ff;font-weight:800;margin-bottom:7px}
+.settings-detail-intro p{margin:0;max-width:650px;color:#969fac;font-size:10px;line-height:1.55}
+.settings-section-block{border-bottom:1px solid var(--line);padding:5px 0 8px;margin:0 0 13px}
+.settings-section-block h3{font-size:12px;margin:8px 4px 5px;color:#dfe4ec}
+.settings-control-row{display:flex;align-items:center;gap:12px;min-height:58px;padding:9px 4px;border-radius:9px;cursor:pointer}
+.settings-control-row:hover{background:rgba(255,255,255,.035)}
+.settings-control-copy{min-width:0;flex:1}
+.settings-control-copy b{display:block;font-size:11px;line-height:1.35;color:#f1f3f6;font-weight:700}
+.settings-control-copy small{display:block;margin-top:3px;font-size:9px;line-height:1.45;color:#8d97a6}
+.settings-switch{position:relative;width:42px;height:24px;flex:0 0 42px;display:block}
+.settings-switch input{position:absolute;inset:0;opacity:0;width:100%;height:100%;margin:0;cursor:pointer}
+.settings-switch i{position:absolute;inset:0;border-radius:13px;background:#3b4658;transition:.16s}
+.settings-switch i:after{content:"";position:absolute;width:18px;height:18px;left:3px;top:3px;border-radius:50%;background:#dbe2ec;transition:.16s;box-shadow:0 1px 4px rgba(0,0,0,.35)}
+.settings-switch input:checked+i{background:#2878ff}
+.settings-switch input:checked+i:after{transform:translateX(18px);background:#fff}
+.settings-choice-row select{width:150px;max-width:42%;height:38px;padding:0 10px;border-radius:9px;background:#121a28;font-size:10px}
+.settings-choice-row select option{background:#121a28;color:#fff}
+.settings-status{font-size:8px;color:#72a6ff;border:1px solid rgba(72,137,255,.25);background:rgba(44,113,255,.08);padding:5px 7px;border-radius:8px;white-space:nowrap}
+.settings-save{margin-top:2px}
+.settings-info-card,.time-summary-card,.settings-hero-lock,.settings-legal-card{border:1px solid var(--line);border-radius:12px;background:linear-gradient(145deg,#101827,#0b1321);padding:15px;margin:8px 0 13px}
+.settings-info-card b,.time-summary-card b,.settings-hero-lock b{display:block;font-size:13px;color:#f3f6fb}
+.settings-info-card small,.time-summary-card small,.settings-hero-lock small{display:block;margin-top:5px;font-size:9px;line-height:1.5;color:#929baa}
+.settings-hero-lock{text-align:center;padding:22px 16px}
+.settings-lock-icon{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;margin:0 auto 10px;background:rgba(44,115,255,.12);border:1px solid rgba(83,143,255,.25);color:#75a9ff;font-size:23px}
+.privacy-choice-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:13px}
+.privacy-choice{min-height:118px;text-align:left;border:1px solid var(--line);border-radius:11px;padding:12px;background:#0d1625}
+.privacy-choice:hover{border-color:rgba(75,139,255,.35);background:#111c2e}
+.privacy-choice-icon{display:grid;place-items:center;width:30px;height:30px;border-radius:9px;background:#151f31;color:#74a6ff;margin-bottom:9px;font-size:14px}
+.privacy-choice b{display:block;font-size:10.5px;line-height:1.35;color:#f0f3f7}
+.privacy-choice small{display:block;font-size:8.5px;line-height:1.4;color:#8c96a5;margin-top:4px}
+.settings-reaction-preview{display:flex;gap:6px;flex-wrap:wrap;padding:10px 2px 13px}
+.settings-reaction-preview span{font-size:9px;padding:7px 9px;border-radius:9px;background:#131d2d;border:1px solid var(--line);color:#cbd5e4}
+.settings-link-row{width:100%;display:flex;align-items:center;gap:10px;min-height:52px;padding:8px 4px;border-bottom:1px solid rgba(151,175,218,.08);text-align:left;color:var(--text)}
+.settings-link-row:hover{background:rgba(255,255,255,.035)}
+.settings-link-row>span:first-child{min-width:0;flex:1}
+.settings-link-row b{display:block;font-size:10.5px;color:#f0f3f7;line-height:1.3}
+.settings-link-row small{display:block;color:#8993a2;font-size:8.5px;margin-top:3px;line-height:1.4}
+.settings-empty{padding:22px 7px;text-align:center;color:#8d97a5;font-size:9.5px;line-height:1.5}
+.blocked-row{display:flex;align-items:center;gap:10px;min-height:58px;padding:8px 3px;border-bottom:1px solid rgba(151,175,218,.08)}
+.blocked-avatar{width:38px;height:38px;border-radius:50%;overflow:hidden;flex:0 0 38px;background:#182236;display:grid;place-items:center}
+.blocked-avatar .avatar{width:100%;height:100%;font-size:11px}
+.blocked-row b{display:block;font-size:10.5px}.blocked-row small{display:block;color:#8993a2;font-size:8.5px;margin-top:3px}
+.settings-legal-card h3{margin:0 0 10px;font-size:15px}.settings-legal-card p{margin:0 0 14px;font-size:10px;line-height:1.65;color:#a4adba}.settings-legal-card small{font-size:8px;color:#778293}
+#themeBtn{display:none!important}
+@media(max-width:720px){
+  .fb-settings-page,.settings-detail-page{padding-left:1px;padding-right:1px}
+  .fb-settings-group{margin-bottom:18px}
+  .fb-settings-row{min-height:54px;gap:10px}
+  .fb-settings-copy b{font-size:11px}.fb-settings-copy small{font-size:8.8px}
+  .settings-detail-intro{padding-bottom:13px}
+  .privacy-choice-grid{gap:7px}.privacy-choice{min-height:108px;padding:10px}
+  .settings-control-row{min-height:55px;padding:8px 3px}
+  .settings-control-copy b{font-size:10.5px}.settings-control-copy small{font-size:8.5px}
+  .settings-choice-row select{width:132px;max-width:40%;font-size:9px}
+}
+@media(max-width:390px){.privacy-choice-grid{grid-template-columns:1fr}.privacy-choice{min-height:82px}.settings-choice-row select{width:118px}.settings-status{display:none}}
