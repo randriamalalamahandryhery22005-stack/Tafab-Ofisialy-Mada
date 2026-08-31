@@ -116,6 +116,7 @@ document.documentElement.classList.add("app-boot");
       message: "vous a envoyé un message.",
       follow: "vous suit maintenant.",
       page_follow: "s’est abonné à votre Page.",
+      page_follow_invite: "vous invite à suivre une Page.",
       group_join: "a rejoint votre groupe.",
       comment_like: "a réagi à votre commentaire."
     };
@@ -123,7 +124,7 @@ document.documentElement.classList.add("app-boot");
   }
   function notificationTarget(n, actor) {
     if (n?.type === "message" && n?.entity_id) return { action:"open-conversation", id:n.entity_id };
-    if (["page_follow"].includes(n?.type) && n?.entity_id) return { action:"page-open", id:n.entity_id };
+    if (["page_follow","page_follow_invite"].includes(n?.type) && n?.entity_id) return { action:"page-open", id:n.entity_id };
     if (["group_join"].includes(n?.type) && n?.entity_id) return { action:"group-open", id:n.entity_id };
     if (n?.entity_type === "post" || n?.post_id) return { action:"open-notification-post", id:n.post_id || n.entity_id };
     if (actor?.id) return { action:"view-profile", id:actor.id };
@@ -231,6 +232,7 @@ document.documentElement.classList.add("app-boot");
   function pageModeActive(){ return !!state.activePage?.id; }
   function pageModeLabel(){ return pageModeActive() ? (state.activePage.name || "Page Tafaß") : "Mon compte"; }
   function syncIdentityUI(){
+    document.body.classList.toggle("page-mode-active", pageModeActive());
     const p = pageModeActive() ? state.activePage : state.profile;
     const nameEl = $("sideName"), avatarEl = $("sideAvatar");
     if(nameEl) nameEl.textContent = pageModeActive() ? p.name : nameOf(p);
@@ -254,13 +256,33 @@ document.documentElement.classList.add("app-boot");
   async function renderPageFeed(){
     const pg=state.activePage; if(!pg) return renderFeed();
     const token=state.renderToken;
-    const {data:posts,error}=await sb.from("page_posts").select("*").eq("page_id",pg.id).order("created_at",{ascending:false}).limit(50);
+    const [postsR, followersR, membersR]=await Promise.all([
+      sb.from("page_posts").select("*").eq("page_id",pg.id).order("created_at",{ascending:false}).limit(50),
+      sb.from("page_followers").select("id",{count:"exact",head:true}).eq("page_id",pg.id),
+      sb.from("page_members").select("user_id,role").eq("page_id",pg.id)
+    ]);
     if(token!==state.renderToken || state.route!=="home") return;
-    if(error) return simplePage("Actualités", pageContextBanner()+`<div class="empty-block"><b>Impossible de charger les actualités de la Page.</b><small>${esc(error.message)}</small></div>`);
-    const ownerMe=pg.owner_id===state.user.id;
-    let html=pageContextBanner()+`<section class="page-mode-feed"><div class="page-mode-hero">${entityAvatarHTML(pg,"page","page-mode-avatar")}<div><span class="eyebrow">TAFAß • PAGE</span><h2>${esc(pg.name)}</h2><p>${esc(pg.bio||"Actualités de votre Page")}</p></div></div>${ownerMe?`<div class="composer composer-clean page-mode-composer"><div class="composer-top">${entityAvatarHTML(pg,"page","avatar")}<b>Publier au nom de ${esc(pg.name)}</b></div><textarea id="pageModePostText" placeholder="Quoi de neuf sur votre Page ?"></textarea><div class="composer-actions"><button type="button" class="primary" data-action="page-mode-publish" data-id="${esc(pg.id)}">Publier</button></div></div>`:""}`;
-    if(!posts?.length) html+=`<div class="card empty">Aucune publication sur cette Page pour le moment.</div>`;
-    else for(const p of posts){ html+=`<article class="post page-mode-post"><div class="post-head">${entityAvatarHTML(pg,"page","avatar")}<div class="meta"><b class="post-author-name">${esc(pg.name)}</b><span class="post-time"><small>${timeAgo(p.created_at)} · Page</small></span></div>${ownerMe?`<button class="post-menu" data-action="delete-page-post" data-id="${esc(p.id)}" data-entity-id="${esc(pg.id)}">⋯</button>`:""}</div>${p.content?`<div class="post-body">${esc(p.content)}</div>`:""}${p.media_url?(String(p.media_type||"").startsWith("video")?`<video class="post-media" src="${esc(p.media_url)}" controls playsinline></video>`:`<img class="post-media" src="${esc(p.media_url)}" alt="${esc(pg.name)}">`):""}</article>`; }
+    if(postsR.error) return simplePage("Actualités", pageContextBanner()+`<div class="empty-block"><b>Impossible de charger les actualités de la Page.</b><small>${esc(postsR.error.message)}</small></div>`);
+    const posts=postsR.data||[], ownerMe=pg.owner_id===state.user.id;
+    const role=(membersR.data||[]).find(m=>m.user_id===state.user.id)?.role||null;
+    const canManage=ownerMe||['owner','admin'].includes(role);
+    const followerCount=followersR.count||0;
+    const mediaCount=posts.filter(p=>p.media_url).length;
+    const recent=posts.slice(0,3);
+    const quick=(action,title,sub,icon)=>`<button class="page-quick-card" data-action="${action}" data-id="${esc(pg.id)}"><span class="page-quick-icon">${icon}</span><span><b>${title}</b><small>${sub}</small></span><strong>›</strong></button>`;
+    let html=pageContextBanner()+`<section class="page-mode-feed page-mode-feed-premium">
+      <div class="page-feed-hero-premium">
+        <div class="page-feed-cover" ${pg.cover_url?`style="background-image:url('${esc(pg.cover_url)}')"`:''}><div class="page-feed-cover-shade"></div></div>
+        <div class="page-feed-identity">${entityAvatarHTML(pg,"page","page-feed-avatar")}<div class="grow"><span class="eyebrow">MODE PAGE • ACTUALITÉS</span><h2>${esc(pg.name)}</h2><p>${esc(pg.bio||"Votre espace professionnel Tafaß.")}</p></div><button class="page-profile-mini" data-action="page-open" data-id="${esc(pg.id)}">Profil</button></div>
+        <div class="page-feed-stats"><div><b>${followerCount}</b><small>Abonnés</small></div><div><b>${posts.length}</b><small>Publications</small></div><div><b>${mediaCount}</b><small>Médias</small></div><div><b>${canManage?'Gestion':'Lecture'}</b><small>Accès</small></div></div>
+      </div>
+      <div class="page-quick-grid">${quick('page-open','Profil de la Page','Voir la Page comme un visiteur','◉')}${quick('page-invite-friends','Inviter des amis','Inviter vos amis à suivre','👥')}${quick('page-more','Outils de la Page','Partage, équipe et options','•••')}${canManage?quick('page-settings','Paramètres','Configurer toute la Page','⚙'):quick('page-share','Partager','Partager cette Page','↗')}</div>
+      ${ownerMe?`<div class="composer composer-clean page-mode-composer page-mode-composer-premium"><div class="composer-top">${entityAvatarHTML(pg,"page","avatar")}<div><b>Publier au nom de ${esc(pg.name)}</b><small>Votre publication sera publiée comme une Page</small></div></div><textarea id="pageModePostText" maxlength="5000" placeholder="Quoi de neuf sur votre Page ?"></textarea><div class="composer-actions"><button type="button" class="primary" data-action="page-mode-publish" data-id="${esc(pg.id)}">Publier</button></div></div>`:""}
+      <div class="page-feed-section-head"><div><span class="eyebrow">TAFAß • PAGE</span><h3>Publications récentes</h3></div><span>${posts.length} au total</span></div>`;
+    if(!posts.length) html+=`<div class="page-feed-empty-premium"><div>✦</div><b>Aucune publication pour le moment</b><span>Les actualités de ${esc(pg.name)} apparaîtront ici.</span>${ownerMe?`<button class="primary" data-action="page-mode-focus">Créer la première publication</button>`:''}</div>`;
+    else for(const p of posts){ html+=`<article class="post page-mode-post page-mode-post-premium"><div class="post-head">${entityAvatarHTML(pg,"page","avatar")}<div class="meta"><b class="post-author-name">${esc(pg.name)}</b><span class="post-time"><small>${timeAgo(p.created_at)} · Page</small></span></div>${ownerMe?`<button class="post-menu" data-action="delete-page-post" data-id="${esc(p.id)}" data-entity-id="${esc(pg.id)}">⋯</button>`:""}</div>${p.content?`<div class="post-body">${esc(p.content)}</div>`:""}${p.media_url?(String(p.media_type||"").startsWith("video")?`<video class="post-media" src="${esc(p.media_url)}" controls playsinline preload="metadata"></video>`:`<img class="post-media" src="${esc(p.media_url)}" alt="${esc(pg.name)}" loading="lazy">`):""}<div class="page-mode-post-footer"><span>Publication officielle</span><span>${timeAgo(p.created_at)}</span></div></article>`; }
+    if(recent.length>1) html+=`<div class="page-feed-bottom-note">✓ Votre fil Page est synchronisé avec les publications de ${esc(pg.name)}.</div>`;
+    html+=`</section>`;
     $("content").innerHTML=html;
   }
 
@@ -1171,9 +1193,38 @@ async function genericListPage(route) {
 
   function pageMenu(){
     const pg=state.activePage;
-    const card=(action,title,sub,icon)=>`<button class="menu-card premium-menu-card page-menu-card" data-action="${action}"><span class="menu-icon">${icon}</span><span class="menu-card-copy"><b>${title}</b><small>${sub}</small></span><span class="menu-arrow">›</span></button>`;
-    simplePage("Menu",`${pageContextBanner()}<div class="page-menu-hero">${entityAvatarHTML(pg,"page","page-menu-avatar")}<div><span class="eyebrow">MODE PAGE</span><h2>${esc(pg.name)}</h2><small>Vous utilisez Tafaß au nom de cette Page.</small></div></div><div class="menu-section-title">Espace Page</div><div class="menu-grid premium-menu-grid">${`<button class="menu-card premium-menu-card page-menu-card" data-route="home"><span class="menu-icon">⌂</span><span class="menu-card-copy"><b>Actualités</b><small>Publications de la Page</small></span><span class="menu-arrow">›</span></button>`}${`<button class="menu-card premium-menu-card page-menu-card" data-route="messages"><span class="menu-icon">▤</span><span class="menu-card-copy"><b>Messages</b><small>Boîte de réception de la Page</small></span><span class="menu-arrow">›</span></button>`}${`<button class="menu-card premium-menu-card page-menu-card" data-route="search"><span class="menu-icon">⌕</span><span class="menu-card-copy"><b>Rechercher</b><small>Rechercher sur Tafaß</small></span><span class="menu-arrow">›</span></button>`}${`<button class="menu-card premium-menu-card page-menu-card" data-route="notifications"><span class="menu-icon">♢</span><span class="menu-card-copy"><b>Alertes</b><small>Activités et notifications</small></span><span class="menu-arrow">›</span></button>`}${`<button class="menu-card premium-menu-card page-menu-card" data-route="groups"><span class="menu-icon">◎</span><span class="menu-card-copy"><b>Groupes</b><small>Communautés</small></span><span class="menu-arrow">›</span></button>`}${card('page-manage-current','Gérer la Page','Informations, équipe et paramètres','⚙')}</div><div class="menu-section-title">Compte</div><div class="menu-grid premium-menu-grid">${card('page-exit-mode','Retour au compte','Revenir à votre profil personnel','↩')}</div>`);
-    document.querySelectorAll('[data-action="menu-route"]').forEach(b=>b.addEventListener('click',()=>{}));
+    if(!pg) return menuPage();
+    const card=(action,title,sub,icon)=>`<button class="menu-card premium-menu-card page-menu-card" data-action="${action}" data-id="${esc(pg.id)}"><span class="menu-icon">${icon}</span><span class="menu-card-copy"><b>${title}</b><small>${sub}</small></span><span class="menu-arrow">›</span></button>`;
+    simplePage("Menu",`${pageContextBanner()}<div class="page-menu-hero page-menu-hero-premium">${entityAvatarHTML(pg,"page","page-menu-avatar")}<div class="grow"><span class="eyebrow">MODE PAGE</span><h2>${esc(pg.name)}</h2><small>Vous utilisez Tafaß avec l’identité de cette Page.</small></div><button class="page-profile-mini" data-action="page-open" data-id="${esc(pg.id)}">Profil</button></div>
+      <div class="page-menu-dashboard"><div><span>ESPACE PAGE</span><b>Centre de contrôle</b><small>Actualités, communauté, messages et paramètres.</small></div><span class="page-menu-live">● ACTIF</span></div>
+      <div class="menu-section-title">Navigation de la Page</div><div class="menu-grid premium-menu-grid">
+        ${card('page-open','Profil de la Page','Voir votre Page publiquement','◉')}${`<button class="menu-card premium-menu-card page-menu-card" data-route="home"><span class="menu-icon">⌂</span><span class="menu-card-copy"><b>Actualités</b><small>Publier et gérer le fil de la Page</small></span><span class="menu-arrow">›</span></button>`}${`<button class="menu-card premium-menu-card page-menu-card" data-route="messages"><span class="menu-icon">▤</span><span class="menu-card-copy"><b>Messages</b><small>Boîte de réception de la Page</small></span><span class="menu-arrow">›</span></button>`}${`<button class="menu-card premium-menu-card page-menu-card" data-route="search"><span class="menu-icon">⌕</span><span class="menu-card-copy"><b>Rechercher</b><small>Rechercher sur Tafaß</small></span><span class="menu-arrow">›</span></button>`}${`<button class="menu-card premium-menu-card page-menu-card" data-route="notifications"><span class="menu-icon">♢</span><span class="menu-card-copy"><b>Alertes</b><small>Activités liées à la Page</small></span><span class="menu-arrow">›</span></button>`}${`<button class="menu-card premium-menu-card page-menu-card" data-route="groups"><span class="menu-icon">◎</span><span class="menu-card-copy"><b>Groupes</b><small>Communautés</small></span><span class="menu-arrow">›</span></button>`}
+      </div>
+      <div class="menu-section-title">Gestion complète</div><div class="menu-grid premium-menu-grid">
+        ${card('page-settings','Paramètres de la Page','Informations, confidentialité, messages et invitations','⚙')}${card('edit-page','Modifier les informations','Nom, @username, bio, contacts et visuels','✎')}${card('page-invite-friends','Inviter des amis','Chaque membre peut inviter ses amis','👥')}${card('page-business','Outils de gestion','Équipe, publication et gestion professionnelle','◒')}
+      </div>
+      <div class="menu-section-title">Compte</div><div class="menu-grid premium-menu-grid">${card('page-exit-mode','Retour au compte','Quitter le Mode Page et revenir au profil','↩')}</div>`);
+  }
+
+  async function pageSettings(id){
+    const {data:p,error}=await fetchPageById(id||state.activePage?.id);
+    if(error||!p)return toast(error?.message||'Page introuvable.');
+    const key=`tafass_page_settings_${p.id}`;
+    let saved={}; try{saved=JSON.parse(localStorage.getItem(key)||'{}')||{};}catch{}
+    const toggle=(k,title,sub,def=true)=>`<label class="page-setting-row"><span><b>${title}</b><small>${sub}</small></span><input type="checkbox" data-page-setting="${k}" ${saved[k]??def?'checked':''}></label>`;
+    openModal(`<div class="modal-box page-settings-modal"><button class="modal-close" data-action="close-modal">×</button><div class="page-settings-hero">${entityAvatarHTML(p,'page','page-settings-avatar')}<div><span class="eyebrow">TAFAß • PARAMÈTRES</span><h2>${esc(p.name)}</h2><p>Centre de contrôle complet de votre Page.</p></div></div>
+      <div class="page-settings-section"><h3>Identité</h3><button class="page-setting-action" data-action="edit-page" data-id="${esc(p.id)}"><span>✎</span><div><b>Nom et informations</b><small>Nom, @username, catégorie, bio, contacts et visuels</small></div><strong>›</strong></button><button class="page-setting-action" data-action="page-name-history" data-id="${esc(p.id)}"><span>◷</span><div><b>Historique des noms</b><small>Consulter les anciens noms et les dates de changement</small></div><strong>›</strong></button></div>
+      <div class="page-settings-section"><h3>Communauté</h3>${toggle('allow_invites','Invitations par les membres','Tous les utilisateurs peuvent inviter leurs amis à suivre la Page',true)}${toggle('allow_messages','Messages de la Page','Permettre aux visiteurs de contacter la Page',true)}${toggle('notify_followers','Alertes aux abonnés','Conserver les notifications importantes pour les abonnés',true)}</div>
+      <div class="page-settings-section"><h3>Visibilité</h3>${toggle('public_profile','Profil public','La Page reste visible dans les recherches et partages',true)}${toggle('show_followers','Afficher les abonnés','Afficher le nombre d’abonnés sur le profil public',true)}</div>
+      <button class="primary big" data-action="save-page-settings" data-id="${esc(p.id)}">Enregistrer les paramètres</button></div>`);
+  }
+
+  async function pageNameHistory(id){
+    const {data:p}=await fetchPageById(id); if(!p)return toast('Page introuvable.');
+    const r=await sb.from('activity_history').select('description,created_at').eq('user_id',state.user.id).eq('entity_type','page').eq('entity_id',id).eq('action_type','page_name_changed').order('created_at',{ascending:false}).limit(30);
+    if(r.error)return toast(r.error.message);
+    const rows=(r.data||[]).map(x=>`<div class="page-history-row"><span>◷</span><div><b>${esc(x.description||'Nom de Page modifié')}</b><small>${new Date(x.created_at).toLocaleString('fr-FR')}</small></div></div>`).join('')||`<div class="empty">Aucun ancien nom enregistré. Le nom actuel est « ${esc(p.name)} ».</div>`;
+    openModal(`<div class="modal-box page-settings-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • HISTORIQUE</span><h3>Historique des noms</h3><p class="muted">Nom actuel : <b>${esc(p.name)}</b>. Un changement de nom est autorisé une fois tous les 15 jours.</p><div class="page-history-list">${rows}</div></div>`);
   }
 
   function menuPage() {
@@ -1885,6 +1936,9 @@ async function genericListPage(route) {
     ]);
     if(posts.error) return toast(posts.error.message);
     const ownerMe=x.owner_id===state.user.id;
+    const nameHistoryR=await sb.from('activity_history').select('description,created_at').eq('user_id',x.owner_id).eq('entity_type','page').eq('entity_id',id).eq('action_type','page_name_changed').order('created_at',{ascending:false}).limit(10);
+    const nameHistory=nameHistoryR.data||[];
+    const previousName=nameHistory[0]?.description ? (String(nameHistory[0].description).match(/Ancien nom\s*:\s*(.*?)\s*→/)||[])[1] : '';
     const myRole=(members.data||[]).find(m=>m.user_id===state.user.id)?.role || null;
     const canManage=ownerMe || ['owner','admin'].includes(myRole);
     const canPublish=ownerMe || ['owner','admin'].includes(myRole);
@@ -1906,13 +1960,13 @@ async function genericListPage(route) {
     }).join('') || `<div class="page-empty-state"><div class="page-empty-icon">✦</div><b>Aucune publication pour le moment</b><span>Les nouvelles publications de la Page apparaîtront ici instantanément.</span></div>`;
     const team=(members.data||[]).map(m=>`<div class="page-team-row">${avatarHTML(m.profiles||{},'avatar page-team-avatar')}<div class="grow"><b>${esc(nameOf(m.profiles||{}))}</b><small>${esc(m.role||'editor')}</small></div>${canManage&&m.user_id!==state.user.id?`<button class="page-team-role" data-action="page-member-menu" data-id="${esc(m.user_id)}" data-entity-id="${esc(id)}">⋯</button>`:''}</div>`).join('') || '<div class="muted">Aucun gestionnaire supplémentaire.</div>';
     const ownerName=owner.data?nameOf(owner.data):'';
-    const about=`<div class="page-info-grid"><div><small>Catégorie</small><b>${esc(x.category||'Autre')}</b></div><div><small>Créée le</small><b>${new Date(x.created_at).toLocaleDateString('fr-FR')}</b></div><div><small>Responsable</small><b>${esc(ownerName||'Membre Tafaß')}</b></div><div><small>Adresse</small><b>${esc(x.address||x.location||owner.data?.city_current||'Non renseignée')}</b></div>${x.contact_email?`<div><small>E-mail</small><b>${esc(x.contact_email)}</b></div>`:''}${x.contact_phone?`<div><small>Téléphone</small><b>${esc(x.contact_phone)}</b></div>`:''}${x.website_url?`<div class="wide"><small>Site web</small><b>${esc(x.website_url)}</b></div>`:''}</div>`;
+    const about=`<div class="page-info-grid"><div><small>Catégorie</small><b>${esc(x.category||'Autre')}</b></div><div><small>Créée le</small><b>${new Date(x.created_at).toLocaleDateString('fr-FR')}</b></div><div><small>Responsable</small><b>${esc(ownerName||'Membre Tafaß')}</b></div><div><small>Adresse</small><b>${esc(x.address||owner.data?.city_current||'Non renseignée')}</b></div>${previousName?`<div class="wide page-old-name-detail"><small>Ancien nom</small><b>${esc(previousName)}</b><em>Nom précédent enregistré le ${new Date(nameHistory[0].created_at).toLocaleDateString('fr-FR')}</em></div>`:''}${x.contact_email?`<div><small>E-mail</small><b>${esc(x.contact_email)}</b></div>`:''}${x.contact_phone?`<div><small>Téléphone</small><b>${esc(x.contact_phone)}</b></div>`:''}${x.website_url?`<div class="wide"><small>Site web</small><b>${esc(x.website_url)}</b></div>`:''}</div>`;
     openModal(`<div class="modal-box page-premium-modal page-detail fb-style-detail" data-page-id="${esc(id)}">
       <button class="entity-back-btn" data-action="close-entity" data-route-back="${esc(state.entityBackRoute || "pages")}" aria-label="Retour aux Pages"><span>‹</span><small>Pages</small></button>
       <div class="page-cover" ${x.cover_url?`style="background-image:url('${esc(x.cover_url)}')"`:''}><div class="page-cover-overlay"></div><div class="page-live-badge">● PAGE</div></div>
       <div class="page-profile-head page-profile-head-v2"><div class="page-avatar-wrap">${avatar}<span class="page-verified">✓</span></div></div>
       <div class="page-profile-copy-v2"><h2>${esc(x.name)}</h2>${x.username?`<div class="page-handle">@${esc(x.username)}</div>`:''}<p>${esc(x.bio||'Présentez votre activité, votre communauté et vos actualités.')}</p><div class="page-follow-line"><span><b>${followerCount}</b> abonnés</span><span><b>${postCount}</b> publications</span></div></div>
-      <div class="page-top-actions page-primary-actions">${ownerMe?`<button class="page-action primary" data-action="page-switch" data-id="${esc(id)}">⇄ Basculer</button><button class="page-action secondary" data-action="edit-page" data-id="${esc(id)}">⚙ Gérer la Page</button>`:`<button class="page-action ${follow.data?'secondary':'primary'}" data-action="toggle-page-follow" data-id="${esc(id)}">${follow.data?'✓ Suivie':'＋ Suivre'}</button><button class="page-action secondary" data-action="page-contact" data-id="${esc(id)}">💬 Messages</button>`}<button class="page-action secondary page-more-action" data-action="page-more" data-id="${esc(id)}" aria-label="Plus d’options">•••</button></div>
+      <div class="page-top-actions page-primary-actions">${ownerMe?`<button class="page-action primary" data-action="page-switch" data-id="${esc(id)}">⇄ Basculer</button><button class="page-action secondary" data-action="edit-page" data-id="${esc(id)}">⚙ Gérer la Page</button>`:`<button class="page-action ${follow.data?'secondary':'primary'}" data-action="toggle-page-follow" data-id="${esc(id)}">${follow.data?'✓ Suivie':'＋ Suivre'}</button><button class="page-action secondary" data-action="page-contact" data-id="${esc(id)}">💬 Messages</button>`}<button class="page-action secondary" data-action="page-profile" data-id="${esc(id)}">◉ Profil</button><button class="page-action secondary page-more-action" data-action="page-more" data-id="${esc(id)}" aria-label="Plus d’options">•••</button></div>
       <nav class="page-tabs"><button class="active" data-action="page-tab" data-tab="posts" data-id="${esc(id)}">Publications</button><button data-action="page-tab" data-tab="about" data-id="${esc(id)}">À propos</button><button data-action="page-tab" data-tab="team" data-id="${esc(id)}">Équipe</button></nav>
       ${canPublish?`<section class="page-composer"><div class="page-composer-title"><span>✦</span><div><b>Publier en tant que ${esc(x.name)}</b><small>${myRole==='editor'?'Éditeur':'Gestionnaire'}</small></div></div><textarea id="pagePostText" maxlength="5000" placeholder="Partagez une actualité avec vos abonnés…"></textarea><div class="page-composer-bottom"><label class="page-media-btn">＋ Média<input id="pagePostMedia" type="file" accept="image/*,video/*" hidden></label><span id="pagePostMediaName">Aucun fichier</span><button class="page-publish-btn" data-action="page-publish" data-id="${esc(id)}">Publier</button></div></section>`:''}
       <section class="page-tab-panel page-live-section" data-tab="posts"><div class="page-section-title"><div><span>ACTUALITÉ</span><h3>Publications</h3></div><strong>● EN DIRECT</strong></div><div class="page-post-list">${postRows}</div></section>
@@ -1931,20 +1985,28 @@ async function genericListPage(route) {
   }
 
   async function pageInviteFriends(id){
-    const {data:friends,error}=await sb.from('friendships').select('user_id,friend_id,status').or(`user_id.eq.${state.user.id},friend_id.eq.${state.user.id}`).eq('status','accepted').limit(100);
+    const {data:friends,error}=await sb.from('friendships').select('user_id,friend_id,status').or(`user_id.eq.${state.user.id},friend_id.eq.${state.user.id}`).eq('status','accepted').limit(200);
     if(error)return toast(error.message);
-    const ids=(friends||[]).map(f=>f.user_id===state.user.id?f.friend_id:f.user_id).filter(Boolean);
+    const ids=[...(friends||[])].map(f=>f.user_id===state.user.id?f.friend_id:f.user_id).filter(Boolean);
     if(!ids.length)return openModal(`<div class="modal-box page-more-menu-modal"><button class="modal-close" data-action="close-modal">×</button><h3>Inviter des amis</h3><p class="muted">Vous n’avez pas encore d’ami à inviter.</p></div>`);
-    const {data:profiles}=await sb.from('profiles').select('id,first_name,last_name,username,avatar_url').in('id',ids);
-    const rows=(profiles||[]).map(u=>`<label class="invite-friend-row"><input type="checkbox" value="${esc(u.id)}"><span>${avatarHTML(u,'avatar tiny-avatar')}</span><span class="grow"><b>${esc(nameOf(u))}</b><small>${u.username?`@${esc(u.username)}`:''}</small></span></label>`).join('');
-    openModal(`<div class="modal-box page-more-menu-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • INVITATION</span><h3>Inviter des amis à suivre</h3><p class="muted">Sélectionnez les amis à qui envoyer l’invitation.</p><div class="invite-friend-list">${rows}</div><button class="primary big" data-action="send-page-invites" data-id="${esc(id)}">Envoyer les invitations</button></div>`);
+    const [profilesR,followersR,invitesR]=await Promise.all([
+      sb.from('profiles').select('id,first_name,last_name,username,avatar_url').in('id',ids),
+      sb.from('page_followers').select('user_id').eq('page_id',id).in('user_id',ids),
+      sb.from('notifications').select('user_id').eq('entity_type','page').eq('entity_id',id).eq('type','page_follow_invite').in('user_id',ids).limit(200)
+    ]);
+    const followed=new Set((followersR.data||[]).map(x=>x.user_id)), invited=new Set((invitesR.data||[]).map(x=>x.user_id));
+    const rows=(profilesR.data||[]).map(u=>`<label class="invite-friend-row ${followed.has(u.id)?'disabled':''}"><input type="checkbox" value="${esc(u.id)}" ${followed.has(u.id)?'disabled':''}><span>${avatarHTML(u,'avatar tiny-avatar')}</span><span class="grow"><b>${esc(nameOf(u))}</b><small>${followed.has(u.id)?'Déjà abonné(e)':invited.has(u.id)?'Invitation déjà envoyée':'@'+esc(u.username||'membre')}</small></span></label>`).join('');
+    openModal(`<div class="modal-box page-more-menu-modal page-invite-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • INVITATION</span><h3>Inviter des amis à suivre</h3><p class="muted">Tout utilisateur peut inviter ses amis. Une notification sera envoyée directement à chaque ami sélectionné.</p><div class="invite-friend-list">${rows}</div><button class="primary big" data-action="send-page-invites" data-id="${esc(id)}">Envoyer les invitations</button></div>`);
   }
 
   async function sendPageInvites(id){
     const ids=[...document.querySelectorAll('.invite-friend-list input:checked')].map(x=>x.value);
     if(!ids.length)return toast('Sélectionnez au moins un ami.');
-    const rows=ids.map(uid=>({user_id:uid,actor_id:state.user.id,type:'page_follow',title:'Invitation à suivre une Page',message:'Vous êtes invité à suivre une Page Tafaß.',entity_type:'page',entity_id:id}));
-    const r=await sb.from('notifications').insert(rows); if(r.error)return toast(r.error.message); closeModal(); toast(`${ids.length} invitation${ids.length>1?'s':''} envoyée${ids.length>1?'s':''}.`);
+    const pg=(await fetchPageById(id)).data; if(!pg)return toast('Page introuvable.');
+    const rows=ids.map(uid=>({user_id:uid,actor_id:state.user.id,type:'page_follow_invite',title:`Invitation à suivre ${pg.name}`,message:`Vous êtes invité à suivre la Page ${pg.name}.`,entity_type:'page',entity_id:id}));
+    const r=await sb.from('notifications').insert(rows); if(r.error)return toast(r.error.message);
+    await logActivity('page_invites_sent',`${ids.length} invitation(s) envoyée(s) pour ${pg.name}`,'page',id);
+    closeModal(); toast(`${ids.length} invitation${ids.length>1?'s':''} envoyée${ids.length>1?'s':''}.`);
   }
 
   async function pageShare(id){
@@ -1967,6 +2029,12 @@ async function genericListPage(route) {
     const exists=(await sb.from('page_followers').select('id').eq('page_id',id).eq('user_id',state.user.id).maybeSingle()).data;
     const r=exists?await sb.from('page_followers').delete().eq('id',exists.id):await sb.from('page_followers').insert({page_id:id,user_id:state.user.id});
     if(r.error) return toast(r.error.message);
+    if(!exists){
+      const pg=(await fetchPageById(id)).data;
+      if(pg?.owner_id && pg.owner_id!==state.user.id){
+        await sb.from('notifications').insert({user_id:pg.owner_id,actor_id:state.user.id,type:'page_follow',title:'Nouvel abonné',message:`Un membre suit maintenant ${pg.name}.`,entity_type:'page',entity_id:id});
+      }
+    }
     toast(exists?'Vous ne suivez plus cette Page.':'Vous suivez maintenant cette Page.');
     return openPageDetail(id);
   }
@@ -1976,15 +2044,33 @@ async function genericListPage(route) {
     if(error) return toast(error.message); if(!p) return toast('Page introuvable.');
     const {data:roleRow}=await sb.from('page_members').select('role').eq('page_id',id).eq('user_id',state.user.id).maybeSingle();
     if(p.owner_id!==state.user.id && roleRow?.role!=='admin') return toast('Seul le propriétaire ou un administrateur peut modifier la Page.');
-    openModal(`<div class="modal-box page-edit-modal page-manage-screen"><div class="page-manage-topbar"><button class="entity-back-btn compact" data-action="page-manage-back" data-id="${esc(id)}" aria-label="Retour à la Page"><span>‹</span><small>Retour</small></button><span class="page-eyebrow">TAFAß · ADMINISTRATION</span></div><div class="page-manage-scroll"><div class="page-manage-heading"><h2>Gérer la Page</h2><p>Modifiez l’identité publique, les coordonnées et les visuels.</p></div><div class="page-edit-grid"><label>Nom<input id="editPageName" maxlength="80" value="${esc(p.name)}"></label><label>Nom d’utilisateur<input id="editPageUsername" maxlength="50" value="${esc(p.username||'')}" placeholder="@ma-page"></label><label>Catégorie<select id="editPageCategory">${pageCategoryOptions(p.category||'Autre')}</select><small>Cette information apparaîtra uniquement dans « À propos ».</small></label><label>Site web<input id="editPageWebsite" type="url" value="${esc(p.website_url||'')}" placeholder="https://…"></label><label class="wide">Présentation<textarea id="editPageBio" maxlength="1000">${esc(p.bio||'')}</textarea></label><label>Adresse<input id="editPageAddress" maxlength="200" value="${esc(p.address||p.location||'')}" placeholder="Adresse / ville"></label><label>E-mail professionnel<input id="editPageEmail" type="email" value="${esc(p.contact_email||'')}" placeholder="contact@…"></label><label>Téléphone professionnel<input id="editPagePhone" type="tel" value="${esc(p.contact_phone||'')}" placeholder="+261…"></label><label>Logo<input id="editPageLogo" type="file" accept="image/jpeg,image/png,image/webp"></label><label>Couverture<input id="editPageCover" type="file" accept="image/jpeg,image/png,image/webp"></label></div></div><div class="page-manage-footer"><button class="ghost-action" data-action="page-manage-back" data-id="${esc(id)}">Annuler</button><button class="primary big" data-action="save-page-edit" data-id="${esc(id)}">Enregistrer les modifications</button></div></div>`);
+    openModal(`<div class="modal-box page-edit-modal page-manage-screen"><div class="page-manage-topbar"><button class="entity-back-btn compact" data-action="page-manage-back" data-id="${esc(id)}" aria-label="Retour à la Page"><span>‹</span><small>Retour</small></button><span class="page-eyebrow">TAFAß · ADMINISTRATION</span></div><div class="page-manage-scroll"><div class="page-manage-heading"><h2>Gérer la Page</h2><p>Modifiez l’identité publique, les coordonnées et les visuels.</p></div><div class="page-rename-rule"><span>◷</span><div><b>Le nom peut être modifié une fois tous les 15 jours</b><small>Si vous changez le nom, l’ancien nom restera visible dans les détails de la Page.</small></div></div><div class="page-edit-grid"><label>Nom<input id="editPageName" maxlength="80" value="${esc(p.name)}"></label><label>Nom d’utilisateur<input id="editPageUsername" maxlength="50" value="${esc(p.username||'')}" placeholder="@ma-page"></label><label>Catégorie<select id="editPageCategory">${pageCategoryOptions(p.category||'Autre')}</select><small>Cette information apparaîtra uniquement dans « À propos ».</small></label><label>Site web<input id="editPageWebsite" type="url" value="${esc(p.website_url||'')}" placeholder="https://…"></label><label class="wide">Présentation<textarea id="editPageBio" maxlength="1000">${esc(p.bio||'')}</textarea></label><label>Adresse<input id="editPageAddress" maxlength="200" value="${esc(p.address||p.location||'')}" placeholder="Adresse / ville"></label><label>E-mail professionnel<input id="editPageEmail" type="email" value="${esc(p.contact_email||'')}" placeholder="contact@…"></label><label>Téléphone professionnel<input id="editPagePhone" type="tel" value="${esc(p.contact_phone||'')}" placeholder="+261…"></label><label>Logo<input id="editPageLogo" type="file" accept="image/jpeg,image/png,image/webp"></label><label>Couverture<input id="editPageCover" type="file" accept="image/jpeg,image/png,image/webp"></label></div></div><div class="page-manage-footer"><button class="ghost-action" data-action="page-manage-back" data-id="${esc(id)}">Annuler</button><button class="primary big" data-action="save-page-edit" data-id="${esc(id)}">Enregistrer les modifications</button></div></div>`);
   }
 
   async function savePageEdit(id){
     const btn=document.querySelector('[data-action="save-page-edit"]'); setLoading(btn,true,'Enregistrer');
-    const patch={name:$('editPageName')?.value.trim(),username:$('editPageUsername')?.value.trim().replace(/^@/,''),category:$('editPageCategory')?.value||'Autre',bio:$('editPageBio')?.value.trim()||'',address:$('editPageAddress')?.value.trim()||'',contact_email:$('editPageEmail')?.value.trim()||'',contact_phone:$('editPagePhone')?.value.trim()||'',website_url:$('editPageWebsite')?.value.trim()||''};
-    if(!patch.name){setLoading(btn,false,'Enregistrer');return toast('Le nom est obligatoire.');}
-    for(const [input,key] of [['editPageLogo','logo_url'],['editPageCover','cover_url']]){const file=$(input)?.files?.[0]; if(!file) continue; const ext=(file.name.split('.').pop()||'jpg').toLowerCase(); const path=`${state.user.id}/page-${id}-${key}-${crypto.randomUUID()}.${ext}`; const up=await sb.storage.from('posts').upload(path,file,{upsert:false,contentType:file.type||'image/jpeg'}); if(up.error){setLoading(btn,false,'Enregistrer');return toast('Upload impossible : '+up.error.message);} patch[key]=sb.storage.from('posts').getPublicUrl(path).data.publicUrl;}
-    const r=await sb.from('pages').update(patch).eq('id',id); setLoading(btn,false,'Enregistrer'); if(r.error)return toast(r.error.message); closeModal(); toast('Page mise à jour.'); return openPageDetail(id);
+    try{
+      const current=(await fetchPageById(id)).data;
+      if(!current){setLoading(btn,false,'Enregistrer');return toast('Page introuvable.');}
+      const patch={name:$('editPageName')?.value.trim(),username:$('editPageUsername')?.value.trim().replace(/^@/,''),category:$('editPageCategory')?.value||'Autre',bio:$('editPageBio')?.value.trim()||'',address:$('editPageAddress')?.value.trim()||'',contact_email:$('editPageEmail')?.value.trim()||'',contact_phone:$('editPagePhone')?.value.trim()||'',website_url:$('editPageWebsite')?.value.trim()||''};
+      if(!patch.name){setLoading(btn,false,'Enregistrer');return toast('Le nom est obligatoire.');}
+      if(patch.name!==current.name){
+        if(current.owner_id!==state.user.id){setLoading(btn,false,'Enregistrer');return toast('Seul le propriétaire de la Page peut modifier son nom.');}
+        const h=await sb.from('activity_history').select('created_at').eq('user_id',current.owner_id).eq('entity_type','page').eq('entity_id',id).eq('action_type','page_name_changed').order('created_at',{ascending:false}).limit(1);
+        if(h.error){setLoading(btn,false,'Enregistrer');return toast(h.error.message);}
+        const last=h.data?.[0]?.created_at;
+        if(last){
+          const next=new Date(new Date(last).getTime()+15*24*60*60*1000);
+          if(Date.now()<next.getTime()){setLoading(btn,false,'Enregistrer');return toast(`Le nom de la Page ne peut être modifié qu’une fois tous les 15 jours. Prochain changement : ${next.toLocaleDateString('fr-FR')}.`);}
+        }
+      }
+      for(const [input,key] of [['editPageLogo','logo_url'],['editPageCover','cover_url']]){const file=$(input)?.files?.[0]; if(!file) continue; const ext=(file.name.split('.').pop()||'jpg').toLowerCase(); const path=`${state.user.id}/page-${id}-${key}-${crypto.randomUUID()}.${ext}`; const up=await sb.storage.from('posts').upload(path,file,{upsert:false,contentType:file.type||'image/jpeg'}); if(up.error){setLoading(btn,false,'Enregistrer');return toast('Upload impossible : '+up.error.message);} patch[key]=sb.storage.from('posts').getPublicUrl(path).data.publicUrl;}
+      const r=await sb.from('pages').update(patch).eq('id',id); if(r.error){setLoading(btn,false,'Enregistrer');return toast(r.error.message);}
+      if(patch.name!==current.name){await logActivity('page_name_changed',`Ancien nom : ${current.name} → Nouveau nom : ${patch.name}`,'page',id);}
+      setLoading(btn,false,'Enregistrer'); closeModal(); toast('Page mise à jour.');
+      if(state.activePage?.id===id) state.activePage={...state.activePage,...patch};
+      return openPageDetail(id);
+    }catch(e){setLoading(btn,false,'Enregistrer');toast(e?.message||'Impossible d’enregistrer la Page.');}
   }
 
   async function pageMemberMenu(userId,pageId){
@@ -2151,6 +2237,10 @@ async function genericListPage(route) {
 
     if (action === "page-exit-mode") { closeModal(); state.activePage=null; state.entityBackRoute=null; state.navStack=["home"]; state.route="home"; restoreAccountNavigation(); syncIdentityUI(); return navigate("home",{replaceStack:true}); }
     if (action === "page-manage-current") { return editPage(state.activePage?.id); }
+    if (action === "page-settings") return pageSettings(id || state.activePage?.id);
+    if (action === "page-name-history") return pageNameHistory(id);
+    if (action === "page-settings-save") return pageSettings(id);
+    if (action === "save-page-settings") { const pgId=id||state.activePage?.id; const key=`tafass_page_settings_${pgId}`; const values={}; document.querySelectorAll('[data-page-setting]').forEach(x=>values[x.dataset.pageSetting]=x.checked); localStorage.setItem(key,JSON.stringify(values)); closeModal(); toast('Paramètres de la Page enregistrés.'); return; }
     if (action === "close-entity") { closeModal(); return navigate(actionEl.dataset.routeBack || "pages"); }
     if (action === "page-manage-back") { const pageId=actionEl.dataset.id || ""; closeModal(); return pageId ? openPageDetail(pageId) : navigate("pages"); }
     if (action === "page-back") return goBack();
@@ -2317,6 +2407,7 @@ async function genericListPage(route) {
       if(Object.keys(patch).length) await sb.from('pages').update(patch).eq('id',pg.id).eq('owner_id',state.user.id);
       closeModal(); toast("Page créée"); return genericListPage("pages");
     }
+    if (action === "page-profile") { state.entityBackRoute = state.route || "pages"; return openPageDetail(id); }
     if (action === "page-open") { state.entityBackRoute = pageModeActive() && state.activePage?.id===id ? "home" : (state.route || "pages"); return openPageDetail(id); }
     if (action === "page-more") return pageMore(id);
     if (action === "page-invite-friends") return pageInviteFriends(id);
