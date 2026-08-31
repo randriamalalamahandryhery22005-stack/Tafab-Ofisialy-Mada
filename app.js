@@ -13,7 +13,7 @@ document.documentElement.classList.add("app-boot");
   const routes = ["home","friends","search","messages","notifications","profile","reels","pages","groups","saved","menu","tafab","settings"];
   const state = {
     user: null, profile: null, route: "home", navStack: ["home"], backOverride: null, posts: [], friends: [], stories: [],
-    channel: null, theme: "dark", entering: false, loggingOut: false,
+    channel: null, theme: "dark", entering: false, loggingOut: false, logoutGuard: false,
     profileTab: "posts", friendsTab: "suggestions", pagesTab: "mine", groupsTab: "mine", groupSort: "recent", selectedConversation: null, viewingProfileId: null, renderToken: 0, activePage: null, entityBackRoute: null
   };
 
@@ -1741,6 +1741,32 @@ async function genericListPage(route) {
     const type = PAGE_ICONS[routeOrTitle] || (String(routeOrTitle).toLowerCase().includes("message") ? "messages" : String(routeOrTitle).toLowerCase().includes("ami") ? "friends" : "settings");
     return menuIcon(type);
   }
+  function premiumControlIcon(type) {
+    if (type === "back") return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5"/><path d="M11 6l-6 6 6 6"/></svg>`;
+    return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>`;
+  }
+  function normalizeNavigationControls(root = document) {
+    const scope = root || document;
+    scope.querySelectorAll('[data-action="page-back"], [data-action="close-entity"], [data-action="page-manage-back"]').forEach(btn => {
+      btn.classList.add("premium-nav-control", "premium-back-control");
+      btn.setAttribute("aria-label", "Précédent");
+      btn.innerHTML = `${premiumControlIcon("back")}<span>Précédent</span>`;
+    });
+    scope.querySelectorAll('[data-action="close-modal"]').forEach(btn => {
+      btn.classList.add("premium-nav-control", "premium-cancel-control");
+      btn.setAttribute("aria-label", "Annuler");
+      btn.innerHTML = `${premiumControlIcon("cancel")}<span>Annuler</span>`;
+    });
+    scope.querySelectorAll('[data-route]').forEach(btn => {
+      const text = (btn.textContent || "").trim().toLowerCase();
+      if (text === "retour" || text.startsWith("retour aux ")) {
+        btn.classList.add("premium-route-back-control");
+        const target = btn.dataset.route || "home";
+        btn.innerHTML = `${premiumControlIcon("back")}<span>Précédent</span>`;
+        btn.setAttribute("aria-label", `Précédent vers ${target}`);
+      }
+    });
+  }
   function decoratePageHeader(route = state.route) {
     const root = $("content")?.firstElementChild;
     if (!root || route === "home") return;
@@ -1751,9 +1777,10 @@ async function genericListPage(route) {
     if (!header.querySelector('[data-action="page-back"]') && !header.querySelector("[data-page-back]")) {
       const back = document.createElement("button");
       back.type = "button"; back.className = "page-back"; back.dataset.action = "page-back";
-      back.setAttribute("aria-label", "Retour"); back.innerHTML = `<span aria-hidden="true">‹</span><small>Retour</small>`;
+      back.setAttribute("aria-label", "Précédent"); back.innerHTML = `${premiumControlIcon("back")}<span>Précédent</span>`;
       header.insertBefore(back, header.firstChild);
     }
+    normalizeNavigationControls(root);
   }
   function goBack() {
     if (state.backOverride) {
@@ -1781,7 +1808,7 @@ async function genericListPage(route) {
       : `<div class="card"><div class="page-header"><h2>${esc(title)}</h2></div>${body}</div>`;
     decoratePageHeader(state.route);
   }
-  function openModal(html) { $("modal").className = "modal"; $("modal").innerHTML = html; document.body.classList.add("modal-open"); }
+  function openModal(html) { $("modal").className = "modal"; $("modal").innerHTML = html; document.body.classList.add("modal-open"); normalizeNavigationControls($("modal")); }
   function closeModal() { $("modal").className = "modal hidden"; $("modal").innerHTML = ""; document.body.classList.remove("modal-open"); }
 
   function ensurePageLoader() {
@@ -1829,6 +1856,7 @@ async function genericListPage(route) {
       if (pageRoot) pageRoot.dataset.pageRoute = route;
       document.querySelectorAll("[data-route]").forEach(el => el.classList.toggle("active", el.dataset.route === state.route));
       updateBadges();
+      normalizeNavigationControls($("content"));
     } catch (err) {
       console.error("Tafaß render:", err);
       if (token === state.renderToken && state.route === route) {
@@ -1887,29 +1915,36 @@ async function genericListPage(route) {
       <h3>Déconnexion</h3>
       <p class="logout-question">Voulez-vous vraiment vous déconnecter de votre compte ?</p>
       <div class="logout-choice"><div><b>Rester dans l’application</b><small>Votre session reste ouverte.</small></div><button class="ghost-action" data-action="close-modal">Rester</button></div>
-      <div class="logout-choice danger-choice"><div><b>Se déconnecter</b><small>Vous devrez vous reconnecter pour accéder au compte.</small></div><button class="danger-button" data-action="confirm-logout">Déconnexion</button></div>
+      <div class="logout-choice danger-choice"><div><b>Se déconnecter</b><small>La session locale sera fermée et vous reviendrez à Connexion.</small></div><button class="danger-button" data-action="confirm-logout">Déconnexion</button></div>
     </div>`);
   }
   async function confirmLogout() {
     if (state.loggingOut) return;
     state.loggingOut = true;
+    state.logoutGuard = true;
     const button = document.querySelector('[data-action="confirm-logout"]');
     if (button) { button.disabled = true; button.textContent = "Déconnexion…"; }
     try {
       if (state.channel) { try { await sb.removeChannel(state.channel); } catch (_) {} state.channel = null; }
-      const { error } = await sb.auth.signOut();
+      const { error } = await sb.auth.signOut({ scope: "local" });
       if (error) throw error;
-      state.user=null; state.profile=null; state.selectedConversation=null; state.viewingProfileId=null; state.activePage=null; state.entityBackRoute=null; state.navStack=["home"]; state.route="home";
-      document.body.classList.remove("page-mode-active","modal-open");
+      state.user=null; state.profile=null; state.selectedConversation=null; state.viewingProfileId=null; state.activePage=null; state.entityBackRoute=null; state.backOverride=null; state.navStack=["home"]; state.route="home";
+      state.renderToken++;
+      document.body.classList.remove("page-mode-active","modal-open","page-loading");
       closeModal();
       $("app")?.classList.add("hidden");
+      history.replaceState(null, "", location.pathname + location.search);
       showLogin();
     } catch (e) {
+      state.logoutGuard = false;
       if (button) { button.disabled = false; button.textContent = "Déconnexion"; }
       state.loggingOut = false;
       return toast(e?.message || "Impossible de se déconnecter. Réessayez.");
     }
     state.loggingOut = false;
+    // Keep the guard through the current event-loop turn so a queued auth
+    // callback cannot restore the previous application state.
+    setTimeout(() => { state.logoutGuard = false; }, 250);
   }
 
   async function setupRealtime() {
@@ -2894,10 +2929,17 @@ async function genericListPage(route) {
       setTimeout(() => showResetPassword(), 0);
       return;
     }
+    if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
+      if (event === "SIGNED_IN") state.logoutGuard = false;
+    }
     setTimeout(() => {
       if (state.loggingOut) return;
+      if (state.logoutGuard) {
+        if (!state.user) { $("app")?.classList.add("hidden"); showLogin(); }
+        return;
+      }
       if (state.user) enterApp().catch(err => { console.error("Tafaß auth:", err); state.entering=false; showLogin(); });
-      else { $("app").classList.add("hidden"); showLogin(); }
+      else { $("app")?.classList.add("hidden"); showLogin(); }
     }, 0);
   });
 
