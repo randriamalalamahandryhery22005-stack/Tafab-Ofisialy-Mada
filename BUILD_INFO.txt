@@ -6,3 +6,6 @@ TAFAß PAGES + GROUPES PREMIUM V3 — ROLE / UI / MOBILE FIX
 - Group admin-only management; members can publish/invite friends
 - Supabase RLS + GRANT + Realtime migration included
 - JavaScript syntax verified with node --check
+
+- 2026-08-31: FINAL UI/UX + Stories + Tafaß Business Suite + Paramètres & confidentialité.
+- Page mobile navigation: centered with side margins; duplicate bottom search removed in Page mode.

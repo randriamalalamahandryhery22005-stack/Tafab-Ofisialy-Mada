@@ -56,3 +56,12 @@ This build is aligned with `TAFASS_COMPLETE_SCHEMA.sql` (the supplied
 
 ## Pages & Groupes Premium
 Run `PAGES_GROUPS_PREMIUM_REALTIME.sql` once after the main Supabase schema. It is idempotent and does not delete existing rows. It adds Page managers, Page/Group post reactions/comments, Page contact messages, Group discussion messages and duplicate-safe Realtime.
+
+
+## Tafaß FINAL UI/UX PATCH — 31 août 2026
+- Page : navigation mobile centrée avec marges gauche/droite ; suppression de « Rechercher » dans la barre inférieure du Mode Page (la recherche reste accessible en haut).
+- Actualités : fil plus complet avec Stories 24 h réelles, création de story photo/vidéo/texte, publication Texte/Photo/Vidéo/Humeur, et conservation des réactions/commentaires/partages Supabase existants.
+- Business : « Tafaß Business Suite » remplace « Meta Business Suite ». Le tableau de bord lit les Pages, abonnés, publications, messages et gestionnaires depuis Supabase et se rafraîchit via Realtime.
+- Para & Conf : interface restructurée selon la référence fournie, avec recherche dans les paramètres, icônes SVG distinctes et actions reliées aux contrôles existants du compte.
+- Navigation : fermeture des modales obsolètes lors d'une navigation et prévention des états de retour persistants.
+- Aucun nouveau schéma SQL n'est requis par ce patch ; les fonctions utilisent les tables déjà présentes dans le ZIP final.

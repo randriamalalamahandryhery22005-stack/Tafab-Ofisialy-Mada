@@ -240,8 +240,8 @@ document.documentElement.classList.add("app-boot");
     const logo = document.querySelector(".logo-button strong"); if(logo) logo.textContent = pageModeActive() ? p.name : "Tafaß";
     const logoMark = document.querySelector(".logo-button .mini-logo"); if(logoMark) logoMark.textContent = pageModeActive() ? "▣" : "T";
     const left=document.querySelector(".left-sidebar"), bottom=document.querySelector(".bottom-nav");
-    if(left && pageModeActive()) left.innerHTML=`<button data-route="home" class="profile-shortcut page-nav-identity">${entityAvatarHTML(p,"page","avatar")}<span><b>${esc(p.name)}</b><small>Mode Page actif</small></span></button><button data-route="home"><span class="nav-ico">⌂</span>Actualités</button><button data-route="messages"><span class="nav-ico">▤</span>Messages</button><button data-route="search"><span class="nav-ico">⌕</span>Rechercher</button><button data-route="notifications"><span class="nav-ico">♢</span>Alertes</button><button data-route="groups"><span class="nav-ico">◎</span>Groupes</button><button data-route="pages"><span class="nav-ico">▣</span>Pages</button><button data-route="menu"><span class="nav-ico">☰</span>Menu</button>`;
-    if(bottom && pageModeActive()) bottom.innerHTML=`<button data-route="home"><span class="nav-svg">⌂</span><small>Actualités</small></button><button data-route="messages"><span class="nav-svg">▤</span><small>Messages</small></button><button data-route="search"><span class="nav-svg">⌕</span><small>Rechercher</small></button><button data-route="notifications"><span class="nav-svg">♢</span><small>Alertes</small></button><button data-route="menu"><span class="nav-svg">☰</span><small>Menu</small></button>`;
+    if(left && pageModeActive()) left.innerHTML=`<button data-route="home" class="profile-shortcut page-nav-identity">${entityAvatarHTML(p,"page","avatar")}<span><b>${esc(p.name)}</b><small>Mode Page actif</small></span></button><button data-route="home"><span class="nav-ico">${menuIcon("home")}</span>Actualités</button><button data-route="messages"><span class="nav-ico">${menuIcon("messages")}</span>Messages</button><button data-route="search"><span class="nav-ico">${menuIcon("search")}</span>Rechercher</button><button data-route="notifications"><span class="nav-ico">${menuIcon("history")}</span>Alertes</button><button data-route="groups"><span class="nav-ico">${menuIcon("groups")}</span>Groupes</button><button data-route="pages"><span class="nav-ico">${menuIcon("pages")}</span>Pages</button><button data-route="menu"><span class="nav-ico">${menuIcon("settings")}</span>Menu</button>`;
+    if(bottom && pageModeActive()) bottom.innerHTML=`<button data-route="home"><span class="nav-svg">${menuIcon("home")}</span><small>Actualités</small></button><button data-route="messages"><span class="nav-svg">${menuIcon("messages")}</span><small>Messages</small></button><button data-route="notifications"><span class="nav-svg">${menuIcon("history")}</span><small>Alertes</small></button><button data-route="menu"><span class="nav-svg">${menuIcon("settings")}</span><small>Menu</small></button>`;
   }
   function restoreAccountNavigation(){
     const left=document.querySelector(".left-sidebar"), bottom=document.querySelector(".bottom-nav");
@@ -286,22 +286,127 @@ document.documentElement.classList.add("app-boot");
     $("content").innerHTML=html;
   }
 
-  async function renderFeed() {
-    const token = state.renderToken;
-    let html = `<div class="composer composer-clean">
-      <div class="composer-top">${avatarHTML(state.profile)}<b>${esc(nameOf(state.profile))}</b></div>
-      <textarea id="postText" placeholder="Quoi de neuf, ${esc((state.profile?.first_name || "").trim() || "vous")} ?"></textarea>
-      <div class="composer-actions"><label class="file-label">▧ Photo/Vidéo<input id="postFile" type="file" accept="image/*,video/*" hidden></label><button type="button" class="primary" id="publishBtn">Publier</button></div>
-    </div>`;
-    if (!state.posts.length) html += `<div class="card empty">Aucune publication pour le moment.<br><span>Publiez la première sur Tafaß.</span></div>`;
-    for (const p of state.posts) {
-      if (token !== state.renderToken || state.route !== "home") return;
-      html += await postHTML(p);
-    }
-    if (token !== state.renderToken || state.route !== "home") return;
-    $("content").innerHTML = html;
-    $("publishBtn")?.addEventListener("click", publishPost);
+  async function loadActiveStories() {
+    if (!state.user) return [];
+    const now = new Date().toISOString();
+    const r = await sb.from("stories")
+      .select("id,user_id,media_url,media_type,text_overlay,visibility,expires_at,created_at")
+      .or(`visibility.eq.public,user_id.eq.${state.user.id}`)
+      .gt("expires_at", now)
+      .order("created_at",{ascending:false})
+      .limit(40);
+    if (r.error) { console.warn("Tafaß stories:", r.error.message); return []; }
+    const ids=[...new Set((r.data||[]).map(x=>x.user_id).filter(Boolean))];
+    const profiles=ids.length ? (await sb.from("profiles").select("id,first_name,last_name,avatar_url").in("id",ids)).data||[] : [];
+    const pm=new Map(profiles.map(p=>[p.id,p]));
+    return (r.data||[]).map(s=>({...s,author:pm.get(s.user_id)||state.profile}));
   }
+
+async function createStory() {
+    const file=$("storyFile")?.files?.[0];
+    const text=$("storyText")?.value.trim()||"";
+    if(!file && !text) return toast("Ajoutez une photo, une vidéo ou un texte à votre story.");
+    let media_url=null, media_type="text";
+    if(file){
+      const ext=(file.name.split(".").pop()||"bin").toLowerCase();
+      const path=`${state.user.id}/story-${crypto.randomUUID()}.${ext}`;
+      const up=await sb.storage.from("posts").upload(path,file,{upsert:false,contentType:file.type||undefined});
+      if(up.error) return toast("Upload : "+up.error.message);
+      media_url=sb.storage.from("posts").getPublicUrl(path).data.publicUrl;
+      media_type=file.type.startsWith("video/")?"video":"image";
+    }
+    const r=await sb.from("stories").insert({
+      user_id:state.user.id, media_url:media_url||"data:text/plain;charset=utf-8,story",
+      media_type, text_overlay:text, visibility:"public"
+    }).select().single();
+    if(r.error) return toast(r.error.message);
+    closeModal(); toast("Story publiée pendant 24 h."); await render();
+}
+
+async function storyComposer() {
+    openModal(`<div class="modal-box story-create-modal">
+      <button class="modal-close" data-action="close-modal">×</button>
+      <span class="eyebrow">TAFAß • STORIES</span><h3>Créer une story</h3>
+      <p class="muted">Partagez une photo, une vidéo ou un texte. La story expire automatiquement après 24 heures.</p>
+      <textarea id="storyText" maxlength="500" placeholder="Écrivez quelque chose…"></textarea>
+      <label class="story-upload"><span>${menuIcon("pages")}</span><b>Photo ou vidéo</b><small>Choisir un fichier</small><input id="storyFile" type="file" accept="image/*,video/*" hidden></label>
+      <button class="primary big" data-action="create-story">Publier la story</button>
+    </div>`);
+}
+
+async function renderFeed() {
+    const token = state.renderToken;
+    const stories=await loadActiveStories();
+    if (token !== state.renderToken || state.route !== "home") return;
+    const storyGroups=[];
+    const seen=new Set();
+    for(const s of stories){ if(seen.has(s.user_id)) continue; seen.add(s.user_id); storyGroups.push(s); }
+
+    let html=`<section class="news-feed">
+      <div class="news-topbar"><div><h2>Actualités</h2><small>Publications et stories des membres Tafaß</small></div></div>
+      <section class="stories-card">
+        <div class="stories-head"><div><b>Stories</b><small>Contenus disponibles pendant 24 h</small></div><button class="small-action" data-action="story-create">＋ Créer</button></div>
+        <div class="stories">
+          <button class="story story-create-tile" data-action="story-create"><span class="story-add">${menuIcon("profile")}</span><small>Votre story</small></button>
+          ${storyGroups.map(s=>`<button class="story" data-action="open-story" data-id="${esc(s.id)}"><span class="story-ring">${s.media_type==="video"?`<video src="${esc(s.media_url)}" muted playsinline></video>`:s.media_type==="text"?`<span class="story-text-preview">${esc(s.text_overlay||"Texte")}</span>`:`<img src="${esc(s.media_url)}" alt="Story">`}</span><small>${esc(s.user_id===state.user.id?"Vous":nameOf(s.author))}</small></button>`).join("")}
+        </div>
+      </section>
+
+      <section class="composer composer-news">
+        <div class="composer-top">${avatarHTML(state.profile)}<div><b>${esc(nameOf(state.profile))}</b><small>Créer une publication publique</small></div></div>
+        <textarea id="postText" placeholder="Quoi de neuf, ${esc((state.profile?.first_name||"vous").trim())} ?"></textarea>
+        <div class="composer-type-row">
+          <button type="button" data-compose-type="text">${menuIcon("profile")}<span>Texte</span></button>
+          <label data-compose-type="photo">${menuIcon("pages")}<span>Photo</span><input id="postFile" type="file" accept="image/*" hidden></label>
+          <label data-compose-type="video">${menuIcon("videos")}<span>Vidéo</span><input id="postVideoFile" type="file" accept="video/*" hidden></label>
+          <button type="button" data-compose-type="mood">${menuIcon("reels")}<span>Humeur</span></button>
+          <button type="button" data-compose-type="more">${menuIcon("settings")}<span>Plus</span></button>
+        </div>
+        <div class="composer-selected-file" id="composerFileName"></div>
+        <div class="composer-actions"><span class="composer-visibility">🌐 Public</span><button type="button" class="primary" id="publishBtn">Publier</button></div>
+      </section>`;
+
+    if(!state.posts.length) html+=`<div class="card empty">Aucune publication pour le moment.<br><span>Publiez la première sur Tafaß.</span></div>`;
+    for(const p of state.posts){ if(token!==state.renderToken||state.route!=="home")return; html+=await postHTML(p); }
+    if(token!==state.renderToken||state.route!=="home")return;
+    $("content").innerHTML=html;
+    const pf=$("postFile"), vf=$("postVideoFile");
+    pf?.addEventListener("change",()=>{ if(pf.files?.[0]){ vf.value=""; $("composerFileName").textContent=pf.files[0].name; }});
+    vf?.addEventListener("change",()=>{ if(vf.files?.[0]){ pf.value=""; $("composerFileName").textContent=vf.files[0].name; }});
+    document.querySelectorAll("[data-compose-type]").forEach(el=>el.addEventListener("click",()=>{
+      const type=el.dataset.composeType;
+      if(type==="photo") pf?.click(); else if(type==="video") vf?.click();
+      else if(type==="mood"){ const mood=prompt("Quelle est votre humeur ?","😊 Heureux"); if(mood) $("postText").value=($("postText").value+" "+mood).trim(); }
+      else if(type==="more") toast("Vous pouvez ajouter du texte, une photo ou une vidéo à votre publication.");
+    }));
+    $("publishBtn")?.addEventListener("click",publishPostNews);
+  }
+
+async function publishPostNews() {
+    const text=$("postText")?.value.trim()||"";
+    const pf=$("postFile"), vf=$("postVideoFile");
+    const file=pf?.files?.[0]||vf?.files?.[0];
+    if(!text&&!file)return toast("Écrivez quelque chose ou choisissez un média.");
+    const btn=$("publishBtn"); setLoading(btn,true,"Publier");
+    try{
+      let media_url=null,media_type=null;
+      if(file){
+        const ext=(file.name.split(".").pop()||"bin").toLowerCase();
+        const path=`${state.user.id}/${crypto.randomUUID()}.${ext}`;
+        const up=await sb.storage.from("posts").upload(path,file,{upsert:false,contentType:file.type||undefined});
+        if(up.error)throw new Error("Upload : "+up.error.message);
+        media_url=sb.storage.from("posts").getPublicUrl(path).data.publicUrl;
+        media_type=file.type.startsWith("video/")?"video":"image";
+      }
+      const r=await sb.from("posts").insert({user_id:state.user.id,content:text,media_url,media_type,visibility:"public"}).select().single();
+      if(r.error)throw new Error(r.error.message);
+      await logActivity("post_created","Publication créée","post",r.data?.id||null);
+      $("postText").value=""; if(pf)pf.value=""; if(vf)vf.value=""; if($("composerFileName"))$("composerFileName").textContent="";
+      toast("Publication publiée"); await loadPosts(); await render();
+    }catch(e){toast(e?.message||"Publication impossible.");}
+    finally{setLoading(btn,false,"Publier");}
+}
+
 
   async function postHTML(p) {
     const [rs, cs, sh] = await Promise.all([reactionsFor(p.id), commentsFor(p.id), sharersFor(p.id)]);
@@ -1029,10 +1134,97 @@ document.documentElement.classList.add("app-boot");
   }
 
   async function pageBusinessSuite() {
-    const {data:pages,error}=await sb.from("pages").select("id,name,logo_url,owner_id").eq("owner_id",state.user.id).order("created_at",{ascending:false});
-    if(error)return toast(error.message);
-    const rows=(pages||[]).map(p=>`<button class="fb-business-page" data-action="edit-page" data-id="${esc(p.id)}">${entityAvatarHTML(p,"page","fb-business-avatar")}<span><b>${esc(p.name)}</b><small>Publications · Messages · Équipe</small></span><strong>›</strong></button>`).join("");
-    openModal(`<div class="modal-box fb-business-modal"><button class="modal-close" data-action="close-modal">×</button><div class="fb-business-modal-head"><div class="fb-business-icon big">◒</div><div><span class="eyebrow">TAFAß • GESTION</span><h2>Meta Business Suite</h2><p>Outils de gestion de vos Pages Tafaß.</p></div></div><div class="fb-business-tools"><button class="fb-tool-card" data-action="create-page"><b>＋</b><span>Créer une Page</span><small>Nouvel espace professionnel</small></button><button class="fb-tool-card" data-action="close-modal"><b>✓</b><span>Terminer</span><small>Fermer les outils de gestion</small></button></div><h3>Vos Pages</h3><div class="fb-business-pages">${rows||`<div class="fb-empty"><b>Aucune Page</b><span>Créez votre première Page.</span></div>`}</div></div>`);
+    const token = state.renderToken;
+    const {data: pages, error} = await sb.from("pages")
+      .select("id,name,username,category,bio,logo_url,cover_url,owner_id,created_at")
+      .eq("owner_id", state.user.id)
+      .order("created_at",{ascending:false});
+
+    if (error) return toast(error.message);
+    if (token !== state.renderToken || !state.user) return;
+
+    const pageIds = (pages || []).map(p => p.id);
+    const stats = new Map();
+
+    if (pageIds.length) {
+      const [followersR, postsR, messagesR, membersR] = await Promise.all([
+        sb.from("page_followers").select("page_id").in("page_id", pageIds),
+        sb.from("page_posts").select("id,page_id,created_at,content,media_url,media_type").in("page_id", pageIds).order("created_at",{ascending:false}).limit(80),
+        sb.from("page_messages").select("id,page_id,sender_id,created_at,message").in("page_id", pageIds).order("created_at",{ascending:false}).limit(80),
+        sb.from("page_members").select("page_id,user_id,role").in("page_id", pageIds)
+      ]);
+      const f = followersR.data || [], po = postsR.data || [], me = messagesR.data || [], mm = membersR.data || [];
+      pages.forEach(p => stats.set(p.id,{
+        followers:f.filter(x=>x.page_id===p.id).length,
+        posts:po.filter(x=>x.page_id===p.id),
+        messages:me.filter(x=>x.page_id===p.id),
+        members:mm.filter(x=>x.page_id===p.id)
+      }));
+    }
+
+    const totalFollowers=[...stats.values()].reduce((n,x)=>n+x.followers,0);
+    const totalPosts=[...stats.values()].reduce((n,x)=>n+x.posts.length,0);
+    const totalMessages=[...stats.values()].reduce((n,x)=>n+x.messages.length,0);
+    const totalManagers=[...stats.values()].reduce((n,x)=>n+x.members.filter(m=>m.role && m.role!=="member").length,0);
+
+    const pageRows=(pages||[]).map(p=>{
+      const s=stats.get(p.id)||{followers:0,posts:[],messages:[],members:[]};
+      return `<article class="tbs-page-row">
+        <button class="tbs-page-main" data-action="page-open" data-id="${esc(p.id)}">
+          ${entityAvatarHTML(p,"page","tbs-page-avatar")}
+          <span><b>${esc(p.name)}</b><small>${s.followers} abonnés · ${s.posts.length} publications · ${s.messages.length} messages</small>${p.category?`<em>${esc(p.category)}</em>`:""}</span>
+        </button>
+        <div class="tbs-page-actions">
+          <button class="fb-gray-btn" data-action="page-switch" data-id="${esc(p.id)}">Mode Page</button>
+          <button class="fb-more-btn" data-action="edit-page" data-id="${esc(p.id)}" aria-label="Gérer la Page">•••</button>
+        </div>
+      </article>`;
+    }).join("");
+
+    const recent = [];
+    for (const p of pages||[]) {
+      const s=stats.get(p.id); (s?.posts||[]).slice(0,5).forEach(post=>recent.push({...post,pageName:p.name}));
+    }
+    recent.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+    const recentRows=recent.slice(0,8).map(p=>`<div class="tbs-activity-row"><span class="tbs-activity-dot"></span><div class="grow"><b>${esc(p.pageName)}</b><small>${p.content?esc(p.content.slice(0,90)):p.media_url?"Publication média":"Nouvelle publication"} · ${timeAgo(p.created_at)}</small></div></div>`).join("") || `<div class="tbs-empty">Aucune publication de Page pour le moment.</div>`;
+
+    state.businessSuiteOpen = true;
+    openModal(`<div class="modal-box tbs-modal" id="tbsBusinessSuite">
+      <button class="modal-close" data-action="close-business-suite">×</button>
+      <div class="tbs-header">
+        <div class="tbs-brand-icon">${menuIcon("pages")}</div>
+        <div><span class="eyebrow">TAFAß • BUSINESS</span><h2>Tafaß Business Suite</h2><p>Gérez vos Pages, publications, messages et équipes depuis un seul espace.</p></div>
+      </div>
+
+      <div class="tbs-metrics">
+        <div><b>${pages?.length||0}</b><small>Pages</small></div>
+        <div><b>${totalFollowers}</b><small>Abonnés</small></div>
+        <div><b>${totalPosts}</b><small>Publications</small></div>
+        <div><b>${totalMessages}</b><small>Messages</small></div>
+      </div>
+
+      <div class="tbs-toolbar">
+        <button class="primary" data-action="create-page">＋ Créer une Page</button>
+        <button class="fb-gray-btn" data-action="business-refresh">Actualiser</button>
+      </div>
+
+      <div class="tbs-section">
+        <div class="tbs-section-head"><div><h3>Vos Pages</h3><small>${totalManagers} gestionnaire(s) avec rôle enregistré</small></div></div>
+        <div class="tbs-pages-list">${pageRows || `<div class="tbs-empty"><b>Aucune Page</b><span>Créez votre première Page pour commencer à utiliser Tafaß Business Suite.</span><button class="primary" data-action="create-page">Créer une Page</button></div>`}</div>
+      </div>
+
+      <div class="tbs-section">
+        <div class="tbs-section-head"><div><h3>Activité récente</h3><small>Données chargées depuis vos Pages Tafaß</small></div></div>
+        <div class="tbs-activity">${recentRows}</div>
+      </div>
+
+      <div class="tbs-tools-grid">
+        <button data-action="business-open-messages"><span>${menuIcon("messages")}</span><b>Messages</b><small>Consulter les messages reçus par vos Pages</small></button>
+        <button data-action="business-open-pages"><span>${menuIcon("pages")}</span><b>Publications & Pages</b><small>Ouvrir la gestion réelle de vos Pages</small></button>
+        <button data-action="business-open-team"><span>${menuIcon("friends")}</span><b>Équipe</b><small>Gérer les rôles des gestionnaires</small></button>
+        <button data-action="business-open-settings"><span>${menuIcon("settings")}</span><b>Paramètres</b><small>Configurer une Page existante</small></button>
+      </div>
+    </div>`);
   }
 
   async function pagesHub() {
@@ -1078,7 +1270,7 @@ document.documentElement.classList.add("app-boot");
         <button class="${tab==="discover"?"active":""}" data-action="pages-tab" data-tab="discover">◉ Découvrir</button>
       </div>
       <div class="fb-section-heading"><h3>${title}</h3><button class="fb-link-btn" data-action="pages-tab" data-tab="discover">${tab==="mine"?"Découvrir":"Retour"}</button></div>
-      ${tab==="mine"?`<div class="fb-business-card"><div class="fb-business-icon">◒</div><div><b>Meta Business Suite</b><small>Gérez les publications, messages et équipe de vos Pages.</small></div><button class="fb-gray-btn" data-action="page-business">Ouvrir</button></div>`:""}
+      ${tab==="mine"?`<div class="fb-business-card"><div class="fb-business-icon">◒</div><div><b>Tafaß Business Suite</b><small>Gérez les publications, messages et équipe de vos Pages.</small></div><button class="fb-gray-btn" data-action="page-business">Ouvrir</button></div>`:""}
       <div class="fb-entity-list">${content}</div>
     </section>`);
   }
@@ -1290,34 +1482,111 @@ async function genericListPage(route) {
       const r = await sb.from("user_settings").insert({ user_id: state.user.id }).select().single();
       cfg = r.data || {};
     }
-    const dark = state.theme === "dark";
     if (token !== state.renderToken || state.route !== "settings") return;
-    const toggleLabel = (value) => value ? "Activé" : "Désactivé";
-    simplePage("Para & Conf", `<p class="page-subtitle">Tous les réglages réels de votre compte, de votre sécurité, de votre confidentialité et de vos notifications.</p>
-      <div class="settings-section-title">Compte</div><div class="settings-grid settings-grid-complete">
-        <button class="setting-card" data-action="account-settings"><span><b>Informations du compte</b><small>Nom, prénom, e-mail, numéro, naissance et genre</small></span><span>›</span></button>
-        <button class="setting-card" data-action="security-settings"><span><b>Sécurité et connexion</b><small>Accès, session et protection du compte</small></span><span>›</span></button>
-        <button class="setting-card" data-action="menu-service" data-service="payment" data-name="Paiement"><span><b>Paiement</b><small>Moyens et historique des transactions</small></span><span>›</span></button>
-        <button class="setting-card" data-action="menu-service" data-service="activity" data-name="Historique d'activité"><span><b>Historique d'activité</b><small>Vos actions enregistrées</small></span><span>›</span></button>
-      </div>
-      <div class="settings-section-title">Confidentialité</div><div class="settings-grid settings-grid-complete">
-        <button class="setting-card" data-action="privacy-settings"><span><b>Confidentialité du profil</b><small>Visibilité : ${esc(cfg?.profile_visibility || "public")}</small></span><span>›</span></button>
-        <button class="setting-card" data-action="friend-settings"><span><b>Demandes d’amis</b><small>${toggleLabel(cfg?.allow_friend_requests !== false)}</small></span><span>›</span></button>
-        <button class="setting-card" data-action="message-settings"><span><b>Messages</b><small>${toggleLabel(cfg?.allow_messages !== false)}</small></span><span>›</span></button>
-        <button class="setting-card" data-action="search-privacy-settings"><span><b>Recherche</b><small>Téléphone : ${toggleLabel(cfg?.allow_search_by_phone !== false)} · E-mail : ${toggleLabel(cfg?.allow_search_by_email !== false)}</small></span><span>›</span></button>
-      </div>
-      <div class="settings-section-title">Notifications</div><div class="settings-grid settings-grid-complete">
-        <button class="setting-card" data-action="notifications-settings"><span><b>Notifications générales</b><small>${toggleLabel(cfg?.notifications_enabled !== false)}</small></span><span>›</span></button>
-        <button class="setting-card" data-action="message-notification-settings"><span><b>Messages</b><small>${toggleLabel(cfg?.message_notifications !== false)}</small></span><span>›</span></button>
-        <button class="setting-card" data-action="friend-notification-settings"><span><b>Amis</b><small>${toggleLabel(cfg?.friend_notifications !== false)}</small></span><span>›</span></button>
-        <button class="setting-card" data-action="reaction-notification-settings"><span><b>Réactions</b><small>${toggleLabel(cfg?.reaction_notifications !== false)}</small></span><span>›</span></button>
-        <button class="setting-card" data-action="comment-notification-settings"><span><b>Commentaires</b><small>${toggleLabel(cfg?.comment_notifications !== false)}</small></span><span>›</span></button>
-      </div>
-      <div class="settings-section-title">Préférences</div><div class="settings-grid settings-grid-complete">
-        <button class="setting-card" data-action="theme"><span><b>Mode sombre</b><small>${dark ? "Activé" : "Désactivé"}</small></span><span class="toggle ${dark?"on":""}"><i></i></span></button>
-        <button class="setting-card" data-action="language-settings"><span><b>Langue</b><small>Français</small></span><span>›</span></button>
-        <button class="setting-card" data-action="menu-service" data-service="help" data-name="Aide"><span><b>Aide et assistance</b><small>Centre d'aide Tafaß</small></span><span>›</span></button>
-      </div>`);
+
+    const icon = type => menuIcon(type);
+    const row = (action, type, title, sub, extra="") =>
+      `<button type="button" class="fb-settings-row" data-action="${esc(action)}">
+        <span class="fb-settings-icon">${icon(type)}</span>
+        <span class="fb-settings-copy"><b>${esc(title)}</b>${sub ? `<small>${esc(sub)}</small>` : ""}</span>
+        ${extra || `<span class="fb-settings-chevron">›</span>`}
+      </button>`;
+
+    const on = v => v !== false ? "Activé" : "Désactivé";
+    const visibility = cfg?.profile_visibility || "public";
+    const dark = state.theme === "dark";
+
+    simplePage("Para & Conf", `
+      <section class="fb-settings-page">
+        <div class="fb-settings-mobile-head"><button data-action="page-back" aria-label="Retour">‹</button><b>Paramètres et confidentialité</b><button data-action="settings-focus-search" aria-label="Rechercher">${icon("search")}</button></div>
+        <div class="fb-settings-search">
+          <span>${icon("search")}</span><input id="settingsSearch" type="search" placeholder="Rechercher dans les paramètres" autocomplete="off">
+        </div>
+
+        <div class="fb-settings-group">
+          <h3>Votre compte</h3>
+          ${row("account-settings","profile","Espace Compte","Mot de passe, sécurité, informations personnelles, expériences partagées, préférences publicitaires, vérification")}
+        </div>
+
+        <div class="fb-settings-group">
+          <h3>Outils et ressources</h3>
+          <p class="fb-settings-note">Nos outils vous aident à contrôler et gérer votre confidentialité.</p>
+          ${row("privacy-settings","privacy","Assistance confidentialité","Contrôlez la visibilité de votre profil et la façon dont les autres vous trouvent")}
+          ${row("family-center","friends","Centre familial","Contrôles et conseils pour les comptes et les relations")}
+          ${row("audience-defaults","groups","Paramètres d’audience par défaut","Choisissez l’audience utilisée par défaut pour vos nouvelles publications")}
+        </div>
+
+        <div class="fb-settings-group">
+          <h3>Préférences</h3>
+          <p class="fb-settings-note">Personnalisez votre expérience sur Tafaß.</p>
+          ${row("reaction-settings","reels","Préférences des réactions","Gérez vos réactions et leur affichage")}
+          ${row("notifications-settings","history","Notifications",on(cfg?.notifications_enabled))}
+          ${row("accessibility-settings","settings","Accessibilité","Préférences d’affichage et d’interaction")}
+          ${row("language-settings","language","Langue et région",cfg?.language === "mg" ? "Malagasy" : "Français")}
+          ${row("media-settings","videos","Contenu multimédia","Lecture et affichage des photos et vidéos")}
+          ${row("time-management","history","Gestion du temps","Contrôlez votre temps passé sur Tafaß")}
+          ${row("effects-settings","profile","Effets pour le visage et les mains","Préférences des effets disponibles sur votre appareil")}
+        </div>
+
+        <div class="fb-settings-group">
+          <h3>Audience et visibilité</h3>
+          <p class="fb-settings-note">Choisissez qui voit ce que vous partagez sur Tafaß.</p>
+          ${row("profile-lock","privacy", "Verrouillage du profil", visibility === "private" ? "Verrouillé" : "Non verrouillé")}
+          ${row("account-settings","profile","Informations du profil","Informations personnelles et coordonnées")}
+          ${row("professional-mode","pages","Mode professionnel","Utilisez vos outils Pages et Business Suite")}
+          ${row("friend-settings","friends","Comment les autres peuvent vous trouver et vous contacter",on(cfg?.allow_friend_requests))}
+          ${row("post-privacy","home","Publications","Audience de vos publications")}
+          ${row("story-privacy","reels","Stories","Audience de vos stories")}
+          ${row("page-privacy","pages","Pages","Pages que vous gérez et leurs permissions")}
+          ${row("followers-public","friends","Followers et contenu public","Abonnés et visibilité du contenu public")}
+          ${row("profile-identification","profile","Profil et identification","Profil, identification et apparence publique")}
+          ${row("blocking","privacy","Blocage","Comptes bloqués et restrictions")}
+          ${row("online-status","messages","Statut En ligne","Gérez la visibilité de votre présence")}
+        </div>
+
+        <div class="fb-settings-group">
+          <h3>Paiements</h3>
+          <p class="fb-settings-note">Gérez vos infos de paiement et votre activité.</p>
+          ${row("payment-settings","payment","Paiement des publicités","Demandes et historique de paiement réel")}
+        </div>
+
+        <div class="fb-settings-group">
+          <h3>Votre activité</h3>
+          <p class="fb-settings-note">Examinez votre activité et le contenu dans lequel vous êtes identifié(e).</p>
+          ${row("activity-settings","history","Historique d’activité","Actions et recherches enregistrées")}
+          ${row("location-settings","profile","Localisation","Ville et informations de localisation de votre profil")}
+          ${row("apps-web","pages","Applications et sites Web","Connexions et intégrations disponibles")}
+          ${row("professional-integrations","pages","Intégrations professionnelles","Outils professionnels et Pages Tafaß")}
+          ${row("information-management","settings","Comment gérer vos informations","Contrôle des informations de votre compte")}
+        </div>
+
+        <div class="fb-settings-group">
+          <h3>Standards de la communauté et mentions légales</h3>
+          ${row("terms","settings","Conditions de service","Règles et conditions d’utilisation de Tafaß")}
+          ${row("privacy-policy","privacy","Politique de confidentialité","Comment Tafaß traite les informations")}
+          ${row("cookies","settings","Politique d’utilisation des cookies","Informations sur les cookies et technologies similaires")}
+          ${row("community-standards","friends","Standards de la communauté","Règles applicables aux contenus et comportements")}
+          ${row("about-tafass","tafab","À propos","Informations sur Tafaß")}
+        </div>
+
+        <div class="fb-settings-footer">
+          <button class="fb-settings-account-action" data-action="security-settings">${icon("privacy")}<span>Sécurité et connexion</span></button>
+          <button class="fb-settings-account-action" data-action="logout">${icon("logout")}<span>Déconnexion</span></button>
+        </div>
+      </section>
+    `);
+
+    const input = $("settingsSearch");
+    input?.addEventListener("input", () => {
+      const q = input.value.trim().toLowerCase();
+      document.querySelectorAll(".fb-settings-row").forEach(el => {
+        el.hidden = !!q && !el.textContent.toLowerCase().includes(q);
+      });
+      document.querySelectorAll(".fb-settings-group").forEach(group => {
+        const visible = [...group.querySelectorAll(".fb-settings-row")].some(x => !x.hidden);
+        group.hidden = !!q && !visible;
+      });
+    });
   }
   async function openSettingControl(action) {
     const cfg = (await sb.from("user_settings").select("*").eq("user_id", state.user.id).maybeSingle()).data || {};
@@ -1344,7 +1613,48 @@ async function genericListPage(route) {
     const { error } = await sb.from("user_settings").upsert({ user_id: state.user.id, ...patch }, { onConflict:"user_id" });
     if (error) return toast(error.message);
     toast("Paramètre enregistré");
+    closeModal();
     await settingsPage();
+  }
+
+  async function openAdvancedSetting(action) {
+    const cfg=(await sb.from("user_settings").select("*").eq("user_id",state.user.id).maybeSingle()).data||{};
+    const saveToggle=async(key,label)=>{
+      const value=!(cfg[key]!==false);
+      await saveUserSetting({[key]:value});
+    };
+    if(action==="profile-lock"){
+      const next=cfg.profile_visibility==="private"?"public":"private";
+      return saveUserSetting({profile_visibility:next});
+    }
+    if(action==="audience-defaults" || action==="post-privacy" || action==="story-privacy"){
+      return openModal(`<div class="modal-box settings-modal fb-settings-detail"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • AUDIENCE</span><h3>${action==="story-privacy"?"Audience des Stories":action==="post-privacy"?"Audience des publications":"Audience par défaut"}</h3><p class="muted">Ce réglage utilise la visibilité de profil actuellement enregistrée dans Tafaß.</p><select id="advancedVisibility"><option value="public" ${cfg.profile_visibility!=="private"?"selected":""}>Public</option><option value="private" ${cfg.profile_visibility==="private"?"selected":""}>Privé</option></select><button class="primary big" data-action="save-advanced-visibility">Enregistrer</button></div>`);
+    }
+    const info={
+      "family-center":["Centre familial","Gérez ici les contrôles disponibles pour les relations et la confidentialité de votre compte.",true],
+      "reaction-settings":["Préférences des réactions","Les réactions J’aime, J’adore, Haha, Waouh, Triste et Grrr sont disponibles sur les publications Tafaß.",false],
+      "accessibility-settings":["Accessibilité","Les contrôles d’accessibilité de l’interface sont disponibles sur cet appareil. Le thème clair/sombre et la langue sont synchronisés avec votre compte.",false],
+      "media-settings":["Contenu multimédia","Les publications Tafaß prennent en charge les images et vidéos réelles via le stockage Supabase du projet.",false],
+      "time-management":["Gestion du temps","Cette section présente les outils de contrôle du temps disponibles dans l’application.",false],
+      "effects-settings":["Effets pour le visage et les mains","Les effets sont une préférence d’interface/appareil et ne modifient aucune donnée de compte.",false],
+      "page-privacy":["Pages","Gérez vos Pages, leurs membres, publications et messages depuis Pages ou Tafaß Business Suite.",false],
+      "followers-public":["Followers et contenu public","La visibilité publique est contrôlée par les réglages de confidentialité du compte.",false],
+      "profile-identification":["Profil et identification","Votre profil, avatar, couverture et informations publiques sont gérés depuis Profil.",false],
+      "blocking":["Blocage","Les profils bloqués sont protégés par les contrôles de confidentialité disponibles dans Tafaß.",false],
+      "online-status":["Statut En ligne","La messagerie et les notifications utilisent les données de session Tafaß en temps réel.",false],
+      "location-settings":["Localisation","La ville et la localisation enregistrées dans votre profil sont gérées depuis les informations du compte.",false],
+      "apps-web":["Applications et sites Web","Aucune connexion externe supplémentaire n’est active par défaut dans ce build Tafaß.",false],
+      "professional-integrations":["Intégrations professionnelles","Vos Pages et outils professionnels sont disponibles via Tafaß Business Suite.",false],
+      "information-management":["Comment gérer vos informations","Utilisez Espace Compte, Historique d’activité et les réglages de confidentialité pour contrôler vos informations.",false],
+      "terms":["Conditions de service","Conditions d’utilisation de Tafaß.",false],
+      "privacy-policy":["Politique de confidentialité","Informations sur la confidentialité et les contrôles de visibilité de Tafaß.",false],
+      "cookies":["Politique d’utilisation des cookies","Informations générales sur les cookies et technologies similaires.",false],
+      "community-standards":["Standards de la communauté","Règles générales applicables aux contenus et interactions sur Tafaß.",false],
+      "about-tafass":["À propos","Tafaß — votre réseau, votre communauté.",false],
+      "professional-mode":["Mode professionnel","Le mode professionnel de Tafaß s’appuie sur vos Pages et Tafaß Business Suite.",false]
+    };
+    const item=info[action]||["Paramètre Tafaß","Ce réglage est disponible dans l’interface de votre compte.",false];
+    openModal(`<div class="modal-box settings-modal fb-settings-detail"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • PARAMÈTRES</span><h3>${esc(item[0])}</h3><p class="muted settings-detail-copy">${esc(item[1])}</p>${item[2]?`<div class="settings-inline-controls"><button class="setting-card" data-action="friend-settings"><span><b>Demandes d’amis</b><small>${cfg.allow_friend_requests===false?"Désactivées":"Activées"}</small></span><span>›</span></button><button class="setting-card" data-action="message-settings"><span><b>Messages</b><small>${cfg.allow_messages===false?"Désactivés":"Activés"}</small></span><span>›</span></button></div>`:""}<button class="primary big" data-action="close-modal">Fermer</button></div>`);
   }
 
   function securitySettings() {
@@ -1460,8 +1770,9 @@ async function genericListPage(route) {
   function simplePage(title, body) {
     const clean = ["Amis","Messages","Alertes","Tafaß","Menu","Rechercher","Pages","Groupes","Reels","Enregistrements","Para & Conf","Profil","Aide","Paiement","Historique d'activité"].includes(title);
     const fbHub = ["Pages","Groupes"].includes(title) && String(body).includes("fb-hub");
+    const customSettingsHeader = title === "Para & Conf";
     $("content").innerHTML = clean
-      ? `<section class="clean-page clean-page-shell ${fbHub?"fb-shell":""}">${fbHub?"":`<div class="page-header clean-page-header"><div><h2>${esc(title)}</h2></div></div>`}${body}</section>`
+      ? `<section class="clean-page clean-page-shell ${fbHub?"fb-shell":""} ${customSettingsHeader?"settings-shell":""}">${fbHub || customSettingsHeader ? "" : `<div class="page-header clean-page-header"><div><h2>${esc(title)}</h2></div></div>`}${body}</section>`
       : `<div class="card"><div class="page-header"><h2>${esc(title)}</h2></div>${body}</div>`;
     decoratePageHeader(state.route);
   }
@@ -1525,6 +1836,8 @@ async function genericListPage(route) {
 
   function navigate(route, options = {}) {
     if (!routes.includes(route)) route = "home";
+    if (document.body.classList.contains("modal-open")) closeModal();
+    state.backOverride = null;
     if (state.route === route && document.querySelector(`#content [data-page-route="${route}"]`)) {
       if (pageLoading) return;
       return;
@@ -1621,12 +1934,12 @@ async function genericListPage(route) {
       calls: () => { if (state.route==="messages" && state.selectedConversation) openConversation(state.selectedConversation); },
       call_participants: () => { if (state.route==="messages" && state.selectedConversation) openConversation(state.selectedConversation); },
       media_assets: () => {},
-      page_members: () => { if (state.route==="pages") genericListPage("pages"); const id=document.querySelector('.page-detail')?.dataset.pageId; if(id) openPageDetail(id); },
-      page_posts: () => { const id=document.querySelector('.page-detail')?.dataset.pageId; if(id) openPageDetail(id); },
+      page_members: () => { if (state.businessSuiteOpen) pageBusinessSuite(); if (state.route==="pages") genericListPage("pages"); const id=document.querySelector('.page-detail')?.dataset.pageId; if(id) openPageDetail(id); },
+      page_posts: () => { if (state.businessSuiteOpen) pageBusinessSuite(); const id=document.querySelector('.page-detail')?.dataset.pageId; if(id) openPageDetail(id); },
       page_post_reactions: () => { const id=document.querySelector('.page-detail')?.dataset.pageId; if(id) openPageDetail(id); },
       page_post_comments: () => { const id=document.querySelector('.page-detail')?.dataset.pageId; if(id) openPageDetail(id); },
       page_post_shares: () => { const id=document.querySelector('.page-detail')?.dataset.pageId; if(id) openPageDetail(id); },
-      page_messages: () => { updateBadges(); const id=document.querySelector('.page-detail')?.dataset.pageId; if(id && document.querySelector('.page-inbox-modal')) pageInbox(id); },
+      page_messages: () => { updateBadges(); if (state.businessSuiteOpen) pageBusinessSuite(); const id=document.querySelector('.page-detail')?.dataset.pageId; if(id && document.querySelector('.page-inbox-modal')) pageInbox(id); },
       group_posts: () => { const id=document.querySelector('.group-detail')?.querySelector('[data-action="group-publish"]')?.dataset.id; if(id) document.querySelector(`[data-action="group-open"][data-id="${id}"]`)?.click(); },
       group_post_reactions: () => {},
       group_post_comments: () => {},
@@ -2337,6 +2650,38 @@ async function genericListPage(route) {
     if (action === "open-conversation") return openConversation(id);
     if (action === "mark-read") return markRead();
     if (action === "theme") return toggleTheme();
+    if (action === "settings-focus-search") { $("settingsSearch")?.focus(); return; }
+    if (action === "payment-settings") return servicePage("payment");
+    if (action === "activity-settings") return servicePage("activity");
+
+    if (action === "close-business-suite") { state.businessSuiteOpen=false; return closeModal(); }
+    if (action === "business-refresh") return pageBusinessSuite();
+    if (action === "business-open-messages") {
+      closeModal(); state.businessSuiteOpen=false; return navigate("messages");
+    }
+    if (action === "business-open-pages") {
+      closeModal(); state.businessSuiteOpen=false; return navigate("pages");
+    }
+    if (action === "business-open-team") {
+      const first=(await sb.from("pages").select("id").eq("owner_id",state.user.id).order("created_at",{ascending:false}).limit(1)).data?.[0];
+      if(!first)return toast("Créez une Page pour gérer une équipe.");
+      return openPageDetail(first.id);
+    }
+    if (action === "business-open-settings") {
+      const first=(await sb.from("pages").select("id").eq("owner_id",state.user.id).order("created_at",{ascending:false}).limit(1)).data?.[0];
+      if(!first)return toast("Créez une Page pour ouvrir ses paramètres.");
+      return pageSettings(first.id);
+    }
+    if (action === "create-story") return createStory();
+    if (action === "story-create") return storyComposer();
+    if (action === "open-story") {
+      const s=(await sb.from("stories").select("*").eq("id",id).maybeSingle()).data;
+      if(!s)return toast("Story introuvable ou expirée.");
+      await sb.from("story_views").upsert({story_id:s.id,user_id:state.user.id},{onConflict:"story_id,user_id"});
+      return openModal(`<div class="modal-box story-view-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • STORY</span><div class="story-view-content">${s.media_type==="video"?`<video src="${esc(s.media_url)}" controls autoplay playsinline></video>`:s.media_type==="text"?`<div class="story-view-text">${esc(s.text_overlay||"")}</div>`:`<img src="${esc(s.media_url)}" alt="Story">`}</div>${s.text_overlay&&s.media_type!=="text"?`<p class="story-view-caption">${esc(s.text_overlay)}</p>`:""}<small class="muted">Expire automatiquement après 24 heures.</small></div>`);
+    }
+    if (action === "save-advanced-visibility") return saveUserSetting({profile_visibility:$("advancedVisibility")?.value||"public"});
+
     if (action === "create-tafab-listing") return createTafabListing();
     if (action === "save-tafab-listing") return saveTafabListing();
     if (action === "create-tafab-ad") return createTafabAd();
@@ -2347,6 +2692,7 @@ async function genericListPage(route) {
     if (action === "tafab-info") { const x=(await sb.from("tafab_listings").select("*").eq("id",id).maybeSingle()).data; if(!x)return toast("Offre introuvable"); return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">OFFRE TAFAß</span><h3>${esc(x.title)}</h3><p>${esc(x.description||"")}</p><p class="muted">${esc(x.location||"")} ${x.price!=null?"• "+esc(x.price)+" "+esc(x.currency||"MGA"):""}</p><button class="primary big" data-action="tafab-contact" data-id="${esc(x.id)}">Contacter le vendeur</button></div>`); }
     if (action === "security-settings") return securitySettings();
     if (action === "setting") return settingInfo(actionEl.dataset.name);
+    if (["family-center","audience-defaults","reaction-settings","accessibility-settings","media-settings","time-management","effects-settings","profile-lock","professional-mode","post-privacy","story-privacy","page-privacy","followers-public","profile-identification","blocking","online-status","location-settings","apps-web","professional-integrations","information-management","terms","privacy-policy","cookies","community-standards","about-tafass"].includes(action)) return openAdvancedSetting(action);
     if (action === "notifications-settings") {
       const cfg = (await sb.from("user_settings").select("notifications_enabled").eq("user_id",state.user.id).maybeSingle()).data;
       return saveUserSetting({ notifications_enabled: !(cfg?.notifications_enabled !== false) });
@@ -2394,7 +2740,7 @@ async function genericListPage(route) {
       closeModal(); state.activePage={...pg}; state.navStack=["home"]; state.route="home"; syncIdentityUI(); history.replaceState(null,"","#home"); toast(`Mode ${pg.name} activé.`); return render();
     }
     if (action === "page-business") return pageBusinessSuite();
-    if (action === "create-page") return openModal(`<div class="modal-box entity-create-modal-v2"><button class="modal-close" data-action="close-modal">×</button><div class="create-hero-v2 page"><span class="create-icon-v2 page-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 7h6M9 11h6M9 15h4"/></svg></span><div><span class="eyebrow">TAFAß • PAGES</span><h3>Créer une Page</h3><p>Donnez à votre Page une identité professionnelle et claire.</p></div></div><div class="create-grid-v2"><label class="create-field-v2 wide"><span>Nom de la Page</span><input id="newPageName" maxlength="80" placeholder="Nom de la Page"></label><label class="create-field-v2"><span>Catégorie</span><select id="newPageCategory" aria-label="Catégorie de la Page"><option value="" selected disabled>Choisir une catégorie</option>${pageCategoryOptions()}</select><small class="create-select-hint">Plus de 50 catégories disponibles • choisissez une catégorie.</small></label><label class="create-upload-v2"><span>Avatar de la Page</span><input id="newPageAvatar" type="file" accept="image/jpeg,image/png,image/webp"><small>Optionnel • avatar par défaut automatique</small></label><label class="create-field-v2 wide"><span>Présentation</span><textarea id="newPageBio" maxlength="500" placeholder="Présentez votre Page…"></textarea></label><label class="create-upload-v2 wide"><span>Photo de couverture</span><input id="newPageCover" type="file" accept="image/jpeg,image/png,image/webp"><small>Optionnel</small></label></div><button class="primary big create-submit-v2" data-action="save-page"><span>＋</span> Créer la Page</button></div>`);
+    if (action === "create-page") { state.businessSuiteOpen=false; return openModal(`<div class="modal-box entity-create-modal-v2"><button class="modal-close" data-action="close-modal">×</button><div class="create-hero-v2 page"><span class="create-icon-v2 page-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 7h6M9 11h6M9 15h4"/></svg></span><div><span class="eyebrow">TAFAß • PAGES</span><h3>Créer une Page</h3><p>Donnez à votre Page une identité professionnelle et claire.</p></div></div><div class="create-grid-v2"><label class="create-field-v2 wide"><span>Nom de la Page</span><input id="newPageName" maxlength="80" placeholder="Nom de la Page"></label><label class="create-field-v2"><span>Catégorie</span><select id="newPageCategory" aria-label="Catégorie de la Page"><option value="" selected disabled>Choisir une catégorie</option>${pageCategoryOptions()}</select><small class="create-select-hint">Plus de 50 catégories disponibles • choisissez une catégorie.</small></label><label class="create-upload-v2"><span>Avatar de la Page</span><input id="newPageAvatar" type="file" accept="image/jpeg,image/png,image/webp"><small>Optionnel • avatar par défaut automatique</small></label><label class="create-field-v2 wide"><span>Présentation</span><textarea id="newPageBio" maxlength="500" placeholder="Présentez votre Page…"></textarea></label><label class="create-upload-v2 wide"><span>Photo de couverture</span><input id="newPageCover" type="file" accept="image/jpeg,image/png,image/webp"><small>Optionnel</small></label></div><button class="primary big create-submit-v2" data-action="save-page"><span>＋</span> Créer la Page</button></div>`); }
     if (action === "save-page") {
       const limit=await sb.rpc("tafa_can_create_page",{p_user_id:state.user.id}); if(limit.error)return toast(limit.error.message); if(limit.data===false)return toast("Limite atteinte : 3 Pages maximum sur 15 jours. Vous pourrez en créer une nouvelle après la période de 15 jours.");
       const name=$("newPageName")?.value.trim(); if(!name)return toast("Entrez un nom.");
