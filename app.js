@@ -13,7 +13,7 @@ document.documentElement.classList.add("app-boot");
   const routes = ["home","friends","search","messages","notifications","profile","reels","pages","groups","saved","menu","tafab","settings"];
   const state = {
     user: null, profile: null, route: "home", navStack: ["home"], backOverride: null, posts: [], friends: [], stories: [],
-    channel: null, theme: "dark", entering: false,
+    channel: null, theme: "dark", entering: false, loggingOut: false,
     profileTab: "posts", friendsTab: "suggestions", pagesTab: "mine", groupsTab: "mine", groupSort: "recent", selectedConversation: null, viewingProfileId: null, renderToken: 0, activePage: null, entityBackRoute: null
   };
 
@@ -245,8 +245,8 @@ document.documentElement.classList.add("app-boot");
   }
   function restoreAccountNavigation(){
     const left=document.querySelector(".left-sidebar"), bottom=document.querySelector(".bottom-nav");
-    if(left) left.innerHTML=`<button data-route="profile" class="profile-shortcut"><span id="sideAvatar" class="avatar">T</span><span><b id="sideName">Mon profil</b><small>Voir mon profil</small></span></button><button data-route="home"><span class="nav-ico">⌂</span>Actualités</button><button data-route="friends"><span class="nav-ico">♧</span>Amis</button><button data-route="messages"><span class="nav-ico">▤</span>Messages</button><button data-route="notifications"><span class="nav-ico">♢</span>Notifications</button><button data-route="pages"><span class="nav-ico">▣</span>Pages</button><button data-route="groups"><span class="nav-ico">◎</span>Groupes</button><button data-route="reels"><span class="nav-ico">◉</span>Reels</button><button data-route="tafab"><span class="nav-ico">ß</span>Tafaß</button><button data-route="saved"><span class="nav-ico">♡</span>Enregistrements</button><button data-route="menu"><span class="nav-ico">☰</span>Menu</button>`;
-    if(bottom) bottom.innerHTML=`<button data-route="home"><span class="nav-svg">⌂</span><small>Actualités</small></button><button data-route="friends"><span class="nav-svg">♧</span><small>Amis</small></button><button data-route="messages"><span class="nav-svg">▤</span><small>Messages</small></button><button data-route="pages"><span class="nav-svg">▣</span><small>Pages</small></button><button data-route="groups"><span class="nav-svg">◎</span><small>Groupes</small></button><button data-route="tafab"><span class="nav-svg">ß</span><small>Tafaß</small></button>`;
+    if(left) left.innerHTML=`<button data-route="profile" class="profile-shortcut"><span id="sideAvatar" class="avatar">T</span><span><b id="sideName">Mon profil</b><small>Voir mon profil</small></span></button><button data-route="home"><span class="nav-ico">${menuIcon("home")}</span>Actualités</button><button data-route="friends"><span class="nav-ico">${menuIcon("friends")}</span>Amis</button><button data-route="messages"><span class="nav-ico">${menuIcon("messages")}</span>Messages</button><button data-route="notifications"><span class="nav-ico">${menuIcon("notifications")}</span>Notifications</button><button data-route="pages"><span class="nav-ico">${menuIcon("pages")}</span>Pages</button><button data-route="groups"><span class="nav-ico">${menuIcon("groups")}</span>Groupes</button><button data-route="reels"><span class="nav-ico">${menuIcon("reels")}</span>Reels</button><button data-route="tafab"><span class="nav-ico">${menuIcon("tafab")}</span>Tafaß</button><button data-route="saved"><span class="nav-ico">${menuIcon("saved")}</span>Enregistrements</button><button data-route="menu"><span class="nav-ico">${menuIcon("settings")}</span>Menu</button>`;
+    if(bottom) bottom.innerHTML=`<button data-route="home"><span class="nav-svg">${menuIcon("home")}</span><small>Actualités</small></button><button data-route="friends"><span class="nav-svg">${menuIcon("friends")}</span><small>Amis</small></button><button data-route="messages"><span class="nav-svg">${menuIcon("messages")}</span><small>Messages</small></button><button data-route="pages"><span class="nav-svg">${menuIcon("pages")}</span><small>Pages</small></button><button data-route="groups"><span class="nav-svg">${menuIcon("groups")}</span><small>Groupes</small></button><button data-route="tafab"><span class="nav-svg">${menuIcon("tafab")}</span><small>Tafaß</small></button>`;
     const nameEl=$("sideName"), avatarEl=$("sideAvatar"); if(nameEl) nameEl.textContent=nameOf(state.profile); if(avatarEl) avatarEl.outerHTML=avatarHTML(state.profile,"avatar").replace("<span ", '<span id="sideAvatar" ');
   }
   function pageContextBanner(){
@@ -276,7 +276,7 @@ document.documentElement.classList.add("app-boot");
         <div class="page-feed-identity">${entityAvatarHTML(pg,"page","page-feed-avatar")}<div class="grow"><span class="eyebrow">MODE PAGE • ACTUALITÉS</span><h2>${esc(pg.name)}</h2><p>${esc(pg.bio||"Votre espace professionnel Tafaß.")}</p></div><button class="page-profile-mini" data-action="page-open" data-id="${esc(pg.id)}">Profil</button></div>
         <div class="page-feed-stats"><div><b>${followerCount}</b><small>Abonnés</small></div><div><b>${posts.length}</b><small>Publications</small></div><div><b>${mediaCount}</b><small>Médias</small></div><div><b>${canManage?'Gestion':'Lecture'}</b><small>Accès</small></div></div>
       </div>
-      <div class="page-quick-grid">${quick('page-open','Profil de la Page','Voir la Page comme un visiteur','◉')}${quick('page-invite-friends','Inviter des amis','Inviter vos amis à suivre','👥')}${quick('page-more','Outils de la Page','Partage, équipe et options','•••')}${canManage?quick('page-settings','Paramètres','Configurer toute la Page','⚙'):quick('page-share','Partager','Partager cette Page','↗')}</div>
+      <div class="page-quick-grid">${quick('page-open','Profil de la Page','Voir la Page comme un visiteur',menuIcon('pages'))}${quick('page-invite-friends','Inviter des amis','Inviter vos amis à suivre',menuIcon('friends'))}${quick('page-more','Outils de la Page','Partage, équipe et options',menuIcon('help'))}${canManage?quick('page-settings','Paramètres','Configurer toute la Page',menuIcon('settings')):quick('page-share','Partager','Partager cette Page',menuIcon('share'))}</div>
       ${ownerMe?`<div class="composer composer-clean page-mode-composer page-mode-composer-premium"><div class="composer-top">${entityAvatarHTML(pg,"page","avatar")}<div><b>Publier au nom de ${esc(pg.name)}</b><small>Votre publication sera publiée comme une Page</small></div></div><textarea id="pageModePostText" maxlength="5000" placeholder="Quoi de neuf sur votre Page ?"></textarea><div class="composer-actions"><button type="button" class="primary" data-action="page-mode-publish" data-id="${esc(pg.id)}">Publier</button></div></div>`:""}
       <div class="page-feed-section-head"><div><span class="eyebrow">TAFAß • PAGE</span><h3>Publications récentes</h3></div><span>${posts.length} au total</span></div>`;
     if(!posts.length) html+=`<div class="page-feed-empty-premium"><div>✦</div><b>Aucune publication pour le moment</b><span>Les actualités de ${esc(pg.name)} apparaîtront ici.</span>${ownerMe?`<button class="primary" data-action="page-mode-focus">Créer la première publication</button>`:''}</div>`;
@@ -1365,6 +1365,9 @@ async function genericListPage(route) {
 
   function menuIcon(type) {
     const paths = {
+      home:'<path d="M3 10.5 12 3l9 7.5"/><path d="M5.5 9.5V20h13V9.5M9.5 20v-6h5v6"/>',
+      messages:'<path d="M4 5.5A3.5 3.5 0 0 1 7.5 2h9A3.5 3.5 0 0 1 20 5.5v7A3.5 3.5 0 0 1 16.5 16H10l-5.5 4v-4.6A3.5 3.5 0 0 1 4 12.5z"/><path d="M8 7h8M8 11h5"/>',
+      notifications:'<path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/>',
       profile:'<circle cx="12" cy="8" r="3"/><path d="M5 20c.7-4 2.9-6 7-6s6.3 2 7 6"/>',
       friends:'<circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3.5 20c.6-3.5 2.6-5.5 5.5-5.5s4.9 2 5.5 5.5M14.5 15c3.2-.2 5.2 1.4 6 4.5"/>',
       groups:'<circle cx="12" cy="8" r="3"/><path d="M4 20c.8-3.7 3.5-5.5 8-5.5s7.2 1.8 8 5.5"/>',
@@ -1373,10 +1376,12 @@ async function genericListPage(route) {
       videos:'<rect x="3" y="5" width="18" height="14" rx="3"/><path d="m10 9 5 3-5 3z"/>',
       reels:'<rect x="4" y="4" width="16" height="16" rx="4"/><path d="m8 4 3 4m2-4 3 4M4 9h16M10 12l5 3-5 3z"/>',
       settings:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.8 1.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-2.5V20a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1-1.8-1.8.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H6v-2.5h.2a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1 1.8-1.8.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.6V4h2.5v.2a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1 1.8 1.8-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v2.5h-.2a1.7 1.7 0 0 0-1.6 1z"/>',
+      share:'<path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M5 12v8h14v-8"/>' ,
       search:'<circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/>',
       history:'<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5M12 7v5l3 2"/>',
       help:'<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.7 2.7 0 1 1 4.2 2.2c-1.1.7-1.7 1.2-1.7 2.6M12 17h.01"/>',
       privacy:'<rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
+      tafab:'<path d="M6 4h7a5 5 0 0 1 0 10H9v6H6z"/><path d="M9 8h4a1.5 1.5 0 0 1 0 3H9z"/><path d="M16 15l3 3-3 3"/>',
       payment:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h4"/>',
       logout:'<path d="M10 5H5v14h5M14 8l5 4-5 4M19 12H9"/>'
     };
@@ -1886,15 +1891,25 @@ async function genericListPage(route) {
     </div>`);
   }
   async function confirmLogout() {
+    if (state.loggingOut) return;
+    state.loggingOut = true;
     const button = document.querySelector('[data-action="confirm-logout"]');
     if (button) { button.disabled = true; button.textContent = "Déconnexion…"; }
-    const { error } = await sb.auth.signOut({ scope: "global" });
-    if (error) { if (button) { button.disabled = false; button.textContent = "Se déconnecter"; } return toast(error.message); }
-    if (state.channel) { try { await sb.removeChannel(state.channel); } catch (_) {} state.channel = null; }
-    state.user=null; state.profile=null; state.selectedConversation=null; state.viewingProfileId=null;
-    closeModal();
-    $("app").classList.add("hidden");
-    showLogin();
+    try {
+      if (state.channel) { try { await sb.removeChannel(state.channel); } catch (_) {} state.channel = null; }
+      const { error } = await sb.auth.signOut();
+      if (error) throw error;
+      state.user=null; state.profile=null; state.selectedConversation=null; state.viewingProfileId=null; state.activePage=null; state.entityBackRoute=null; state.navStack=["home"]; state.route="home";
+      document.body.classList.remove("page-mode-active","modal-open");
+      closeModal();
+      $("app")?.classList.add("hidden");
+      showLogin();
+    } catch (e) {
+      if (button) { button.disabled = false; button.textContent = "Déconnexion"; }
+      state.loggingOut = false;
+      return toast(e?.message || "Impossible de se déconnecter. Réessayez.");
+    }
+    state.loggingOut = false;
   }
 
   async function setupRealtime() {
@@ -2880,6 +2895,7 @@ async function genericListPage(route) {
       return;
     }
     setTimeout(() => {
+      if (state.loggingOut) return;
       if (state.user) enterApp().catch(err => { console.error("Tafaß auth:", err); state.entering=false; showLogin(); });
       else { $("app").classList.add("hidden"); showLogin(); }
     }, 0);
