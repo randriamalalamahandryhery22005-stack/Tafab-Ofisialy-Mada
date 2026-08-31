@@ -1886,7 +1886,8 @@ async function genericListPage(route) {
         if(r.error) throw r.error;
         const appRows=(r.data||[]).length ? (r.data||[]).map(x=>{const revoke=x.status==="active"?`<button class="ghost-action" data-action="revoke-connected-app" data-id="${esc(x.id)}">Révoquer</button>`:""; return `<div class="settings-link-row"><span><b>${esc(x.app_name)}</b><small>${esc(x.provider||"Connexion externe")} · ${esc(x.status||"active")} · ${timeAgo(x.connected_at)}</small></span>${revoke}</div>`}).join("") : `<div class="settings-empty">Aucune application ou site Web connecté.</div>`;
         settingsDetail("Applications et sites Web","TAFAß • CONNEXIONS","Consultez les applications et sites auxquels votre compte Tafaß est connecté.",
-          `<div class="settings-section-block"><h3>Connexions actives</h3>${appRows}</div>`);
+          `<div class="settings-games-card"><div><span class="eyebrow">TAFAß • DIVERTISSEMENT</span><h3>Jeux Tafaß</h3><p>Des jeux intégrés, jouables immédiatement dans l’application, sans quitter votre compte.</p></div><button class="primary big" data-action="open-games">Jouer</button></div>
+           <div class="settings-section-block"><h3>Connexions actives</h3>${appRows}</div>`);
         return;
       }
 
@@ -2842,7 +2843,71 @@ async function genericListPage(route) {
     root.querySelectorAll('.group-tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
   }
 
+  /* ============================================================
+     TAFAß GAMES — jeux réellement jouables dans l'app
+     ============================================================ */
+  let activeGameCleanup = null;
+  function gamesModal() {
+    if (activeGameCleanup) { activeGameCleanup(); activeGameCleanup=null; }
+    openModal(`<div class="modal-box tafass-games-modal"><button class="modal-close" data-action="close-games">×</button><div class="games-head"><div><span class="eyebrow">TAFAß • JEUX</span><h2>Jouez dans Tafaß</h2><p class="muted">Choisissez un jeu. Les parties se jouent directement ici.</p></div></div><div class="games-tabs"><button class="game-tab active" data-game="ttt">Tic-Tac-Toe</button><button class="game-tab" data-game="2048">2048</button><button class="game-tab" data-game="snake">Snake</button></div><div id="gameStage"></div></div>`);
+    startGame("ttt");
+  }
+  function gameScores(key) { try { return Number(localStorage.getItem("tafass_game_score_"+key)||0); } catch { return 0; } }
+  function setGameScore(key, score) { try { if(score>gameScores(key)) localStorage.setItem("tafass_game_score_"+key,String(score)); } catch {} }
+  function startGame(key) {
+    if (activeGameCleanup) { activeGameCleanup(); activeGameCleanup=null; }
+    document.querySelectorAll(".game-tab").forEach(b=>b.classList.toggle("active",b.dataset.game===key));
+    const stage=$("gameStage"); if(!stage) return;
+    if(key==="ttt") return renderTicTacToe(stage);
+    if(key==="2048") return render2048(stage);
+    return renderSnake(stage);
+  }
+  function renderTicTacToe(stage) {
+    let board=Array(9).fill(""), turn="X", over=false, wins=0;
+    stage.innerHTML=`<div class="game-toolbar"><b>Tic-Tac-Toe</b><span>Record : ${gameScores("ttt")}</span><button class="ghost-action" id="tttReset">Nouvelle partie</button></div><div class="ttt-board">${board.map((_,i)=>`<button class="ttt-cell" data-i="${i}"></button>`).join("")}</div><div id="tttStatus" class="game-status">À vous : X</div>`;
+    const cells=[...stage.querySelectorAll(".ttt-cell")], status=$("tttStatus");
+    const lines=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+    const result=()=>{ for(const [a,b,c] of lines) if(board[a]&&board[a]===board[b]&&board[a]===board[c]) return board[a]; return board.every(Boolean)?"draw":null; };
+    const finish=(r)=>{over=true;if(r==="X"){wins++;setGameScore("ttt",wins);status.textContent="Vous gagnez ! 🎉";}else if(r==="O")status.textContent="Tafaß gagne cette manche.";else status.textContent="Égalité.";};
+    const ai=()=>{ if(over)return; const empty=board.map((v,i)=>v?null:i).filter(v=>v!==null); if(!empty.length)return; let pick=empty[Math.floor(Math.random()*empty.length)]; if(!board[4]&&empty.includes(4))pick=4; board[pick]="O"; cells[pick].textContent="O"; cells[pick].classList.add("o"); const r=result(); if(r)return finish(r); turn="X";status.textContent="À vous : X"; };
+    const play=e=>{const i=Number(e.currentTarget.dataset.i);if(over||board[i])return;board[i]="X";e.currentTarget.textContent="X";e.currentTarget.classList.add("x");const r=result();if(r)return finish(r);turn="O";status.textContent="Tafaß réfléchit…";setTimeout(ai,280);};
+    cells.forEach(c=>c.addEventListener("click",play));
+    const reset=()=>{board=Array(9).fill("");turn="X";over=false;cells.forEach(c=>{c.textContent="";c.className="ttt-cell"});status.textContent="À vous : X";};
+    $("tttReset")?.addEventListener("click",reset); activeGameCleanup=()=>cells.forEach(c=>c.removeEventListener("click",play));
+  }
+  function render2048(stage) {
+    let grid=Array(16).fill(0), score=0, won=false;
+    const spawn=()=>{const e=grid.map((v,i)=>v?null:i).filter(v=>v!==null);if(!e.length)return;grid[e[Math.floor(Math.random()*e.length)]]=Math.random()<.9?2:4;}; spawn();spawn();
+    stage.innerHTML=`<div class="game-toolbar"><b>2048</b><span>Score : <strong id="g2048Score">0</strong> · Record : ${gameScores("2048")}</span><button class="ghost-action" id="g2048Reset">Nouvelle partie</button></div><div id="g2048Board" class="game-2048-board"></div><div id="g2048Status" class="game-status">Utilisez les flèches ou les boutons.</div><div class="game-pad"><button data-dir="up">↑</button><div><button data-dir="left">←</button><button data-dir="down">↓</button><button data-dir="right">→</button></div></div>`;
+    const boardEl=$("g2048Board"), scoreEl=$("g2048Score"), status=$("g2048Status");
+    const render=()=>{boardEl.innerHTML=grid.map(v=>`<div class="g2048-cell ${v?"v"+v:""}">${v||""}</div>`).join("");scoreEl.textContent=score;};
+    const slide=line=>{const a=line.filter(Boolean);let out=[],gain=0;for(let i=0;i<a.length;i++){if(a[i]===a[i+1]){out.push(a[i]*2);gain+=a[i]*2;i++;}else out.push(a[i]);}while(out.length<4)out.push(0);return [out,gain];};
+    const move=dir=>{let before=grid.join(","),g=0;
+      const rows=[];for(let r=0;r<4;r++)rows.push([0,1,2,3].map(c=>grid[r*4+c]));
+      let out=rows.map(row=>slide(dir==="right"?row.slice().reverse():row)[0]); let gains=rows.map(row=>slide(dir==="right"?row.slice().reverse():row)[1]);
+      if(dir==="right")out=out.map(r=>r.slice().reverse()); if(dir==="left"){};
+      if(dir==="up"||dir==="down"){const cols=[];for(let c=0;c<4;c++)cols.push([0,1,2,3].map(r=>grid[r*4+c]));let o=cols.map(col=>slide(dir==="down"?col.slice().reverse():col)[0]);gains=cols.map(col=>slide(dir==="down"?col.slice().reverse():col)[1]);if(dir==="down")o=o.map(c=>c.slice().reverse());grid=Array(16).fill(0);for(let c=0;c<4;c++)for(let r=0;r<4;r++)grid[r*4+c]=o[c][r];} else {grid=out.flat();}
+      g=gains.reduce((a,b)=>a+b,0); if(g)score+=g; if(grid.join(",")!==before){spawn();render();if(grid.includes(2048)&&!won){won=true;status.textContent="2048 atteint ! 🏆";} else if(!canMove())status.textContent="Partie terminée.";setGameScore("2048",score);} };
+    const canMove=()=>{if(grid.some(v=>!v))return true;for(let r=0;r<4;r++)for(let c=0;c<4;c++){const i=r*4+c;if(c<3&&grid[i]===grid[i+1])return true;if(r<3&&grid[i]===grid[i+4])return true;}return false;};
+    const key=e=>{const m={ArrowUp:"up",ArrowDown:"down",ArrowLeft:"left",ArrowRight:"right"};if(m[e.key]){e.preventDefault();move(m[e.key]);}};
+    const reset=()=>{grid=Array(16).fill(0);score=0;won=false;spawn();spawn();status.textContent="Utilisez les flèches ou les boutons.";render();};
+    document.addEventListener("keydown",key);stage.querySelectorAll("[data-dir]").forEach(b=>b.addEventListener("click",()=>move(b.dataset.dir)));$("g2048Reset")?.addEventListener("click",reset);render();activeGameCleanup=()=>document.removeEventListener("keydown",key);
+  }
+  function renderSnake(stage) {
+    const size=16, canvas=document.createElement("canvas");canvas.width=320;canvas.height=320;canvas.className="snake-canvas";
+    stage.innerHTML=`<div class="game-toolbar"><b>Snake</b><span>Score : <strong id="snakeScore">0</strong> · Record : ${gameScores("snake")}</span><button class="ghost-action" id="snakeReset">Nouvelle partie</button></div>`;stage.appendChild(canvas);stage.insertAdjacentHTML("beforeend",`<div id="snakeStatus" class="game-status">Appuyez sur une flèche pour commencer.</div><div class="game-pad"><button data-dir="up">↑</button><div><button data-dir="left">←</button><button data-dir="down">↓</button><button data-dir="right">→</button></div></div>`);
+    const ctx=canvas.getContext("2d"), scoreEl=$("snakeScore"), status=$("snakeStatus");let snake,dir,next,food,score,running,timer;
+    const reset=()=>{clearInterval(timer);snake=[{x:8,y:8},{x:7,y:8},{x:6,y:8}];dir={x:1,y:0};next=dir;food=randomFood();score=0;running=false;scoreEl.textContent=0;status.textContent="Appuyez sur une flèche pour commencer.";draw();};
+    const randomFood=()=>{let f;do{f={x:Math.floor(Math.random()*size),y:Math.floor(Math.random()*size)}}while(snake?.some(s=>s.x===f.x&&s.y===f.y));return f;};
+    const draw=()=>{ctx.clearRect(0,0,320,320);ctx.fillStyle="#0a0e19";ctx.fillRect(0,0,320,320);ctx.strokeStyle="rgba(255,255,255,.05)";for(let i=1;i<size;i++){ctx.beginPath();ctx.moveTo(i*20,0);ctx.lineTo(i*20,320);ctx.stroke();ctx.beginPath();ctx.moveTo(0,i*20);ctx.lineTo(320,i*20);ctx.stroke();}ctx.fillStyle="#ff5c8a";ctx.fillRect(food.x*20+3,food.y*20+3,14,14);snake.forEach((s,i)=>{ctx.fillStyle=i?"#7c8cff":"#b9c2ff";ctx.fillRect(s.x*20+2,s.y*20+2,16,16);});};
+    const tick=()=>{dir=next;const h={x:snake[0].x+dir.x,y:snake[0].y+dir.y};if(h.x<0||h.x>=size||h.y<0||h.y>=size||snake.some(s=>s.x===h.x&&s.y===h.y)){running=false;clearInterval(timer);status.textContent="Game over — Nouvelle partie pour rejouer.";setGameScore("snake",score);return;}snake.unshift(h);if(h.x===food.x&&h.y===food.y){score++;scoreEl.textContent=score;food=randomFood();}else snake.pop();draw();};
+    const start=d=>{if(d){if(!(d.x===-dir.x&&d.y===-dir.y))next=d;}if(!running){running=true;status.textContent="En jeu !";clearInterval(timer);timer=setInterval(tick,125);}};
+    const key=e=>{const m={ArrowUp:{x:0,y:-1},ArrowDown:{x:0,y:1},ArrowLeft:{x:-1,y:0},ArrowRight:{x:1,y:0}};if(m[e.key]){e.preventDefault();start(m[e.key]);}};document.addEventListener("keydown",key);stage.querySelectorAll("[data-dir]").forEach(b=>b.addEventListener("click",()=>start(({up:{x:0,y:-1},down:{x:0,y:1},left:{x:-1,y:0},right:{x:1,y:0}})[b.dataset.dir])));$("snakeReset")?.addEventListener("click",reset);reset();activeGameCleanup=()=>{clearInterval(timer);document.removeEventListener("keydown",key);};
+  }
+
   document.addEventListener("click", async e => {
+    const gameTab = e.target.closest("[data-game]");
+    if (gameTab && $("gameStage")) { e.preventDefault(); return startGame(gameTab.dataset.game); }
     const actionEl = e.target.closest("[data-action]");
     if (actionEl) {
       e.preventDefault();
@@ -2985,6 +3050,8 @@ async function genericListPage(route) {
     if (action === "mark-read") return markRead();
     if (action === "theme") return toggleTheme();
     if (action === "settings-focus-search") { $("settingsSearch")?.focus(); return; }
+    if (action === "open-games") return gamesModal();
+    if (action === "close-games") { if (activeGameCleanup) { activeGameCleanup(); activeGameCleanup=null; } return closeModal(); }
     if (["save-profile-lock","save-privacy-assistance","save-find-contact-settings","save-notification-settings","save-family-settings","save-story-settings","save-publication-settings","save-public-content-settings","save-media-settings","save-time-settings","save-reaction-settings","save-audience-setting","save-followers-settings","save-profile-identification","save-online-settings","save-location-settings","save-professional-settings","save-accessibility-settings","save-effects-settings"].includes(action)) {
       if (action === "save-audience-setting") {
         const key = actionEl.dataset.audienceKey || "default_post_audience";
@@ -3194,6 +3261,21 @@ async function genericListPage(route) {
   syncThemeButton();
   $("modal").addEventListener("click", e => { if (e.target.id === "modal") closeModal(); });
   document.addEventListener("change", e => {
+    if (state.route === "settings" && state.settingsDetailAction) {
+      const autoMap = {
+        "profile-lock":"save-profile-lock", "privacy-settings":"save-privacy-assistance", "find-contact-settings":"save-find-contact-settings",
+        "notifications-settings":"save-notification-settings", "family-center":"save-family-settings", "story-privacy":"save-story-settings",
+        "post-privacy":"save-publication-settings", "followers-public":"save-public-content-settings", "media-settings":"save-media-settings",
+        "time-management":"save-time-settings", "reaction-settings":"save-reaction-settings", "profile-identification":"save-profile-identification",
+        "online-status":"save-online-settings", "location-settings":"save-location-settings", "professional-mode":"save-professional-settings",
+        "accessibility-settings":"save-accessibility-settings", "effects-settings":"save-effects-settings"
+      };
+      const saveAction = autoMap[state.settingsDetailAction];
+      if (saveAction && e.target.closest(".settings-detail-page")) {
+        clearTimeout(window.__tafassSettingsSaveTimer);
+        window.__tafassSettingsSaveTimer = setTimeout(() => saveSettingsDetail(saveAction), 60);
+      }
+    }
     if(e.target.id==="pagePostMedia") $("pagePostMediaName")?.replaceChildren(document.createTextNode(e.target.files?.[0]?.name||"Aucun fichier"));
     if(e.target.id==="groupPostMedia") $("groupPostMediaName")?.replaceChildren(document.createTextNode(e.target.files?.[0]?.name||"Aucun fichier"));
   });
