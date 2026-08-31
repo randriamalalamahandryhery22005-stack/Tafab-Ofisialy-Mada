@@ -1,3 +1,8 @@
+-- Tafaß — FINAL FIX: public.friendships has NO status column
+-- Do NOT add a status column to friendships.
+-- public.friend_requests.status stores request state; a row in friendships represents an accepted friendship.
+-- This script is safe to run after the Tafaß schema/settings SQL.
+
 -- Tafaß — FIX for ERROR 42703: friendships.status does not exist
 -- Run this AFTER the main Tafaß schema.
 -- IMPORTANT: public.friendships has NO status column.
@@ -54,3 +59,11 @@ commit;
 
 notify pgrst, 'reload schema';
 select 'TAFAß FRIENDSHIPS STATUS FIX APPLIED' as status;
+
+
+-- Verification: this must return zero rows.
+select column_name
+from information_schema.columns
+where table_schema='public'
+  and table_name='friendships'
+  and column_name='status';

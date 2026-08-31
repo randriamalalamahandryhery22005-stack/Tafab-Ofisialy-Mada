@@ -70,3 +70,8 @@ Run `PAGES_GROUPS_PREMIUM_REALTIME.sql` once after the main Supabase schema. It 
 ### Fix SQL 2026-08-31 — friendships
 
 The settings SQL uses `public.friendships` as the source of accepted friendships. That table does not contain a `status` column: the existence of a row itself represents an accepted friendship. The audience function therefore checks the friendship row directly.
+
+
+### FIX 2026-08-31 — friendships.status
+
+`public.friendships` does **not** contain a `status` column. The application and settings SQL now use the existence of a friendship row to determine an accepted friendship. `friend_requests.status` remains the source for pending/accepted/rejected requests. Do not add `status` to `friendships`.
