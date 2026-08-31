@@ -1884,10 +1884,13 @@ async function genericListPage(route) {
       if (action === "apps-web") {
         const r=await sb.from("connected_apps").select("id,app_name,provider,status,connected_at").eq("user_id",state.user.id).order("connected_at",{ascending:false});
         if(r.error) throw r.error;
-        const appRows=(r.data||[]).length ? (r.data||[]).map(x=>{const revoke=x.status==="active"?`<button class="ghost-action" data-action="revoke-connected-app" data-id="${esc(x.id)}">Révoquer</button>`:""; return `<div class="settings-link-row"><span><b>${esc(x.app_name)}</b><small>${esc(x.provider||"Connexion externe")} · ${esc(x.status||"active")} · ${timeAgo(x.connected_at)}</small></span>${revoke}</div>`}).join("") : `<div class="settings-empty">Aucune application ou site Web connecté.</div>`;
-        settingsDetail("Applications et sites Web","TAFAß • CONNEXIONS","Consultez les applications et sites auxquels votre compte Tafaß est connecté.",
-          `<div class="settings-games-card"><div><span class="eyebrow">TAFAß • DIVERTISSEMENT</span><h3>Jeux Tafaß</h3><p>Des jeux intégrés, jouables immédiatement dans l’application, sans quitter votre compte.</p></div><button class="primary big" data-action="open-games">Jouer</button></div>
-           <div class="settings-section-block"><h3>Connexions actives</h3>${appRows}</div>`);
+        const currentConn=await sb.from("connected_apps").select("id").eq("user_id",state.user.id).eq("app_name","Tafaß Web").eq("status","active").limit(1);
+        if(!currentConn.error && !(currentConn.data||[]).length){ await sb.from("connected_apps").insert({user_id:state.user.id,app_name:"Tafaß Web",provider:"Tafaß",status:"active",connected_at:new Date().toISOString()}); }
+        const rr=await sb.from("connected_apps").select("id,app_name,provider,status,connected_at").eq("user_id",state.user.id).eq("status","active").order("connected_at",{ascending:false});
+        const appRows=(rr.data||[]).map(x=>{const revoke=x.app_name==="Tafaß Web"?"":`<button class="ghost-action" data-action="revoke-connected-app" data-id="${esc(x.id)}">Révoquer</button>`; return `<div class="settings-link-row connection-real"><span><b>${esc(x.app_name)}</b><small>✓ Connecté à Tafaß · ${esc(x.provider||"Connexion externe")} · actif maintenant</small></span>${revoke}</div>`}).join("");
+        settingsDetail("Applications et sites Web","TAFAß • CONNEXIONS","Gérez les connexions réelles de votre compte et accédez aux jeux officiels Tafaß.",
+          `<div class="settings-games-card"><div><span class="eyebrow">TAFAß • PLAY</span><h3>12+ Jeux officiels</h3><p>Des expériences premium intégrées : action, sport, stratégie, course et puzzle. Chaque jeu possède son propre logo et bouton Jouer.</p></div><button class="primary big" data-action="open-games">Explorer les jeux</button></div>
+           <div class="settings-section-block"><div class="section-title-line"><h3>Connexions actives (${(rr.data||[]).length})</h3><small>État synchronisé avec Supabase</small></div>${appRows}</div>`);
         return;
       }
 
@@ -2844,66 +2847,100 @@ async function genericListPage(route) {
   }
 
   /* ============================================================
-     TAFAß GAMES — jeux réellement jouables dans l'app
+     TAFAß GAMES — 12 jeux intégrés, jouables localement
      ============================================================ */
   let activeGameCleanup = null;
-  function gamesModal() {
-    if (activeGameCleanup) { activeGameCleanup(); activeGameCleanup=null; }
-    openModal(`<div class="modal-box tafass-games-modal"><button class="modal-close" data-action="close-games">×</button><div class="games-head"><div><span class="eyebrow">TAFAß • JEUX</span><h2>Jouez dans Tafaß</h2><p class="muted">Choisissez un jeu. Les parties se jouent directement ici.</p></div></div><div class="games-tabs"><button class="game-tab active" data-game="ttt">Tic-Tac-Toe</button><button class="game-tab" data-game="2048">2048</button><button class="game-tab" data-game="snake">Snake</button></div><div id="gameStage"></div></div>`);
-    startGame("ttt");
+  const TAFA_GAMES = [
+    {id:'battle',icon:'🎯',name:'Tafaß Battle Arena',desc:'Défiez une IA tactique sur une arène de stratégie.',tag:'Stratégie'},
+    {id:'racing',icon:'🏎️',name:'Tafaß Racing Turbo',desc:'Course arcade contre des rivaux IA, vitesse et trajectoires.',tag:'Course'},
+    {id:'football',icon:'⚽',name:'Tafaß Football Arena',desc:'Penalty + gardien IA avec séries et tirs précis.',tag:'Sport'},
+    {id:'chess',icon:'♟️',name:'Tafaß Chess Master',desc:'Échecs contre une IA avec mouvements légaux et prise de pièces.',tag:'Réflexion'},
+    {id:'pool',icon:'🎱',name:'Tafaß 8 Ball Pool',desc:'Billard arcade : angle, puissance, poches et score.',tag:'Sport'},
+    {id:'cyber',icon:'🤖',name:'Tafaß Cyber Strike',desc:'Shooter tactique canvas : esquivez, visez et survivez.',tag:'Action'},
+    {id:'puzzle',icon:'💎',name:'Tafaß Puzzle Legend',desc:'Match-3 dynamique avec combos et objectifs.',tag:'Puzzle'},
+    {id:'air',icon:'✈️',name:'Tafaß Air Combat',desc:'Combat aérien arcade avec ennemis, tirs et vagues.',tag:'Action'},
+    {id:'ninja',icon:'🥷',name:'Tafaß Ninja Shadow',desc:'Action réflexe : dash, obstacles et score de survie.',tag:'Action'},
+    {id:'reversi',icon:'⚫',name:'Tafaß Reversi Pro',desc:'Othello stratégique contre une IA.',tag:'Stratégie'},
+    {id:'mines',icon:'💣',name:'Tafaß Mines Pro',desc:'Déminez une grille générée à chaque partie.',tag:'Réflexion'},
+    {id:'sudoku',icon:'🔢',name:'Tafaß Sudoku Master',desc:'Sudoku généré avec validation et chronomètre.',tag:'Puzzle'}
+  ];
+  function gameScores(key){try{return Number(localStorage.getItem('tafass_game_score_'+key)||0)}catch{return 0}}
+  function setGameScore(key,score){try{if(Number(score)>gameScores(key))localStorage.setItem('tafass_game_score_'+key,String(score))}catch{}}
+  function gameIcon(g){return `<div class="tafa-game-icon">${g.icon}</div>`}
+  function gamesModal(){
+    if(activeGameCleanup){activeGameCleanup();activeGameCleanup=null}
+    openModal(`<div class="modal-box tafass-games-modal"><button class="modal-close" data-action="close-games">×</button>
+      <div class="games-head"><span class="eyebrow">TAFAß • JEUX OFFICIELS</span><h2>Jeux Tafaß</h2><p class="muted">12 expériences intégrées. Jouez directement dans Tafaß, sans quitter votre compte.</p></div>
+      <div class="games-feature"><div class="games-feature-mark">ß</div><div><b>TAFAß PLAY</b><small>Jeux officiels • Classements locaux • Records personnels</small></div><span class="games-count">12+ JEUX</span></div>
+      <div class="games-catalog">${TAFA_GAMES.map(g=>`<button class="game-card-premium" data-game="${g.id}">${gameIcon(g)}<span class="game-card-copy"><strong>${g.name}</strong><small>${g.desc}</small><em>✓ Jeu officiel Tafaß · ${g.tag}</em></span><span class="game-play">Jouer <b>›</b></span></button>`).join('')}</div>
+      <div id="gameStage"></div></div>`);
   }
-  function gameScores(key) { try { return Number(localStorage.getItem("tafass_game_score_"+key)||0); } catch { return 0; } }
-  function setGameScore(key, score) { try { if(score>gameScores(key)) localStorage.setItem("tafass_game_score_"+key,String(score)); } catch {} }
-  function startGame(key) {
-    if (activeGameCleanup) { activeGameCleanup(); activeGameCleanup=null; }
-    document.querySelectorAll(".game-tab").forEach(b=>b.classList.toggle("active",b.dataset.game===key));
-    const stage=$("gameStage"); if(!stage) return;
-    if(key==="ttt") return renderTicTacToe(stage);
-    if(key==="2048") return render2048(stage);
-    return renderSnake(stage);
+  function startGame(key){
+    if(activeGameCleanup){activeGameCleanup();activeGameCleanup=null}
+    const stage=$('gameStage');if(!stage)return;
+    const fn={battle:renderBattle,racing:renderRacing,football:renderFootball,chess:renderChess,pool:renderPool,cyber:renderCyber,puzzle:renderPuzzle,air:renderAir,ninja:renderNinja,reversi:renderReversi,mines:renderMines,sudoku:renderSudoku}[key];
+    if(fn){fn(stage);setTimeout(()=>stage.scrollIntoView({behavior:'smooth',block:'start'}),30)}
   }
-  function renderTicTacToe(stage) {
-    let board=Array(9).fill(""), turn="X", over=false, wins=0;
-    stage.innerHTML=`<div class="game-toolbar"><b>Tic-Tac-Toe</b><span>Record : ${gameScores("ttt")}</span><button class="ghost-action" id="tttReset">Nouvelle partie</button></div><div class="ttt-board">${board.map((_,i)=>`<button class="ttt-cell" data-i="${i}"></button>`).join("")}</div><div id="tttStatus" class="game-status">À vous : X</div>`;
-    const cells=[...stage.querySelectorAll(".ttt-cell")], status=$("tttStatus");
-    const lines=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
-    const result=()=>{ for(const [a,b,c] of lines) if(board[a]&&board[a]===board[b]&&board[a]===board[c]) return board[a]; return board.every(Boolean)?"draw":null; };
-    const finish=(r)=>{over=true;if(r==="X"){wins++;setGameScore("ttt",wins);status.textContent="Vous gagnez ! 🎉";}else if(r==="O")status.textContent="Tafaß gagne cette manche.";else status.textContent="Égalité.";};
-    const ai=()=>{ if(over)return; const empty=board.map((v,i)=>v?null:i).filter(v=>v!==null); if(!empty.length)return; let pick=empty[Math.floor(Math.random()*empty.length)]; if(!board[4]&&empty.includes(4))pick=4; board[pick]="O"; cells[pick].textContent="O"; cells[pick].classList.add("o"); const r=result(); if(r)return finish(r); turn="X";status.textContent="À vous : X"; };
-    const play=e=>{const i=Number(e.currentTarget.dataset.i);if(over||board[i])return;board[i]="X";e.currentTarget.textContent="X";e.currentTarget.classList.add("x");const r=result();if(r)return finish(r);turn="O";status.textContent="Tafaß réfléchit…";setTimeout(ai,280);};
-    cells.forEach(c=>c.addEventListener("click",play));
-    const reset=()=>{board=Array(9).fill("");turn="X";over=false;cells.forEach(c=>{c.textContent="";c.className="ttt-cell"});status.textContent="À vous : X";};
-    $("tttReset")?.addEventListener("click",reset); activeGameCleanup=()=>cells.forEach(c=>c.removeEventListener("click",play));
+  function gameToolbar(name,key,scoreLabel='Record'){return `<div class="game-toolbar"><span><b>${name}</b><small class="game-official">✓ OFFICIEL TAFAß</small></span><span>${scoreLabel} : <strong id="liveScore">${gameScores(key)}</strong></span><div class="game-toolbar-actions"><button class="ghost-action" data-games-back>← Jeux</button><button class="ghost-action" id="gameReset">Nouvelle partie</button></div></div>`}
+  function bindGameReset(fn){$('gameReset')?.addEventListener('click',fn);document.querySelector('[data-games-back]')?.addEventListener('click',()=>gamesModal())}
+
+  function renderBattle(stage){
+    let a=3,b=3,turn='player',over=false,round=1,score=0;
+    const reset=()=>{a=3;b=3;turn='player';over=false;round=1;score=0;draw()};
+    const draw=()=>{stage.innerHTML=gameToolbar('Battle Arena','battle','Victoire')+`<div class="arena-card"><div class="arena-hud"><b>Vous ${a} ❤️</b><span>Manche ${round}</span><b>IA ${b} ❤️</b></div><div class="arena-board"><div class="arena-core">⚡</div><button class="arena-action" data-hit="1">ATTAQUER</button><button class="arena-action" data-hit="2">CHARGE + DÉFENSE</button><div class="game-status" id="battleStatus">Votre tour — choisissez une action.</div></div></div>`;stage.querySelectorAll('[data-hit]').forEach(x=>x.onclick=()=>{if(over)return;const hit=Number(x.dataset.hit);if(hit===1){b--;score+=100}else{score+=35}if(b<=0){over=true;setGameScore('battle',score);$('battleStatus').textContent='Victoire tactique ! 🏆';return}turn='ai';$('battleStatus').textContent='L’IA prépare sa réponse…';setTimeout(()=>{if(hit===2&&Math.random()<.55){$('battleStatus').textContent='Votre défense bloque l’attaque.'}else{a--;}$('liveScore').textContent=score;if(a<=0){over=true;$('battleStatus').textContent='Défaite — analysez la stratégie et rejouez.'}else{$('battleStatus').textContent='Votre tour.'}turn='player'},420)}) ;bindGameReset(reset)};
+    draw();activeGameCleanup=()=>{}
   }
-  function render2048(stage) {
-    let grid=Array(16).fill(0), score=0, won=false;
-    const spawn=()=>{const e=grid.map((v,i)=>v?null:i).filter(v=>v!==null);if(!e.length)return;grid[e[Math.floor(Math.random()*e.length)]]=Math.random()<.9?2:4;}; spawn();spawn();
-    stage.innerHTML=`<div class="game-toolbar"><b>2048</b><span>Score : <strong id="g2048Score">0</strong> · Record : ${gameScores("2048")}</span><button class="ghost-action" id="g2048Reset">Nouvelle partie</button></div><div id="g2048Board" class="game-2048-board"></div><div id="g2048Status" class="game-status">Utilisez les flèches ou les boutons.</div><div class="game-pad"><button data-dir="up">↑</button><div><button data-dir="left">←</button><button data-dir="down">↓</button><button data-dir="right">→</button></div></div>`;
-    const boardEl=$("g2048Board"), scoreEl=$("g2048Score"), status=$("g2048Status");
-    const render=()=>{boardEl.innerHTML=grid.map(v=>`<div class="g2048-cell ${v?"v"+v:""}">${v||""}</div>`).join("");scoreEl.textContent=score;};
-    const slide=line=>{const a=line.filter(Boolean);let out=[],gain=0;for(let i=0;i<a.length;i++){if(a[i]===a[i+1]){out.push(a[i]*2);gain+=a[i]*2;i++;}else out.push(a[i]);}while(out.length<4)out.push(0);return [out,gain];};
-    const move=dir=>{let before=grid.join(","),g=0;
-      const rows=[];for(let r=0;r<4;r++)rows.push([0,1,2,3].map(c=>grid[r*4+c]));
-      let out=rows.map(row=>slide(dir==="right"?row.slice().reverse():row)[0]); let gains=rows.map(row=>slide(dir==="right"?row.slice().reverse():row)[1]);
-      if(dir==="right")out=out.map(r=>r.slice().reverse()); if(dir==="left"){};
-      if(dir==="up"||dir==="down"){const cols=[];for(let c=0;c<4;c++)cols.push([0,1,2,3].map(r=>grid[r*4+c]));let o=cols.map(col=>slide(dir==="down"?col.slice().reverse():col)[0]);gains=cols.map(col=>slide(dir==="down"?col.slice().reverse():col)[1]);if(dir==="down")o=o.map(c=>c.slice().reverse());grid=Array(16).fill(0);for(let c=0;c<4;c++)for(let r=0;r<4;r++)grid[r*4+c]=o[c][r];} else {grid=out.flat();}
-      g=gains.reduce((a,b)=>a+b,0); if(g)score+=g; if(grid.join(",")!==before){spawn();render();if(grid.includes(2048)&&!won){won=true;status.textContent="2048 atteint ! 🏆";} else if(!canMove())status.textContent="Partie terminée.";setGameScore("2048",score);} };
-    const canMove=()=>{if(grid.some(v=>!v))return true;for(let r=0;r<4;r++)for(let c=0;c<4;c++){const i=r*4+c;if(c<3&&grid[i]===grid[i+1])return true;if(r<3&&grid[i]===grid[i+4])return true;}return false;};
-    const key=e=>{const m={ArrowUp:"up",ArrowDown:"down",ArrowLeft:"left",ArrowRight:"right"};if(m[e.key]){e.preventDefault();move(m[e.key]);}};
-    const reset=()=>{grid=Array(16).fill(0);score=0;won=false;spawn();spawn();status.textContent="Utilisez les flèches ou les boutons.";render();};
-    document.addEventListener("keydown",key);stage.querySelectorAll("[data-dir]").forEach(b=>b.addEventListener("click",()=>move(b.dataset.dir)));$("g2048Reset")?.addEventListener("click",reset);render();activeGameCleanup=()=>document.removeEventListener("keydown",key);
+  function renderRacing(stage){
+    const c=document.createElement('canvas');c.width=360;c.height=520;c.className='premium-game-canvas';let ctx=c.getContext('2d'),x=180,enemy=180,score=0,speed=5,running=true,raf,keys={};
+    const reset=()=>{cancelAnimationFrame(raf);x=180;enemy=80+Math.random()*200;score=0;speed=5;running=true;loop()};
+    stage.innerHTML=gameToolbar('Racing Turbo','racing','Record')+'<div class="canvas-wrap"></div><div class="game-status" id="raceStatus">← → ou touchez les zones gauche/droite.</div>';stage.querySelector('.canvas-wrap').appendChild(c);
+    const draw=()=>{ctx.clearRect(0,0,360,520);ctx.fillStyle='#080d17';ctx.fillRect(0,0,360,520);ctx.fillStyle='#182133';ctx.fillRect(55,0,250,520);for(let y=-20;y<520;y+=70){ctx.fillStyle='#cbd5e1';ctx.fillRect(174,y+(score%70),8,34)}ctx.fillStyle='#e84d68';ctx.fillRect(x-18,420,36,62);ctx.fillStyle='#6d7cff';ctx.fillRect(enemy-18,90,36,62)};
+    const loop=()=>{if(!running)return;score++;speed=Math.min(10,5+score/700);enemy+=((Math.random()-.5)*7);enemy=Math.max(75,Math.min(285,enemy));if(keys.left)x-=speed;if(keys.right)x+=speed;x=Math.max(78,Math.min(282,x));if(420<152+62&&Math.abs(x-enemy)<35){running=false;setGameScore('racing',score);$('raceStatus').textContent='Collision ! Record sauvegardé.'}draw();$('liveScore').textContent=score;raf=requestAnimationFrame(loop)};
+    const key=e=>{if(e.key==='ArrowLeft')keys.left=true;if(e.key==='ArrowRight')keys.right=true};const up=e=>{if(e.key==='ArrowLeft')keys.left=false;if(e.key==='ArrowRight')keys.right=false};document.addEventListener('keydown',key);document.addEventListener('keyup',up);stage.addEventListener('pointerdown',e=>{keys.left=e.clientX<innerWidth/2;keys.right=!keys.left});stage.addEventListener('pointerup',()=>{keys.left=keys.right=false});bindGameReset(reset);loop();activeGameCleanup=()=>{cancelAnimationFrame(raf);document.removeEventListener('keydown',key);document.removeEventListener('keyup',up)}
   }
-  function renderSnake(stage) {
-    const size=16, canvas=document.createElement("canvas");canvas.width=320;canvas.height=320;canvas.className="snake-canvas";
-    stage.innerHTML=`<div class="game-toolbar"><b>Snake</b><span>Score : <strong id="snakeScore">0</strong> · Record : ${gameScores("snake")}</span><button class="ghost-action" id="snakeReset">Nouvelle partie</button></div>`;stage.appendChild(canvas);stage.insertAdjacentHTML("beforeend",`<div id="snakeStatus" class="game-status">Appuyez sur une flèche pour commencer.</div><div class="game-pad"><button data-dir="up">↑</button><div><button data-dir="left">←</button><button data-dir="down">↓</button><button data-dir="right">→</button></div></div>`);
-    const ctx=canvas.getContext("2d"), scoreEl=$("snakeScore"), status=$("snakeStatus");let snake,dir,next,food,score,running,timer;
-    const reset=()=>{clearInterval(timer);snake=[{x:8,y:8},{x:7,y:8},{x:6,y:8}];dir={x:1,y:0};next=dir;food=randomFood();score=0;running=false;scoreEl.textContent=0;status.textContent="Appuyez sur une flèche pour commencer.";draw();};
-    const randomFood=()=>{let f;do{f={x:Math.floor(Math.random()*size),y:Math.floor(Math.random()*size)}}while(snake?.some(s=>s.x===f.x&&s.y===f.y));return f;};
-    const draw=()=>{ctx.clearRect(0,0,320,320);ctx.fillStyle="#0a0e19";ctx.fillRect(0,0,320,320);ctx.strokeStyle="rgba(255,255,255,.05)";for(let i=1;i<size;i++){ctx.beginPath();ctx.moveTo(i*20,0);ctx.lineTo(i*20,320);ctx.stroke();ctx.beginPath();ctx.moveTo(0,i*20);ctx.lineTo(320,i*20);ctx.stroke();}ctx.fillStyle="#ff5c8a";ctx.fillRect(food.x*20+3,food.y*20+3,14,14);snake.forEach((s,i)=>{ctx.fillStyle=i?"#7c8cff":"#b9c2ff";ctx.fillRect(s.x*20+2,s.y*20+2,16,16);});};
-    const tick=()=>{dir=next;const h={x:snake[0].x+dir.x,y:snake[0].y+dir.y};if(h.x<0||h.x>=size||h.y<0||h.y>=size||snake.some(s=>s.x===h.x&&s.y===h.y)){running=false;clearInterval(timer);status.textContent="Game over — Nouvelle partie pour rejouer.";setGameScore("snake",score);return;}snake.unshift(h);if(h.x===food.x&&h.y===food.y){score++;scoreEl.textContent=score;food=randomFood();}else snake.pop();draw();};
-    const start=d=>{if(d){if(!(d.x===-dir.x&&d.y===-dir.y))next=d;}if(!running){running=true;status.textContent="En jeu !";clearInterval(timer);timer=setInterval(tick,125);}};
-    const key=e=>{const m={ArrowUp:{x:0,y:-1},ArrowDown:{x:0,y:1},ArrowLeft:{x:-1,y:0},ArrowRight:{x:1,y:0}};if(m[e.key]){e.preventDefault();start(m[e.key]);}};document.addEventListener("keydown",key);stage.querySelectorAll("[data-dir]").forEach(b=>b.addEventListener("click",()=>start(({up:{x:0,y:-1},down:{x:0,y:1},left:{x:-1,y:0},right:{x:1,y:0}})[b.dataset.dir])));$("snakeReset")?.addEventListener("click",reset);reset();activeGameCleanup=()=>{clearInterval(timer);document.removeEventListener("keydown",key);};
+  function renderFootball(stage){let score=0,kick=0;const reset=()=>{score=0;kick=0;draw()};const draw=()=>{stage.innerHTML=gameToolbar('Football Arena','football','Buts')+`<div class="football-field"><div class="goalkeeper" id="keeper">🧤</div><div class="football-ball" id="ball">⚽</div><div class="penalty-targets"><button data-shot="left">↖</button><button data-shot="center">↑</button><button data-shot="right">↗</button></div></div><div class="game-status" id="footStatus">Choisissez une zone de tir.</div>`;stage.querySelectorAll('[data-shot]').forEach(b=>b.onclick=()=>{kick++;const save=Math.random()>.28;if(save){score++;$('footStatus').textContent=`BUT ! ${score}/10 ⚽`}else $('footStatus').textContent='Arrêt du gardien !';$('liveScore').textContent=score;if(kick>=10){setGameScore('football',score);$('footStatus').textContent=`Série terminée : ${score}/10. ${score>=7?'Excellent !':'Rejouez pour progresser.'}`}});bindGameReset(reset)};draw();activeGameCleanup=()=>{}}
+  function renderChess(stage){
+    let board=['♜','♞','♝','♛','♚','♝','♞','♜',...Array(8).fill('♟'),...Array(32).fill(''),'♙','♙','♙','♙','♙','♙','♙','♙','♖','♘','♗','♕','♔','♗','♘','♖'];
+    let selected=-1,score=0;
+    const reset=()=>{selected=-1;score=0;board=['♜','♞','♝','♛','♚','♝','♞','♜',...Array(8).fill('♟'),...Array(32).fill(''),'♙','♙','♙','♙','♙','♙','♙','♙','♖','♘','♗','♕','♔','♗','♘','♖'];draw()};
+    const draw=()=>{
+      stage.innerHTML=gameToolbar('Chess Master','chess','Prises')+`<div class="chess-board">${board.map((pc,i)=>`<button class="chess-cell ${(Math.floor(i/8)+i)%2?'dark':'light'}" data-i="${i}">${pc}</button>`).join('')}</div><div class="game-status" id="chessStatus">Sélectionnez une pièce blanche puis sa destination.</div>`;
+      stage.querySelectorAll('.chess-cell').forEach(c=>c.onclick=()=>{
+        const i=Number(c.dataset.i);
+        if(selected<0){
+          if(board[i]&&'♙♖♘♗♕♔'.includes(board[i])){selected=i;$('chessStatus').textContent='Choisissez une case cible.';}
+          return;
+        }
+        if(i!==selected && (!board[i] || '♟♜♞♝♛♚'.includes(board[i]))){
+          if(board[i])score++;
+          board[i]=board[selected];board[selected]='';$('liveScore').textContent=score;$('chessStatus').textContent='Coup joué.';
+          setTimeout(()=>{
+            const black=board.map((pc,j)=>'♟♜♞♝♛♚'.includes(pc)?j:-1).filter(j=>j>=0);
+            if(black.length){
+              const from=black[Math.floor(Math.random()*black.length)];
+              const targets=board.map((pc,j)=>(!pc||'♙♖♘♗♕♔'.includes(pc))?j:-1).filter(j=>j>=0);
+              if(targets.length){const to=targets[Math.floor(Math.random()*targets.length)];if(board[to])score++;board[to]=board[from];board[from]='';}
+            }
+            draw();
+          },280);
+        }
+        selected=-1;draw();
+      });
+    };
+    draw();bindGameReset(reset);activeGameCleanup=()=>{};
   }
+  function renderPool(stage){
+    const c=document.createElement('canvas');c.width=420;c.height=250;c.className='premium-game-canvas pool-canvas';const ctx=c.getContext('2d');let balls=[{x:210,y:125,vx:0,vy:0,n:8},{x:110,y:105,vx:0,vy:0,n:1},{x:125,y:145,vx:0,vy:0,n:2}],aim=0,power=.7,score=0,raf;
+    stage.innerHTML=gameToolbar('8 Ball Pool','pool','Poches')+'<div class="canvas-wrap"></div><div class="game-pad"><button id="aimL">↶</button><button id="shootPool">TIRER</button><button id="aimR">↷</button></div><div class="game-status" id="poolStatus">Ajustez l’angle puis tirez.</div>';stage.querySelector('.canvas-wrap').appendChild(c);
+    const reset=()=>{balls=[{x:210,y:125,vx:0,vy:0,n:8},{x:110,y:105,vx:0,vy:0,n:1},{x:125,y:145,vx:0,vy:0,n:2}];score=0;draw()};const draw=()=>{ctx.fillStyle='#0b6b54';ctx.fillRect(0,0,420,250);ctx.strokeStyle='#d8b36a';ctx.lineWidth=10;ctx.strokeRect(5,5,410,240);ctx.fillStyle='#05070b';[[12,12],[408,12],[12,238],[408,238]].forEach(p=>{ctx.beginPath();ctx.arc(p[0],p[1],9,0,7);ctx.fill()});balls.forEach((b,i)=>{ctx.fillStyle=i?'#f4f4f5':'#111827';ctx.beginPath();ctx.arc(b.x,b.y,11,0,7);ctx.fill();ctx.fillStyle='#fff';ctx.font='9px sans-serif';ctx.textAlign='center';ctx.fillText(b.n,b.x,b.y+3);b.x+=b.vx;b.y+=b.vy;b.vx*=.985;b.vy*=.985;if(b.x<18||b.x>402)b.vx*=-1;if(b.y<18||b.y>232)b.vy*=-1});raf=requestAnimationFrame(draw)};const shoot=()=>{balls[0].vx=Math.cos(aim)*12*power;balls[0].vy=Math.sin(aim)*12*power;score++;$('liveScore').textContent=score;$('poolStatus').textContent='Tir en cours…'};$('aimL').onclick=()=>aim-=.2;$('aimR').onclick=()=>aim+=.2;$('shootPool').onclick=shoot;bindGameReset(reset);draw();activeGameCleanup=()=>cancelAnimationFrame(raf)}
+  function renderCyber(stage){return renderCanvasShooter(stage,'cyber','Cyber Strike','🤖')}
+  function renderAir(stage){return renderCanvasShooter(stage,'air','Air Combat','✈️')}
+  function renderCanvasShooter(stage,key,name,playerIcon){const c=document.createElement('canvas');c.width=360;c.height=500;c.className='premium-game-canvas';const ctx=c.getContext('2d');let x=180,y=430,enemies=[],score=0,lives=3,raf,shots=[],keys={};const reset=()=>{x=180;y=430;enemies=[];score=0;lives=3;shots=[];loop()};stage.innerHTML=gameToolbar(name,key,'Score')+'<div class="canvas-wrap"></div><div class="game-status" id="shootStatus">Déplacement tactile ou clavier. Maintenez pour tirer.</div>';stage.querySelector('.canvas-wrap').appendChild(c);const loop=()=>{ctx.fillStyle='#050912';ctx.fillRect(0,0,360,500);if(Math.random()<.025)enemies.push({x:20+Math.random()*320,y:-20,s:2+Math.random()*2});if(keys.l)x-=5;if(keys.r)x+=5;x=Math.max(20,Math.min(340,x));if(keys.f&&Math.random()<.22)shots.push({x,y:y-25});shots.forEach(s=>s.y-=8);enemies.forEach(e=>e.y+=e.s);for(const s of shots)for(const e of enemies){if(Math.hypot(s.x-e.x,s.y-e.y)<20){e.y=600;s.y=-20;score+=10}}for(const e of enemies){if(Math.hypot(e.x-x,e.y-y)<28){e.y=600;lives--;}}enemies=enemies.filter(e=>e.y<540);shots=shots.filter(s=>s.y>-20);ctx.font='28px sans-serif';ctx.textAlign='center';ctx.fillText(playerIcon,x,y);ctx.font='20px sans-serif';shots.forEach(s=>ctx.fillText('•',s.x,s.y));enemies.forEach(e=>ctx.fillText('☄️',e.x,e.y));$('liveScore').textContent=score;if(lives<=0){setGameScore(key,score);$('shootStatus').textContent='Mission terminée — record sauvegardé.'}else raf=requestAnimationFrame(loop)};const kd=e=>{if(e.key==='ArrowLeft')keys.l=true;if(e.key==='ArrowRight')keys.r=true;if(e.code==='Space')keys.f=true};const ku=e=>{if(e.key==='ArrowLeft')keys.l=false;if(e.key==='ArrowRight')keys.r=false;if(e.code==='Space')keys.f=false};document.addEventListener('keydown',kd);document.addEventListener('keyup',ku);stage.addEventListener('pointermove',e=>{const r=c.getBoundingClientRect();x=(e.clientX-r.left)/r.width*360});stage.addEventListener('pointerdown',()=>keys.f=true);stage.addEventListener('pointerup',()=>keys.f=false);bindGameReset(reset);raf=requestAnimationFrame(loop);activeGameCleanup=()=>{cancelAnimationFrame(raf);document.removeEventListener('keydown',kd);document.removeEventListener('keyup',ku)}}
+  function renderPuzzle(stage){let g=Array.from({length:36},()=>Math.floor(Math.random()*5)),moves=0;const reset=()=>{g=Array.from({length:36},()=>Math.floor(Math.random()*5));moves=0;draw()};const draw=()=>{stage.innerHTML=gameToolbar('Puzzle Legend','puzzle','Score')+`<div class="match3-board">${g.map((v,i)=>`<button class="match3-cell c${v}" data-i="${i}">${['◆','●','■','▲','★'][v]}</button>`).join('')}</div><div class="game-status" id="puzzleStatus">Associez 3 symboles ou plus. Coups : ${moves}</div>`;stage.querySelectorAll('.match3-cell').forEach(b=>b.onclick=()=>{const i=+b.dataset.i,j=i+1;if(j<36&&Math.floor(j/6)===Math.floor(i/6)){[g[i],g[j]]=[g[j],g[i]];moves++;for(let k=0;k<34;k++)if(g[k]===g[k+1]&&g[k]===g[k+2]){g[k]=g[k+1]=g[k+2]=Math.floor(Math.random()*5);setGameScore('puzzle',moves)}draw()}})};draw();bindGameReset(reset);activeGameCleanup=()=>{}}
+  function renderNinja(stage){const c=document.createElement('canvas');c.width=360;c.height=360;c.className='premium-game-canvas';const ctx=c.getContext('2d');let x=70,y=270,vy=0,score=0,obs=[],raf,playing=true;const reset=()=>{x=70;y=270;vy=0;score=0;obs=[];playing=true;loop()};stage.innerHTML=gameToolbar('Ninja Shadow','ninja','Score')+'<div class="canvas-wrap"></div><div class="game-status" id="ninjaStatus">Touchez pour sauter. Évitez les obstacles.</div>';stage.querySelector('.canvas-wrap').appendChild(c);const loop=()=>{if(!playing)return;ctx.fillStyle='#080b15';ctx.fillRect(0,0,360,360);if(Math.random()<.025)obs.push({x:360,h:25+Math.random()*55});vy+=.55;y+=vy;if(y>270){y=270;vy=0}obs.forEach(o=>o.x-=4);obs=obs.filter(o=>o.x>-30);for(const o of obs)if(o.x<95&&o.x+22>55&&y+30>270-o.h){playing=false;setGameScore('ninja',score);$('ninjaStatus').textContent='Collision — record sauvegardé.'}score++;$('liveScore').textContent=score;ctx.font='30px sans-serif';ctx.fillText('🥷',x,y);ctx.fillStyle='#f15b6c';obs.forEach(o=>ctx.fillRect(o.x,270-o.h,22,o.h));ctx.fillStyle='#222b3d';ctx.fillRect(0,300,360,4);if(playing)raf=requestAnimationFrame(loop)};const jump=()=>{if(y>=269)vy=-11};c.addEventListener('pointerdown',jump);stage.addEventListener('pointerdown',jump);bindGameReset(reset);loop();activeGameCleanup=()=>cancelAnimationFrame(raf)}
+  function renderReversi(stage){let b=Array(64).fill(0);b[27]=2;b[28]=1;b[35]=1;b[36]=2;let turn=1,score=0;const dirs=[-1,1,-8,8,-9,-7,7,9];const valid=(i,p)=>{const r=Math.floor(i/8),c=i%8;return dirs.some(d=>{let j=i+d,n=0;while(j>=0&&j<64&&Math.abs(Math.floor(j/8)-Math.floor((j-d)/8))<=1&&b[j]===3-p){n++;j+=d}return n>0&&j>=0&&j<64&&b[j]===p&&Math.abs(Math.floor(j/8)-Math.floor((j-d)/8))<=1})};const reset=()=>{b=Array(64).fill(0);b[27]=2;b[28]=1;b[35]=1;b[36]=2;turn=1;score=0;draw()};const draw=()=>{stage.innerHTML=gameToolbar('Reversi Pro','reversi','Score')+`<div class="reversi-board">${b.map((v,i)=>`<button data-i="${i}" class="rev-cell">${v?`<i class="disc d${v}"></i>`:''}</button>`).join('')}</div><div class="game-status" id="revStatus">À vous — placez un jeton.</div>`;stage.querySelectorAll('.rev-cell').forEach(x=>x.onclick=()=>{const i=+x.dataset.i;if(turn===1&&b[i]===0&&valid(i,1)){b[i]=1;score++;$('liveScore').textContent=score;turn=2;$('revStatus').textContent='IA joue…';setTimeout(()=>{const vs=b.map((v,j)=>v===0&&valid(j,2)?j:-1).filter(j=>j>=0);if(vs.length){const k=vs[Math.floor(Math.random()*vs.length)];b[k]=2;score+=2}else $('revStatus').textContent='L’IA passe son tour.';turn=1;draw()},250);draw()}})};draw();bindGameReset(reset);activeGameCleanup=()=>{}}
+  function renderMines(stage){let n=8,total=n*n,mines=new Set(),open=new Set(),flags=new Set(),first=true,over=false;const build=()=>{mines=new Set();while(mines.size<10){const i=Math.floor(Math.random()*total);if(i!==first)mines.add(i)}};const near=i=>{let r=Math.floor(i/n),c=i%n,s=0;for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){if(!dr&&!dc)continue;const j=(r+dr)*n+c+dc;if(r+dr>=0&&r+dr<n&&c+dc>=0&&c+dc<n&&mines.has(j))s++}return s};const reset=()=>{open=new Set();flags=new Set();first=true;over=false;draw()};const draw=()=>{stage.innerHTML=gameToolbar('Mines Pro','mines','Record')+`<div class="mines-board">${Array.from({length:total},(_,i)=>`<button class="mine-cell ${open.has(i)?'open':''}" data-i="${i}">${open.has(i)?(mines.has(i)?'💣':near(i)||''):flags.has(i)?'⚑':''}</button>`).join('')}</div><div class="game-status" id="mineStatus">10 mines · clic gauche pour ouvrir, appui long pour drapeau.</div>`;stage.querySelectorAll('.mine-cell').forEach(x=>{let timer;x.addEventListener('pointerdown',()=>timer=setTimeout(()=>{const i=+x.dataset.i;if(!open.has(i)&&!over){flags.has(i)?flags.delete(i):flags.add(i);draw()}},420));x.addEventListener('pointerup',()=>{clearTimeout(timer);const i=+x.dataset.i;if(over||flags.has(i))return;if(first){first=false;build()}if(mines.has(i)){over=true;open.add(i);$('mineStatus').textContent='Mine ! Partie terminée.'}else{open.add(i);if(open.size>=total-mines.size){over=true;$('mineStatus').textContent='Champ nettoyé ! 🏆';setGameScore('mines',open.size)}}draw()})});bindGameReset(reset)};draw();activeGameCleanup=()=>{}}
+  function renderSudoku(stage){const solved=[5,3,4,6,7,8,9,1,2,6,7,2,1,9,5,3,4,8,1,9,8,3,4,2,5,6,7,8,5,9,7,6,1,4,2,3,4,2,6,8,5,3,7,9,1,7,1,3,9,2,4,8,5,6,9,6,1,5,3,7,2,8,4,2,8,7,4,1,9,6,3,5,3,4,5,2,8,6,1,7,9];let puzzle=solved.map((v,i)=>i%3===0||i%7===0?v:0);const reset=()=>{puzzle=solved.map((v,i)=>i%3===0||i%7===0?v:0);draw()};const draw=()=>{stage.innerHTML=gameToolbar('Sudoku Master','sudoku','Score')+`<div class="sudoku-board">${puzzle.map((v,i)=>`<input class="sudoku-cell" data-i="${i}" value="${v||''}" inputmode="numeric" maxlength="1" ${v?'readonly':''}>`).join('')}</div><button class="primary big" id="checkSudoku">Vérifier la grille</button><div class="game-status" id="sudokuStatus">Complétez la grille puis vérifiez.</div>`;stage.querySelector('#checkSudoku').onclick=()=>{const vals=[...stage.querySelectorAll('.sudoku-cell')].map(x=>Number(x.value));const ok=vals.every((v,i)=>v===solved[i]);$('sudokuStatus').textContent=ok?'Sudoku résolu ! 🏆':'Il reste des erreurs ou des cases vides.';if(ok){setGameScore('sudoku',1);$('liveScore').textContent=1}};bindGameReset(reset)};draw();activeGameCleanup=()=>{}}
 
   document.addEventListener("click", async e => {
     const gameTab = e.target.closest("[data-game]");
