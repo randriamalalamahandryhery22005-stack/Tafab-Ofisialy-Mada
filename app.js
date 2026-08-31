@@ -451,8 +451,8 @@ document.documentElement.classList.add("app-boot");
       const [pr, por, pgr, gr] = await Promise.all([
         sb.from("profiles").select("*").or(`first_name.ilike.%${safe}%,last_name.ilike.%${safe}%,username.ilike.%${safe}%`).limit(30),
         sb.from("posts").select("*").or(`content.ilike.%${safe}%`).order("created_at", {ascending:false}).limit(30),
-        sb.from("pages").select("*").or(`name.ilike.%${safe}%,category.ilike.%${safe}%,bio.ilike.%${safe}%`).limit(20),
-        sb.from("groups").select("*").or(`name.ilike.%${safe}%,description.ilike.%${safe}%`).limit(20)
+        sb.from("pages").select(PAGE_FIELDS).or(`name.ilike.%${safe}%,category.ilike.%${safe}%,bio.ilike.%${safe}%`).limit(20),
+        sb.from("groups").select(GROUP_FIELDS).or(`name.ilike.%${safe}%,description.ilike.%${safe}%`).limit(20)
       ]);
       people=pr.data||[]; posts=por.data||[]; pages=pgr.data||[]; groups=gr.data||[];
       if (state.user && safe.length >= 2) {
@@ -945,6 +945,21 @@ document.documentElement.classList.add("app-boot");
   }
 
 
+  // V35: explicit root-table projections prevent ambiguous owner_id references
+  // when pages/groups are queried alongside member/profile relations.
+  const PAGE_FIELDS = "id,name,logo_url,cover_url,owner_id,username,category,bio,address,location,contact_email,contact_phone,website_url,created_at";
+  const GROUP_FIELDS = "id,name,description,avatar_url,cover_url,owner_id,privacy,created_at";
+
+  async function fetchPageById(id) {
+    const {data,error}=await sb.from("pages").select(PAGE_FIELDS).eq("id",id).maybeSingle();
+    return {data,error};
+  }
+
+  async function fetchGroupById(id) {
+    const {data,error}=await sb.from("groups").select(GROUP_FIELDS).eq("id",id).maybeSingle();
+    return {data,error};
+  }
+
   async function pageBusinessSuite() {
     const {data:pages,error}=await sb.from("pages").select("id,name,logo_url,owner_id").eq("owner_id",state.user.id).order("created_at",{ascending:false});
     if(error)return toast(error.message);
@@ -956,7 +971,7 @@ document.documentElement.classList.add("app-boot");
     const token = state.renderToken;
     const tab = state.pagesTab || "mine";
     let rows = [], followerRows = [], ownerMap = new Map();
-    let q = sb.from("pages").select("*").order("created_at",{ascending:false}).limit(60);
+    let q = sb.from("pages").select(PAGE_FIELDS).order("created_at",{ascending:false}).limit(60);
     if (tab === "mine") q = q.eq("owner_id", state.user.id);
     const {data,error} = await q;
     if (token !== state.renderToken || state.route !== "pages") return;
@@ -1009,16 +1024,23 @@ document.documentElement.classList.add("app-boot");
     const tab = state.groupsTab || "mine";
     let rows=[], members=[];
     if(tab==="posts"){
-      const {data:posts,error}=await sb.from("group_posts").select("*,groups(id,name,privacy,cover_url),profiles(first_name,last_name,username,avatar_url),group_post_reactions(id,user_id,reaction_type),group_post_comments(id,user_id,content,created_at,profiles(first_name,last_name,username,avatar_url))").order("created_at",{ascending:false}).limit(40);
+      const {data:posts,error}=await sb.from("group_posts").select("*,profiles(first_name,last_name,username,avatar_url),group_post_reactions(id,user_id,reaction_type),group_post_comments(id,user_id,content,created_at,profiles(first_name,last_name,username,avatar_url))").order("created_at",{ascending:false}).limit(40);
+      let postGroups=new Map();
+      const postGroupIds=[...new Set((posts||[]).map(p=>p.group_id).filter(Boolean))];
+      if(postGroupIds.length){
+        const gr=await sb.from("groups").select(GROUP_FIELDS).in("id",postGroupIds);
+        if(gr.error) return simplePage("Groupes",`<div class="empty-block"><b>Impossible de charger les Groupes.</b><small>${esc(gr.error.message)}</small></div>`);
+        postGroups=new Map((gr.data||[]).map(g=>[g.id,g]));
+      }
       if(token!==state.renderToken || state.route!=="groups")return;
       if(error)return simplePage("Groupes",`<div class="empty-block"><b>Impossible de charger les publications des groupes.</b><small>${esc(error.message)}</small></div>`);
       const postRows=(posts||[]).map(p=>{
-        const g=p.groups||{}, rs=p.group_post_reactions||[], cs=p.group_post_comments||[], mine=rs.some(r=>r.user_id===state.user.id);
+        const g=postGroups.get(p.group_id)||{}, rs=p.group_post_reactions||[], cs=p.group_post_comments||[], mine=rs.some(r=>r.user_id===state.user.id);
         return `<article class="fb-group-post"><div class="fb-post-head">${avatarHTML(p.profiles||{},'avatar avatar-sm')}<div><b>${esc(nameOf(p.profiles||{}))}</b><small>dans <button class="fb-inline-link" data-action="group-open" data-id="${esc(g.id||"")}">${esc(g.name||"Groupe")}</button> · ${timeAgo(p.created_at)}</small></div></div>${p.content?`<p>${esc(p.content)}</p>`:""}${p.media_url?(String(p.media_type||"").startsWith("video")?`<video class="post-media" src="${esc(p.media_url)}" controls playsinline></video>`:`<img class="post-media" src="${esc(p.media_url)}" alt="Publication" loading="lazy">`):""}<div class="fb-post-counts"><span>${rs.length} réaction${rs.length!==1?"s":""}</span><span>${cs.length} commentaire${cs.length!==1?"s":""}</span></div><div class="fb-post-actions"><button class="${mine?"active":""}" data-action="group-post-like" data-id="${esc(p.id)}" data-entity-id="${esc(g.id||"")}">♡ J’aime</button><button data-action="group-post-comment" data-id="${esc(p.id)}" data-entity-id="${esc(g.id||"")}">💬 Commenter</button><button data-action="share-group-post" data-id="${esc(p.id)}" data-entity-id="${esc(g.id||"")}">↗ Partager</button></div></article>`;
       }).join("");
       return simplePage("Groupes", `<section class="fb-hub fb-groups-hub"><div class="fb-top-tabs"><button data-action="groups-tab" data-tab="mine">👥 Vos groupes</button><button class="active" data-action="groups-tab" data-tab="posts">▣ Publications</button><button data-action="groups-tab" data-tab="discover">◉ Découvrir</button></div><div class="fb-section-heading"><h3>Publications des groupes</h3><button class="fb-link-btn" data-action="groups-tab" data-tab="discover">Découvrir</button></div><div class="fb-post-feed">${postRows||`<div class="fb-empty"><div>▣</div><b>Aucune publication de groupe</b><span>Rejoignez des groupes pour retrouver leurs publications ici.</span></div>`}</div></section>`);
     }
-    const groupQuery=sb.from("groups").select("*").order("created_at",{ascending:false}).limit(60);
+    const groupQuery=sb.from("groups").select(GROUP_FIELDS).order("created_at",{ascending:false}).limit(60);
     const {data:all,error}=await groupQuery;
     if(token!==state.renderToken || state.route!=="groups")return;
     if(error)return simplePage("Groupes",`<div class="empty-block"><b>Impossible de charger les Groupes.</b><small>${esc(error.message)}</small><button class="primary big" data-action="retry-route" data-route-target="groups">Réessayer</button></div>`);
@@ -1796,7 +1818,7 @@ async function genericListPage(route) {
     return toast('Actualisez les Groupes pour rouvrir cette communauté.');
   }
   async function openPageDetail(id){
-    const {data:x,error:xerr}=await sb.from('pages').select('*').eq('id',id).maybeSingle();
+    const {data:x,error:xerr}=await fetchPageById(id);
     if(xerr) return toast(xerr.message);
     if(!x) return toast('Page introuvable.');
     const [follow,followers,owner,members,posts]=await Promise.all([
@@ -1828,7 +1850,8 @@ async function genericListPage(route) {
       </article>`;
     }).join('') || `<div class="page-empty-state"><div class="page-empty-icon">✦</div><b>Aucune publication pour le moment</b><span>Les nouvelles publications de la Page apparaîtront ici instantanément.</span></div>`;
     const team=(members.data||[]).map(m=>`<div class="page-team-row">${avatarHTML(m.profiles||{},'avatar page-team-avatar')}<div class="grow"><b>${esc(nameOf(m.profiles||{}))}</b><small>${esc(m.role||'editor')}</small></div>${canManage&&m.user_id!==state.user.id?`<button class="page-team-role" data-action="page-member-menu" data-id="${esc(m.user_id)}" data-entity-id="${esc(id)}">⋯</button>`:''}</div>`).join('') || '<div class="muted">Aucun gestionnaire supplémentaire.</div>';
-    const about=`<div class="page-info-grid"><div><small>Catégorie</small><b>${esc(x.category||'Autre')}</b></div><div><small>Créée le</small><b>${new Date(x.created_at).toLocaleDateString('fr-FR')}</b></div><div><small>Responsable</small><b>${esc(owner.data?nameOf(owner.data):'Membre Tafaß')}</b></div><div><small>Adresse</small><b>${esc(x.address||x.location||owner.data?.city_current||'Non renseignée')}</b></div>${x.contact_email?`<div><small>E-mail</small><b>${esc(x.contact_email)}</b></div>`:''}${x.contact_phone?`<div><small>Téléphone</small><b>${esc(x.contact_phone)}</b></div>`:''}${x.website_url?`<div class="wide"><small>Site web</small><b>${esc(x.website_url)}</b></div>`:''}</div>`;
+    const ownerName=owner.data?nameOf(owner.data):'';
+    const about=`<div class="page-info-grid"><div><small>Catégorie</small><b>${esc(x.category||'Autre')}</b></div><div><small>Créée le</small><b>${new Date(x.created_at).toLocaleDateString('fr-FR')}</b></div><div><small>Responsable</small><b>${esc(ownerName||'Membre Tafaß')}</b></div><div><small>Adresse</small><b>${esc(x.address||x.location||owner.data?.city_current||'Non renseignée')}</b></div>${x.contact_email?`<div><small>E-mail</small><b>${esc(x.contact_email)}</b></div>`:''}${x.contact_phone?`<div><small>Téléphone</small><b>${esc(x.contact_phone)}</b></div>`:''}${x.website_url?`<div class="wide"><small>Site web</small><b>${esc(x.website_url)}</b></div>`:''}</div>`;
     openModal(`<div class="modal-box page-premium-modal page-detail fb-style-detail" data-page-id="${esc(id)}">
       <button class="entity-back-btn" data-action="close-entity" data-route-back="pages" aria-label="Retour aux Pages"><span>‹</span><small>Pages</small></button>
       <div class="page-cover" ${x.cover_url?`style="background-image:url('${esc(x.cover_url)}')"`:''}><div class="page-cover-overlay"></div><div class="page-live-badge">● PAGE</div></div>
@@ -1894,7 +1917,7 @@ async function genericListPage(route) {
   }
 
   async function editPage(id){
-    const {data:p,error}=await sb.from('pages').select('*').eq('id',id).maybeSingle();
+    const {data:p,error}=await fetchPageById(id);
     if(error) return toast(error.message); if(!p) return toast('Page introuvable.');
     const {data:roleRow}=await sb.from('page_members').select('role').eq('page_id',id).eq('user_id',state.user.id).maybeSingle();
     if(p.owner_id!==state.user.id && roleRow?.role!=='admin') return toast('Seul le propriétaire ou un administrateur peut modifier la Page.');
@@ -1959,12 +1982,12 @@ async function genericListPage(route) {
     const el=document.querySelector(`[data-action="group-open"][data-id="${CSS.escape(id)}"]`);
     if(el) return el.click();
     // Fallback: invoke the same route through the delegated handler.
-    const x=(await sb.from('groups').select('*').eq('id',id).maybeSingle()).data;
+    const x=(await fetchGroupById(id)).data;
     if(x) toast('Actualisez la liste des groupes pour rouvrir cette communauté.');
   }
 
   async function editGroup(id){
-    const {data:g,error}=await sb.from('groups').select('*').eq('id',id).maybeSingle();
+    const {data:g,error}=await fetchGroupById(id);
     if(error)return toast(error.message); if(!g)return toast('Groupe introuvable.');
     const {data:gm}=await sb.from('group_members').select('role').eq('group_id',id).eq('user_id',state.user.id).maybeSingle();
     if(g.owner_id!==state.user.id && gm?.role!=='admin')return toast('Seul un administrateur peut modifier le groupe.');
@@ -2247,7 +2270,7 @@ async function genericListPage(route) {
     if (action === "group-share") { closeModal(); return groupShare(id); }
     if (action === "group-copy-link") return groupCopyLink(id);
     if (action === "group-open") {
-      const x=(await sb.from("groups").select("*").eq("id",id).maybeSingle()).data;
+      const x=(await fetchGroupById(id)).data;
       if(!x)return toast("Groupe introuvable");
       const [m,c,members,owner,posts]=await Promise.all([
         sb.from("group_members").select("id,role").eq("group_id",id).eq("user_id",state.user.id).maybeSingle(),
@@ -2265,7 +2288,7 @@ async function genericListPage(route) {
         <div class="detail-cover premium-cover" ${x.cover_url?`style="background-image:url('${esc(x.cover_url)}')"`:''}><div class="cover-gradient"></div><span class="verified-chip">${x.privacy==='private'?'🔒 PRIVÉ':'🌐 PUBLIC'}</span></div>
         <div class="detail-head-wrap">${entityAvatarHTML(x,"group","detail-logo premium-detail-logo")}</div>
         <div class="detail-main"><span class="eyebrow">TAFAß • GROUPE COMMUNAUTAIRE</span><h3>${esc(x.name)}</h3><p class="entity-description">${esc(x.description||"Aucune description pour le moment.")}</p>
-        <div class="detail-stats premium-stats"><span><b>${c.count||0}</b><small>Membres</small></span><span><b>${posts.data?.length||0}</b><small>Publications</small></span><span><b>${esc(x.privacy==='private'?'Privé':'Public')}</b><small>Confidentialité</small></span><span><b>${esc(owner.data?nameOf(owner.data):"Admin")}</b><small>Administrateur</small></span></div>
+        <div class="detail-stats premium-stats"><span><b>${c.count||0}</b><small>Membres</small></span><span><b>${posts.data?.length||0}</b><small>Publications</small></span><span><b>${esc(x.privacy==='private'?'Privé':'Public')}</b><small>Confidentialité</small></span><span><b>${esc(owner.data?nameOf(owner.data):"Propriétaire du groupe")}</b><small>Administrateur</small></span></div>
         <div class="group-action-bar"><button class="primary" data-action="toggle-group-member" data-id="${esc(id)}">${isMember?"✓ Membre":"＋ Rejoindre"}</button>${isMember?`<button class="secondary-pill" data-action="group-chat" data-id="${esc(id)}">💬 Discussion</button>`:""}<button class="secondary-pill" data-action="group-share" data-id="${esc(id)}">↗ Partager</button>${isGroupAdmin?`<button class="secondary-pill" data-action="edit-group" data-id="${esc(id)}">⚙ Gérer</button>`:""}<button class="member-more" data-action="group-more" data-id="${esc(id)}" aria-label="Plus">•••</button></div>
         ${canPost?`<div class="entity-composer premium-composer"><div class="composer-label"><span>◎</span><b>Partager avec le groupe</b></div><textarea id="groupPostText" maxlength="5000" placeholder="Quoi de neuf dans la communauté ?"></textarea><div class="composer-tools"><label class="media-pick">＋ Média<input id="groupPostMedia" type="file" accept="image/*,video/*" hidden></label><span id="groupPostMediaName" class="muted">Aucun fichier</span><button class="primary composer-publish" data-action="group-publish" data-id="${esc(id)}">Publier</button></div></div>`:`<div class="join-callout"><b>Rejoignez le groupe</b><span>pour publier, commenter et participer aux discussions.</span><button class="primary" data-action="toggle-group-member" data-id="${esc(id)}">Rejoindre le groupe</button></div>`}
         <div class="entity-tabs group-tabs"><button class="active" data-tab="posts" data-action="group-tab" data-id="${esc(id)}">Publications</button><button data-tab="videos" data-action="group-tab" data-id="${esc(id)}">Vidéos</button><button data-tab="events" data-action="group-tab" data-id="${esc(id)}">Événements</button><button data-tab="members" data-action="group-tab" data-id="${esc(id)}">Membres</button><button data-tab="about" data-action="group-tab" data-id="${esc(id)}">À propos</button></div>
