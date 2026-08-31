@@ -65,3 +65,39 @@ Run `PAGES_GROUPS_PREMIUM_REALTIME.sql` once after the main Supabase schema. It 
 - Para & Conf : interface restructurée selon la référence fournie, avec recherche dans les paramètres, icônes SVG distinctes et actions reliées aux contrôles existants du compte.
 - Navigation : fermeture des modales obsolètes lors d'une navigation et prévention des états de retour persistants.
 - Aucun nouveau schéma SQL n'est requis par ce patch ; les fonctions utilisent les tables déjà présentes dans le ZIP final.
+
+## Tafaß — Paramètres complets, tables Supabase et Realtime
+
+Le fichier `TAFASS_SETTINGS_COMPLETE_REALTIME.sql` ajoute les modules persistants des menus Paramètres et confidentialité :
+
+- audience des publications et Stories
+- centre familial
+- préférences des réactions
+- accessibilité
+- contenu multimédia
+- gestion du temps
+- effets
+- identification du profil
+- followers et visibilité publique
+- blocage (table existante renforcée)
+- statut en ligne
+- localisation
+- applications/sites connectés
+- intégrations professionnelles
+- mode professionnel
+- sessions de sécurité et activité de connexion
+- demandes d’export/suppression des données
+- acceptations des documents légaux
+- préférences publicitaires
+
+Toutes ces tables ont RLS et sont ajoutées à `supabase_realtime`. Les audiences `public / friends / private` sont également appliquées par une policy Supabase aux publications et Stories.
+
+### Installation Supabase
+
+1. Ouvrir **Supabase → SQL Editor**.
+2. Exécuter d'abord le schéma Tafaß principal déjà fourni dans le projet si ce n'est pas encore fait.
+3. Exécuter ensuite **`TAFASS_SETTINGS_COMPLETE_REALTIME.sql`** en entier.
+4. Attendre le message `TAFAß SETTINGS COMPLETE + REAL AUDIENCE POLICIES + REALTIME READY`.
+5. Recharger l'application.
+
+Le build conserve l'authentification Supabase existante et utilise les mêmes données du projet. Les nouveaux réglages sont sauvegardés dans Supabase et synchronisés en Realtime.

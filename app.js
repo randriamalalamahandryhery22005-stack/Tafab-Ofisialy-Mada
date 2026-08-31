@@ -13,7 +13,7 @@ document.documentElement.classList.add("app-boot");
   const routes = ["home","friends","search","messages","notifications","profile","reels","pages","groups","saved","menu","tafab","settings"];
   const state = {
     user: null, profile: null, route: "home", navStack: ["home"], backOverride: null, posts: [], friends: [], stories: [],
-    channel: null, theme: "dark", entering: false, loggingOut: false,
+    channel: null, theme: "dark", mediaAutoplay: true, defaultPostAudience: "public", defaultStoryAudience: "public", entering: false, loggingOut: false,
     profileTab: "posts", friendsTab: "suggestions", pagesTab: "mine", groupsTab: "mine", groupSort: "recent", selectedConversation: null, viewingProfileId: null, renderToken: 0, activePage: null, entityBackRoute: null
   };
 
@@ -169,6 +169,15 @@ document.documentElement.classList.add("app-boot");
     if (authEmail) state.profile.email = authEmail;
     const settings=(await sb.from("user_settings").select("theme").eq("user_id",state.user.id).maybeSingle()).data;
     if(settings?.theme==="light" || settings?.theme==="dark") state.theme=settings.theme;
+    const access=(await sb.from("accessibility_settings").select("large_text,reduce_motion,high_contrast").eq("user_id",state.user.id).maybeSingle()).data||{};
+    const mediaCfg=(await sb.from("media_settings").select("autoplay_videos,data_saver").eq("user_id",state.user.id).maybeSingle()).data||{};
+    const audienceCfg=(await sb.from("audience_settings").select("default_post_audience,story_audience").eq("user_id",state.user.id).maybeSingle()).data||{};
+    state.mediaAutoplay=mediaCfg.autoplay_videos!==false;
+    state.defaultPostAudience=audienceCfg.default_post_audience||"public";
+    state.defaultStoryAudience=audienceCfg.story_audience||"public";
+    document.body.classList.toggle("accessibility-large-text",!!access.large_text);
+    document.body.classList.toggle("accessibility-reduce-motion",!!access.reduce_motion);
+    document.body.classList.toggle("accessibility-high-contrast",!!access.high_contrast);
     const sideName = $("sideName"); if (sideName) sideName.textContent = nameOf(state.profile);
     const sideAvatar = $("sideAvatar"); if (sideAvatar) { sideAvatar.outerHTML = avatarHTML(state.profile, "avatar").replace("<span ", '<span id="sideAvatar" '); }
   }
@@ -317,7 +326,7 @@ async function createStory() {
     }
     const r=await sb.from("stories").insert({
       user_id:state.user.id, media_url:media_url||"data:text/plain;charset=utf-8,story",
-      media_type, text_overlay:text, visibility:"public"
+      media_type, text_overlay:text, visibility:state.defaultStoryAudience||"public"
     }).select().single();
     if(r.error) return toast(r.error.message);
     closeModal(); toast("Story publiée pendant 24 h."); await render();
@@ -398,7 +407,7 @@ async function publishPostNews() {
         media_url=sb.storage.from("posts").getPublicUrl(path).data.publicUrl;
         media_type=file.type.startsWith("video/")?"video":"image";
       }
-      const r=await sb.from("posts").insert({user_id:state.user.id,content:text,media_url,media_type,visibility:"public"}).select().single();
+      const r=await sb.from("posts").insert({user_id:state.user.id,content:text,media_url,media_type,visibility:state.defaultPostAudience||"public"}).select().single();
       if(r.error)throw new Error(r.error.message);
       await logActivity("post_created","Publication créée","post",r.data?.id||null);
       $("postText").value=""; if(pf)pf.value=""; if(vf)vf.value=""; if($("composerFileName"))$("composerFileName").textContent="";
@@ -416,7 +425,7 @@ async function publishPostNews() {
     const reactionVisual = Object.entries(counts).map(([k,v]) => `<span class="reaction-chip"><i>${reactionMeta[k]?.[1] || "👍"}</i><b>${v}</b></span>`).join("");
     const media = p.media_url
       ? (p.media_type === "video" || p.media_type === "reel"
-        ? `<video class="post-media" src="${esc(p.media_url)}" controls preload="metadata"></video>`
+        ? `<video class="post-media" src="${esc(p.media_url)}" controls ${state.mediaAutoplay?"autoplay muted":""} preload="metadata"></video>`
         : `<img class="post-media" src="${esc(p.media_url)}" alt="Publication">`)
       : "";
     const byParent = new Map();
@@ -1622,49 +1631,140 @@ async function genericListPage(route) {
     await settingsPage();
   }
 
+  async function settingsRowData(table, defaults = {}) {
+    if (!state.user) return defaults;
+    const r = await sb.from(table).select("*").eq("user_id", state.user.id).maybeSingle();
+    if (r.error) { console.warn("Tafaß settings read:", table, r.error.message); return defaults; }
+    return { ...defaults, ...(r.data || {}) };
+  }
+  async function saveSettingsTable(table, patch) {
+    if (!state.user) return toast("Session expirée.");
+    const r = await sb.from(table).upsert({ user_id: state.user.id, ...patch, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+    if (r.error) return toast(r.error.message);
+    await logActivity("settings_updated", `Paramètres ${table} mis à jour`, "settings");
+    toast("Paramètre enregistré"); closeModal(); await settingsPage();
+  }
+  function settingToggleRow(id, label, checked, key) {
+    return `<label class="setting-switch-line"><input id="${esc(id)}" type="checkbox" ${checked ? "checked" : ""}><span>${esc(label)}</span></label>`;
+  }
   async function openAdvancedSetting(action) {
-    const cfg=(await sb.from("user_settings").select("*").eq("user_id",state.user.id).maybeSingle()).data||{};
-    const saveToggle=async(key,label)=>{
-      const value=!(cfg[key]!==false);
-      await saveUserSetting({[key]:value});
-    };
-    if(action==="profile-lock"){
-      const next=cfg.profile_visibility==="private"?"public":"private";
-      return saveUserSetting({profile_visibility:next});
+    const cfg = await settingsRowData("user_settings", {});
+    const modal = (title, subtitle, body, saveAction="save-settings-generic") => openModal(`<div class="modal-box settings-modal fb-settings-detail"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • PARAMÈTRES</span><h3>${esc(title)}</h3><p class="muted settings-detail-copy">${esc(subtitle)}</p>${body}<button class="primary big" data-action="${saveAction}">Enregistrer</button></div>`);
+
+    if (action === "profile-lock") {
+      const locked = cfg.profile_visibility === "private";
+      return modal("Verrouillage du profil", "Quand le profil est verrouillé, l’accès aux informations publiques est limité.", settingToggleRow("advancedProfileLock", locked ? "Profil verrouillé" : "Verrouiller mon profil", locked, "profile_lock"), "save-profile-lock");
     }
-    if(action==="audience-defaults" || action==="post-privacy" || action==="story-privacy"){
-      return openModal(`<div class="modal-box settings-modal fb-settings-detail"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • AUDIENCE</span><h3>${action==="story-privacy"?"Audience des Stories":action==="post-privacy"?"Audience des publications":"Audience par défaut"}</h3><p class="muted">Ce réglage utilise la visibilité de profil actuellement enregistrée dans Tafaß.</p><select id="advancedVisibility"><option value="public" ${cfg.profile_visibility!=="private"?"selected":""}>Public</option><option value="private" ${cfg.profile_visibility==="private"?"selected":""}>Privé</option></select><button class="primary big" data-action="save-advanced-visibility">Enregistrer</button></div>`);
+    if (["audience-defaults","post-privacy","story-privacy"].includes(action)) {
+      const a = await settingsRowData("audience_settings", { default_post_audience:"public", story_audience:"public", reel_audience:"public" });
+      const key = action === "story-privacy" ? "story_audience" : "default_post_audience";
+      const title = action === "story-privacy" ? "Audience des Stories" : action === "post-privacy" ? "Audience des publications" : "Paramètres d’audience par défaut";
+      return modal(title, "Choisissez l’audience enregistrée et utilisée par défaut.", `<label>Audience<select id="advancedAudience" data-audience-key="${key}"><option value="public" ${a[key]==="public"?'selected':''}>Public</option><option value="friends" ${a[key]==="friends"?'selected':''}>Amis</option><option value="private" ${a[key]==="private"?'selected':''}>Moi uniquement</option></select></label>`, "save-audience-setting");
     }
-    const info={
-      "family-center":["Centre familial","Gérez ici les contrôles disponibles pour les relations et la confidentialité de votre compte.",true],
-      "reaction-settings":["Préférences des réactions","Les réactions J’aime, J’adore, Haha, Waouh, Triste et Grrr sont disponibles sur les publications Tafaß.",false],
-      "accessibility-settings":["Accessibilité","Les contrôles d’accessibilité de l’interface sont disponibles sur cet appareil. Le thème clair/sombre et la langue sont synchronisés avec votre compte.",false],
-      "media-settings":["Contenu multimédia","Les publications Tafaß prennent en charge les images et vidéos réelles via le stockage Supabase du projet.",false],
-      "time-management":["Gestion du temps","Cette section présente les outils de contrôle du temps disponibles dans l’application.",false],
-      "effects-settings":["Effets pour le visage et les mains","Les effets sont une préférence d’interface/appareil et ne modifient aucune donnée de compte.",false],
-      "page-privacy":["Pages","Gérez vos Pages, leurs membres, publications et messages depuis Pages ou Tafaß Business Suite.",false],
-      "followers-public":["Followers et contenu public","La visibilité publique est contrôlée par les réglages de confidentialité du compte.",false],
-      "profile-identification":["Profil et identification","Votre profil, avatar, couverture et informations publiques sont gérés depuis Profil.",false],
-      "blocking":["Blocage","Les profils bloqués sont protégés par les contrôles de confidentialité disponibles dans Tafaß.",false],
-      "online-status":["Statut En ligne","La messagerie et les notifications utilisent les données de session Tafaß en temps réel.",false],
-      "location-settings":["Localisation","La ville et la localisation enregistrées dans votre profil sont gérées depuis les informations du compte.",false],
-      "apps-web":["Applications et sites Web","Aucune connexion externe supplémentaire n’est active par défaut dans ce build Tafaß.",false],
-      "professional-integrations":["Intégrations professionnelles","Vos Pages et outils professionnels sont disponibles via Tafaß Business Suite.",false],
-      "information-management":["Comment gérer vos informations","Utilisez Espace Compte, Historique d’activité et les réglages de confidentialité pour contrôler vos informations.",false],
-      "terms":["Conditions de service","Conditions d’utilisation de Tafaß.",false],
-      "privacy-policy":["Politique de confidentialité","Informations sur la confidentialité et les contrôles de visibilité de Tafaß.",false],
-      "cookies":["Politique d’utilisation des cookies","Informations générales sur les cookies et technologies similaires.",false],
-      "community-standards":["Standards de la communauté","Règles générales applicables aux contenus et interactions sur Tafaß.",false],
-      "about-tafass":["À propos","Tafaß — votre réseau, votre communauté.",false],
-      "professional-mode":["Mode professionnel","Le mode professionnel de Tafaß s’appuie sur vos Pages et Tafaß Business Suite.",false]
-    };
-    const item=info[action]||["Paramètre Tafaß","Ce réglage est disponible dans l’interface de votre compte.",false];
-    openModal(`<div class="modal-box settings-modal fb-settings-detail"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • PARAMÈTRES</span><h3>${esc(item[0])}</h3><p class="muted settings-detail-copy">${esc(item[1])}</p>${item[2]?`<div class="settings-inline-controls"><button class="setting-card" data-action="friend-settings"><span><b>Demandes d’amis</b><small>${cfg.allow_friend_requests===false?"Désactivées":"Activées"}</small></span><span>›</span></button><button class="setting-card" data-action="message-settings"><span><b>Messages</b><small>${cfg.allow_messages===false?"Désactivés":"Activés"}</small></span><span>›</span></button></div>`:""}<button class="primary big" data-action="close-modal">Fermer</button></div>`);
+    if (action === "family-center") {
+      const f = await settingsRowData("family_settings", { safety_mode:true, contact_restrictions:false });
+      return modal("Centre familial", "Contrôlez les protections et les interactions de votre compte.", `${settingToggleRow("familySafety", "Mode sécurité renforcée", f.safety_mode !== false, "safety_mode")}${settingToggleRow("familyContacts", "Limiter les contacts inconnus", !!f.contact_restrictions, "contact_restrictions")}`, "save-family-settings");
+    }
+    if (action === "reaction-settings") {
+      const r = await settingsRowData("reaction_settings", { show_reaction_counts:true, personalized_reactions:true });
+      return modal("Préférences des réactions", "Contrôlez l’affichage des compteurs et les suggestions de réactions.", `${settingToggleRow("showReactionCounts", "Afficher les compteurs de réactions", r.show_reaction_counts !== false, "show_reaction_counts")}${settingToggleRow("personalizedReactions", "Suggestions de réactions personnalisées", r.personalized_reactions !== false, "personalized_reactions")}`, "save-reaction-settings");
+    }
+    if (action === "accessibility-settings") {
+      const a = await settingsRowData("accessibility_settings", { large_text:false, reduce_motion:false, high_contrast:false });
+      return modal("Accessibilité", "Ces préférences sont enregistrées sur votre compte et synchronisées en temps réel.", `${settingToggleRow("largeText", "Texte agrandi", !!a.large_text, "large_text")}${settingToggleRow("reduceMotion", "Réduire les animations", !!a.reduce_motion, "reduce_motion")}${settingToggleRow("highContrast", "Contraste renforcé", !!a.high_contrast, "high_contrast")}`, "save-accessibility-settings");
+    }
+    if (action === "media-settings") {
+      const m = await settingsRowData("media_settings", { autoplay_videos:true, data_saver:false, upload_quality:"standard" });
+      return modal("Contenu multimédia", "Gérez la lecture automatique et la qualité des médias.", `<label>Qualité d’envoi<select id="uploadQuality"><option value="standard" ${m.upload_quality==='standard'?'selected':''}>Standard</option><option value="high" ${m.upload_quality==='high'?'selected':''}>Élevée</option><option value="data_saver" ${m.upload_quality==='data_saver'?'selected':''}>Économie de données</option></select></label>${settingToggleRow("autoplayVideos", "Lecture automatique des vidéos", m.autoplay_videos !== false, "autoplay_videos")}${settingToggleRow("dataSaver", "Économie de données", !!m.data_saver, "data_saver")}`, "save-media-settings");
+    }
+    if (action === "time-management") {
+      const t = await settingsRowData("time_management_settings", { daily_limit_minutes:0, reminders_enabled:true, quiet_start:"22:00", quiet_end:"06:00" });
+      return modal("Gestion du temps", "Définissez une limite quotidienne et des rappels. 0 signifie aucune limite.", `<label>Limite quotidienne (minutes)<input id="dailyLimit" type="number" min="0" max="1440" value="${esc(t.daily_limit_minutes||0)}"></label>${settingToggleRow("timeReminders", "Rappels de temps", t.reminders_enabled !== false, "reminders_enabled")}<div class="grid2"><label>Début silencieux<input id="quietStart" type="time" value="${esc(t.quiet_start||'22:00')}"></label><label>Fin silencieux<input id="quietEnd" type="time" value="${esc(t.quiet_end||'06:00')}"></label></div>`, "save-time-settings");
+    }
+    if (action === "effects-settings") {
+      const e = await settingsRowData("effects_settings", { effects_enabled:true, face_effects:true, hand_effects:true });
+      return modal("Effets pour le visage et les mains", "Ces préférences contrôlent les effets proposés par Tafaß lorsque la fonction est disponible.", `${settingToggleRow("effectsEnabled", "Autoriser les effets", e.effects_enabled !== false, "effects_enabled")}${settingToggleRow("faceEffects", "Effets visage", e.face_effects !== false, "face_effects")}${settingToggleRow("handEffects", "Effets mains", e.hand_effects !== false, "hand_effects")}`, "save-effects-settings");
+    }
+    if (action === "followers-public") {
+      const f = await settingsRowData("audience_settings", { followers_visibility:"public" });
+      return modal("Followers et contenu public", "Contrôlez qui peut vous suivre et voir votre contenu public.", `<label>Visibilité des followers<select id="followersVisibility"><option value="public" ${f.followers_visibility==='public'?'selected':''}>Tout le monde</option><option value="friends" ${f.followers_visibility==='friends'?'selected':''}>Amis</option><option value="private" ${f.followers_visibility==='private'?'selected':''}>Personne</option></select></label>`, "save-followers-setting");
+    }
+    if (action === "profile-identification") {
+      const p = await settingsRowData("profile_identification_settings", { allow_tagging:true, review_tags:false, search_engine_index:true });
+      return modal("Profil et identification", "Gérez les identifications et l’apparence publique de votre profil.", `${settingToggleRow("allowTagging", "Autoriser les identifications", p.allow_tagging !== false, "allow_tagging")}${settingToggleRow("reviewTags", "Examiner les identifications avant publication", !!p.review_tags, "review_tags")}${settingToggleRow("searchIndex", "Autoriser l’indexation publique du profil", p.search_engine_index !== false, "search_engine_index")}`, "save-profile-identification");
+    }
+    if (action === "blocking") {
+      const r = await sb.from("blocked_profiles").select("id,blocked_id,created_at,profiles!blocked_profiles_blocked_id_fkey(first_name,last_name,username,avatar_url)").eq("blocker_id", state.user.id).order("created_at", {ascending:false});
+      const rows = r.data || [];
+      return openModal(`<div class="modal-box settings-modal fb-settings-detail"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • CONFIDENTIALITÉ</span><h3>Blocage</h3><p class="muted">Les comptes bloqués ne peuvent plus interagir normalement avec vous.</p><div class="clean-list">${rows.map(x=>`<div class="list-row"><div class="grow"><b>${esc(nameOf(x.profiles||{}))}</b><small>Bloqué ${timeAgo(x.created_at)}</small></div><button class="ghost-action" data-action="unblock-settings-user" data-id="${esc(x.blocked_id)}">Débloquer</button></div>`).join("") || '<div class="empty">Aucun compte bloqué.</div>'}</div><button class="primary big" data-action="close-modal">Fermer</button></div>`);
+    }
+    if (action === "online-status") {
+      const o = await settingsRowData("online_status_settings", { visible:true, last_seen_visible:true });
+      return modal("Statut En ligne", "Choisissez si votre présence et votre dernière activité sont visibles.", `${settingToggleRow("onlineVisible", "Afficher mon statut En ligne", o.visible !== false, "visible")}${settingToggleRow("lastSeenVisible", "Afficher ma dernière activité", o.last_seen_visible !== false, "last_seen_visible")}`, "save-online-settings");
+    }
+    if (action === "location-settings") {
+      const l = await settingsRowData("location_settings", { profile_location_enabled:true, precise_location_enabled:false });
+      return modal("Localisation", "Contrôlez l’utilisation de la localisation enregistrée dans votre profil.", `${settingToggleRow("profileLocation", "Afficher ma ville sur mon profil", l.profile_location_enabled !== false, "profile_location_enabled")}${settingToggleRow("preciseLocation", "Autoriser la localisation précise", !!l.precise_location_enabled, "precise_location_enabled")}`, "save-location-settings");
+    }
+    if (action === "apps-web") {
+      const r = await sb.from("connected_apps").select("*").eq("user_id", state.user.id).order("connected_at", {ascending:false});
+      const rows = r.data || [];
+      return openModal(`<div class="modal-box settings-modal fb-settings-detail"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • CONNEXIONS</span><h3>Applications et sites Web</h3><p class="muted">Gérez les connexions externes autorisées pour votre compte.</p><div class="clean-list">${rows.map(x=>`<div class="list-row"><div class="grow"><b>${esc(x.app_name)}</b><small>${esc(x.status||'active')} · ${timeAgo(x.connected_at)}</small></div><button class="ghost-action" data-action="revoke-app" data-id="${esc(x.id)}">Révoquer</button></div>`).join("") || '<div class="empty">Aucune application connectée.</div>'}</div><button class="primary big" data-action="close-modal">Fermer</button></div>`);
+    }
+    if (action === "professional-integrations") {
+      const pages = (await sb.from("pages").select("id,name").eq("owner_id",state.user.id).order("created_at",{ascending:false})).data || [];
+      const ints = (await sb.from("professional_integrations").select("*").eq("user_id",state.user.id)).data || [];
+      return openModal(`<div class="modal-box settings-modal fb-settings-detail"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • PROFESSIONNEL</span><h3>Intégrations professionnelles</h3><p class="muted">Les Pages et Business Suite utilisent vos données réelles Supabase.</p><div class="clean-list">${pages.map(pg=>`<div class="list-row"><div class="grow"><b>${esc(pg.name)}</b><small>Page Tafaß</small></div><button class="ghost-action" data-action="page-open" data-id="${esc(pg.id)}">Ouvrir</button></div>`).join("") || '<div class="empty">Aucune Page créée.</div>'}</div><div class="clean-list">${ints.map(x=>`<div class="list-row"><div class="grow"><b>${esc(x.provider)}</b><small>${esc(x.status||'active')}</small></div><button class="ghost-action" data-action="revoke-integration" data-id="${esc(x.id)}">Révoquer</button></div>`).join("")}</div><button class="primary big" data-action="close-modal">Fermer</button></div>`);
+    }
+    if (action === "information-management") {
+      const r = await sb.from("data_requests").select("*").eq("user_id",state.user.id).order("created_at",{ascending:false}).limit(20);
+      return openModal(`<div class="modal-box settings-modal fb-settings-detail"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • DONNÉES</span><h3>Comment gérer vos informations</h3><p class="muted">Vous pouvez demander une copie de vos données ou demander la suppression du compte.</p><div class="form-stack"><button class="primary" data-action="request-data-export">Demander une copie de mes données</button><button class="danger-button" data-action="request-account-deletion">Demander la suppression du compte</button></div><h4>Demandes récentes</h4><div class="clean-list">${(r.data||[]).map(x=>`<div class="list-row"><div class="grow"><b>${esc(x.request_type)}</b><small>${esc(x.status)} · ${timeAgo(x.created_at)}</small></div></div>`).join("")||'<div class="empty">Aucune demande.</div>'}</div></div>`);
+    }
+    if (action === "terms" || action === "privacy-policy" || action === "cookies" || action === "community-standards" || action === "about-tafass") {
+      const docs = {
+        terms:["Conditions de service","Utilisez Tafaß de manière légale, respectueuse et conforme aux règles de la communauté."],
+        "privacy-policy":["Politique de confidentialité","Tafaß utilise les données nécessaires au fonctionnement du compte, des publications, des messages et des paramètres que vous choisissez."],
+        cookies:["Politique d’utilisation des cookies","Les technologies locales peuvent être utilisées pour maintenir la session, mémoriser les préférences et améliorer l’expérience."],
+        "community-standards":["Standards de la communauté","Pas de harcèlement, fraude, usurpation, contenu illégal ou abus des fonctionnalités de la plateforme."],
+        "about-tafass":["À propos de Tafaß","Tafaß est un réseau social construit avec authentification Supabase, données réelles et synchronisation Realtime."]
+      };
+      const d=docs[action];
+      const legal=(await sb.from("legal_acceptances").select("accepted_at").eq("user_id",state.user.id).eq("document_type",action).maybeSingle()).data;
+      return openModal(`<div class="modal-box settings-modal fb-settings-detail"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • INFORMATIONS</span><h3>${esc(d[0])}</h3><p class="muted settings-detail-copy">${esc(d[1])}</p><p class="muted">${legal?.accepted_at ? `Dernière acceptation : ${timeAgo(legal.accepted_at)}` : "Vous n’avez pas encore enregistré votre acceptation."}</p>${action!=='about-tafass'?`<button class="primary big" data-action="accept-legal" data-id="${esc(action)}">J’accepte</button>`:`<button class="primary big" data-action="close-modal">Fermer</button>`}</div>`);
+    }
+    if (action === "professional-mode") {
+      const p = await settingsRowData("professional_settings", { enabled:false });
+      return modal("Mode professionnel", "Activez ou désactivez les outils professionnels de votre compte.", settingToggleRow("professionalEnabled", "Activer le mode professionnel", !!p.enabled, "enabled"), "save-professional-mode");
+    }
+    return modal("Paramètre Tafaß", "Ce réglage est disponible dans votre compte.", `<p class="muted">Aucune action supplémentaire n’est nécessaire pour le moment.</p>`, "close-modal");
   }
 
-  function securitySettings() {
-    openModal(`<div class="modal-box settings-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • SÉCURITÉ</span><h3>Sécurité et connexion</h3><p class="muted">Compte connecté : ${esc(state.user?.email || "Compte Tafaß")}</p><div class="form-stack"><label>Nouveau mot de passe<input id="newPassword" type="password" minlength="6" autocomplete="new-password" placeholder="Au moins 6 caractères"></label><label>Confirmer le mot de passe<input id="confirmPassword" type="password" minlength="6" autocomplete="new-password" placeholder="Répétez le mot de passe"></label><button class="primary big" data-action="change-password">Modifier le mot de passe</button><button class="ghost-action big" data-action="logout">Se déconnecter</button></div></div>`);
+
+  async function ensureSettingsSession() {
+    if (!state.user) return;
+    const id = localStorage.getItem("tafass_device_session_id") || crypto.randomUUID();
+    localStorage.setItem("tafass_device_session_id", id);
+    const device = `${navigator.userAgent||"Tafaß"}`.slice(0,180);
+    await sb.from("security_sessions").upsert({ user_id:state.user.id, device_session_id:id, device_label:device, last_seen_at:new Date().toISOString(), active:true }, {onConflict:"user_id,device_session_id"});
+    await sb.from("login_activity").insert({ user_id:state.user.id, device_session_id:id, event_type:"session_seen", device_label:device });
   }
+  async function saveAdvancedPatch(table, patch) { return saveSettingsTable(table, patch); }
+  async function unblockSettingsUser(id) {
+    const r=await sb.from("blocked_profiles").delete().eq("blocker_id",state.user.id).eq("blocked_id",id);
+    if(r.error)return toast(r.error.message); toast("Compte débloqué"); return openAdvancedSetting("blocking");
+  }
+  async function revokeApp(id) { const r=await sb.from("connected_apps").update({status:"revoked",revoked_at:new Date().toISOString()}).eq("id",id).eq("user_id",state.user.id); if(r.error)return toast(r.error.message); toast("Connexion révoquée"); return openAdvancedSetting("apps-web"); }
+  async function revokeIntegration(id) { const r=await sb.from("professional_integrations").update({status:"revoked",revoked_at:new Date().toISOString()}).eq("id",id).eq("user_id",state.user.id); if(r.error)return toast(r.error.message); toast("Intégration révoquée"); return openAdvancedSetting("professional-integrations"); }
+  async function requestData(type) { const r=await sb.from("data_requests").insert({user_id:state.user.id,request_type:type,status:"pending"}); if(r.error)return toast(r.error.message); await logActivity("data_request",`Demande ${type}`,"data_request",r.data?.[0]?.id); toast("Demande enregistrée"); return openAdvancedSetting("information-management"); }
+  async function acceptLegal(type) { const r=await sb.from("legal_acceptances").upsert({user_id:state.user.id,document_type:type,document_version:"1.0",accepted_at:new Date().toISOString()},{onConflict:"user_id,document_type"}); if(r.error)return toast(r.error.message); toast("Acceptation enregistrée"); return openAdvancedSetting(type); }
+
+  async function securitySettings() {
+    const sid=localStorage.getItem("tafass_device_session_id");
+    const sessions=(await sb.from("security_sessions").select("*").eq("user_id",state.user.id).eq("active",true).order("last_seen_at",{ascending:false})).data||[];
+    const logs=(await sb.from("login_activity").select("*").eq("user_id",state.user.id).order("created_at",{ascending:false}).limit(8)).data||[];
+    openModal(`<div class="modal-box settings-modal fb-settings-detail"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • SÉCURITÉ</span><h3>Sécurité et connexion</h3><p class="muted">Compte connecté : ${esc(state.user?.email || "Compte Tafaß")}</p><section class="clean-section"><h4>Sessions actives</h4><div class="clean-list">${sessions.map(x=>`<div class="list-row"><div class="grow"><b>${x.device_session_id===sid?'Cet appareil':'Appareil connecté'}</b><small>${esc(x.device_label||'Tafaß')} · ${timeAgo(x.last_seen_at)}</small></div>${x.device_session_id===sid?'<span class="secure-pill-v5">● Actif</span>':`<button class="ghost-action" data-action="revoke-session" data-id="${esc(x.id)}">Révoquer</button>`}</div>`).join('')||'<div class="empty">Aucune session enregistrée.</div>'}</div></section><section class="clean-section"><h4>Activité de connexion</h4><div class="clean-list">${logs.map(x=>`<div class="list-row"><div class="grow"><b>${esc(x.event_type||'connexion')}</b><small>${esc(x.device_label||'')} · ${timeAgo(x.created_at)}</small></div></div>`).join('')||'<div class="empty">Aucune activité.</div>'}</div></section><div class="form-stack"><label>Nouveau mot de passe<input id="newPassword" type="password" minlength="6" autocomplete="new-password" placeholder="Au moins 6 caractères"></label><label>Confirmer le mot de passe<input id="confirmPassword" type="password" minlength="6" autocomplete="new-password" placeholder="Répétez le mot de passe"></label><button class="primary big" data-action="change-password">Modifier le mot de passe</button><button class="ghost-action big" data-action="logout">Se déconnecter</button></div></div>`);
+  }
+  async function revokeSession(id) { const r=await sb.from("security_sessions").update({active:false,revoked_at:new Date().toISOString()}).eq("id",id).eq("user_id",state.user.id); if(r.error)return toast(r.error.message); await sb.from("login_activity").insert({user_id:state.user.id,device_session_id:id,event_type:"session_revoked",device_label:"Tafaß"}); toast("Session révoquée"); return securitySettings(); }
   async function changePassword() {
     const password=$("newPassword")?.value || "", confirm=$("confirmPassword")?.value || "";
     if(password.length < 6) return toast("Le mot de passe doit contenir au moins 6 caractères.");
@@ -1913,6 +2013,7 @@ async function genericListPage(route) {
   }
 
   async function setupRealtime() {
+    if (state.user) ensureSettingsSession().catch(e=>console.warn("Tafaß session log:",e));
     if (state.channel) {
       try { await sb.removeChannel(state.channel); } catch (_) {}
       state.channel = null;
@@ -1963,7 +2064,24 @@ async function genericListPage(route) {
       conversation_members: () => { if (state.route==="messages") messagesPage(); },
       tafab_listings: () => { if (state.route==="tafab") servicePage("marketplace"); },
       tafab_listing_messages: () => { if (state.route==="tafab") servicePage("marketplace"); },
-      tafab_ads: () => {}
+      tafab_ads: () => {},
+      audience_settings: () => { if (state.route==="settings") settingsPage(); },
+      family_settings: () => { if (state.route==="settings") settingsPage(); },
+      reaction_settings: () => { if (state.route==="settings") settingsPage(); },
+      accessibility_settings: () => { if (state.route==="settings") settingsPage(); },
+      media_settings: () => { if (state.route==="settings") settingsPage(); },
+      time_management_settings: () => { if (state.route==="settings") settingsPage(); },
+      effects_settings: () => { if (state.route==="settings") settingsPage(); },
+      profile_identification_settings: () => { if (state.route==="settings") settingsPage(); },
+      online_status_settings: () => { if (state.route==="settings") settingsPage(); },
+      location_settings: () => { if (state.route==="settings") settingsPage(); },
+      connected_apps: () => { if (state.route==="settings") settingsPage(); },
+      professional_integrations: () => { if (state.route==="settings") settingsPage(); },
+      data_requests: () => { if (state.route==="settings") settingsPage(); },
+      legal_acceptances: () => { if (state.route==="settings") settingsPage(); },
+      professional_settings: () => { if (state.route==="settings") settingsPage(); },
+      security_sessions: () => { if (state.route==="settings") settingsPage(); },
+      login_activity: () => { if (state.route==="settings") settingsPage(); }
     };
 
     Object.keys(refresh).forEach(table => {
@@ -2706,6 +2824,26 @@ async function genericListPage(route) {
     if (action === "send-tafab-message") return sendTafabMessage(id);
     if (action === "tafab-info") { const x=(await sb.from("tafab_listings").select("*").eq("id",id).maybeSingle()).data; if(!x)return toast("Offre introuvable"); return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">OFFRE TAFAß</span><h3>${esc(x.title)}</h3><p>${esc(x.description||"")}</p><p class="muted">${esc(x.location||"")} ${x.price!=null?"• "+esc(x.price)+" "+esc(x.currency||"MGA"):""}</p><button class="primary big" data-action="tafab-contact" data-id="${esc(x.id)}">Contacter le vendeur</button></div>`); }
     if (action === "security-settings") return securitySettings();
+    if (action === "revoke-session") return revokeSession(id);
+    if (action === "save-profile-lock") return saveUserSetting({profile_visibility: $("advancedProfileLock")?.checked ? "private" : "public"});
+    if (action === "save-audience-setting") { const key = $("advancedAudience")?.dataset.audienceKey || "default_post_audience"; return saveAdvancedPatch("audience_settings", {[key]:$("advancedAudience")?.value||"public"}); }
+    if (action === "save-family-settings") return saveAdvancedPatch("family_settings", {safety_mode:!!$("familySafety")?.checked, contact_restrictions:!!$("familyContacts")?.checked});
+    if (action === "save-reaction-settings") return saveAdvancedPatch("reaction_settings", {show_reaction_counts:!!$("showReactionCounts")?.checked, personalized_reactions:!!$("personalizedReactions")?.checked});
+    if (action === "save-accessibility-settings") { const patch={large_text:!!$("largeText")?.checked, reduce_motion:!!$("reduceMotion")?.checked, high_contrast:!!$("highContrast")?.checked}; document.body.classList.toggle("accessibility-large-text",patch.large_text); document.body.classList.toggle("accessibility-reduce-motion",patch.reduce_motion); return saveAdvancedPatch("accessibility_settings",patch); }
+    if (action === "save-media-settings") return saveAdvancedPatch("media_settings", {autoplay_videos:!!$("autoplayVideos")?.checked, data_saver:!!$("dataSaver")?.checked, upload_quality:$("uploadQuality")?.value||"standard"});
+    if (action === "save-time-settings") return saveAdvancedPatch("time_management_settings", {daily_limit_minutes:Number($("dailyLimit")?.value||0), reminders_enabled:!!$("timeReminders")?.checked, quiet_start:$("quietStart")?.value||"22:00", quiet_end:$("quietEnd")?.value||"06:00"});
+    if (action === "save-effects-settings") return saveAdvancedPatch("effects_settings", {effects_enabled:!!$("effectsEnabled")?.checked, face_effects:!!$("faceEffects")?.checked, hand_effects:!!$("handEffects")?.checked});
+    if (action === "save-followers-setting") return saveAdvancedPatch("audience_settings", {followers_visibility:$("followersVisibility")?.value||"public"});
+    if (action === "save-profile-identification") return saveAdvancedPatch("profile_identification_settings", {allow_tagging:!!$("allowTagging")?.checked, review_tags:!!$("reviewTags")?.checked, search_engine_index:!!$("searchIndex")?.checked});
+    if (action === "unblock-settings-user") return unblockSettingsUser(id);
+    if (action === "save-online-settings") return saveAdvancedPatch("online_status_settings", {visible:!!$("onlineVisible")?.checked, last_seen_visible:!!$("lastSeenVisible")?.checked});
+    if (action === "save-location-settings") return saveAdvancedPatch("location_settings", {profile_location_enabled:!!$("profileLocation")?.checked, precise_location_enabled:!!$("preciseLocation")?.checked});
+    if (action === "revoke-app") return revokeApp(id);
+    if (action === "revoke-integration") return revokeIntegration(id);
+    if (action === "request-data-export") return requestData("export");
+    if (action === "request-account-deletion") return requestData("deletion");
+    if (action === "accept-legal") return acceptLegal(id);
+    if (action === "save-professional-mode") return saveAdvancedPatch("professional_settings", {enabled:!!$("professionalEnabled")?.checked});
     if (action === "setting") return settingInfo(actionEl.dataset.name);
     if (["family-center","audience-defaults","reaction-settings","accessibility-settings","media-settings","time-management","effects-settings","profile-lock","professional-mode","post-privacy","story-privacy","page-privacy","followers-public","profile-identification","blocking","online-status","location-settings","apps-web","professional-integrations","information-management","terms","privacy-policy","cookies","community-standards","about-tafass"].includes(action)) return openAdvancedSetting(action);
     if (action === "notifications-settings") {
