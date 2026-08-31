@@ -291,8 +291,8 @@ returns boolean language sql stable security definer set search_path=public as $
       p_visibility = 'friends'
       and exists (
         select 1 from public.friendships f
-        where f.status='accepted'
-          and ((f.user_id=auth.uid() and f.friend_id=p_owner) or (f.user_id=p_owner and f.friend_id=auth.uid()))
+        where ((f.user_id=auth.uid() and f.friend_id=p_owner)
+            or (f.user_id=p_owner and f.friend_id=auth.uid()))
       )
     );
 $$;

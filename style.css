@@ -3272,17 +3272,3 @@ button[data-action],button[data-route]{-webkit-tap-highlight-color:transparent!i
   .page-mode-active .bottom-nav button small{font-size:8px!important;}
 }
 .nav-ico svg,.nav-svg svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}
-
-/* =========================================================
-   Tafaß — Settings functional controls
-   ========================================================= */
-.settings-switch-line, .setting-switch-line { display:flex; align-items:center; gap:12px; padding:12px 0; }
-.setting-switch-line input { width:20px; height:20px; accent-color: currentColor; }
-.fb-settings-detail .clean-section { margin-top:16px; }
-.fb-settings-detail h4 { margin:16px 0 8px; }
-.fb-settings-detail .clean-list { max-height:320px; overflow:auto; }
-.fb-settings-detail select, .fb-settings-detail input[type="number"], .fb-settings-detail input[type="time"] { width:100%; }
-.accessibility-large-text { font-size: 110%; }
-.accessibility-large-text .fb-settings-row small, .accessibility-large-text .muted { font-size: 1em; }
-.accessibility-reduce-motion *, .accessibility-reduce-motion *::before, .accessibility-reduce-motion *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
-.accessibility-high-contrast .card, .accessibility-high-contrast .modal-box, .accessibility-high-contrast .fb-settings-row { border-width: 2px; }
