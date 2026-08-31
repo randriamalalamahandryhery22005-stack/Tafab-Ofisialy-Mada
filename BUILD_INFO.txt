@@ -1,6 +1,8 @@
-TAFAß PAGES + GROUPES PREMIUM COMPLETE REALTIME
-Build: 2026-08-30
-Base: Tafaß Ofisialy
-UI: premium mobile-first
-Backend: Supabase + RLS + Realtime
-Main SQL: TAFASS_PAGES_GROUPS_PREMIUM_COMPLETE.sql
+TAFAß PAGES + GROUPES PREMIUM V3 — ROLE / UI / MOBILE FIX
+- Page action row: Suivre | Messages | •••
+- Page 3 stats
+- Page more menu + friend invitations
+- Page owner/admin publication permissions
+- Group admin-only management; members can publish/invite friends
+- Supabase RLS + GRANT + Realtime migration included
+- JavaScript syntax verified with node --check
