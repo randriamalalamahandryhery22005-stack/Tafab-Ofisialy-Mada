@@ -2710,3 +2710,116 @@ button[data-action],button[data-route]{-webkit-tap-highlight-color:transparent!i
  .entity-detail-modal.group-detail .group-action-bar{grid-template-columns:1fr 1fr!important}
  .entity-detail-modal.group-detail .group-action-bar button:last-child{grid-column:1/-1}
 }
+
+
+/* V13 — Facebook-inspired Pages & Groupes UI
+   Frontend-only presentation layer; existing Supabase data/actions remain the source of truth. */
+.fb-shell{padding:0!important}
+.fb-hub{width:100%;max-width:760px;margin:0 auto;padding:0 0 30px}
+.fb-top-tabs{display:flex;align-items:center;gap:8px;padding:10px 0 14px;border-bottom:1px solid rgba(255,255,255,.10);overflow-x:auto;scrollbar-width:none}
+.fb-top-tabs::-webkit-scrollbar{display:none}
+.fb-top-tabs button{flex:0 0 auto;min-height:44px;padding:0 14px;border-radius:24px;background:transparent;color:#e9eef7;font-size:15px;font-weight:800;white-space:nowrap}
+.fb-top-tabs button.active{background:#263f5d;color:#79b1ff}
+.fb-top-tabs .fb-create-top{background:#34373d;color:#f6f7f9}
+.fb-section-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px 2px 9px}
+.fb-section-heading h3{margin:0;font-size:21px;letter-spacing:-.3px}
+.fb-link-btn{color:#73aaff;font-size:14px;font-weight:750;padding:5px}
+.fb-business-card{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.09)}
+.fb-business-icon{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:#34373d;color:#dfe5ed;font-size:20px;flex:0 0 auto}
+.fb-business-icon.big{width:54px;height:54px}
+.fb-business-card>div:nth-child(2){min-width:0;flex:1}
+.fb-business-card b,.fb-business-card small{display:block}
+.fb-business-card small{color:#a7afbd;font-size:11px;margin-top:3px;line-height:1.35}
+.fb-entity-list{border-top:1px solid rgba(255,255,255,.09)}
+.fb-entity-row{display:flex;align-items:center;gap:9px;min-height:78px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.09)}
+.fb-entity-main{display:flex;align-items:center;gap:13px;text-align:left;min-width:0;flex:1;padding:0;background:transparent}
+.fb-entity-avatar{width:58px;height:58px;border-radius:12px;overflow:hidden;display:grid;place-items:center;flex:0 0 auto;background:#30343a;border:0}
+.fb-entity-avatar.group{border-radius:12px}
+.fb-entity-avatar img{width:100%;height:100%;object-fit:cover}
+.fb-entity-copy{min-width:0;display:block}
+.fb-entity-copy b{display:block;font-size:16px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fb-entity-copy small{display:block;color:#aeb5c0;font-size:12px;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fb-entity-copy em{display:block;color:#858e9c;font-size:11px;font-style:normal;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fb-entity-actions{display:flex;align-items:center;gap:6px;flex:0 0 auto}
+.fb-blue-btn,.fb-gray-btn,.fb-more-btn{min-height:38px;border-radius:8px;padding:0 14px;font-size:13px;font-weight:800;white-space:nowrap}
+.fb-blue-btn{background:#2374f2;color:#fff}
+.fb-gray-btn{background:#3a3d42;color:#f0f2f5}
+.fb-more-btn{width:40px;padding:0;background:#35383d;color:#eef1f5;font-size:14px}
+.fb-create-row{display:flex;align-items:center;gap:13px;width:100%;padding:10px 0 14px;text-align:left;border-bottom:1px solid rgba(255,255,255,.09);font-size:16px}
+.fb-create-row span{width:58px;height:58px;border-radius:50%;display:grid;place-items:center;background:#35383d;color:#f2f4f7;font-size:30px}
+.fb-post-feed{display:grid;gap:10px;padding-top:10px}
+.fb-group-post{padding:14px 0;border-bottom:1px solid rgba(255,255,255,.10)}
+.fb-post-head{display:flex;gap:10px;align-items:center}
+.fb-post-head>div:last-child{min-width:0}
+.fb-post-head b,.fb-post-head small{display:block}
+.fb-post-head small{color:#9da6b4;font-size:11px;margin-top:2px}
+.fb-inline-link{color:#78aaff;font-weight:750}
+.fb-group-post>p{font-size:14px;line-height:1.5;margin:10px 0}
+.fb-post-counts{display:flex;justify-content:space-between;color:#8f98a6;font-size:11px;padding:9px 2px 6px}
+.fb-post-actions{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid rgba(255,255,255,.07);border-bottom:1px solid rgba(255,255,255,.07)}
+.fb-post-actions button{min-height:40px;color:#c8ced8;font-size:12px;font-weight:750}
+.fb-post-actions button.active{color:#6fa9ff}
+.fb-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:7px;padding:46px 18px;color:#aeb6c2}
+.fb-empty>div{font-size:30px;color:#6ea7ff}
+.fb-empty b{font-size:16px;color:#f3f5f8}
+.fb-empty span{font-size:12px;max-width:360px;line-height:1.45}
+.fb-empty .fb-blue-btn{margin-top:8px}
+.fb-business-modal,.fb-more-modal{width:min(620px,calc(100vw - 18px));padding:18px!important;background:#242526!important;border:1px solid rgba(255,255,255,.12)!important;border-radius:14px!important;color:#f5f6f7}
+.fb-business-modal-head{display:flex;gap:13px;align-items:center;padding:5px 0 18px;border-bottom:1px solid rgba(255,255,255,.10)}
+.fb-business-modal-head h2{margin:4px 0;font-size:22px}
+.fb-business-modal-head p{margin:0;color:#aeb4bf;font-size:12px}
+.fb-business-tools{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:14px 0}
+.fb-tool-card{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;padding:13px;border-radius:10px;background:#303134}
+.fb-tool-card b{font-size:21px;color:#7db1ff}.fb-tool-card span{font-weight:800}.fb-tool-card small{color:#9ca4af}
+.fb-business-modal h3{margin:6px 0 8px}
+.fb-business-page{display:flex;align-items:center;gap:10px;width:100%;padding:10px 0;border-top:1px solid rgba(255,255,255,.08);text-align:left}
+.fb-business-avatar{width:44px;height:44px;border-radius:50%;overflow:hidden;flex:0 0 auto}
+.fb-business-avatar img{width:100%;height:100%;object-fit:cover}
+.fb-business-page span{flex:1;min-width:0}.fb-business-page b,.fb-business-page small{display:block}.fb-business-page small{color:#9ca4af;margin-top:3px}.fb-business-page strong{color:#9da5b1;font-size:24px}
+.fb-more-list{display:grid;gap:2px;margin-top:12px}
+.fb-more-list button{display:flex;gap:13px;align-items:center;padding:14px;border-radius:9px;text-align:left;font-size:15px;background:#303134}
+.fb-more-list span{font-weight:700}
+
+/* Detail pages/groups: compact mobile layout inspired by the reference screenshots. */
+.modal:has(.fb-style-detail){padding:0!important;place-items:stretch!important}
+.fb-style-detail{width:min(760px,100vw)!important;max-width:760px!important;height:100dvh!important;max-height:100dvh!important;margin:0 auto!important;border-radius:0!important;background:#242526!important;border:0!important;padding:0!important;overflow:auto!important}
+.fb-style-detail .entity-back-btn{position:sticky!important;top:0;z-index:30;width:100%;height:50px;padding:0 13px!important;background:rgba(36,37,38,.96)!important;border:0!important;color:#fff!important;display:flex!important;align-items:center!important;gap:9px!important}
+.fb-style-detail .entity-back-btn span{font-size:32px;line-height:1}.fb-style-detail .entity-back-btn small{font-size:14px;font-weight:750}
+.fb-style-detail .detail-cover{height:205px!important;border-radius:0!important;background-color:#333!important}
+.fb-style-detail .detail-head-wrap{padding:0 13px!important;margin-top:-43px!important}
+.fb-style-detail .detail-logo{width:92px!important;height:92px!important;border-radius:50%!important;border:4px solid #242526!important}
+.fb-style-detail .detail-main{padding:10px 13px 28px!important}
+.fb-style-detail .detail-main>.eyebrow{display:none!important}
+.fb-style-detail .detail-main>h3{font-size:24px!important;margin:4px 0!important}
+.fb-style-detail .entity-description{font-size:13px!important;color:#b0b5bd!important}
+.fb-style-detail .premium-stats{display:flex!important;gap:0!important;background:transparent!important;border:0!important}
+.fb-style-detail .premium-stats>span{flex:1!important;min-height:50px!important;background:transparent!important;border:0!important;border-radius:0!important}
+.fb-style-detail .premium-stats b{font-size:15px!important}.fb-style-detail .premium-stats small{font-size:9px!important}
+.fb-style-detail .group-action-bar,.fb-style-detail .page-top-actions{padding:5px 0 10px!important;display:flex!important;gap:7px!important;flex-wrap:nowrap!important}
+.fb-style-detail .group-action-bar button,.fb-style-detail .page-action{min-height:40px!important;border-radius:8px!important;flex:1 1 auto!important}
+.fb-style-detail .group-action-bar .member-more,.fb-style-detail .page-more-action{flex:0 0 42px!important}
+.fb-style-detail .entity-tabs,.fb-style-detail .page-tabs{border-top:1px solid #3a3b3d!important;border-bottom:1px solid #3a3b3d!important;background:#242526!important;border-radius:0!important;padding:0!important;margin:0!important}
+.fb-style-detail .entity-tabs button,.fb-style-detail .page-tabs button{min-height:48px!important;padding:0 14px!important;color:#b5bac4!important;border-bottom:3px solid transparent!important;font-size:13px!important}
+.fb-style-detail .entity-tabs button.active,.fb-style-detail .page-tabs button.active{color:#fff!important;border-bottom-color:#4f93ff!important}
+.fb-style-detail .entity-composer,.fb-style-detail .page-composer{margin:10px 0!important;border-radius:0!important;border-left:0!important;border-right:0!important;background:#242526!important;padding:13px 0!important}
+.fb-style-detail .entity-composer textarea,.fb-style-detail .page-composer textarea{background:#3a3b3c!important;border:0!important;border-radius:20px!important;min-height:42px!important}
+.fb-style-detail .entity-post,.fb-style-detail .page-post-card{background:#242526!important;border:0!important;border-top:8px solid #18191a!important;border-radius:0!important;padding:13px 0!important}
+.fb-style-detail .post-body,.fb-style-detail .page-post-text{font-size:14px!important;line-height:1.5!important}
+.fb-style-detail .post-media,.fb-style-detail .page-post-media{width:100%!important;max-height:520px!important;object-fit:cover!important;border-radius:0!important}
+.fb-style-detail .entity-post-actions,.fb-style-detail .page-post-actions{border-top:1px solid #3a3b3d!important;border-bottom:1px solid #3a3b3d!important}
+.fb-style-detail .entity-post-actions button,.fb-style-detail .page-post-actions button{min-height:42px!important;color:#c8ccd3!important}
+.fb-style-detail .premium-about,.fb-style-detail .page-about-section,.fb-style-detail .page-team-section{padding:14px 0!important}
+.group-events-empty{display:flex;flex-direction:column;align-items:center;text-align:center;padding:55px 18px;gap:7px;color:#aeb5bf}.group-events-empty>div{font-size:34px}.group-events-empty b{font-size:17px;color:#f2f3f5}
+@media(max-width:720px){
+  .fb-hub{padding-bottom:82px}
+  .fb-top-tabs{padding:7px 0 10px}
+  .fb-top-tabs button{font-size:14px;min-height:42px;padding:0 12px}
+  .fb-section-heading h3{font-size:19px}
+  .fb-entity-row{min-height:72px}
+  .fb-entity-avatar{width:54px;height:54px}
+  .fb-entity-copy b{font-size:15px}
+  .fb-entity-actions .fb-more-btn{display:none}
+  .fb-business-card{padding:10px 0}
+  .fb-style-detail .detail-cover{height:190px!important}
+  .fb-style-detail .detail-head-wrap{margin-top:-38px!important}
+}
