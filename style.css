@@ -2823,3 +2823,62 @@ button[data-action],button[data-route]{-webkit-tap-highlight-color:transparent!i
   .fb-style-detail .detail-cover{height:190px!important}
   .fb-style-detail .detail-head-wrap{margin-top:-38px!important}
 }
+
+/* =========================================================
+   Tafaß V34 — Page owner view + responsive Page management
+   ========================================================= */
+.page-profile-head-v2{display:block!important;margin-top:-46px!important;padding:0 20px!important;position:relative!important;z-index:5!important}
+.page-profile-head-v2 .page-avatar-wrap{width:94px!important;height:94px!important}
+.page-profile-head-v2 .page-detail-avatar{width:94px!important;height:94px!important;border-radius:50%!important}
+.page-profile-copy-v2{padding:10px 20px 0!important}
+.page-profile-copy-v2 h2{margin:0!important;font-size:27px!important;line-height:1.15!important;color:#fff!important;overflow-wrap:anywhere!important}
+.page-profile-copy-v2 .page-handle{margin-top:4px!important;color:#8da0ba!important;font-size:11px!important}
+.page-profile-copy-v2 p{margin:8px 0 0!important;color:#b4bfce!important;font-size:13px!important;line-height:1.5!important;white-space:pre-wrap!important;overflow-wrap:anywhere!important}
+.page-profile-copy-v2 .page-follow-line{padding:0!important;margin:9px 0 0!important;gap:14px!important;display:flex!important;flex-wrap:wrap!important}
+.page-profile-copy-v2 .page-follow-line span{color:#8d9cb1!important;font-size:11px!important}
+.page-profile-copy-v2 .page-follow-line b{color:#f1f5fb!important;font-size:12px!important}
+.page-profile-copy-v2 + .page-top-actions{margin-top:14px!important}
+.page-premium-modal .page-primary-actions{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 50px!important}
+
+/* Management is a complete mobile screen: no clipped fields and a reliable return/save bar. */
+.page-manage-screen{width:min(760px,100vw)!important;max-width:760px!important;height:100dvh!important;max-height:100dvh!important;margin:0 auto!important;padding:0!important;border-radius:0!important;overflow:hidden!important;background:#071022!important;border:0!important;display:flex!important;flex-direction:column!important}
+.page-manage-topbar{position:sticky!important;top:0!important;z-index:30!important;display:flex!important;align-items:center!important;gap:12px!important;min-height:62px!important;padding:10px 14px!important;box-sizing:border-box!important;background:rgba(7,16,34,.97)!important;border-bottom:1px solid rgba(108,145,211,.10)!important;backdrop-filter:blur(14px)!important}
+.page-manage-topbar .entity-back-btn.compact{position:relative!important;left:auto!important;top:auto!important;min-width:82px!important;height:42px!important;background:#0b172b!important;border-color:rgba(130,161,215,.18)!important}
+.page-manage-topbar .page-eyebrow{font-size:10px!important;letter-spacing:.13em!important;color:#6fa5ff!important}
+.page-manage-scroll{flex:1 1 auto!important;min-height:0!important;overflow-y:auto!important;overflow-x:hidden!important;padding:20px 20px 32px!important;box-sizing:border-box!important;-webkit-overflow-scrolling:touch!important}
+.page-manage-heading h2{font-size:30px!important;line-height:1.1!important;margin:0 0 8px!important;color:#f6f8fc!important}
+.page-manage-heading p{margin:0!important;color:#8f9db1!important;font-size:14px!important;line-height:1.45!important}
+.page-manage-screen .page-edit-grid{margin:22px 0 0!important;display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:15px!important}
+.page-manage-screen .page-edit-grid label{display:grid!important;gap:7px!important;color:#aebbd0!important;font-size:12px!important;font-weight:850!important;min-width:0!important}
+.page-manage-screen .page-edit-grid label.wide{grid-column:1/-1!important}
+.page-manage-screen .page-edit-grid label small{font-size:9px!important;line-height:1.35!important;color:#6f8099!important;font-weight:600!important}
+.page-manage-screen .page-edit-grid input,.page-manage-screen .page-edit-grid select,.page-manage-screen .page-edit-grid textarea{width:100%!important;box-sizing:border-box!important;background:#071426!important;border:1px solid rgba(103,139,198,.16)!important;color:#eef4ff!important;border-radius:14px!important;outline:none!important;font:inherit!important}
+.page-manage-screen .page-edit-grid input,.page-manage-screen .page-edit-grid select{height:54px!important;padding:0 15px!important}
+.page-manage-screen .page-edit-grid textarea{min-height:125px!important;padding:14px 15px!important;resize:vertical!important;line-height:1.45!important}
+.page-manage-screen .page-edit-grid input[type=file]{height:auto!important;min-height:54px!important;padding:8px!important;color:#e8eef8!important;font-size:12px!important}
+.page-manage-screen .page-edit-grid input[type=file]::file-selector-button{margin-right:10px!important;border:0!important;border-radius:9px!important;padding:9px 12px!important;background:#263a59!important;color:#f4f7fb!important;font-weight:800!important;cursor:pointer!important}
+.page-manage-screen .page-edit-grid input:focus,.page-manage-screen .page-edit-grid select:focus,.page-manage-screen .page-edit-grid textarea:focus{border-color:#347cff!important;box-shadow:0 0 0 3px rgba(52,124,255,.10)!important}
+.page-manage-footer{flex:0 0 auto!important;display:grid!important;grid-template-columns:110px minmax(0,1fr)!important;gap:10px!important;padding:12px 20px calc(12px + env(safe-area-inset-bottom))!important;background:rgba(7,16,34,.98)!important;border-top:1px solid rgba(108,145,211,.12)!important;box-shadow:0 -12px 30px rgba(0,0,0,.22)!important;z-index:35!important}
+.page-manage-footer button{min-height:48px!important;border-radius:13px!important}
+.page-manage-footer .ghost-action{background:#172238!important;color:#d8e1ee!important;border:1px solid rgba(125,157,211,.12)!important}
+.page-manage-footer .primary{width:100%!important}
+
+@media(max-width:620px){
+  .page-profile-head-v2{padding:0 15px!important;margin-top:-40px!important}
+  .page-profile-head-v2 .page-avatar-wrap,.page-profile-head-v2 .page-detail-avatar{width:82px!important;height:82px!important}
+  .page-profile-copy-v2{padding:9px 15px 0!important}
+  .page-profile-copy-v2 h2{font-size:24px!important}
+  .page-profile-copy-v2 p{font-size:12px!important}
+  .page-profile-copy-v2 + .page-top-actions{margin:12px 15px 14px!important}
+  .page-premium-modal .page-primary-actions{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 46px!important}
+  .page-manage-topbar{min-height:58px!important;padding:8px 10px!important}
+  .page-manage-topbar .entity-back-btn.compact{height:40px!important;min-width:78px!important}
+  .page-manage-scroll{padding:18px 15px 28px!important}
+  .page-manage-heading h2{font-size:27px!important}
+  .page-manage-heading p{font-size:13px!important}
+  .page-manage-screen .page-edit-grid{grid-template-columns:1fr!important;gap:13px!important;margin-top:19px!important}
+  .page-manage-screen .page-edit-grid label.wide{grid-column:auto!important}
+  .page-manage-screen .page-edit-grid input,.page-manage-screen .page-edit-grid select{height:52px!important}
+  .page-manage-screen .page-edit-grid textarea{min-height:120px!important}
+  .page-manage-footer{grid-template-columns:94px minmax(0,1fr)!important;padding-left:15px!important;padding-right:15px!important}
+}
