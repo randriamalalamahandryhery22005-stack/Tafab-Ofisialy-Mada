@@ -14,6 +14,7 @@ document.documentElement.classList.add("app-boot");
   const state = {
     user: null, profile: null, route: "home", navStack: ["home"], backOverride: null, posts: [], friends: [], stories: [],
     channel: null, theme: "dark", entering: false, loggingOut: false, composerOpen: false, composerBackground: "plain", composerLocation: "",
+    composerDraftText: "", composerFile: null,
     profileTab: "posts", reactionSettingsCache:new Map(), locationWatchId:null, friendsTab: "suggestions", pagesTab: "mine", groupsTab: "mine", groupSort: "recent", selectedConversation: null, viewingProfileId: null, renderToken: 0, activePage: null, entityBackRoute: null
   };
 
@@ -370,11 +371,17 @@ async function renderFeed() {
       </section>
 
       <section class="composer composer-news composer-launcher">
-        <button class="composer-launcher-button" type="button" data-action="open-publisher">
-          <span class="composer-launcher-avatar">${avatarHTML(state.profile)}</span>
-          <span class="composer-launcher-input">À quoi pensez-vous ?</span>
-          <span class="composer-launcher-photo" aria-label="Photo">▣</span>
-        </button>
+        <div class="composer-launcher-row">
+          <button class="composer-launcher-button" type="button" data-action="open-publisher" aria-label="Créer une publication">
+            <span class="composer-launcher-avatar">${avatarHTML(state.profile)}</span>
+            <span class="composer-launcher-input">À quoi pensez-vous ?</span>
+          </button>
+          <button class="composer-launcher-photo" type="button" data-action="quick-publisher-photo" aria-label="Publier une photo ou une vidéo">
+            <span class="composer-photo-icon" aria-hidden="true">▣</span>
+            <small>Photo</small>
+          </button>
+        </div>
+        <input id="quickPostFile" class="quick-post-file" type="file" accept="image/*,video/*" hidden>
       </section>`;
 
     if(!state.posts.length) html+=`<div class="card empty">Aucune publication pour le moment.<br><span>Publiez la première sur Tafaß.</span></div>`;
@@ -395,42 +402,114 @@ function publisherBackgrounds(){
       ["pink","linear-gradient(135deg,#db2777,#9333ea)","Rose"]
     ];
   }
-  function openPublisher(){
-    state.composerOpen=true; state.composerBackground="plain"; state.composerLocation="";
-    openModal(`<div class="publisher-modal">
-      <header class="publisher-header"><button class="publisher-back" data-action="close-publisher" aria-label="Retour">←</button><div><span class="eyebrow">TAFAß</span><h2>Créer une publication</h2></div><button class="publisher-top-publish" data-action="publish-post-news">PUBLIER</button></header>
-      <div class="publisher-author">${avatarHTML(state.profile,"avatar publisher-avatar")}<div><b>${esc(nameOf(state.profile))}</b><button class="publisher-audience" type="button">🌐 Public <span>⌄</span></button></div></div>
-      <div class="publisher-editor-wrap">
-        <textarea id="postText" class="publisher-editor" maxlength="5000" placeholder="Quoi de neuf pour vous ?"></textarea>
-        <div class="publisher-backgrounds">${publisherBackgrounds().map(([id,bg,label])=>`<button class="publisher-bg ${id==="plain"?"selected":""}" data-action="select-publisher-bg" data-bg="${id}" title="${esc(label)}" style="${bg?`background:${bg};`:""}">${id==="plain"?"Aa":""}</button>`).join("")}</div>
-      </div>
-      <div class="publisher-media-preview" id="publisherMediaPreview"></div>
-      <div class="publisher-tools">
-        <button data-action="publisher-photo"><span>▣</span><b>Photos/Vidéos</b></button>
-        <button data-action="publisher-music"><span>♫</span><b>Musique</b></button>
-        <button data-action="publisher-tag"><span>👥</span><b>Identifier des personnes</b></button>
-        <button data-action="publisher-location"><span>📍</span><b>Ajouter un lieu</b></button>
-        <button data-action="publisher-mood"><span>☺</span><b>Humeur/Activité</b></button>
-        <button data-action="publisher-message"><span>💬</span><b>Recevoir des messages</b></button>
-        <button data-action="publisher-event"><span>▦</span><b>Créer un évènement</b></button>
-        <button data-action="publisher-live"><span>●</span><b>Lancer un direct</b></button>
-      </div>
-      <input id="postFile" type="file" accept="image/*" hidden>
-      <input id="postVideoFile" type="file" accept="video/*" hidden>
-      <div class="publisher-bottom"><span id="composerFileName">Aucun média sélectionné</span><button class="primary big" data-action="publish-post-news">PUBLIER</button></div>
-    </div>`);
-    const pf=$("postFile"), vf=$("postVideoFile");
-    const preview=()=>{
-      const f=pf?.files?.[0]||vf?.files?.[0], box=$("publisherMediaPreview");
-      if(!box)return;
-      if(!f){box.innerHTML=""; $("composerFileName")&&( $("composerFileName").textContent="Aucun média sélectionné"); return;}
-      $("composerFileName")&&( $("composerFileName").textContent=f.name);
-      box.innerHTML=f.type.startsWith("video/")?`<video src="${URL.createObjectURL(f)}" controls playsinline></video>`:`<img src="${URL.createObjectURL(f)}" alt="Aperçu">`;
-    };
-    pf?.addEventListener("change",()=>{if(vf)vf.value="";preview();});
-    vf?.addEventListener("change",()=>{if(pf)pf.value="";preview();});
-    setTimeout(()=>$("postText")?.focus(),50);
+  function savePublisherDraft(){
+    if(!$("postText")) return;
+    state.composerDraftText=$("postText").value||"";
+    state.composerBackground=state.composerBackground||"plain";
+    state.composerLocation=state.composerLocation||"";
+    state.composerFile=$("postFile")?.files?.[0]||state.composerFile||null;
   }
+  function openPublisher(){
+    const restoring=!!state.composerOpen;
+    if(!restoring){
+      state.composerBackground="plain";
+      state.composerLocation="";
+      state.composerDraftText="";
+      state.composerFile=null;
+    }
+    state.composerOpen=true;
+    openModal(`<div class="publisher-modal publisher-modal-v2">
+      <header class="publisher-header">
+        <button class="publisher-back" data-action="close-publisher" aria-label="Retour">←</button>
+        <div class="publisher-brand">
+          <img src="assets/tafass-logo-premium.svg" alt="Tafaß" class="publisher-logo">
+          <div><span class="eyebrow">TAFAß</span><h2>Créer une publication</h2></div>
+        </div>
+        <button class="publisher-top-publish" data-action="publish-post-news">PUBLIER</button>
+      </header>
+
+      <div class="publisher-scroll">
+        <div class="publisher-author">
+          ${avatarHTML(state.profile,"avatar publisher-avatar")}
+          <div class="publisher-author-copy"><b>${esc(nameOf(state.profile))}</b>
+            <button class="publisher-audience" type="button"><span aria-hidden="true">◉</span> Public <span>⌄</span></button>
+          </div>
+        </div>
+
+        <div class="publisher-editor-wrap">
+          <textarea id="postText" class="publisher-editor" maxlength="5000" placeholder="Quoi de neuf pour vous ?" aria-label="Texte de la publication">${esc(state.composerDraftText||"")}</textarea>
+          <div class="publisher-style-head"><span>Style du texte</span><small>Choisissez un fond</small></div>
+          <div class="publisher-backgrounds" role="listbox" aria-label="Fonds de publication">
+            ${publisherBackgrounds().map(([id,bg,label])=>`<button class="publisher-bg ${id==="plain"?"selected":""}" data-action="select-publisher-bg" data-bg="${id}" title="${esc(label)}" aria-label="${esc(label)}" style="${bg?`background:${bg};`:""}">${id==="plain"?"Aa":""}</button>`).join("")}
+          </div>
+        </div>
+
+        <div class="publisher-media-preview" id="publisherMediaPreview"></div>
+
+        <div class="publisher-tools">
+          <button data-action="publisher-photo"><span class="publisher-tool-icon photos">▣</span><span><b>Photos/Vidéos</b><small>Ajouter depuis votre appareil</small></span></button>
+          <button data-action="publisher-music"><span class="publisher-tool-icon music">♫</span><span><b>Musique</b><small>Ajouter une musique</small></span></button>
+          <button data-action="publisher-tag"><span class="publisher-tool-icon tag">♙</span><span><b>Identifier des personnes</b><small>Ajouter des personnes</small></span></button>
+          <button data-action="publisher-location"><span class="publisher-tool-icon location">⌖</span><span><b>Ajouter un lieu</b><small>Indiquer où vous êtes</small></span></button>
+          <button data-action="publisher-mood"><span class="publisher-tool-icon mood">☺</span><span><b>Humeur/Activité</b><small>Partager votre humeur</small></span></button>
+          <button data-action="publisher-message"><span class="publisher-tool-icon message">✦</span><span><b>Recevoir des messages</b><small>Autoriser les réponses</small></span></button>
+          <button data-action="publisher-event"><span class="publisher-tool-icon event">▦</span><span><b>Créer un évènement</b><small>Ajouter un évènement</small></span></button>
+          <button data-action="publisher-live"><span class="publisher-tool-icon live">●</span><span><b>Lancer un direct</b><small>Démarrer un direct</small></span></button>
+        </div>
+      </div>
+
+      <input id="postFile" type="file" accept="image/*,video/*" hidden>
+      <div class="publisher-bottom">
+        <span id="composerFileName">Aucun média sélectionné</span>
+        <button class="primary big" data-action="publish-post-news">PUBLIER</button>
+      </div>
+    </div>`);
+    const pf=$("postFile");
+    if(pf && state.composerFile){
+      try{
+        const dt=new DataTransfer();
+        dt.items.add(state.composerFile);
+        pf.files=dt.files;
+      }catch(_){}
+    }
+    const preview=()=>{
+      const f=pf?.files?.[0], box=$("publisherMediaPreview");
+      if(!box)return;
+      if(!f){box.innerHTML=""; $("composerFileName") && ($("composerFileName").textContent="Aucun média sélectionné"); return;}
+      $("composerFileName") && ($("composerFileName").textContent=f.name);
+      const url=URL.createObjectURL(f);
+      box.innerHTML=f.type.startsWith("video/")
+        ? `<div class="publisher-preview-frame"><video src="${url}" controls playsinline></video><button class="publisher-preview-remove" data-action="publisher-clear-media" aria-label="Retirer le média">×</button></div>`
+        : `<div class="publisher-preview-frame"><img src="${url}" alt="Aperçu de la publication"><button class="publisher-preview-remove" data-action="publisher-clear-media" aria-label="Retirer le média">×</button></div>`;
+    };
+    pf?.addEventListener("change",()=>{state.composerFile=pf.files?.[0]||null;preview();});
+    $("postText")?.addEventListener("input",()=>{state.composerDraftText=$("postText").value;});
+    preview();
+    setTimeout(()=>$("postText")?.focus(),80);
+  }
+
+  function openPublisherField(field){
+    const config={
+      music:{eyebrow:"MUSIQUE",title:"Ajouter une musique",label:"Nom de la musique",placeholder:"Ex. Ma chanson préférée",action:"publisher-field-apply",button:"Ajouter"},
+      tag:{eyebrow:"PERSONNES",title:"Identifier des personnes",label:"Nom de la personne",placeholder:"Rechercher ou saisir un nom",action:"publisher-field-apply",button:"Identifier"},
+      location:{eyebrow:"LIEU",title:"Ajouter un lieu",label:"Lieu de la publication",placeholder:"Ex. Antananarivo, Madagascar",action:"publisher-field-apply",button:"Ajouter le lieu"},
+      event:{eyebrow:"ÉVÈNEMENT",title:"Créer un évènement",label:"Nom de l’évènement",placeholder:"Ex. Rencontre Tafaß",action:"publisher-field-apply",button:"Ajouter l’évènement"},
+      question:{eyebrow:"QUESTION",title:"Poser une question",label:"Votre question",placeholder:"Écrivez votre question…",action:"publisher-field-apply",button:"Ajouter la question"}
+    }[field] || null;
+    if(!config)return;
+    savePublisherDraft();
+    openModal(`<div class="modal-box composer-field-modal">
+      <button class="modal-close" data-action="close-publisher-field" aria-label="Fermer">×</button>
+      <div class="composer-field-brand"><img src="assets/tafass-logo-premium.svg" alt="Tafaß"></div>
+      <span class="eyebrow">TAFAß • ${config.eyebrow}</span>
+      <h3>${config.title}</h3>
+      <p class="muted">Ajoutez cet élément à votre publication sans quitter l’éditeur.</p>
+      <label class="composer-field-label">${config.label}<input id="publisherFieldInput" maxlength="500" autocomplete="off" placeholder="${config.placeholder}"></label>
+      <div class="composer-field-actions"><button class="secondary-action" data-action="close-publisher-field">Annuler</button><button class="primary" data-action="${config.action}" data-field="${field}">${config.button}</button></div>
+    </div>`);
+    setTimeout(()=>$("publisherFieldInput")?.focus(),60);
+  }
+
   async function publishPostNews(){
     const text=$("postText")?.value.trim()||"";
     const pf=$("postFile"), vf=$("postVideoFile"), file=pf?.files?.[0]||vf?.files?.[0];
@@ -455,7 +534,8 @@ function publisherBackgrounds(){
       }
       if(r.error)throw new Error(r.error.message);
       await logActivity("post_created","Publication créée","post",r.data?.id||null);
-      state.composerOpen=false; closeModal(); toast("Publication publiée"); await loadPosts(); await render();
+      state.composerOpen=false; state.composerDraftText=""; state.composerFile=null; state.composerBackground="plain"; state.composerLocation="";
+      closeModal(); toast("Publication publiée"); await loadPosts(); await render();
     }catch(e){toast(e?.message||"Publication impossible.");}
     finally{setLoading(btn,false,"Publier");}
   }
@@ -2566,23 +2646,27 @@ async function genericListPage(route) {
   }
 
   async function enterApp() {
-    if (state.entering) return;
+    if (state.entering || !state.user) return;
     state.entering = true;
+    // Keep the authenticated app visible during background re-entry. The auth
+    // screen is shown only when there is genuinely no session.
     $("app").classList.add("hidden");
-    $("auth").classList.remove("hidden");
+    document.body.classList.remove("modal-open");
     document.body.classList.toggle("light", state.theme === "light");
     syncThemeButton();
-    await loadProfile();
-    if (!(await profileIsComplete())) {
+    try{
+      await loadProfile();
+      if (!(await profileIsComplete())) {
+        showOAuthOnboarding();
+        return;
+      }
+      await splashReady;
+      $("auth").classList.add("hidden"); $("app").classList.remove("hidden");
+      await loadPosts(); await setupRealtime();
+      await render();
+    }finally{
       state.entering = false;
-      showOAuthOnboarding();
-      return;
     }
-    await splashReady;
-    $("auth").classList.add("hidden"); $("app").classList.remove("hidden");
-    await loadPosts(); await setupRealtime();
-    state.entering = false;
-    await render();
   }
   async function signInWithProvider(provider) {
     const allowed = ["google", "apple"];
@@ -3194,7 +3278,7 @@ async function genericListPage(route) {
     const notificationId = actionEl.dataset.notification;
     if (action === "new-logout") return newLogout();
     if (action === "open-publisher") return openPublisher();
-    if (action === "close-publisher") { closeModal(); state.composerOpen=false; return; }
+    if (action === "close-publisher") { closeModal(); state.composerOpen=false; state.composerDraftText=""; state.composerFile=null; state.composerBackground="plain"; state.composerLocation=""; return; }
     if (action === "select-publisher-bg") {
       state.composerBackground=actionEl.dataset.bg||"plain";
       document.querySelectorAll(".publisher-bg").forEach(x=>x.classList.toggle("selected",x===actionEl));
@@ -3202,23 +3286,60 @@ async function genericListPage(route) {
     }
     if (action === "publish-post-news") return publishPostNews();
     if (action === "publisher-photo") return $("postFile")?.click();
-    if (action === "publisher-music") { const v=prompt("Nom ou lien de la musique :",""); if(v?.trim()) appendPublisherText(`♫ ${v.trim()}`); return; }
-    if (action === "publisher-tag") { const v=prompt("Nom de la personne à identifier :",""); if(v?.trim()) appendPublisherText(`👥 ${v.trim()}`); return; }
-    if (action === "publisher-location") { const v=prompt("Lieu de la publication :",""); if(v?.trim()){state.composerLocation=v.trim();appendPublisherText(`📍 ${v.trim()}`);} return; }
-    if (action === "publisher-mood") { return openMoodComposer(); }
+    if (action === "quick-publisher-photo") {
+      const input=$("quickPostFile");
+      if(!input)return;
+      input.onchange=()=>{
+        const file=input.files?.[0];
+        if(!file)return;
+        openPublisher();
+        const pf=$("postFile");
+        if(pf){
+          try{
+            const dt=new DataTransfer();
+            dt.items.add(file);
+            pf.files=dt.files;
+            pf.dispatchEvent(new Event("change",{bubbles:true}));
+          }catch(_){}
+        }
+      };
+      input.click();
+      return;
+    }
+    if (action === "publisher-clear-media") {
+      const pf=$("postFile");
+      if(pf)pf.value="";
+      state.composerFile=null;
+      const box=$("publisherMediaPreview");
+      if(box)box.innerHTML="";
+      if($("composerFileName"))$("composerFileName").textContent="Aucun média sélectionné";
+      return;
+    }
+    if (action === "publisher-music") return openPublisherField("music");
+    if (action === "publisher-tag") return openPublisherField("tag");
+    if (action === "publisher-location") return openPublisherField("location");
+    if (action === "publisher-mood") return openMoodComposer();
     if (action === "publisher-message") { appendPublisherText("💬 Recevoir des messages"); return toast("Option ajoutée à la publication."); }
-    if (action === "publisher-event") { const v=prompt("Nom de l’évènement :",""); if(v?.trim()) appendPublisherText(`📅 ${v.trim()}`); return; }
-    if (action === "publisher-live") return toast("Le direct nécessite l’activation du module Live Tafaß.");
+    if (action === "publisher-event") return openPublisherField("event");
+    if (action === "publisher-live") return openModal(`<div class="modal-box composer-field-modal"><button class="modal-close" data-action="close-modal" aria-label="Fermer">×</button><div class="composer-field-brand"><img src="assets/tafass-logo-premium.svg" alt="Tafaß"></div><span class="eyebrow">TAFAß • LIVE</span><h3>Lancer un direct</h3><p class="muted">Le module Live n’est pas encore activé sur ce projet. Votre publication reste intacte.</p><button class="primary big" data-action="close-modal">Fermer</button></div>`);
+    if (action === "close-publisher-field") { closeModal(); if(state.composerOpen) setTimeout(openPublisher,40); return; }
+    if (action === "publisher-field-apply") {
+      const field=actionEl.dataset.field, value=$("publisherFieldInput")?.value.trim()||"";
+      if(!value)return toast("Saisissez une valeur.");
+      const prefix=field==="music"?`♫ ${value}`:field==="tag"?`👥 ${value}`:field==="location"?`📍 ${value}`:field==="event"?`📅 ${value}`:`❓ ${value}`;
+      if(field==="location") state.composerLocation=value;
+      state.composerDraftText=(prefix+(state.composerDraftText.trim()?`\n${state.composerDraftText.trim()}`:"")).slice(0,5000);
+      closeModal();
+      if(state.composerOpen) setTimeout(()=>openPublisher(),40);
+      return;
+    }
     if (notificationId && action !== "mark-read") { await sb.from("notifications").update({is_read:true}).eq("id",notificationId).eq("user_id",state.user.id); updateBadges(); }
     if (action === "search-category") { searchCategory = actionEl.dataset.category || "accounts"; return searchPage($("searchInput")?.value || "", searchCategory); }
     if (action === "select-mood") { document.querySelectorAll(".mood-choice").forEach(x=>x.classList.remove("selected")); actionEl.classList.add("selected"); return; }
     if (action === "select-payment-method") { document.querySelectorAll(".payment-method").forEach(x=>x.classList.remove("active")); actionEl.classList.add("active"); return; }
     if (action === "apply-mood") { const v=document.querySelector(".mood-choice.selected")?.dataset.moodValue||""; const extra=$("moodExtra")?.value.trim()||""; if(!v&&!extra)return toast("Choisissez une humeur ou écrivez un message."); const t=$("postText"); if(t)t.value=[v,extra].filter(Boolean).join(" — ").trim(); closeModal(); if(state.composerOpen) setTimeout(openPublisher,40); t?.focus(); return toast("Humeur ajoutée à votre publication"); }
-    if (action === "more-question") { closeModal(); const q=prompt("Votre question :",""); if(q?.trim()&&$("postText")){$("postText").value=`❓ ${q.trim()}
-
-`+$('postText').value;toast("Question ajoutée");} return; }
-    if (action === "more-location") { closeModal(); const q=prompt("Lieu de la publication :",""); if(q?.trim()&&$("postText")){$("postText").value=`📍 ${q.trim()}
-`+$('postText').value;toast("Lieu ajouté");} return; }
+    if (action === "more-question") return openPublisherField("question");
+    if (action === "more-location") return openPublisherField("location");
     if (action === "more-file") { closeModal(); $("postFile")?.click(); return; }
     if (action === "more-style") { closeModal(); toast("Style premium prêt pour votre publication"); return; }
     if (action === "react") return showReactions(id);
@@ -3534,8 +3655,19 @@ async function genericListPage(route) {
       return document.querySelector(`[data-action="group-open"][data-id="${id}"]`)?.click() || closeModal();
     }
     if (action === "delete-page-post") { const r=await sb.from("page_posts").delete().eq("id",id); if(r.error)return toast(r.error.message); toast("Publication supprimée"); return openPageDetail(actionEl.dataset.entityId); }
-    if (!email) { $("authMsg").textContent = "Compte introuvable."; return; }
-    const { error } = await sb.auth.signInWithPassword({ email, password });
+    if (!email) { $("authMsg").textContent = "Saisissez votre adresse e-mail ou votre numéro."; return; }
+    $("authMsg").textContent = "Connexion en cours…";
+    let authEmail=email;
+    if(!email.includes("@")){
+      const normalized=normalizePhone(email,COUNTRY_META.MG);
+      const lookup=await sb.from("profiles").select("email").eq("phone",normalized).maybeSingle();
+      if(lookup.error || !lookup.data?.email){
+        $("authMsg").textContent="Compte introuvable. Utilisez l’adresse e-mail associée à votre compte.";
+        return;
+      }
+      authEmail=lookup.data.email;
+    }
+    const { error } = await sb.auth.signInWithPassword({ email:authEmail, password });
     $("authMsg").textContent = error ? error.message : "";
   });
   $("signupForm").addEventListener("submit", async e => {
@@ -3622,17 +3754,41 @@ async function genericListPage(route) {
   };
   const splashFallback = setTimeout(finishSplash, SPLASH_MAX_MS);
 
+  let authBootComplete = false;
+  let authEventTimer = null;
   sb.auth.onAuthStateChange((event, session) => {
+    if(authEventTimer) clearTimeout(authEventTimer);
     state.user = session?.user || null;
     if (event === "PASSWORD_RECOVERY") {
       setTimeout(() => showResetPassword(), 0);
       return;
     }
-    setTimeout(() => {
-      if (state.loggingOut) return;
-      if (state.user) enterApp().catch(err => { console.error("Tafaß auth:", err); state.entering=false; showLogin(); });
-      else { $("app").classList.add("hidden"); showLogin(); }
-    }, 0);
+    // TOKEN_REFRESHED must never rebuild the application or send a valid user
+    // back to the authentication page. Only real sign-in/out transitions do.
+    if (event === "TOKEN_REFRESHED") return;
+    if (event === "SIGNED_OUT") {
+      state.user=null;
+      if(state.loggingOut) return;
+      $("app")?.classList.add("hidden");
+      showLogin();
+      return;
+    }
+    if (!["SIGNED_IN","INITIAL_SESSION","USER_UPDATED"].includes(event)) return;
+    authEventTimer=setTimeout(async()=>{
+      if(state.loggingOut || !state.user) return;
+      try{
+        await enterApp();
+      }catch(err){
+        console.error("Tafaß auth/app:",err);
+        state.entering=false;
+        // Keep the valid session. A transient database/render error must not
+        // masquerade as a logout.
+        if(!authBootComplete && !state.user) showLogin();
+        else $("app")?.classList.remove("hidden");
+      }finally{
+        authBootComplete=true;
+      }
+    },20);
   });
 
   (async () => {
