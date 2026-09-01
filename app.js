@@ -35,6 +35,17 @@ document.documentElement.classList.add("app-boot");
   }
 
   function nameOf(p) { return [p?.first_name, p?.last_name].filter(Boolean).join(" ") || "Membre Tafaß"; }
+  const blockedCache={ids:new Set(),loadedAt:0,promise:null};
+  async function getBlockedIds(force=false){
+    if(!state.user)return new Set();
+    if(!force&&blockedCache.promise)return blockedCache.promise;
+    if(!force&&Date.now()-blockedCache.loadedAt<15000)return blockedCache.ids;
+    blockedCache.promise=(async()=>{const q=await sb.from("blocked_profiles").select("blocker_id,blocked_id").or(`blocker_id.eq.${state.user.id},blocked_id.eq.${state.user.id}`);const ids=new Set();(q.data||[]).forEach(x=>{if(x.blocker_id===state.user.id)ids.add(x.blocked_id);else if(x.blocked_id===state.user.id)ids.add(x.blocker_id)});blockedCache.ids=ids;blockedCache.loadedAt=Date.now();blockedCache.promise=null;return ids})().catch(()=>{blockedCache.promise=null;return blockedCache.ids});
+    return blockedCache.promise;
+  }
+  async function isBlockedBetween(id){if(!state.user||!id||id===state.user.id)return false;return (await getBlockedIds()).has(id)}
+  async function denyIfBlocked(id,msg="Cette personne est bloquée. Les interactions sont indisponibles."){if(await isBlockedBetween(id)){toast(msg);return true}return false}
+  const filterBlocked=(rows,field="user_id")=>(rows||[]).filter(x=>!blockedCache.ids.has(x?.[field]));
   const MG_CITIES = [
     "Antananarivo","Ambohimanambola","Ambohidratrimo","Andramasina","Anjozorobe","Ankazobe","Manjakandriana","Arivonimamo","Miarinarivo","Soavinandriana","Tsiroanomandidy","Antsirabe","Betafo","Ambatolampy","Fianarantsoa","Ambalavao","Manakara","Mananjary","Farafangana","Toamasina","Fenerive Est","Vatomandry","Brickaville","Mahajanga","Marovoay","Mitsinjo","Antsiranana","Ambilobe","Nosy Be","Sambava","Antalaha","Toliara","Morondava","Belo sur Tsiribihina","Miandrivazo","Taolagnaro","Amboasary","Ihosy","Ambovombe"
   ];
@@ -176,8 +187,9 @@ document.documentElement.classList.add("app-boot");
 
   async function loadPosts() {
     if (!state.user) return;
+    await getBlockedIds();
     const { data, error } = await sb.from("posts").select("*").order("created_at", { ascending: false }).limit(60);
-    state.posts = error ? [] : (data || []);
+    state.posts = error ? [] : filterBlocked(data || [],"user_id");
     await hydratePosts();
   }
 
@@ -297,10 +309,12 @@ document.documentElement.classList.add("app-boot");
       .order("created_at",{ascending:false})
       .limit(40);
     if (r.error) { console.warn("Tafaß stories:", r.error.message); return []; }
-    const ids=[...new Set((r.data||[]).map(x=>x.user_id).filter(Boolean))];
+    await getBlockedIds();
+    const visibleStories=filterBlocked(r.data||[],"user_id");
+    const ids=[...new Set(visibleStories.map(x=>x.user_id).filter(Boolean))];
     const profiles=ids.length ? (await sb.from("profiles").select("id,first_name,last_name,avatar_url").in("id",ids)).data||[] : [];
     const pm=new Map(profiles.map(p=>[p.id,p]));
-    return (r.data||[]).map(s=>({...s,author:pm.get(s.user_id)||state.profile}));
+    return visibleStories.map(s=>({...s,author:pm.get(s.user_id)||state.profile}));
   }
 
 async function createStory() {
@@ -335,6 +349,8 @@ async function storyComposer() {
     </div>`);
 }
 
+function openMoodComposer(){openModal(`<div class="modal-box composer-modal-premium mood-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • HUMEUR</span><h3>Comment vous sentez-vous ?</h3><p class="muted">Ajoutez une humeur ou une activité à votre publication.</p><div class="mood-grid">${[["😊","Heureux / Heureuse"],["😍","Amoureux / Amoureuse"],["🥳","En fête"],["😎","Détendu(e)"],["🤩","Enthousiaste"],["😌","Serein(e)"],["💪","Motivé(e)"],["😢","Triste"],["😡","En colère"],["🤔","En réflexion"],["❤️","Avec mes proches"],["🙏","Reconnaissant(e)"]].map(([e,l])=>`<button class="mood-choice" data-action="select-mood" data-mood-value="${esc(e+' '+l)}"><span>${e}</span><b>${esc(l)}</b></button>`).join('')}</div><label class="mood-extra">Message complémentaire<textarea id="moodExtra" maxlength="500" placeholder="Ajoutez un message…"></textarea></label><button class="primary big" data-action="apply-mood">Ajouter à ma publication</button></div>`)}
+function openMoreComposer(){openModal(`<div class="modal-box composer-modal-premium more-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • PLUS</span><h3>Enrichir votre publication</h3><p class="muted">Ajoutez des éléments à votre publication.</p><div class="more-composer-grid"><button data-action="more-question"><span>❓</span><div><b>Question</b><small>Posez une question à votre communauté.</small></div></button><button data-action="more-location"><span>📍</span><div><b>Lieu</b><small>Ajoutez un lieu réel à votre texte.</small></div></button><button data-action="more-file"><span>📎</span><div><b>Média</b><small>Ajouter une photo ou une vidéo.</small></div></button><button data-action="more-style"><span>✨</span><div><b>Style premium</b><small>Préparez votre texte pour un affichage premium.</small></div></button></div></div>`)}
 async function renderFeed() {
     const token = state.renderToken;
     const stories=await loadActiveStories();
@@ -356,12 +372,13 @@ async function renderFeed() {
       <section class="composer composer-news">
         <div class="composer-top">${avatarHTML(state.profile)}<div><b>${esc(nameOf(state.profile))}</b><small>Créer une publication publique</small></div></div>
         <textarea id="postText" placeholder="Quoi de neuf, ${esc((state.profile?.first_name||"vous").trim())} ?"></textarea>
-        <div class="composer-type-row">
-          <button type="button" data-compose-type="text">${menuIcon("profile")}<span>Texte</span></button>
-          <label data-compose-type="photo">${menuIcon("pages")}<span>Photo</span><input id="postFile" type="file" accept="image/*" hidden></label>
-          <label data-compose-type="video">${menuIcon("videos")}<span>Vidéo</span><input id="postVideoFile" type="file" accept="video/*" hidden></label>
-          <button type="button" data-compose-type="mood">${menuIcon("reels")}<span>Humeur</span></button>
-          <button type="button" data-compose-type="more">${menuIcon("settings")}<span>Plus</span></button>
+        <div class="composer-type-row composer-type-row-premium">
+          <button type="button" data-compose-type="story"><span class="composer-type-icon story-icon">◉</span><span>Story</span></button>
+          <button type="button" data-compose-type="text"><span class="composer-type-icon text-icon">Aa</span><span>Texte</span></button>
+          <label data-compose-type="photo"><span class="composer-type-icon photo-icon">▣</span><span>Photo</span><input id="postFile" type="file" accept="image/*" hidden></label>
+          <label data-compose-type="video"><span class="composer-type-icon video-icon">▶</span><span>Vidéo</span><input id="postVideoFile" type="file" accept="video/*" hidden></label>
+          <button type="button" data-compose-type="mood"><span class="composer-type-icon mood-icon">☺</span><span>Humeur</span></button>
+          <button type="button" data-compose-type="more"><span class="composer-type-icon more-icon">＋</span><span>Plus</span></button>
         </div>
         <div class="composer-selected-file" id="composerFileName"></div>
         <div class="composer-actions"><span class="composer-visibility">🌐 Public</span><button type="button" class="primary" id="publishBtn">Publier</button></div>
@@ -376,9 +393,10 @@ async function renderFeed() {
     vf?.addEventListener("change",()=>{ if(vf.files?.[0]){ pf.value=""; $("composerFileName").textContent=vf.files[0].name; }});
     document.querySelectorAll("[data-compose-type]").forEach(el=>el.addEventListener("click",()=>{
       const type=el.dataset.composeType;
+      if(type==="story") return storyComposer();
       if(type==="photo") pf?.click(); else if(type==="video") vf?.click();
-      else if(type==="mood"){ const mood=prompt("Quelle est votre humeur ?","😊 Heureux"); if(mood) $("postText").value=($("postText").value+" "+mood).trim(); }
-      else if(type==="more") toast("Vous pouvez ajouter du texte, une photo ou une vidéo à votre publication.");
+      else if(type==="mood") return openMoodComposer();
+      else if(type==="more") return openMoreComposer();
     }));
     $("publishBtn")?.addEventListener("click",publishPostNews);
   }
@@ -457,6 +475,8 @@ async function publishPostNews() {
     box.querySelectorAll("[data-reaction]").forEach(b => b.addEventListener("click", () => setReaction(id, b.dataset.reaction), { once: true }));
   }
   async function setReaction(postId, reaction) {
+    const target=state.posts.find(x=>String(x.id)===String(postId));
+    if(target?.user_id && await denyIfBlocked(target.user_id,"Réaction impossible : ce compte est bloqué."))return;
     // Instant UI: reflect the selected reaction immediately, then sync Supabase.
     const picker = $("reaction-" + postId);
     const button = document.querySelector(`[data-action="react"][data-id="${CSS.escape(String(postId))}"]`);
@@ -472,6 +492,8 @@ async function publishPostNews() {
     loadPosts().then(()=>{ if (state.route === "profile") profilePage(state.profileTab); });
   }
   async function addComment(postId, parentId = null) {
+    const target=state.posts.find(x=>String(x.id)===String(postId));
+    if(target?.user_id && await denyIfBlocked(target.user_id,"Commentaire impossible : ce compte est bloqué."))return;
     const input = $(parentId ? "reply-input-" + parentId : "comment-" + postId);
     const text = input?.value.trim(); if (!text) return;
     const payload = { post_id: postId, user_id: state.user.id, content: text, parent_id: parentId || null };
@@ -482,6 +504,8 @@ async function publishPostNews() {
     if (state.route === "profile") await profilePage(state.profileTab);
   }
   async function sharePost(id) {
+    const target=state.posts.find(x=>String(x.id)===String(id));
+    if(target?.user_id && await denyIfBlocked(target.user_id,"Partage impossible : ce compte est bloqué."))return;
     const { error } = await sb.rpc("tafa_share_post", { p_post_id: id, p_share_message: "" });
     if (error) return toast(error.message);
     await logActivity("post_shared", "Publication partagée", "post", id);
@@ -548,7 +572,9 @@ async function publishPostNews() {
   async function friendsPage(tab = state.friendsTab) {
     state.friendsTab = tab || "suggestions";
     const token = state.renderToken;
-    const { data: people, error } = await sb.from("profiles").select("*").neq("id", state.user.id).order("created_at", { ascending:false }).limit(100);
+    await getBlockedIds();
+    const { data: peopleRaw, error } = await sb.from("profiles").select("*").neq("id", state.user.id).order("created_at", { ascending:false }).limit(100);
+    const people=filterBlocked(peopleRaw||[],"id");
     if (token !== state.renderToken) return;
     if (error) return simplePage("Amis", `<div class="empty">${esc(error.message)}</div>`);
 
@@ -588,6 +614,7 @@ async function publishPostNews() {
   }
   async function addFriend(id) {
     if (!id || id === state.user.id) return;
+    if(await denyIfBlocked(id,"Demande impossible : ce compte est bloqué."))return;
     const settings = (await sb.from("user_settings").select("allow_friend_requests").eq("user_id", id).maybeSingle()).data;
     if (settings?.allow_friend_requests === false) return toast("Ce compte n’accepte pas les demandes d’ami.");
     const existing = await sb.from("friend_requests").select("id,status,sender_id,receiver_id").or(`and(sender_id.eq.${state.user.id},receiver_id.eq.${id}),and(sender_id.eq.${id},receiver_id.eq.${state.user.id})`).maybeSingle();
@@ -600,6 +627,7 @@ async function publishPostNews() {
     if (state.viewingProfileId === id) await openUserProfile(id);
   }
   async function handleFriend(id, status) {
+    if(await denyIfBlocked(id,"Cette relation est bloquée."))return;
     const { error } = await sb.from("friend_requests").update({ status }).eq("sender_id", id).eq("receiver_id", state.user.id).eq("status", "pending");
     if (error) return toast(error.message);
     if (status === "accepted") {
@@ -627,7 +655,7 @@ async function publishPostNews() {
         sb.from("pages").select(PAGE_FIELDS).or(`name.ilike.%${safe}%,category.ilike.%${safe}%,bio.ilike.%${safe}%`).limit(20),
         sb.from("groups").select(GROUP_FIELDS).or(`name.ilike.%${safe}%,description.ilike.%${safe}%`).limit(20)
       ]);
-      people=pr.data||[]; posts=por.data||[]; pages=pgr.data||[]; groups=gr.data||[];
+      await getBlockedIds(); people=filterBlocked(pr.data||[],"id"); posts=filterBlocked(por.data||[],"user_id"); pages=pgr.data||[]; groups=gr.data||[];
       if (state.user && safe.length >= 2) {
         const recent=await sb.from("search_history").select("id").eq("user_id",state.user.id).eq("search_text",term).limit(1);
         if(!(recent.data||[]).length) await sb.from("search_history").insert({ user_id:state.user.id, search_text:term, result_type:"all" });
@@ -683,6 +711,7 @@ async function publishPostNews() {
     if (token !== state.renderToken || state.route !== "messages") return;
     if (error) return simplePage("Messages", `<div class="empty">${esc(error.message)}</div>`);
 
+    await getBlockedIds();
     const ids = [...new Set((memberships || []).map(x => x.conversation_id))];
     let conversations = [];
     if (ids.length) {
@@ -701,6 +730,7 @@ async function publishPostNews() {
         const r = await sb.from("profiles").select("*").eq("id", otherIds[0]).maybeSingle();
         person = r.data || null;
       }
+      if(person && blockedCache.ids.has(person.id)) continue;
       const { data: last } = await sb.from("messages").select("content,created_at")
         .eq("conversation_id", c.id).order("created_at", { ascending:false }).limit(1);
       cards.push(`<button class="list-row message-conversation" style="width:100%;text-align:left"
@@ -727,11 +757,14 @@ async function publishPostNews() {
   }
 
   async function newMessage() {
-    const { data: people } = await sb.from("profiles").select("*").neq("id", state.user.id).limit(20);
+    await getBlockedIds();
+    const { data: rawPeople } = await sb.from("profiles").select("*").neq("id", state.user.id).limit(50);
+    const people=filterBlocked(rawPeople||[],"id");
     openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><h3>Nouvelle conversation</h3><div>${(people||[]).map(p=>`<button class="list-row" style="width:100%;text-align:left" data-action="start-conversation" data-id="${esc(p.id)}">${avatarHTML(p)}<div class="grow"><b>${esc(nameOf(p))}</b></div><span>›</span></button>`).join("")}</div></div>`);
   }
   async function startConversation(otherId) {
     if(!otherId || otherId===state.user.id)return;
+    if(await denyIfBlocked(otherId,"Conversation impossible : ce compte est bloqué."))return;
     const cfg=(await sb.from("user_settings").select("allow_messages").eq("user_id",otherId).maybeSingle()).data;
     if(cfg?.allow_messages===false)return toast("Ce compte n’accepte pas les messages.");
     const { data: mine } = await sb.from("conversation_members").select("conversation_id").eq("user_id", state.user.id);
@@ -754,6 +787,8 @@ async function publishPostNews() {
     }
     const { data: memberCheck } = await sb.from("conversation_members").select("user_id").eq("conversation_id", id).eq("user_id", state.user.id).maybeSingle();
     if (!memberCheck) return toast("Conversation inaccessible.");
+    const otherIdCheck=(await sb.from("conversation_members").select("user_id").eq("conversation_id",id).neq("user_id",state.user.id).maybeSingle()).data?.user_id;
+    if(otherIdCheck && await denyIfBlocked(otherIdCheck,"Conversation indisponible : ce compte est bloqué."))return;
     const { data: msgs } = await sb.from("messages").select("*").eq("conversation_id", id).order("created_at", { ascending: true }).limit(200);
     await sb.rpc("tafa_mark_conversation_read", { p_conversation_id:id });
     const ids = [...new Set((msgs || []).map(m => m.sender_id))];
@@ -763,7 +798,7 @@ async function publishPostNews() {
     const otherId = (await sb.from("conversation_members").select("user_id").eq("conversation_id", id).neq("user_id", state.user.id).maybeSingle()).data?.user_id;
     const otherProfile = otherId ? (await sb.from("profiles").select("*").eq("id", otherId).maybeSingle()).data : null;
     $("content").innerHTML = `<section class="clean-page messages-page conversation-page"><div class="page-header clean-page-header"><button class="page-back" data-action="page-back" type="button"><span aria-hidden="true">‹</span><small>Messages</small></button><div class="conversation-title">${avatarHTML(otherProfile || state.profile,"avatar conversation-avatar")}<h2>${esc(otherProfile ? nameOf(otherProfile) : "Discussion")}</h2></div><span></span></div><div class="message-list clean-message-list">${(msgs||[]).map(m=>`<div class="message ${m.sender_id===state.user.id?"mine":""}"><div>${esc(m.content)}</div><small>${timeAgo(m.created_at)}</small></div>`).join("")||`<div class="empty">Dites bonjour 👋</div>`}</div><form id="messageForm" class="comment-form clean-message-form"><input id="messageText" placeholder="Écrire un message..." required><button>Envoyer</button></form></section>`;
-    $("messageForm").addEventListener("submit", async e => { e.preventDefault(); const text=$("messageText").value.trim(); if(!text)return; const r=await sb.from("messages").insert({conversation_id:id,sender_id:state.user.id,content:text,is_read:false}); if(r.error)toast(r.error.message); else {$("messageText").value=""; await openConversation(id);} });
+    $("messageForm").addEventListener("submit", async e => { e.preventDefault(); const text=$("messageText").value.trim(); if(!text)return; const otherId=(await sb.from("conversation_members").select("user_id").eq("conversation_id",id).neq("user_id",state.user.id).maybeSingle()).data?.user_id; if(otherId && await denyIfBlocked(otherId,"Message impossible : ce compte est bloqué."))return; const r=await sb.from("messages").insert({conversation_id:id,sender_id:state.user.id,content:text,is_read:false}); if(r.error)toast(r.error.message); else {$("messageText").value=""; await openConversation(id);} });
   }
 
   async function notificationsPage() {
@@ -864,6 +899,7 @@ async function publishPostNews() {
     }
 
     const isMe = userId === state.user.id;
+    if(!isMe && await isBlockedBetween(userId)){ $("content").innerHTML=`<section class="profile-locked-screen profile-blocked-screen" data-page-route="profile"><div class="profile-lock-orbit"><div class="profile-lock-icon">⊘</div></div><span class="eyebrow">TAFAß • BLOCAGE</span><h2>Compte inaccessible</h2><h3>Profil masqué</h3><p class="profile-lock-message-fr">Ce compte et votre compte sont bloqués l’un pour l’autre. Les profils, publications, relations et interactions ne sont pas accessibles.</p><div class="profile-lock-status"><span>🔒</span><div><b>Accès totalement bloqué</b><small>Vous ne pouvez ni voir ni contacter ce compte tant que le blocage est actif.</small></div></div><div class="unavailable-actions"><button class="ghost-action" data-route="home">Retour à l’accueil</button></div></section>`; return; }
     const privacy = await getProfilePrivacy(userId);
     // Le propriétaire voit toujours son propre profil, même lorsqu'il est verrouillé.
     if (!isMe) {
@@ -931,6 +967,7 @@ async function publishPostNews() {
 
   async function openUserProfileTab(userId, tab="posts") {
     if (!userId) return;
+    if(userId!==state.user.id && await isBlockedBetween(userId)) return openUserProfile(userId);
     const { data:p }=await sb.from("profiles").select("*").eq("id",userId).maybeSingle();
     if(!p) return openUserProfile(userId);
     const isMe = userId === state.user.id;
@@ -982,11 +1019,17 @@ async function publishPostNews() {
   }
   async function blockProfile(id) {
     const r=await sb.from("blocked_profiles").upsert({blocker_id:state.user.id,blocked_id:id},{onConflict:"blocker_id,blocked_id"});
-    if(r.error)return toast(r.error.message); closeModal(); toast("Compte bloqué"); await logActivity("profile_blocked","Compte bloqué","profile",id);
+    if(r.error)return toast(r.error.message);
+    await Promise.allSettled([
+      sb.from("friend_requests").delete().or(`and(sender_id.eq.${state.user.id},receiver_id.eq.${id}),and(sender_id.eq.${id},receiver_id.eq.${state.user.id})`),
+      sb.from("friendships").delete().or(`and(user_id.eq.${state.user.id},friend_id.eq.${id}),and(user_id.eq.${id},friend_id.eq.${state.user.id})`),
+      sb.from("follows").delete().or(`and(follower_id.eq.${state.user.id},following_id.eq.${id}),and(follower_id.eq.${id},following_id.eq.${state.user.id})`)
+    ]);
+    blockedCache.loadedAt=0; await getBlockedIds(true); closeModal(); toast("Compte bloqué : accès et interactions désactivés"); await logActivity("profile_blocked","Compte bloqué","profile",id);
   }
   async function unblockProfile(id) {
     const r=await sb.from("blocked_profiles").delete().eq("blocker_id",state.user.id).eq("blocked_id",id);
-    if(r.error)return toast(r.error.message); closeModal(); toast("Compte débloqué");
+    if(r.error)return toast(r.error.message); blockedCache.loadedAt=0; await getBlockedIds(true); closeModal(); toast("Compte débloqué");
   }
 
   async function profilePage(tab = state.profileTab) {
@@ -1521,13 +1564,15 @@ async function genericListPage(route) {
       return simplePage("Paiement", `<section class="payment-page-premium"><div class="premium-hero payment-hero"><span class="eyebrow">TAFAß • PAIEMENT</span><h3>Paiement sécurisé</h3><p class="page-subtitle">Une seule interface de paiement. Les demandes restent en attente jusqu’à validation réelle.</p></div><div class="payment-method-card"><div><b>Airtel Money / Yas Money</b><small>Créer une demande de paiement réelle enregistrée dans votre compte.</small></div><button class="primary" data-action="payment-request" data-method="Airtel Money">Nouvelle demande</button></div><div class="clean-section"><h3 class="menu-section-title">Historique</h3><div class="clean-list">${unique.map(x=>`<div class="list-row payment-history-row"><div class="grow"><b>${esc(x.method||"Paiement")}</b><small>${esc(x.status||"pending")} · ${esc(String(x.amount||0))} ${esc(x.currency||"MGA")} · ${timeAgo(x.created_at)}</small></div></div>`).join("")||`<div class="empty">Aucune transaction.</div>`}</div></div></section>`);
     }
   }
-  async function createPaymentRequest(method) {
-    const amount=prompt(`Montant en MGA pour ${method} :`, ""); if(amount===null)return; const n=Number(amount); if(!Number.isFinite(n)||n<=0)return toast("Montant invalide.");
-    const existing=await sb.from("payment_transactions").select("id,status").eq("user_id",state.user.id).eq("method",method).eq("amount",n).eq("status","pending").limit(1);
-    if(existing.error) return toast("Le service de paiement n’est pas configuré. Exécutez TAFASS_PAYMENT_SETUP.sql.");
-    if((existing.data||[]).length) return toast("Une demande identique est déjà en attente.");
-    const r=await sb.from("payment_transactions").insert({user_id:state.user.id,method,amount:n,currency:"MGA",status:"pending"});
-    if(r.error)return toast(r.error.message); await logActivity("payment_request_created",`Demande de paiement ${method}`,"payment"); toast("Demande enregistrée et en attente de validation"); return servicePage("payment");
+  function createPaymentRequest(method="Airtel Money"){
+    openModal(`<div class="modal-box payment-modal-premium"><button class="modal-close" data-action="close-modal">×</button><div class="payment-brand"><span class="payment-brand-icon">₿</span><div><span class="eyebrow">TAFAß • PAIEMENT</span><h3>Nouvelle demande</h3></div></div><div class="payment-stepper"><span class="active">1<small>Montant</small></span><i></i><span>2<small>Vérification</small></span><i></i><span>3<small>Confirmation</small></span></div><div class="payment-methods"><button class="payment-method active" data-action="select-payment-method" data-payment-method="Airtel Money"><b>📱 Airtel Money</b><small>Paiement mobile</small></button><button class="payment-method" data-action="select-payment-method" data-payment-method="Yas Money"><b>📲 Yas Money</b><small>Paiement mobile</small></button></div><label class="payment-field">Montant (MGA)<input id="paymentAmount" type="number" min="1" step="1" inputmode="numeric" placeholder="Ex. 10 000"></label><label class="payment-field">Numéro de paiement<input id="paymentPhone" type="tel" inputmode="tel" placeholder="03x xx xxx xx"></label><div class="payment-secure-note"><span>🔐</span><div><b>Paiement sécurisé</b><small>La demande est enregistrée dans Tafaß et reste en attente jusqu'à validation réelle. Aucun lien externe n'est affiché.</small></div></div><button class="primary big" data-action="payment-review">Continuer vers la vérification</button></div>`);
+  }
+  async function submitPaymentRequest(method,amount,phone){
+    const n=Number(amount); if(!Number.isFinite(n)||n<=0)return toast("Montant invalide."); if(!phone.trim())return toast("Ajoutez le numéro de paiement.");
+    const existing=await sb.from("payment_transactions").select("id,status").eq("user_id",state.user.id).eq("method",method).eq("amount",n).eq("status","pending").limit(1); if(existing.error)return toast(existing.error.message); if((existing.data||[]).length)return toast("Une demande identique est déjà en attente.");
+    const r=await sb.from("payment_transactions").insert({user_id:state.user.id,method,amount:n,currency:"MGA",status:"pending",external_reference:phone.trim()}).select("id").single(); if(r.error)return toast(r.error.message);
+    await logActivity("payment_request_created",`Demande de paiement ${method}`,"payment",r.data?.id||null);
+    openModal(`<div class="modal-box payment-modal-premium payment-confirm-modal"><div class="payment-success-mark">✓</div><span class="eyebrow">TAFAß • DEMANDE ENREGISTRÉE</span><h3>Demande envoyée</h3><p class="muted">Votre demande de <b>${n.toLocaleString("fr-FR")} MGA</b> via <b>${esc(method)}</b> est enregistrée et attend une validation réelle.</p><div class="payment-receipt"><span>Montant</span><b>${n.toLocaleString("fr-FR")} MGA</b><span>Méthode</span><b>${esc(method)}</b><span>Numéro</span><b>${esc(phone.trim())}</b><span>État</span><b class="payment-pending">EN ATTENTE</b></div><button class="primary big" data-action="close-payment">Terminer</button></div>`);
   }
 
   async function settingsPage() {
@@ -1669,8 +1714,7 @@ async function genericListPage(route) {
     const { error } = await sb.from("user_settings").upsert({ user_id: state.user.id, ...patch }, { onConflict:"user_id" });
     if (error) return toast(error.message);
     toast("Paramètre enregistré");
-    closeModal();
-    await settingsPage();
+    if(state.route==="settings" && state.settingsDetailAction) return openAdvancedSetting(state.settingsDetailAction);
   }
 
   async function getSettingsTable(table) {
@@ -2043,7 +2087,7 @@ async function genericListPage(route) {
         await applyNativeCaptureProtection($('protectCapture')?.checked!==false);
         await logActivity("profile_privacy_updated",visibility==="private"?"Profil verrouillé":"Profil déverrouillé","profile",state.user.id);
         toast("Confidentialité du profil enregistrée");
-        return settingsPage();
+        return openAdvancedSetting("profile-lock");
       }
       if(action==="save-privacy-assistance") return saveUserSetting({allow_friend_requests:!!$('privacyFriend')?.checked,allow_messages:!!$('privacyMessage')?.checked,allow_search_by_phone:!!$('privacyPhone')?.checked,allow_search_by_email:!!$('privacyEmail')?.checked});
       if(action==="save-find-contact-settings") return saveUserSetting({allow_friend_requests:!!$('findFriends')?.checked,allow_messages:!!$('findMessages')?.checked,allow_search_by_phone:!!$('findPhone')?.checked,allow_search_by_email:!!$('findEmail')?.checked});
@@ -3118,8 +3162,19 @@ async function genericListPage(route) {
     }
     const action = actionEl.dataset.action, id = actionEl.dataset.id;
     const notificationId = actionEl.dataset.notification;
+    if (action === "confirm-logout") return confirmLogout();
     if (notificationId && action !== "mark-read") { await sb.from("notifications").update({is_read:true}).eq("id",notificationId).eq("user_id",state.user.id); updateBadges(); }
     if (action === "search-category") { searchCategory = actionEl.dataset.category || "accounts"; return searchPage($("searchInput")?.value || "", searchCategory); }
+    if (action === "select-mood") { document.querySelectorAll(".mood-choice").forEach(x=>x.classList.remove("selected")); actionEl.classList.add("selected"); return; }
+    if (action === "select-payment-method") { document.querySelectorAll(".payment-method").forEach(x=>x.classList.remove("active")); actionEl.classList.add("active"); return; }
+    if (action === "apply-mood") { const v=document.querySelector(".mood-choice.selected")?.dataset.moodValue||""; const extra=$("moodExtra")?.value.trim()||""; if(!v&&!extra)return toast("Choisissez une humeur ou écrivez un message."); const t=$("postText"); if(t)t.value=[v,extra].filter(Boolean).join(" — ").trim(); closeModal(); t?.focus(); return toast("Humeur ajoutée à votre publication"); }
+    if (action === "more-question") { closeModal(); const q=prompt("Votre question :",""); if(q?.trim()&&$("postText")){$("postText").value=`❓ ${q.trim()}
+
+`+$('postText').value;toast("Question ajoutée");} return; }
+    if (action === "more-location") { closeModal(); const q=prompt("Lieu de la publication :",""); if(q?.trim()&&$("postText")){$("postText").value=`📍 ${q.trim()}
+`+$('postText').value;toast("Lieu ajouté");} return; }
+    if (action === "more-file") { closeModal(); $("postFile")?.click(); return; }
+    if (action === "more-style") { closeModal(); toast("Style premium prêt pour votre publication"); return; }
     if (action === "react") return showReactions(id);
     if (action === "comment") { $("comment-"+id)?.focus(); return; }
     if (action === "send-comment") return addComment(id);
@@ -3264,7 +3319,7 @@ async function genericListPage(route) {
       const r=await sb.from("blocked_profiles").delete().eq("blocker_id",state.user.id).eq("blocked_id",id);
       if(r.error) return toast(r.error.message);
       await logActivity("profile_unblocked","Compte débloqué","profile",id);
-      toast("Compte débloqué");
+      blockedCache.loadedAt=0; await getBlockedIds(true); toast("Compte débloqué");
       return openAdvancedSetting("blocking");
     }
     if (action === "revoke-connected-app") {
@@ -3279,6 +3334,8 @@ async function genericListPage(route) {
       toast("Intégration révoquée");
       return openAdvancedSetting("professional-integrations");
     }
+    if (action === "payment-review") { const method=document.querySelector(".payment-method.active")?.dataset.paymentMethod||"Airtel Money"; return submitPaymentRequest(method,$("paymentAmount")?.value||"",$("paymentPhone")?.value||""); }
+    if (action === "close-payment") return servicePage("payment");
     if (action === "payment-settings") return servicePage("payment");
     if (action === "activity-settings") return servicePage("activity");
 
