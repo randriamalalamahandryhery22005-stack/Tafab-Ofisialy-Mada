@@ -822,6 +822,31 @@ async function publishPostNews() {
     }
   }
 
+  async function getProfilePrivacy(userId) {
+    if (!userId) return { locked:false, visibility:"public" };
+    const { data, error } = await sb.from("user_settings")
+      .select("profile_visibility,allow_messages,allow_friend_requests")
+      .eq("user_id", userId).maybeSingle();
+    if (error) console.warn("Tafaß profile privacy:", error.message);
+    return { locked:data?.profile_visibility === "private", visibility:data?.profile_visibility || "public", settings:data || {} };
+  }
+
+  function lockedProfileScreen(p, isOwner=false) {
+    const display = nameOf(p) || "Profil Tafaß";
+    return `<section class="profile-locked-screen" data-page-route="profile">
+      <div class="profile-lock-orbit"><div class="profile-lock-icon" aria-hidden="true">🔒</div></div>
+      <div class="profile-lock-identity">${avatarHTML(p,"avatar profile-lock-avatar")}</div>
+      <span class="eyebrow">TAFAß • CONFIDENTIALITÉ</span>
+      <h2>Profil verrouillé</h2>
+      <h3>${esc(display)}</h3>
+      ${p.username ? `<div class="profile-lock-handle">@${esc(p.username)}</div>` : ""}
+      <p class="profile-lock-message">Ny profil ankehitriny dia voasakan'ny tompony ny hiditra</p>
+      <p class="profile-lock-message-fr">Le propriétaire de ce profil a verrouillé l’accès. Les informations, publications, photos, vidéos et relations privées ne sont pas accessibles.</p>
+      <div class="profile-lock-status"><span>🔐</span><div><b>Accès protégé</b><small>Seul le propriétaire peut consulter le contenu complet de ce profil.</small></div></div>
+      <div class="unavailable-actions"><button class="primary" data-route="home">Retour à l’accueil</button><button class="ghost-action" data-route="search">Rechercher</button></div>
+    </section>`;
+  }
+
   async function openUserProfile(userId) {
     if (!userId || !state.user) return;
     state.viewingProfileId = userId;
@@ -834,24 +859,24 @@ async function publishPostNews() {
     const { data: p, error } = await sb.from("profiles").select("*").eq("id", userId).maybeSingle();
     if (error || !p || token !== state.renderToken) {
       if (token !== state.renderToken) return;
-      $("content").innerHTML = `<section class="profile-unavailable premium-unavailable" data-page-route="profile">
-      <div class="profile-unavailable-icon"><span>◌</span></div>
-      <span class="eyebrow">TAFAß • PROFIL</span>
-      <h2>Profil indisponible</h2>
-      <p>Ce profil n’est pas accessible actuellement. Il peut avoir été supprimé, désactivé, bloqué ou rendu privé.</p>
-      <div class="unavailable-actions"><button class="primary" data-route="friends">Retour aux amis</button><button class="ghost-action" data-route="search">Rechercher un autre compte</button></div>
-    </section>`;
+      $("content").innerHTML = `<section class="profile-unavailable premium-unavailable" data-page-route="profile"><div class="profile-unavailable-icon"><span>◌</span></div><span class="eyebrow">TAFAß • PROFIL</span><h2>Profil indisponible</h2><p>Ce profil n’est pas accessible actuellement. Il peut avoir été supprimé ou désactivé.</p><div class="unavailable-actions"><button class="primary" data-route="home">Retour</button><button class="ghost-action" data-route="search">Rechercher</button></div></section>`;
       return;
     }
-    if (userId !== state.user.id) {
-      const cfg=(await sb.from("user_settings").select("profile_visibility").eq("user_id",userId).maybeSingle()).data;
-      const visibility=cfg?.profile_visibility || "public";
-      if (visibility === "private") {
-        return $("content").innerHTML = `<section class="profile-unavailable premium-unavailable" data-page-route="profile"><div class="profile-unavailable-icon"><span>⌁</span></div><span class="eyebrow">TAFAß • CONFIDENTIALITÉ</span><h2>Profil indisponible</h2><p>Ce profil est privé. Vous ne pouvez pas consulter son contenu.</p><div class="unavailable-actions"><button class="primary" data-route="friends">Retour</button></div></section>`;
+
+    const isMe = userId === state.user.id;
+    const privacy = await getProfilePrivacy(userId);
+    // Le propriétaire voit toujours son propre profil, même lorsqu'il est verrouillé.
+    if (!isMe) {
+      if (privacy.locked) {
+        $("content").innerHTML = lockedProfileScreen(p, false);
+        return;
       }
-      if (visibility === "friends") {
+      if (privacy.visibility === "friends") {
         const fr=(await sb.from("friendships").select("id").eq("user_id",state.user.id).eq("friend_id",userId).maybeSingle()).data;
-        if(!fr) return $("content").innerHTML = `<section class="profile-unavailable premium-unavailable" data-page-route="profile"><div class="profile-unavailable-icon"><span>⌁</span></div><span class="eyebrow">TAFAß • CONFIDENTIALITÉ</span><h2>Profil indisponible</h2><p>Ce profil est réservé aux amis.</p><div class="unavailable-actions"><button class="primary" data-route="friends">Voir mes amis</button></div></section>`;
+        if(!fr) {
+          $("content").innerHTML = `<section class="profile-locked-screen" data-page-route="profile"><div class="profile-lock-orbit"><div class="profile-lock-icon">🔐</div></div>${avatarHTML(p,"avatar profile-lock-avatar")}<span class="eyebrow">TAFAß • CONFIDENTIALITÉ</span><h2>Profil réservé aux amis</h2><h3>${esc(nameOf(p))}</h3><p class="profile-lock-message-fr">Ce profil est visible uniquement par les amis du propriétaire.</p><div class="profile-lock-status"><span>👥</span><div><b>Accès limité</b><small>Ajoutez cette personne comme ami pour demander l’accès.</small></div></div><div class="unavailable-actions"><button class="primary" data-action="add-friend" data-id="${esc(userId)}">Ajouter</button><button class="ghost-action" data-route="friends">Retour</button></div></section>`;
+          return;
+        }
       }
     }
 
@@ -860,38 +885,45 @@ async function publishPostNews() {
     const friendsR = await sb.from("friendships").select("id", { count:"exact", head:true }).eq("user_id", userId);
     const followersR = await sb.from("follows").select("id", { count:"exact", head:true }).eq("following_id", userId);
     const cover = p.cover_url ? `style="background-image:url('${esc(p.cover_url)}')"` : "";
-    const isMe = userId === state.user.id;
-    const isLockedProfile = userId === state.user.id && ((await sb.from("user_settings").select("profile_visibility").eq("user_id",userId).maybeSingle()).data?.profile_visibility === "private");
-    if(userId===state.user.id) { const pp=(await sb.from("privacy_protection_settings").select("capture_protection").eq("user_id",userId).maybeSingle()).data; applyNativeCaptureProtection(pp?.capture_protection !== false); }
+    const isLockedProfile = isMe && privacy.locked;
+    if(isMe) { const pp=(await sb.from("privacy_protection_settings").select("capture_protection").eq("user_id",userId).maybeSingle()).data; applyNativeCaptureProtection(pp?.capture_protection !== false); }
     const [friendR, sentR, receivedR] = isMe ? [{data:null},{data:null},{data:null}] : await Promise.all([
       sb.from("friendships").select("id").eq("user_id",state.user.id).eq("friend_id",userId).maybeSingle(),
       sb.from("friend_requests").select("id,status").eq("sender_id",state.user.id).eq("receiver_id",userId).eq("status","pending").maybeSingle(),
       sb.from("friend_requests").select("id,status").eq("sender_id",userId).eq("receiver_id",state.user.id).eq("status","pending").maybeSingle()
     ]);
     const relationAction = isMe ? `<div class="profile-action-slot profile-action-left"><button class="primary" data-action="edit-profile">Modifier le profil</button></div>` : friendR.data ? `<div class="profile-action-slot profile-action-left"><button class="ghost-action" data-action="remove-friend" data-id="${esc(userId)}">Retirer des amis</button></div>` : receivedR.data ? `<div class="profile-action-slot profile-action-left"><button class="small-action" data-action="accept-friend" data-id="${esc(userId)}">Confirmer</button><button class="ghost-action" data-action="decline-friend" data-id="${esc(userId)}">Refuser</button></div>` : sentR.data ? `<div class="profile-action-slot profile-action-left"><button class="ghost-action" disabled>Demande envoyée</button></div>` : `<div class="profile-action-slot profile-action-left"><button class="primary" data-action="add-friend" data-id="${esc(userId)}">Ajouter</button></div>`;
-    const actions = isMe ? relationAction : `${relationAction}<div class="profile-action-slot profile-action-center"><button class="ghost-action" data-action="message-user" data-id="${esc(userId)}">Messages</button></div><div class="profile-action-slot profile-action-right"><button class="round-button profile-more-button" data-action="profile-more" data-id="${esc(userId)}" aria-label="Plus d'options"><span aria-hidden="true">⋯</span></button></div>`;
+    const actions = isMe ? relationAction : `${relationAction}<div class="profile-action-slot profile-action-center"><button class="ghost-action" data-action="message-user" data-id="${esc(userId)}">Messages</button></div><div class="profile-action-slot profile-action-right"><button class="round-button profile-more-button" data-action="profile-more" data-id="${esc(userId)}" aria-label="Plus d’options"><span aria-hidden="true">⋯</span></button></div>`;
 
     let body = "";
-    for (const post of postRows) {
-      body += await postHTML({ ...post, author:p });
-    }
+    for (const post of postRows) body += await postHTML({ ...post, author:p });
     if (!body) body = `<div class="empty profile-empty">Aucune publication pour le moment.</div>`;
+
+    const ownerDetails = isMe ? `<div class="profile-owner-details"><div class="profile-owner-detail-head"><span class="eyebrow">MON PROFIL • INFORMATIONS</span><span class="profile-owner-lock-state">${isLockedProfile?'🔒 Verrouillé':'✓ Visible'}</span></div><div class="profile-owner-grid">
+      <div><span>Nom complet</span><b>${esc(nameOf(p))}</b></div>
+      ${p.username?`<div><span>Nom d’utilisateur</span><b>@${esc(p.username)}</b></div>`:""}
+      ${p.email?`<div><span>E-mail</span><b>${esc(p.email)}</b></div>`:""}
+      ${p.phone?`<div><span>Téléphone</span><b>${esc(p.phone)}</b></div>`:""}
+      ${p.country?`<div><span>Pays</span><b>${esc(p.country)}</b></div>`:""}
+      ${p.city_current?`<div><span>Ville actuelle</span><b>${esc(p.city_current)}</b></div>`:""}
+      ${p.city_origin?`<div><span>Ville d’origine</span><b>${esc(p.city_origin)}</b></div>`:""}
+      ${p.birth_date?`<div><span>Date de naissance</span><b>${esc(p.birth_date)}</b></div>`:""}
+      ${p.gender?`<div><span>Genre</span><b>${esc(p.gender)}</b></div>`:""}
+      ${p.created_at?`<div><span>Membre depuis</span><b>${new Date(p.created_at).toLocaleDateString("fr-FR",{month:"long",year:"numeric"})}</b></div>`:""}
+    </div></div>` : "";
 
     if (token !== state.renderToken) return;
     $("content").innerHTML = `<section class="profile-page-premium public-profile-page" data-page-route="profile">
       <div class="profile-cover-wrap"><div class="profile-cover" ${cover}></div></div>
       <div class="profile-main-premium">
-        <div class="profile-identity-row">
-          ${avatarHTML(p,"avatar profile-avatar")}
-        </div>
-        <div class="profile-name-block"><h2 class="profile-name">${esc(nameOf(p))}${isLockedProfile ? ' <span class="profile-locked-badge" title="Profil verrouillé">🔒 Profil verrouillé</span>' : ''}</h2>${isLockedProfile ? '<small class="profile-protection-note">🔐 Contenu protégé par les paramètres de confidentialité Tafaß</small>' : ''}</div>
+        <div class="profile-identity-row">${avatarHTML(p,"avatar profile-avatar")}</div>
+        <div class="profile-name-block"><h2 class="profile-name">${esc(nameOf(p))}${isLockedProfile ? ' <span class="profile-locked-badge profile-locked-badge-centered" title="Profil verrouillé">🔒 Profil verrouillé</span>' : ''}</h2>${isLockedProfile ? '<small class="profile-protection-note">🔐 Ny profil ankehitriny dia voasakan’ny tompony ny hiditra • Seul vous pouvez voir le contenu complet.</small>' : ''}</div>
         <p class="profile-bio">${esc(p.bio || "")}</p>
         <div class="profile-actions">${actions}</div>
         <div class="profile-stats"><div class="profile-stat"><b>${postRows.length}</b><small>Publications</small></div><div class="profile-stat"><b>${friendsR.count || 0}</b><small>Amis</small></div><div class="profile-stat"><b>${followersR.count || 0}</b><small>Abonnés</small></div></div>
-        <div class="profile-info profile-info-v23"><div class="profile-info-title-v23">Lieu</div>${p.country ? `<div>🌍 Pays : ${esc(p.country)}</div>` : ""}${p.city_current ? `<div>⌖ Ville actuelle : ${esc(p.city_current)}</div>` : ""}${p.city_origin ? `<div>⌂ Ville d’origine : ${esc(p.city_origin)}</div>` : ""}${p.created_at ? `<div class="profile-member-v23">◷ Membre depuis ${new Date(p.created_at).toLocaleDateString("fr-FR", {month:"long", year:"numeric"})}</div>` : ""}</div>
-        <div class="profile-tabs">
-          ${[["posts","Publications"],["photos","Photos"],["videos","Vidéos"],["friends","Amis"]].map(([k,v])=>`<button class="${k==="posts"?"active":""}" data-action="public-profile-tab" data-id="${esc(userId)}" data-tab="${k}">${v}</button>`).join("")}
-        </div>
+        ${ownerDetails}
+        <div class="profile-info profile-info-v23"><div class="profile-info-title-v23">Présentation</div>${p.country ? `<div>🌍 Pays : ${esc(p.country)}</div>` : ""}${p.city_current ? `<div>⌖ Ville actuelle : ${esc(p.city_current)}</div>` : ""}${p.city_origin ? `<div>⌂ Ville d’origine : ${esc(p.city_origin)}</div>` : ""}${p.created_at ? `<div class="profile-member-v23">◷ Membre depuis ${new Date(p.created_at).toLocaleDateString("fr-FR", {month:"long", year:"numeric"})}</div>` : ""}</div>
+        <div class="profile-tabs">${[["posts","Publications"],["photos","Photos"],["videos","Vidéos"],["friends","Amis"]].map(([k,v])=>`<button class="${k==="posts"?"active":""}" data-action="public-profile-tab" data-id="${esc(userId)}" data-tab="${k}">${v}</button>`).join("")}</div>
         <section class="profile-content-section profile-publications-section">${body}</section>
       </div>
     </section>`;
@@ -900,8 +932,11 @@ async function publishPostNews() {
   async function openUserProfileTab(userId, tab="posts") {
     if (!userId) return;
     const { data:p }=await sb.from("profiles").select("*").eq("id",userId).maybeSingle();
-    const isLockedProfile = userId === state.user.id && ((await sb.from("user_settings").select("profile_visibility").eq("user_id",userId).maybeSingle()).data?.profile_visibility === "private");
     if(!p) return openUserProfile(userId);
+    const isMe = userId === state.user.id;
+    const privacy = await getProfilePrivacy(userId);
+    if(!isMe && privacy.locked) { $("content").innerHTML = lockedProfileScreen(p,false); return; }
+    const isLockedProfile = isMe && privacy.locked;
     const { data:posts }=await sb.from("posts").select("*").eq("user_id",userId).order("created_at",{ascending:false}).limit(100);
     const rows=(posts||[]).map(x=>({...x,author:p}));
     let body="";
@@ -959,6 +994,8 @@ async function publishPostNews() {
     state.profileTab = ["posts","photos","friends"].includes(tab) ? tab : "posts";
     tab = state.profileTab;
     const p = state.profile || {};
+    const privacy = await getProfilePrivacy(state.user.id);
+    const isLockedProfile = privacy.locked === true;
     const mine = await loadMyPosts();
     const photos = mine.filter(x => x.media_url && x.media_type === "image");
     const cover = p.cover_url ? `style="background-image:url('${esc(p.cover_url)}')"` : "";
@@ -1459,7 +1496,7 @@ async function genericListPage(route) {
       ["help","help","Aide","Assistance et signalement", "help"]
     ];
     const card = x => `<button type="button" class="menu-card premium-menu-card" ${x[4] ? `data-action="menu-service" data-name="${esc(x[2])}" data-service="${esc(x[4])}"` : `data-action="menu-route" data-route-target="${esc(x[0])}"`} aria-label="${esc(x[2])}"><span class="menu-icon">${menuIcon(x[1])}</span><span class="menu-card-copy"><b>${esc(x[2])}</b><small title="${esc(x[3])}">${esc(x[3])}</small></span><span class="menu-arrow">›</span></button>`;
-    simplePage("Menu", `<div class="menu-profile premium-menu-profile" data-route="profile"><button class="profile-link menu-profile-avatar" data-action="view-profile" data-id="${esc(p.id || "")}">${avatarHTML(p)}</button><div class="grow"><b>${esc(nameOf(p))}</b><small title="${esc(p.email || state.user?.email || "")}">${esc(p.email || state.user?.email || "")}</small></div><button class="small-action" data-route="profile">Profil</button></div><div class="menu-section-title">Raccourcis</div><div class="menu-grid premium-menu-grid">${items.map(card).join("")}</div><div class="menu-section-title">Services</div><div class="menu-grid premium-menu-grid">${actions.map(card).join("")}</div><div class="menu-section-title">Compte</div><div class="menu-grid premium-menu-grid"><button class="menu-card premium-menu-card danger-card" data-action="logout"><span class="menu-icon">${menuIcon("logout")}</span><span class="menu-card-copy"><b>Déconnexion</b><small>Quitter ce compte en toute sécurité</small></span><span class="menu-arrow">›</span></button></div>`);
+    simplePage("Menu", `<div class="menu-profile premium-menu-profile" data-route="profile"><button class="profile-link menu-profile-avatar" data-action="view-profile" data-id="${esc(p.id || "")}">${avatarHTML(p)}</button><div class="grow"><b>${esc(nameOf(p))}</b><small title="${esc(p.email || state.user?.email || "")}">${esc(p.email || state.user?.email || "")}</small></div><button class="small-action" data-route="profile">Profil</button></div><div class="menu-section-title">Raccourcis</div><div class="menu-grid premium-menu-grid">${items.map(card).join("")}</div><div class="menu-section-title">Services</div><div class="menu-grid premium-menu-grid">${actions.map(card).join("")}</div><div class="menu-section-title">Compte</div><div class="menu-grid premium-menu-grid"><button class="menu-card premium-menu-card danger-card" data-action="logout"><span class="menu-icon">${menuIcon("logout")}</span><span class="menu-card-copy"><b>Quitter le compte</b><small>Fermer la session sur cet appareil</small></span><span class="menu-arrow">›</span></button></div>`);
   }
 
   async function servicePage(service) {
@@ -1590,7 +1627,7 @@ async function genericListPage(route) {
 
         <div class="fb-settings-footer">
           <button class="fb-settings-account-action" data-action="security-settings">${icon("privacy")}<span>Sécurité et connexion</span></button>
-          <button class="fb-settings-account-action" data-action="logout">${icon("logout")}<span>Déconnexion</span></button>
+          <button class="fb-settings-account-action" data-action="logout">${icon("logout")}<span>Quitter le compte</span></button>
         </div>
       </section>
     `);
@@ -2248,13 +2285,13 @@ async function genericListPage(route) {
   }
 
   function logout() {
-    openModal(`<div class="modal-box logout-modal premium-logout-modal">
-      <div class="logout-visual"><span class="logout-shield" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M24 5l15 6v10c0 10.2-6.3 18.1-15 22-8.7-3.9-15-11.8-15-22V11l15-6z"/><path d="M16 24l5 5 11-12"/></svg></span></div>
-      <span class="eyebrow">TAFAß • COMPTE</span>
-      <h3>Déconnexion</h3>
-      <p class="logout-question">Voulez-vous vraiment vous déconnecter de votre compte ?</p>
-      <div class="logout-choice"><div><b>Rester dans l’application</b><small>Votre session reste ouverte.</small></div><button class="ghost-action" data-action="close-modal">Rester</button></div>
-      <div class="logout-choice danger-choice"><div><b>Se déconnecter</b><small>Vous devrez vous reconnecter pour accéder au compte.</small></div><button class="danger-button" data-action="confirm-logout">Déconnexion</button></div>
+    openModal(`<div class="modal-box logout-modal logout-v2">
+      <div class="logout-v2-icon" aria-hidden="true">↪</div>
+      <span class="eyebrow">TAFAß • SESSION</span>
+      <h3>Quitter ce compte</h3>
+      <p class="logout-v2-copy">Vous allez fermer la session de ce compte sur cet appareil. Vos données restent enregistrées dans Tafaß.</p>
+      <div class="logout-account-card">${avatarHTML(state.profile||{},"avatar")}<div><b>${esc(nameOf(state.profile||{})||"Compte Tafaß")}</b><small>${esc(state.user?.email||"Session actuelle")}</small></div><span class="live-dot">●</span></div>
+      <div class="logout-v2-actions"><button class="ghost-action big" data-action="close-modal">Annuler</button><button class="danger-button big" data-action="confirm-logout">Quitter le compte</button></div>
     </div>`);
   }
   async function confirmLogout() {
