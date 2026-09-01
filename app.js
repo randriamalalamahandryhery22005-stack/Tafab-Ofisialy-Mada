@@ -13,7 +13,7 @@ document.documentElement.classList.add("app-boot");
   const routes = ["home","friends","search","messages","notifications","profile","reels","pages","groups","saved","menu","tafab","settings"];
   const state = {
     user: null, profile: null, route: "home", navStack: ["home"], backOverride: null, posts: [], friends: [], stories: [],
-    channel: null, theme: "dark", entering: false, loggingOut: false,
+    channel: null, theme: "dark", entering: false, loggingOut: false, composerOpen: false, composerBackground: "plain", composerLocation: "",
     profileTab: "posts", reactionSettingsCache:new Map(), locationWatchId:null, friendsTab: "suggestions", pagesTab: "mine", groupsTab: "mine", groupSort: "recent", selectedConversation: null, viewingProfileId: null, renderToken: 0, activePage: null, entityBackRoute: null
   };
 
@@ -369,44 +369,74 @@ async function renderFeed() {
         </div>
       </section>
 
-      <section class="composer composer-news">
-        <div class="composer-top">${avatarHTML(state.profile)}<div><b>${esc(nameOf(state.profile))}</b><small>Créer une publication publique</small></div></div>
-        <textarea id="postText" placeholder="Quoi de neuf, ${esc((state.profile?.first_name||"vous").trim())} ?"></textarea>
-        <div class="composer-type-row composer-type-row-premium">
-          <button type="button" data-compose-type="story"><span class="composer-type-icon story-icon">◉</span><span>Story</span></button>
-          <button type="button" data-compose-type="text"><span class="composer-type-icon text-icon">Aa</span><span>Texte</span></button>
-          <label data-compose-type="photo"><span class="composer-type-icon photo-icon">▣</span><span>Photo</span><input id="postFile" type="file" accept="image/*" hidden></label>
-          <label data-compose-type="video"><span class="composer-type-icon video-icon">▶</span><span>Vidéo</span><input id="postVideoFile" type="file" accept="video/*" hidden></label>
-          <button type="button" data-compose-type="mood"><span class="composer-type-icon mood-icon">☺</span><span>Humeur</span></button>
-          <button type="button" data-compose-type="more"><span class="composer-type-icon more-icon">＋</span><span>Plus</span></button>
-        </div>
-        <div class="composer-selected-file" id="composerFileName"></div>
-        <div class="composer-actions"><span class="composer-visibility">🌐 Public</span><button type="button" class="primary" id="publishBtn">Publier</button></div>
+      <section class="composer composer-news composer-launcher">
+        <button class="composer-launcher-button" type="button" data-action="open-publisher">
+          <span class="composer-launcher-avatar">${avatarHTML(state.profile)}</span>
+          <span class="composer-launcher-input">À quoi pensez-vous ?</span>
+          <span class="composer-launcher-photo" aria-label="Photo">▣</span>
+        </button>
       </section>`;
 
     if(!state.posts.length) html+=`<div class="card empty">Aucune publication pour le moment.<br><span>Publiez la première sur Tafaß.</span></div>`;
     for(const p of state.posts){ if(token!==state.renderToken||state.route!=="home")return; html+=await postHTML(p); }
     if(token!==state.renderToken||state.route!=="home")return;
     $("content").innerHTML=html;
-    const pf=$("postFile"), vf=$("postVideoFile");
-    pf?.addEventListener("change",()=>{ if(pf.files?.[0]){ vf.value=""; $("composerFileName").textContent=pf.files[0].name; }});
-    vf?.addEventListener("change",()=>{ if(vf.files?.[0]){ pf.value=""; $("composerFileName").textContent=vf.files[0].name; }});
-    document.querySelectorAll("[data-compose-type]").forEach(el=>el.addEventListener("click",()=>{
-      const type=el.dataset.composeType;
-      if(type==="story") return storyComposer();
-      if(type==="photo") pf?.click(); else if(type==="video") vf?.click();
-      else if(type==="mood") return openMoodComposer();
-      else if(type==="more") return openMoreComposer();
-    }));
-    $("publishBtn")?.addEventListener("click",publishPostNews);
   }
 
-async function publishPostNews() {
-    const text=$("postText")?.value.trim()||"";
+function publisherBackgrounds(){
+    return [
+      ["plain","", "Classique"],
+      ["snow","linear-gradient(135deg,#ffffff,#eef3ff)","Blanc"],
+      ["violet","linear-gradient(135deg,#7c3aed,#ec4899)","Violet"],
+      ["blue","linear-gradient(135deg,#2563eb,#06b6d4)","Bleu"],
+      ["sunset","linear-gradient(135deg,#f97316,#ef4444,#ec4899)","Sunset"],
+      ["mint","linear-gradient(135deg,#10b981,#14b8a6)","Menthe"],
+      ["night","linear-gradient(135deg,#111827,#374151)","Nuit"],
+      ["pink","linear-gradient(135deg,#db2777,#9333ea)","Rose"]
+    ];
+  }
+  function openPublisher(){
+    state.composerOpen=true; state.composerBackground="plain"; state.composerLocation="";
+    openModal(`<div class="publisher-modal">
+      <header class="publisher-header"><button class="publisher-back" data-action="close-publisher" aria-label="Retour">←</button><div><span class="eyebrow">TAFAß</span><h2>Créer une publication</h2></div><button class="publisher-top-publish" data-action="publish-post-news">PUBLIER</button></header>
+      <div class="publisher-author">${avatarHTML(state.profile,"avatar publisher-avatar")}<div><b>${esc(nameOf(state.profile))}</b><button class="publisher-audience" type="button">🌐 Public <span>⌄</span></button></div></div>
+      <div class="publisher-editor-wrap">
+        <textarea id="postText" class="publisher-editor" maxlength="5000" placeholder="Quoi de neuf pour vous ?"></textarea>
+        <div class="publisher-backgrounds">${publisherBackgrounds().map(([id,bg,label])=>`<button class="publisher-bg ${id==="plain"?"selected":""}" data-action="select-publisher-bg" data-bg="${id}" title="${esc(label)}" style="${bg?`background:${bg};`:""}">${id==="plain"?"Aa":""}</button>`).join("")}</div>
+      </div>
+      <div class="publisher-media-preview" id="publisherMediaPreview"></div>
+      <div class="publisher-tools">
+        <button data-action="publisher-photo"><span>▣</span><b>Photos/Vidéos</b></button>
+        <button data-action="publisher-music"><span>♫</span><b>Musique</b></button>
+        <button data-action="publisher-tag"><span>👥</span><b>Identifier des personnes</b></button>
+        <button data-action="publisher-location"><span>📍</span><b>Ajouter un lieu</b></button>
+        <button data-action="publisher-mood"><span>☺</span><b>Humeur/Activité</b></button>
+        <button data-action="publisher-message"><span>💬</span><b>Recevoir des messages</b></button>
+        <button data-action="publisher-event"><span>▦</span><b>Créer un évènement</b></button>
+        <button data-action="publisher-live"><span>●</span><b>Lancer un direct</b></button>
+      </div>
+      <input id="postFile" type="file" accept="image/*" hidden>
+      <input id="postVideoFile" type="file" accept="video/*" hidden>
+      <div class="publisher-bottom"><span id="composerFileName">Aucun média sélectionné</span><button class="primary big" data-action="publish-post-news">PUBLIER</button></div>
+    </div>`);
     const pf=$("postFile"), vf=$("postVideoFile");
-    const file=pf?.files?.[0]||vf?.files?.[0];
+    const preview=()=>{
+      const f=pf?.files?.[0]||vf?.files?.[0], box=$("publisherMediaPreview");
+      if(!box)return;
+      if(!f){box.innerHTML=""; $("composerFileName")&&( $("composerFileName").textContent="Aucun média sélectionné"); return;}
+      $("composerFileName")&&( $("composerFileName").textContent=f.name);
+      box.innerHTML=f.type.startsWith("video/")?`<video src="${URL.createObjectURL(f)}" controls playsinline></video>`:`<img src="${URL.createObjectURL(f)}" alt="Aperçu">`;
+    };
+    pf?.addEventListener("change",()=>{if(vf)vf.value="";preview();});
+    vf?.addEventListener("change",()=>{if(pf)pf.value="";preview();});
+    setTimeout(()=>$("postText")?.focus(),50);
+  }
+  async function publishPostNews(){
+    const text=$("postText")?.value.trim()||"";
+    const pf=$("postFile"), vf=$("postVideoFile"), file=pf?.files?.[0]||vf?.files?.[0];
     if(!text&&!file)return toast("Écrivez quelque chose ou choisissez un média.");
-    const btn=$("publishBtn"); setLoading(btn,true,"Publier");
+    const buttons=[...document.querySelectorAll('[data-action="publish-post-news"]')], btn=buttons[buttons.length-1];
+    setLoading(btn,true,"Publier");
     try{
       let media_url=null,media_type=null;
       if(file){
@@ -417,14 +447,23 @@ async function publishPostNews() {
         media_url=sb.storage.from("posts").getPublicUrl(path).data.publicUrl;
         media_type=file.type.startsWith("video/")?"video":"image";
       }
-      const r=await sb.from("posts").insert({user_id:state.user.id,content:text,media_url,media_type,visibility:"public"}).select().single();
+      const payload={user_id:state.user.id,content:text,media_url,media_type,visibility:"public",location:state.composerLocation||null,background_style:state.composerBackground||"plain"};
+      let r=await sb.from("posts").insert(payload).select().single();
+      if(r.error && String(r.error.code)==="42703"){
+        delete payload.background_style;
+        r=await sb.from("posts").insert(payload).select().single();
+      }
       if(r.error)throw new Error(r.error.message);
       await logActivity("post_created","Publication créée","post",r.data?.id||null);
-      $("postText").value=""; if(pf)pf.value=""; if(vf)vf.value=""; if($("composerFileName"))$("composerFileName").textContent="";
-      toast("Publication publiée"); await loadPosts(); await render();
+      state.composerOpen=false; closeModal(); toast("Publication publiée"); await loadPosts(); await render();
     }catch(e){toast(e?.message||"Publication impossible.");}
     finally{setLoading(btn,false,"Publier");}
-}
+  }
+  function appendPublisherText(prefix){
+    const t=$("postText"); if(!t)return;
+    t.value=(prefix+(t.value.trim()?`\n${t.value.trim()}`:"")).slice(0,5000);
+    t.focus();
+  }
 
 
   async function reactionCountsVisibleFor(ownerId) {
@@ -458,9 +497,9 @@ async function publishPostNews() {
     }).join("");
     const shareNames = sh.slice(0,3).map(x => esc(nameOf(x.user))).join(", ");
     const shareSummary = sh.length ? `<span class="share-summary">↗ ${shareNames}${sh.length > 3 ? ` +${sh.length-3}` : ""}</span>` : "";
-    return `<article class="post" id="post-${esc(p.id)}" data-post-id="${esc(p.id)}">
+    return `<article class="post post-premium" id="post-${esc(p.id)}" data-post-id="${esc(p.id)}" data-post-bg="${esc(p.background_style || "plain")}">
       <div class="post-head">${profileLink(p.author, avatarHTML(p.author), "profile-link profile-avatar-link")}<div class="meta">${profileLink(p.author, `<span class="post-author-name">${esc(nameOf(p.author))}</span>`, "profile-link profile-meta-link")}<span class="post-time"><small>${timeAgo(p.created_at)} · ${esc(p.visibility || "public")}</small></span></div><button class="post-menu" data-action="post-menu" data-id="${esc(p.id)}">⋯</button></div>
-      ${p.content ? `<div class="post-body">${esc(p.content)}</div>` : ""}${media}
+      ${p.content ? `<div class="post-body ${p.background_style && p.background_style !== "plain" ? "post-body-has-bg" : ""}">${esc(p.content)}</div>` : ""}${media}
       <div class="post-stats"><span class="reaction-summary">${reactionVisual || "<span class='muted-inline'>Aucune réaction</span>"}</span><span>${cs.length} commentaire(s) · ${Number(p.shares || sh.length || 0)} partage(s)</span></div>
       ${shareSummary}
       <div class="post-actions"><button class="react-btn" data-action="react" data-id="${esc(p.id)}">${reactionMeta[mine]?.[1] || "👍"} ${esc(reactionMeta[mine]?.[0] || "J’aime")}</button><button data-action="comment" data-id="${esc(p.id)}">💬 Commenter</button><button data-action="share" data-id="${esc(p.id)}">↗ Partager</button></div>
@@ -1539,7 +1578,7 @@ async function genericListPage(route) {
       ["help","help","Aide","Assistance et signalement", "help"]
     ];
     const card = x => `<button type="button" class="menu-card premium-menu-card" ${x[4] ? `data-action="menu-service" data-name="${esc(x[2])}" data-service="${esc(x[4])}"` : `data-action="menu-route" data-route-target="${esc(x[0])}"`} aria-label="${esc(x[2])}"><span class="menu-icon">${menuIcon(x[1])}</span><span class="menu-card-copy"><b>${esc(x[2])}</b><small title="${esc(x[3])}">${esc(x[3])}</small></span><span class="menu-arrow">›</span></button>`;
-    simplePage("Menu", `<div class="menu-profile premium-menu-profile" data-route="profile"><button class="profile-link menu-profile-avatar" data-action="view-profile" data-id="${esc(p.id || "")}">${avatarHTML(p)}</button><div class="grow"><b>${esc(nameOf(p))}</b><small title="${esc(p.email || state.user?.email || "")}">${esc(p.email || state.user?.email || "")}</small></div><button class="small-action" data-route="profile">Profil</button></div><div class="menu-section-title">Raccourcis</div><div class="menu-grid premium-menu-grid">${items.map(card).join("")}</div><div class="menu-section-title">Services</div><div class="menu-grid premium-menu-grid">${actions.map(card).join("")}</div><div class="menu-section-title">Compte</div><div class="menu-grid premium-menu-grid"><button class="menu-card premium-menu-card danger-card" data-action="logout"><span class="menu-icon">${menuIcon("logout")}</span><span class="menu-card-copy"><b>Quitter le compte</b><small>Fermer la session sur cet appareil</small></span><span class="menu-arrow">›</span></button></div>`);
+    simplePage("Menu", `<div class="menu-profile premium-menu-profile" data-route="profile"><button class="profile-link menu-profile-avatar" data-action="view-profile" data-id="${esc(p.id || "")}">${avatarHTML(p)}</button><div class="grow"><b>${esc(nameOf(p))}</b><small title="${esc(p.email || state.user?.email || "")}">${esc(p.email || state.user?.email || "")}</small></div><button class="small-action" data-route="profile">Profil</button></div><div class="menu-section-title">Raccourcis</div><div class="menu-grid premium-menu-grid">${items.map(card).join("")}</div><div class="menu-section-title">Services</div><div class="menu-grid premium-menu-grid">${actions.map(card).join("")}</div><div class="menu-section-title">Compte</div><div class="menu-grid premium-menu-grid"><button class="menu-card premium-menu-card danger-card" data-action="new-logout"><span class="menu-icon">${menuIcon("logout")}</span><span class="menu-card-copy"><b>Quitter le compte</b><small>Fermer la session sur cet appareil</small></span><span class="menu-arrow">›</span></button></div>`);
   }
 
   async function servicePage(service) {
@@ -1672,7 +1711,7 @@ async function genericListPage(route) {
 
         <div class="fb-settings-footer">
           <button class="fb-settings-account-action" data-action="security-settings">${icon("privacy")}<span>Sécurité et connexion</span></button>
-          <button class="fb-settings-account-action" data-action="logout">${icon("logout")}<span>Quitter le compte</span></button>
+          <button class="fb-settings-account-action" data-action="new-logout">${icon("logout")}<span>Quitter le compte</span></button>
         </div>
       </section>
     `);
@@ -2111,7 +2150,7 @@ async function genericListPage(route) {
   }
 
   function securitySettings() {
-    openModal(`<div class="modal-box settings-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • SÉCURITÉ</span><h3>Sécurité et connexion</h3><p class="muted">Compte connecté : ${esc(state.user?.email || "Compte Tafaß")}</p><div class="form-stack"><label>Nouveau mot de passe<input id="newPassword" type="password" minlength="6" autocomplete="new-password" placeholder="Au moins 6 caractères"></label><label>Confirmer le mot de passe<input id="confirmPassword" type="password" minlength="6" autocomplete="new-password" placeholder="Répétez le mot de passe"></label><button class="primary big" data-action="change-password">Modifier le mot de passe</button><button class="ghost-action big" data-action="logout">Se déconnecter</button></div></div>`);
+    openModal(`<div class="modal-box settings-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • SÉCURITÉ</span><h3>Sécurité et connexion</h3><p class="muted">Compte connecté : ${esc(state.user?.email || "Compte Tafaß")}</p><div class="form-stack"><label>Nouveau mot de passe<input id="newPassword" type="password" minlength="6" autocomplete="new-password" placeholder="Au moins 6 caractères"></label><label>Confirmer le mot de passe<input id="confirmPassword" type="password" minlength="6" autocomplete="new-password" placeholder="Répétez le mot de passe"></label><button class="primary big" data-action="change-password">Modifier le mot de passe</button><button class="ghost-action big" data-action="new-logout">Se déconnecter</button></div></div>`);
   }
   async function changePassword() {
     const password=$("newPassword")?.value || "", confirm=$("confirmPassword")?.value || "";
@@ -2328,38 +2367,29 @@ async function genericListPage(route) {
     if (state.user) await sb.from("user_settings").upsert({user_id:state.user.id,theme:"dark"},{onConflict:"user_id"});
   }
 
-  function logout() {
-    openModal(`<div class="modal-box logout-modal logout-v2">
-      <div class="logout-v2-icon" aria-hidden="true">↪</div>
-      <span class="eyebrow">TAFAß • SESSION</span>
-      <h3>Quitter ce compte</h3>
-      <p class="logout-v2-copy">Vous allez fermer la session de ce compte sur cet appareil. Vos données restent enregistrées dans Tafaß.</p>
-      <div class="logout-account-card">${avatarHTML(state.profile||{},"avatar")}<div><b>${esc(nameOf(state.profile||{})||"Compte Tafaß")}</b><small>${esc(state.user?.email||"Session actuelle")}</small></div><span class="live-dot">●</span></div>
-      <div class="logout-v2-actions"><button class="ghost-action big" data-action="close-modal">Annuler</button><button class="danger-button big" data-action="confirm-logout">Quitter le compte</button></div>
-    </div>`);
-  }
-  async function confirmLogout() {
-    if (state.loggingOut) return;
-    state.loggingOut = true;
-    const button = document.querySelector('[data-action="confirm-logout"]');
-    if (button) { button.disabled = true; button.textContent = "Déconnexion…"; }
-    try {
-      if (state.channel) { try { await sb.removeChannel(state.channel); } catch (_) {} state.channel = null; }
-      const { error } = await sb.auth.signOut();
-      if (error) throw error;
-      state.user=null; state.profile=null; state.selectedConversation=null; state.viewingProfileId=null; state.activePage=null; state.entityBackRoute=null; state.navStack=["home"]; state.route="home";
+  async function newLogout(){
+    if(state.loggingOut)return;
+    state.loggingOut=true;
+    try{
+      document.body.classList.add("app-logging-out");
+      if(state.channel){try{await sb.removeChannel(state.channel);}catch(_){} state.channel=null;}
+      const {error}=await sb.auth.signOut();
+      if(error)throw error;
+      state.user=null; state.profile=null; state.posts=[]; state.friends=[]; state.stories=[];
+      state.selectedConversation=null; state.viewingProfileId=null; state.activePage=null; state.entityBackRoute=null;
+      state.navStack=["home"]; state.route="home"; state.composerOpen=false; state.composerLocation="";
       document.body.classList.remove("page-mode-active","modal-open");
       closeModal();
       $("app")?.classList.add("hidden");
       showLogin();
-    } catch (e) {
-      if (button) { button.disabled = false; button.textContent = "Déconnexion"; }
-      state.loggingOut = false;
-      return toast(e?.message || "Impossible de se déconnecter. Réessayez.");
+      window.scrollTo({top:0,left:0,behavior:"instant"});
+    }catch(e){
+      toast(e?.message||"Impossible de se déconnecter. Réessayez.");
+    }finally{
+      state.loggingOut=false;
+      document.body.classList.remove("app-logging-out");
     }
-    state.loggingOut = false;
   }
-
   async function setupRealtime() {
     if (state.channel) {
       try { await sb.removeChannel(state.channel); } catch (_) {}
@@ -3154,7 +3184,7 @@ async function genericListPage(route) {
     const actionEl = e.target.closest("[data-action]");
     if (actionEl) {
       e.preventDefault();
-      if (pageLoading && !["close-modal","confirm-logout"].includes(actionEl.dataset.action)) return;
+      if (pageLoading && !["close-modal","new-logout"].includes(actionEl.dataset.action)) return;
     } else {
       const routeEl = e.target.closest("[data-route]");
       if (routeEl) { e.preventDefault(); if (pageLoading) return; navigate(routeEl.dataset.route); return; }
@@ -3162,12 +3192,28 @@ async function genericListPage(route) {
     }
     const action = actionEl.dataset.action, id = actionEl.dataset.id;
     const notificationId = actionEl.dataset.notification;
-    if (action === "confirm-logout") return confirmLogout();
+    if (action === "new-logout") return newLogout();
+    if (action === "open-publisher") return openPublisher();
+    if (action === "close-publisher") { closeModal(); state.composerOpen=false; return; }
+    if (action === "select-publisher-bg") {
+      state.composerBackground=actionEl.dataset.bg||"plain";
+      document.querySelectorAll(".publisher-bg").forEach(x=>x.classList.toggle("selected",x===actionEl));
+      return;
+    }
+    if (action === "publish-post-news") return publishPostNews();
+    if (action === "publisher-photo") return $("postFile")?.click();
+    if (action === "publisher-music") { const v=prompt("Nom ou lien de la musique :",""); if(v?.trim()) appendPublisherText(`♫ ${v.trim()}`); return; }
+    if (action === "publisher-tag") { const v=prompt("Nom de la personne à identifier :",""); if(v?.trim()) appendPublisherText(`👥 ${v.trim()}`); return; }
+    if (action === "publisher-location") { const v=prompt("Lieu de la publication :",""); if(v?.trim()){state.composerLocation=v.trim();appendPublisherText(`📍 ${v.trim()}`);} return; }
+    if (action === "publisher-mood") { return openMoodComposer(); }
+    if (action === "publisher-message") { appendPublisherText("💬 Recevoir des messages"); return toast("Option ajoutée à la publication."); }
+    if (action === "publisher-event") { const v=prompt("Nom de l’évènement :",""); if(v?.trim()) appendPublisherText(`📅 ${v.trim()}`); return; }
+    if (action === "publisher-live") return toast("Le direct nécessite l’activation du module Live Tafaß.");
     if (notificationId && action !== "mark-read") { await sb.from("notifications").update({is_read:true}).eq("id",notificationId).eq("user_id",state.user.id); updateBadges(); }
     if (action === "search-category") { searchCategory = actionEl.dataset.category || "accounts"; return searchPage($("searchInput")?.value || "", searchCategory); }
     if (action === "select-mood") { document.querySelectorAll(".mood-choice").forEach(x=>x.classList.remove("selected")); actionEl.classList.add("selected"); return; }
     if (action === "select-payment-method") { document.querySelectorAll(".payment-method").forEach(x=>x.classList.remove("active")); actionEl.classList.add("active"); return; }
-    if (action === "apply-mood") { const v=document.querySelector(".mood-choice.selected")?.dataset.moodValue||""; const extra=$("moodExtra")?.value.trim()||""; if(!v&&!extra)return toast("Choisissez une humeur ou écrivez un message."); const t=$("postText"); if(t)t.value=[v,extra].filter(Boolean).join(" — ").trim(); closeModal(); t?.focus(); return toast("Humeur ajoutée à votre publication"); }
+    if (action === "apply-mood") { const v=document.querySelector(".mood-choice.selected")?.dataset.moodValue||""; const extra=$("moodExtra")?.value.trim()||""; if(!v&&!extra)return toast("Choisissez une humeur ou écrivez un message."); const t=$("postText"); if(t)t.value=[v,extra].filter(Boolean).join(" — ").trim(); closeModal(); if(state.composerOpen) setTimeout(openPublisher,40); t?.focus(); return toast("Humeur ajoutée à votre publication"); }
     if (action === "more-question") { closeModal(); const q=prompt("Votre question :",""); if(q?.trim()&&$("postText")){$("postText").value=`❓ ${q.trim()}
 
 `+$('postText').value;toast("Question ajoutée");} return; }
