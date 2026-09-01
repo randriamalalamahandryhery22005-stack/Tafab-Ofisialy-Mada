@@ -14,7 +14,7 @@ document.documentElement.classList.add("app-boot");
   const state = {
     user: null, profile: null, route: "home", navStack: ["home"], backOverride: null, posts: [], friends: [], stories: [],
     channel: null, theme: "dark", entering: false, loggingOut: false,
-    profileTab: "posts", friendsTab: "suggestions", pagesTab: "mine", groupsTab: "mine", groupSort: "recent", selectedConversation: null, viewingProfileId: null, renderToken: 0, activePage: null, entityBackRoute: null
+    profileTab: "posts", reactionSettingsCache:new Map(), locationWatchId:null, friendsTab: "suggestions", pagesTab: "mine", groupsTab: "mine", groupSort: "recent", selectedConversation: null, viewingProfileId: null, renderToken: 0, activePage: null, entityBackRoute: null
   };
 
   const DEFAULT_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop stop-color='%232d7cff'/%3E%3Cstop offset='.55' stop-color='%23745cff'/%3E%3Cstop offset='1' stop-color='%2310b8a6'/%3E%3C/linearGradient%3E%3ClinearGradient id='h' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop stop-color='%23ffffff' stop-opacity='.9'/%3E%3Cstop offset='1' stop-color='%23dce8ff' stop-opacity='.7'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='256' height='256' rx='128' fill='url(%23g)'/%3E%3Ccircle cx='128' cy='101' r='47' fill='url(%23h)'/%3E%3Cpath d='M52 218c10-47 38-70 76-70s66 23 76 70' fill='url(%23h)'/%3E%3Ccircle cx='128' cy='128' r='112' fill='none' stroke='%23ffffff' stroke-opacity='.22' stroke-width='5'/%3E%3C/svg%3E";
@@ -409,16 +409,25 @@ async function publishPostNews() {
 }
 
 
+  async function reactionCountsVisibleFor(ownerId) {
+    if (!ownerId || ownerId === state.user.id) return true;
+    if (state.reactionSettingsCache.has(ownerId)) return state.reactionSettingsCache.get(ownerId);
+    const r = await sb.from("reaction_settings").select("show_reaction_counts").eq("user_id",ownerId).maybeSingle();
+    const visible = r.error ? true : r.data?.show_reaction_counts !== false;
+    state.reactionSettingsCache.set(ownerId, visible);
+    return visible;
+  }
+
   async function postHTML(p) {
-    const [rs, cs, sh] = await Promise.all([reactionsFor(p.id), commentsFor(p.id), sharersFor(p.id)]);
+    const [rs, cs, sh, showReactionCounts] = await Promise.all([reactionsFor(p.id), commentsFor(p.id), sharersFor(p.id), reactionCountsVisibleFor(p.user_id)]);
     const counts = {}; rs.forEach(r => counts[r.reaction_type] = (counts[r.reaction_type] || 0) + 1);
     const mine = rs.find(r => r.user_id === state.user.id)?.reaction_type;
     const totalReactions = Object.values(counts).reduce((a,b) => a+b, 0);
-    const reactionVisual = Object.entries(counts).map(([k,v]) => `<span class="reaction-chip"><i>${reactionMeta[k]?.[1] || "👍"}</i><b>${v}</b></span>`).join("");
+    const reactionVisual = showReactionCounts ? Object.entries(counts).map(([k,v]) => `<span class="reaction-chip"><i>${reactionMeta[k]?.[1] || "👍"}</i><b>${v}</b></span>`).join("") : `<span class="reaction-hidden-badge">🔒 Réactions masquées</span>`;
     const media = p.media_url
       ? (p.media_type === "video" || p.media_type === "reel"
-        ? `<video class="post-media" src="${esc(p.media_url)}" controls preload="metadata"></video>`
-        : `<img class="post-media" src="${esc(p.media_url)}" alt="Publication">`)
+        ? `<video class="post-media protected-media" src="${esc(p.media_url)}" controls preload="metadata"></video>`
+        : `<img class="post-media protected-media" src="${esc(p.media_url)}" alt="Publication">`)
       : "";
     const byParent = new Map();
     cs.forEach(c => { const k = c.parent_id || "root"; if (!byParent.has(k)) byParent.set(k, []); byParent.get(k).push(c); });
@@ -852,6 +861,8 @@ async function publishPostNews() {
     const followersR = await sb.from("follows").select("id", { count:"exact", head:true }).eq("following_id", userId);
     const cover = p.cover_url ? `style="background-image:url('${esc(p.cover_url)}')"` : "";
     const isMe = userId === state.user.id;
+    const isLockedProfile = userId === state.user.id && ((await sb.from("user_settings").select("profile_visibility").eq("user_id",userId).maybeSingle()).data?.profile_visibility === "private");
+    if(userId===state.user.id) { const pp=(await sb.from("privacy_protection_settings").select("capture_protection").eq("user_id",userId).maybeSingle()).data; applyNativeCaptureProtection(pp?.capture_protection !== false); }
     const [friendR, sentR, receivedR] = isMe ? [{data:null},{data:null},{data:null}] : await Promise.all([
       sb.from("friendships").select("id").eq("user_id",state.user.id).eq("friend_id",userId).maybeSingle(),
       sb.from("friend_requests").select("id,status").eq("sender_id",state.user.id).eq("receiver_id",userId).eq("status","pending").maybeSingle(),
@@ -873,7 +884,7 @@ async function publishPostNews() {
         <div class="profile-identity-row">
           ${avatarHTML(p,"avatar profile-avatar")}
         </div>
-        <div class="profile-name-block"><h2 class="profile-name">${esc(nameOf(p))}</h2></div>
+        <div class="profile-name-block"><h2 class="profile-name">${esc(nameOf(p))}${isLockedProfile ? ' <span class="profile-locked-badge" title="Profil verrouillé">🔒 Profil verrouillé</span>' : ''}</h2>${isLockedProfile ? '<small class="profile-protection-note">🔐 Contenu protégé par les paramètres de confidentialité Tafaß</small>' : ''}</div>
         <p class="profile-bio">${esc(p.bio || "")}</p>
         <div class="profile-actions">${actions}</div>
         <div class="profile-stats"><div class="profile-stat"><b>${postRows.length}</b><small>Publications</small></div><div class="profile-stat"><b>${friendsR.count || 0}</b><small>Amis</small></div><div class="profile-stat"><b>${followersR.count || 0}</b><small>Abonnés</small></div></div>
@@ -889,14 +900,15 @@ async function publishPostNews() {
   async function openUserProfileTab(userId, tab="posts") {
     if (!userId) return;
     const { data:p }=await sb.from("profiles").select("*").eq("id",userId).maybeSingle();
+    const isLockedProfile = userId === state.user.id && ((await sb.from("user_settings").select("profile_visibility").eq("user_id",userId).maybeSingle()).data?.profile_visibility === "private");
     if(!p) return openUserProfile(userId);
     const { data:posts }=await sb.from("posts").select("*").eq("user_id",userId).order("created_at",{ascending:false}).limit(100);
     const rows=(posts||[]).map(x=>({...x,author:p}));
     let body="";
     if(tab==="photos"){
-      body=`<div class="photo-grid">${rows.filter(x=>x.media_type==="image"&&x.media_url).map(x=>`<img src="${esc(x.media_url)}" alt="Photo publiée" loading="lazy">`).join("")||`<div class="empty profile-empty">Aucune photo publiée.</div>`}</div>`;
+      body=`<div class="photo-grid">${rows.filter(x=>x.media_type==="image"&&x.media_url).map(x=>`<img class="protected-media" src="${esc(x.media_url)}" alt="Photo publiée" loading="lazy">`).join("")||`<div class="empty profile-empty">Aucune photo publiée.</div>`}</div>`;
     } else if(tab==="videos"){
-      body=rows.filter(x=>["video","reel"].includes(x.media_type)).map(x=>`<article class="profile-publication"><p>${esc(x.content||"")}</p><video class="post-media" src="${esc(x.media_url)}" controls preload="metadata"></video></article>`).join("")||`<div class="empty profile-empty">Aucune vidéo publiée.</div>`;
+      body=rows.filter(x=>["video","reel"].includes(x.media_type)).map(x=>`<article class="profile-publication"><p>${esc(x.content||"")}</p><video class="post-media protected-media" src="${esc(x.media_url)}" controls preload="metadata"></video></article>`).join("")||`<div class="empty profile-empty">Aucune vidéo publiée.</div>`;
     } else if(tab==="friends"){
       body=`<div class="profile-network-section"><p>Consultez les relations publiques de ce membre.</p><button class="primary big" data-route="friends">Ouvrir Amis</button></div>`;
     } else {
@@ -959,10 +971,10 @@ async function publishPostNews() {
 
     let tabBody = "";
     if (tab === "photos") {
-      tabBody = `<section class="profile-content-section"><div class="photo-grid">${photos.map(x => `<img src="${esc(x.media_url)}" alt="Photo publiée" loading="lazy">`).join("") || `<div class="empty profile-empty">Aucune photo publiée.</div>`}</div></section>`;
+      tabBody = `<section class="profile-content-section"><div class="photo-grid">${photos.map(x => `<img class="protected-media" src="${esc(x.media_url)}" alt="Photo publiée" loading="lazy">`).join("") || `<div class="empty profile-empty">Aucune photo publiée.</div>`}</div></section>`;
     } else if (tab === "videos") {
       const videos = mine.filter(x => x.media_type === "video" || x.media_type === "reel");
-      tabBody = `<section class="profile-content-section"><div class="profile-video-list">${videos.map(x => `<article class="profile-publication"><div class="profile-publication-head">${avatarHTML(p)}<div class="grow"><b>${esc(nameOf(p))}</b><small>${timeAgo(x.created_at)} · ${x.media_type === "reel" ? "Reel" : "Vidéo"}</small></div></div>${x.content ? `<p>${esc(x.content)}</p>` : ""}<video class="post-media" src="${esc(x.media_url)}" controls preload="metadata"></video></article>`).join("") || `<div class="empty profile-empty">Aucune vidéo publiée.</div>`}</div></section>`;
+      tabBody = `<section class="profile-content-section"><div class="profile-video-list">${videos.map(x => `<article class="profile-publication"><div class="profile-publication-head">${avatarHTML(p)}<div class="grow"><b>${esc(nameOf(p))}</b><small>${timeAgo(x.created_at)} · ${x.media_type === "reel" ? "Reel" : "Vidéo"}</small></div></div>${x.content ? `<p>${esc(x.content)}</p>` : ""}<video class="post-media protected-media" src="${esc(x.media_url)}" controls preload="metadata"></video></article>`).join("") || `<div class="empty profile-empty">Aucune vidéo publiée.</div>`}</div></section>`;
     } else if (tab === "friends") {
       tabBody = `<section class="profile-content-section profile-network-section"><div class="profile-network-stat"><b>${friendsCount}</b><span>amis</span></div><p>Votre réseau Tafaß et vos relations réelles.</p><button class="primary big" data-route="friends">Voir mes amis</button></section>`;
     } else {
@@ -975,7 +987,7 @@ async function publishPostNews() {
       <div class="profile-cover-wrap"><div class="profile-cover" ${cover}></div></div>
       <div class="profile-main-premium">
         <div class="profile-identity-row">${avatarHTML(p,"avatar profile-avatar")}</div>
-        <div class="profile-name-block"><h2 class="profile-name">${esc(nameOf(p))}</h2></div>
+        <div class="profile-name-block"><h2 class="profile-name">${esc(nameOf(p))}${isLockedProfile ? ' <span class="profile-locked-badge" title="Profil verrouillé">🔒 Profil verrouillé</span>' : ''}</h2>${isLockedProfile ? '<small class="profile-protection-note">🔐 Contenu protégé par les paramètres de confidentialité Tafaß</small>' : ''}</div>
         <p class="profile-bio">${esc(p.bio || "")}</p>
         <div class="profile-actions"><button class="primary" data-action="edit-profile">Modifier le profil</button></div>
         <div class="profile-stats"><div class="profile-stat"><b>${mine.length}</b><small>Publications</small></div><div class="profile-stat"><b>${friendsCount}</b><small>Amis</small></div><div class="profile-stat"><b>${followersCount}</b><small>Abonnés</small></div></div>
@@ -1666,9 +1678,13 @@ async function genericListPage(route) {
     try {
       if (action === "profile-lock") {
         const cfg = (await sb.from("user_settings").select("profile_visibility").eq("user_id",state.user.id).maybeSingle()).data || {};
-        settingsDetail("Verrouiller votre profil","TAFAß • CONFIDENTIALITÉ","Renforcez la confidentialité de vos photos et publications en limitant ce que les personnes qui ne vous suivent pas peuvent voir.",
-          `<div class="settings-hero-lock"><div class="settings-lock-icon">⌑</div><b>${cfg.profile_visibility === "private" ? "Votre profil est verrouillé" : "Votre profil est public"}</b><small>${cfg.profile_visibility === "private" ? "Seuls les membres autorisés peuvent voir votre contenu privé." : "Les personnes autorisées peuvent voir votre contenu public."}</small></div>
-           <div class="settings-control-list">${settingSwitch("profileLockToggle","Verrouiller le profil","Activer ou désactiver le mode privé du profil.",cfg.profile_visibility === "private")}</div>
+        const pc=(await sb.from("privacy_protection_settings").select("capture_protection,private_media_longpress").eq("user_id",state.user.id).maybeSingle()).data || {};
+        settingsDetail("Verrouiller votre profil","TAFAß • CONFIDENTIALITÉ","Le verrouillage limite réellement l’accès au profil. Les protections média sont appliquées côté interface et, lorsque l’APK fournit un bridge sécurisé, au niveau natif.",
+          `<div class="settings-hero-lock"><div class="settings-lock-icon">🔒</div><b>${cfg.profile_visibility === "private" ? "Votre profil est verrouillé" : "Votre profil est public"}</b><small>${cfg.profile_visibility === "private" ? "Les visiteurs non autorisés ne peuvent pas consulter vos publications privées." : "Votre profil est actuellement accessible selon vos règles d’audience."}</small></div>
+           <div class="settings-control-list">${settingSwitch("profileLockToggle","Verrouiller le profil","Restreindre l’accès aux personnes autorisées.",cfg.profile_visibility === "private")}
+           ${settingSwitch("protectCapture","Protection du contenu","Activer la protection contre la capture lorsque le conteneur Android Tafaß expose la fonction sécurisée.",pc.capture_protection !== false)}
+           ${settingSwitch("protectLongPress","Protection des médias","Désactiver le menu contextuel et l’enregistrement direct par appui long sur les médias protégés.",pc.private_media_longpress !== false)}</div>
+           <div class="settings-info-card"><b>Protection anti-capture</b><small>Un site Web ne peut pas garantir à lui seul l’impossibilité d’une capture d’écran. L’APK peut toutefois activer le mode sécurisé natif (FLAG_SECURE) lorsqu’il expose le bridge Tafaß.</small></div>
            <button class="primary big settings-save" data-action="save-profile-lock">Enregistrer</button>`);
         return;
       }
@@ -1843,8 +1859,13 @@ async function genericListPage(route) {
 
       if (action === "location-settings") {
         const x=await getSettingsTable("location_settings");
-        settingsDetail("Localisation","TAFAß • LOCALISATION","Contrôlez quelles informations de localisation peuvent être utilisées par votre profil.",
-          `<div class="settings-section-block">${settingSwitch("profileLocation","Localisation du profil","Afficher la ville enregistrée sur votre profil.",x.profile_location_enabled)}${settingSwitch("preciseLocation","Localisation précise","Autoriser une localisation plus précise lorsque l’appareil la fournit.",x.precise_location_enabled)}</div>
+        const lr=await sb.from("profile_locations").select("latitude,longitude,accuracy_m,place_name,updated_at").eq("user_id",state.user.id).maybeSingle();
+        const loc=lr.data;
+        const locText=loc ? `📍 ${esc(loc.place_name||"Position exacte enregistrée")} · précision ${Math.round(Number(loc.accuracy_m||0))} m · ${timeAgo(loc.updated_at)}` : "Aucune position exacte enregistrée sur cet appareil.";
+        settingsDetail("Localisation","TAFAß • LOCALISATION","Utilisez la position réelle fournie par le GPS de votre appareil. La précision dépend du signal disponible et de l’autorisation accordée.",
+          `<div class="settings-location-live"><b>Position actuelle</b><small id="locationLiveStatus">${locText}</small></div>
+           <div class="settings-section-block">${settingSwitch("profileLocation","Localisation du profil","Afficher la ville/zone publique de votre profil.",x.profile_location_enabled)}${settingSwitch("preciseLocation","Localisation précise","Autoriser Tafaß à enregistrer les coordonnées GPS exactes lorsque vous le demandez.",x.precise_location_enabled)}</div>
+           <button class="secondary-pill big" data-action="capture-exact-location">📍 Utiliser ma position exacte maintenant</button>
            <button class="primary big settings-save" data-action="save-location-settings">Enregistrer</button>`);
         return;
       }
@@ -1884,13 +1905,15 @@ async function genericListPage(route) {
       if (action === "apps-web") {
         const r=await sb.from("connected_apps").select("id,app_name,provider,status,connected_at").eq("user_id",state.user.id).order("connected_at",{ascending:false});
         if(r.error) throw r.error;
-        const currentConn=await sb.from("connected_apps").select("id").eq("user_id",state.user.id).eq("app_name","Tafaß Web").eq("status","active").limit(1);
-        if(!currentConn.error && !(currentConn.data||[]).length){ await sb.from("connected_apps").insert({user_id:state.user.id,app_name:"Tafaß Web",provider:"Tafaß",status:"active",connected_at:new Date().toISOString()}); }
-        const rr=await sb.from("connected_apps").select("id,app_name,provider,status,connected_at").eq("user_id",state.user.id).eq("status","active").order("connected_at",{ascending:false});
-        const appRows=(rr.data||[]).map(x=>{const revoke=x.app_name==="Tafaß Web"?"":`<button class="ghost-action" data-action="revoke-connected-app" data-id="${esc(x.id)}">Révoquer</button>`; return `<div class="settings-link-row connection-real"><span><b>${esc(x.app_name)}</b><small>✓ Connecté à Tafaß · ${esc(x.provider||"Connexion externe")} · actif maintenant</small></span>${revoke}</div>`}).join("");
-        settingsDetail("Applications et sites Web","TAFAß • CONNEXIONS","Gérez les connexions réelles de votre compte et accédez aux jeux officiels Tafaß.",
-          `<div class="settings-games-card"><div><span class="eyebrow">TAFAß • PLAY</span><h3>12+ Jeux officiels</h3><p>Des expériences premium intégrées : action, sport, stratégie, course et puzzle. Chaque jeu possède son propre logo et bouton Jouer.</p></div><button class="primary big" data-action="open-games">Explorer les jeux</button></div>
-           <div class="settings-section-block"><div class="section-title-line"><h3>Connexions actives (${(rr.data||[]).length})</h3><small>État synchronisé avec Supabase</small></div>${appRows}</div>`);
+        const sessionId=(sb.auth.getSession ? (await sb.auth.getSession()).data?.session?.access_token : null) || "browser";
+        const deviceId=`web-${btoa((navigator.userAgent||"tafass")).replace(/[^a-z0-9]/gi,"").slice(0,28)}`;
+        const currentConn=await sb.from("connected_apps").select("id").eq("user_id",state.user.id).eq("app_name","Tafaß Web").eq("provider","Tafaß Web").eq("status","active").limit(1);
+        if(!currentConn.error && !(currentConn.data||[]).length){ await sb.from("connected_apps").insert({user_id:state.user.id,app_name:"Tafaß Web",provider:"Tafaß Web",status:"active",connected_at:new Date().toISOString(),metadata:{device_id:deviceId,user_agent:navigator.userAgent||""}}); }
+        const rr=await sb.from("connected_apps").select("id,app_name,provider,status,connected_at,metadata").eq("user_id",state.user.id).eq("status","active").order("connected_at",{ascending:false});
+        const appRows=(rr.data||[]).map(x=>{const current=x.app_name==="Tafaß Web"&&x.metadata?.device_id===deviceId; const revoke=current?"":`<button class="ghost-action" data-action="revoke-connected-app" data-id="${esc(x.id)}">Révoquer</button>`; return `<div class="settings-link-row connection-real"><span><b>${esc(x.app_name)}</b><small>${current?'✓ Cet appareil · session actuelle':'✓ Connexion active'} · ${esc(x.provider||"Connexion externe")} · ${x.connected_at?timeAgo(x.connected_at):'à l’instant'}</small></span>${revoke}</div>`}).join("");
+        settingsDetail("Applications et sites Web","TAFAß • CONNEXIONS","Les connexions affichées ici correspondent aux enregistrements actifs de votre compte Tafaß. Une connexion révoquée disparaît immédiatement de cette liste.",
+          `<div class="settings-games-card"><div><span class="eyebrow">TAFAß • PLAY</span><h3>18+ Jeux premium</h3><p>Jeux intégrés et réellement jouables dans Tafaß : Ludo, Piano, Tetris, Mahjong, Échecs, Course, Football, Billard et plus.</p></div><button class="primary big" data-action="open-games">Explorer les jeux</button></div>
+           <div class="settings-section-block"><div class="section-title-line"><h3>Connexions actives (${(rr.data||[]).length})</h3><small>Synchronisé avec Supabase · session réelle</small></div>${appRows || `<div class="settings-empty">Aucune connexion active.</div>`}</div>`);
         return;
       }
 
@@ -1945,9 +1968,46 @@ async function genericListPage(route) {
     }
   }
 
+  async function captureExactLocation(){
+    if(!navigator.geolocation) return toast("La géolocalisation n’est pas disponible sur cet appareil.");
+    const status=$("locationLiveStatus"); if(status) status.textContent="Recherche de votre position GPS exacte…";
+    navigator.geolocation.getCurrentPosition(async pos=>{
+      const lat=Number(pos.coords.latitude), lon=Number(pos.coords.longitude), accuracy=Number(pos.coords.accuracy||0);
+      let place="Position GPS";
+      try{
+        const u=`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&zoom=18&addressdetails=1`;
+        const r=await fetch(u,{headers:{"Accept":"application/json","Accept-Language":"fr"}});
+        if(r.ok){const j=await r.json(); const a=j.address||{}; place=[a.road,a.suburb,a.city||a.town||a.village,a.state,a.country].filter(Boolean).join(", ")||j.display_name||place;}
+      }catch{}
+      const r=await sb.from("profile_locations").upsert({user_id:state.user.id,latitude:lat,longitude:lon,accuracy_m:accuracy,place_name:place,source:"device_gps",updated_at:new Date().toISOString()},{onConflict:"user_id"});
+      if(r.error) return toast(r.error.message);
+      await logActivity("location_updated",`Position exacte mise à jour · précision ${Math.round(accuracy)} m`,`location`);
+      toast(`Position enregistrée · précision ${Math.round(accuracy)} m`);
+      return openAdvancedSetting("location-settings");
+    },err=>{if(status)status.textContent="Autorisation refusée ou position indisponible."; toast(err.code===1?"Autorisez la localisation pour utiliser cette fonction.":"Position GPS indisponible.");},{enableHighAccuracy:true,timeout:15000,maximumAge:0});
+  }
+
+  async function applyNativeCaptureProtection(enabled){
+    try{
+      if(window.TafassAndroid?.setSecureFlag) await window.TafassAndroid.setSecureFlag(!!enabled);
+      else if(window.AndroidTafass?.setSecureFlag) window.AndroidTafass.setSecureFlag(!!enabled);
+      document.documentElement.classList.toggle("tafass-secure-content",!!enabled);
+    }catch(e){}
+  }
+
   async function saveSettingsDetail(action) {
     try {
-      if(action==="save-profile-lock") return saveUserSetting({profile_visibility:$('profileLockToggle')?.checked?"private":"public"});
+      if(action==="save-profile-lock") {
+        const visibility=$('profileLockToggle')?.checked?"private":"public";
+        const a=await sb.from("user_settings").upsert({user_id:state.user.id,profile_visibility:visibility},{onConflict:"user_id"});
+        if(a.error)return toast(a.error.message);
+        const b=await sb.from("privacy_protection_settings").upsert({user_id:state.user.id,capture_protection:$('protectCapture')?.checked!==false,private_media_longpress:$('protectLongPress')?.checked!==false,updated_at:new Date().toISOString()},{onConflict:"user_id"});
+        if(b.error)return toast(b.error.message);
+        await applyNativeCaptureProtection($('protectCapture')?.checked!==false);
+        await logActivity("profile_privacy_updated",visibility==="private"?"Profil verrouillé":"Profil déverrouillé","profile",state.user.id);
+        toast("Confidentialité du profil enregistrée");
+        return settingsPage();
+      }
       if(action==="save-privacy-assistance") return saveUserSetting({allow_friend_requests:!!$('privacyFriend')?.checked,allow_messages:!!$('privacyMessage')?.checked,allow_search_by_phone:!!$('privacyPhone')?.checked,allow_search_by_email:!!$('privacyEmail')?.checked});
       if(action==="save-find-contact-settings") return saveUserSetting({allow_friend_requests:!!$('findFriends')?.checked,allow_messages:!!$('findMessages')?.checked,allow_search_by_phone:!!$('findPhone')?.checked,allow_search_by_email:!!$('findEmail')?.checked});
       if(action==="save-notification-settings") return saveUserSetting({notifications_enabled:!!$('notifAll')?.checked,message_notifications:!!$('notifMessages')?.checked,friend_notifications:!!$('notifFriends')?.checked,reaction_notifications:!!$('notifReactions')?.checked,comment_notifications:!!$('notifComments')?.checked});
@@ -2851,38 +2911,103 @@ async function genericListPage(route) {
      ============================================================ */
   let activeGameCleanup = null;
   const TAFA_GAMES = [
+    {id:'ludo',icon:'🎲',name:'Tafaß Ludo Royale',desc:'Ludo 4 joueurs avec dés, captures, sorties et IA.',tag:'Plateau'},
+    {id:'piano',icon:'🎹',name:'Tafaß Piano Studio',desc:'Piano tactile 2 octaves, sons WebAudio et défis de mélodie.',tag:'Musique'},
+    {id:'tetris',icon:'🧱',name:'Tafaß Tetris Ultra',desc:'Tetris complet : rotation, lignes, vitesse progressive et combos.',tag:'Arcade'},
+    {id:'mahjong',icon:'🀄',name:'Tafaß Mahjong Elite',desc:'Mahjong solitaire avec tuiles libres, couches et aide.',tag:'Stratégie'},
+    {id:'checkers',icon:'⚫',name:'Tafaß Checkers Pro',desc:'Dames avec prises obligatoires et adversaire IA.',tag:'Stratégie'},
+    {id:'memory',icon:'🧠',name:'Tafaß Memory Pro',desc:'Jeu de mémoire avancé avec niveaux et chrono.',tag:'Réflexion'},
     {id:'battle',icon:'🎯',name:'Tafaß Battle Arena',desc:'Défiez une IA tactique sur une arène de stratégie.',tag:'Stratégie'},
     {id:'racing',icon:'🏎️',name:'Tafaß Racing Turbo',desc:'Course arcade contre des rivaux IA, vitesse et trajectoires.',tag:'Course'},
     {id:'football',icon:'⚽',name:'Tafaß Football Arena',desc:'Penalty + gardien IA avec séries et tirs précis.',tag:'Sport'},
-    {id:'chess',icon:'♟️',name:'Tafaß Chess Master',desc:'Échecs contre une IA avec mouvements légaux et prise de pièces.',tag:'Réflexion'},
+    {id:'chess',icon:'♟️',name:'Tafaß Chess Master',desc:'Échecs contre une IA avec mouvements et prises.',tag:'Réflexion'},
     {id:'pool',icon:'🎱',name:'Tafaß 8 Ball Pool',desc:'Billard arcade : angle, puissance, poches et score.',tag:'Sport'},
-    {id:'cyber',icon:'🤖',name:'Tafaß Cyber Strike',desc:'Shooter tactique canvas : esquivez, visez et survivez.',tag:'Action'},
+    {id:'cyber',icon:'🤖',name:'Tafaß Cyber Strike',desc:'Shooter tactique : esquivez, visez et survivez.',tag:'Action'},
     {id:'puzzle',icon:'💎',name:'Tafaß Puzzle Legend',desc:'Match-3 dynamique avec combos et objectifs.',tag:'Puzzle'},
-    {id:'air',icon:'✈️',name:'Tafaß Air Combat',desc:'Combat aérien arcade avec ennemis, tirs et vagues.',tag:'Action'},
-    {id:'ninja',icon:'🥷',name:'Tafaß Ninja Shadow',desc:'Action réflexe : dash, obstacles et score de survie.',tag:'Action'},
+    {id:'air',icon:'✈️',name:'Tafaß Air Combat',desc:'Combat aérien avec ennemis, tirs et vagues.',tag:'Action'},
+    {id:'ninja',icon:'🥷',name:'Tafaß Ninja Shadow',desc:'Action réflexe : obstacles et score de survie.',tag:'Action'},
     {id:'reversi',icon:'⚫',name:'Tafaß Reversi Pro',desc:'Othello stratégique contre une IA.',tag:'Stratégie'},
     {id:'mines',icon:'💣',name:'Tafaß Mines Pro',desc:'Déminez une grille générée à chaque partie.',tag:'Réflexion'},
-    {id:'sudoku',icon:'🔢',name:'Tafaß Sudoku Master',desc:'Sudoku généré avec validation et chronomètre.',tag:'Puzzle'}
+    {id:'sudoku',icon:'🔢',name:'Tafaß Sudoku Master',desc:'Sudoku avec validation et chronomètre.',tag:'Puzzle'}
   ];
   function gameScores(key){try{return Number(localStorage.getItem('tafass_game_score_'+key)||0)}catch{return 0}}
-  function setGameScore(key,score){try{if(Number(score)>gameScores(key))localStorage.setItem('tafass_game_score_'+key,String(score))}catch{}}
-  function gameIcon(g){return `<div class="tafa-game-icon">${g.icon}</div>`}
+  function setGameScore(key,score){try{if(Number(score)>gameScores(key)){localStorage.setItem('tafass_game_score_'+key,String(score));if(state.user) sb.from('game_scores').upsert({user_id:state.user.id,game_id:key,score:Number(score),updated_at:new Date().toISOString()},{onConflict:'user_id,game_id'}).catch(()=>{});}}catch{}}
+  function gameIcon(g){return `<div class="tafa-game-icon game-logo-${esc(g.id)}"><span class="game-logo-mark">${g.icon}</span><i>ß</i></div>`}
   function gamesModal(){
     if(activeGameCleanup){activeGameCleanup();activeGameCleanup=null}
     openModal(`<div class="modal-box tafass-games-modal"><button class="modal-close" data-action="close-games">×</button>
-      <div class="games-head"><span class="eyebrow">TAFAß • JEUX OFFICIELS</span><h2>Jeux Tafaß</h2><p class="muted">12 expériences intégrées. Jouez directement dans Tafaß, sans quitter votre compte.</p></div>
-      <div class="games-feature"><div class="games-feature-mark">ß</div><div><b>TAFAß PLAY</b><small>Jeux officiels • Classements locaux • Records personnels</small></div><span class="games-count">12+ JEUX</span></div>
+      <div class="games-head"><span class="eyebrow">TAFAß • JEUX OFFICIELS</span><h2>Jeux Tafaß</h2><p class="muted">18 expériences intégrées. Jouez directement dans Tafaß, sans quitter votre compte.</p></div>
+      <div class="games-feature"><div class="games-feature-mark">ß</div><div><b>TAFAß PLAY</b><small>Jeux officiels Tafaß · scores synchronisés · commandes tactiles · IA</small></div><div class="games-feature-stats"><span><b>18+</b><small>Jeux</small></span><span><b>6</b><small>Nouveaux</small></span><span><b>∞</b><small>Parties</small></span></div></div>
       <div class="games-catalog">${TAFA_GAMES.map(g=>`<button class="game-card-premium" data-game="${g.id}">${gameIcon(g)}<span class="game-card-copy"><strong>${g.name}</strong><small>${g.desc}</small><em>✓ Jeu officiel Tafaß · ${g.tag}</em></span><span class="game-play">Jouer <b>›</b></span></button>`).join('')}</div>
       <div id="gameStage"></div></div>`);
   }
   function startGame(key){
     if(activeGameCleanup){activeGameCleanup();activeGameCleanup=null}
     const stage=$('gameStage');if(!stage)return;
-    const fn={battle:renderBattle,racing:renderRacing,football:renderFootball,chess:renderChess,pool:renderPool,cyber:renderCyber,puzzle:renderPuzzle,air:renderAir,ninja:renderNinja,reversi:renderReversi,mines:renderMines,sudoku:renderSudoku}[key];
+    const fn={ludo:renderLudo,piano:renderPiano,tetris:renderTetris,mahjong:renderMahjong,checkers:renderCheckers,memory:renderMemory,battle:renderBattle,racing:renderRacing,football:renderFootball,chess:renderChess,pool:renderPool,cyber:renderCyber,puzzle:renderPuzzle,air:renderAir,ninja:renderNinja,reversi:renderReversi,mines:renderMines,sudoku:renderSudoku}[key];
     if(fn){fn(stage);setTimeout(()=>stage.scrollIntoView({behavior:'smooth',block:'start'}),30)}
   }
   function gameToolbar(name,key,scoreLabel='Record'){return `<div class="game-toolbar"><span><b>${name}</b><small class="game-official">✓ OFFICIEL TAFAß</small></span><span>${scoreLabel} : <strong id="liveScore">${gameScores(key)}</strong></span><div class="game-toolbar-actions"><button class="ghost-action" data-games-back>← Jeux</button><button class="ghost-action" id="gameReset">Nouvelle partie</button></div></div>`}
   function bindGameReset(fn){$('gameReset')?.addEventListener('click',fn);document.querySelector('[data-games-back]')?.addEventListener('click',()=>gamesModal())}
+
+  function renderLudo(stage){
+    const path=[[6,0],[7,0],[8,0],[9,0],[10,0],[10,1],[10,2],[10,3],[10,4],[10,5],[11,6],[11,7],[11,8],[11,9],[11,10],[10,10],[9,10],[8,10],[7,10],[6,10],[5,11],[4,11],[3,11],[2,11],[1,11],[0,11],[0,10],[0,9],[0,8],[0,7],[0,6],[0,5],[0,4],[0,3],[0,2],[1,2],[2,2],[3,2],[4,2],[5,2],[5,1],[5,0],[6,0],[7,1],[8,2],[9,3],[10,4],[9,5],[8,6],[7,7],[6,8],[5,9]];
+    const colors=[{n:'Vous',c:'red',start:0},{n:'IA Bleu',c:'blue',start:13},{n:'IA Vert',c:'green',start:26},{n:'IA Jaune',c:'yellow',start:39}];
+    let pieces=colors.map(()=>[0,0,0,0]),turn=0,dice=0,rolled=false,over=false,score=0;
+    const reset=()=>{pieces=colors.map(()=>[0,0,0,0]);turn=0;dice=0;rolled=false;over=false;score=0;draw()};
+    const abs=(pl,step)=>step<1?null:(colors[pl].start+step-1)%52;
+    const canMove=(pl,k)=>dice>0 && (pieces[pl][k]===0?dice===6:pieces[pl][k]+dice<=57);
+    const move=(pl,k)=>{if(!canMove(pl,k))return false; if(pieces[pl][k]===0)pieces[pl][k]=1; else pieces[pl][k]+=dice; const at=abs(pl,pieces[pl][k]); if(at!==null){for(let op=0;op<4;op++)if(op!==pl)for(let q=0;q<4;q++){if(abs(op,pieces[op][q])===at&&pieces[op][q]>0){pieces[op][q]=0}}} if(pieces[pl].every(v=>v>=57)){over=true;score+=1000;setGameScore('ludo',score)} return true};
+    const ai=()=>{if(over)return; const pl=turn; dice=1+Math.floor(Math.random()*6); const ks=[0,1,2,3].filter(k=>canMove(pl,k)); if(ks.length){move(pl,ks.sort((a,b)=>pieces[pl][b]-pieces[pl][a])[0]);} turn=(turn+1)%4; rolled=false; draw(); if(turn>0&&!over)setTimeout(ai,450)};
+    const draw=()=>{stage.innerHTML=gameToolbar('Ludo Royale','ludo','Record')+`<div class="ludo-hud"><span>Tour : <b>${colors[turn].n}</b></span><b class="ludo-dice">${dice||'🎲'}</b><button class="primary" id="ludoRoll" ${turn!==0||rolled||over?'disabled':''}>Lancer le dé</button></div><div class="ludo-board">${path.map((p,i)=>`<div class="ludo-cell" style="grid-column:${p[1]+1};grid-row:${p[0]+1}">${i<52?'<span class="ludo-track">'+(i+1)+'</span>':''}</div>`).join('')}<div class="ludo-home red-home">${pieces[0].map((v,k)=>`<button class="ludo-piece red" data-piece="${k}" ${!canMove(0,k)?'disabled':''}>${v?(''+v):'●'}</button>`).join('')}</div><div class="ludo-home blue-home">🔵 🔵 🔵 🔵</div><div class="ludo-home green-home">🟢 🟢 🟢 🟢</div><div class="ludo-home yellow-home">🟡 🟡 🟡 🟡</div></div><div class="game-status" id="ludoStatus">${over?'Victoire ! 🏆':turn===0?(rolled?'Choisissez un pion à déplacer.':'Lancez le dé pour commencer.'):'L’IA joue…'}</div>`;
+      stage.querySelector('#ludoRoll')?.addEventListener('click',()=>{dice=1+Math.floor(Math.random()*6);rolled=true;const ks=[0,1,2,3].filter(k=>canMove(0,k));if(!ks.length){rolled=false;turn=1;draw();setTimeout(ai,300);return}draw()});
+      stage.querySelectorAll('[data-piece]').forEach(b=>b.addEventListener('click',()=>{if(!rolled)return;const k=+b.dataset.piece;if(move(0,k)){score+=dice*10;$('liveScore').textContent=score;rolled=false;turn=(dice===6?0:1);draw();if(turn!==0&&!over)setTimeout(ai,400)}}));bindGameReset(reset)};draw();activeGameCleanup=()=>{};
+  }
+
+  function renderPiano(stage){
+    const notes=['C4','C#4','D4','D#4','E4','F4','F#4','G4','G#4','A4','A#4','B4','C5','C#5','D5','D#5','E5','F5','F#5','G5','G#5','A5','A#5','B5','C6'];
+    const freqs=[261.63,277.18,293.66,311.13,329.63,349.23,369.99,392,415.3,440,466.16,493.88,523.25,554.37,587.33,622.25,659.25,698.46,739.99,783.99,830.61,880,932.33,987.77,1046.5];
+    let audio=null,score=0,seq=[];
+    const play=(i)=>{try{audio ||= new (window.AudioContext||window.webkitAudioContext)();const o=audio.createOscillator(),g=audio.createGain();o.type='triangle';o.frequency.value=freqs[i];g.gain.setValueAtTime(.0001,audio.currentTime);g.gain.exponentialRampToValueAtTime(.18,audio.currentTime+.015);g.gain.exponentialRampToValueAtTime(.0001,audio.currentTime+.65);o.connect(g).connect(audio.destination);o.start();o.stop(audio.currentTime+.7);}catch{} score+=5;seq.push(notes[i]);seq=seq.slice(-12);$('liveScore').textContent=score;};
+    const reset=()=>{score=0;seq=[];draw()};
+    const draw=()=>{stage.innerHTML=gameToolbar('Piano Studio','piano','Score')+`<div class="piano-panel"><div class="piano-display">${seq.length?seq.join(' · '):'Touchez les touches pour jouer'}<small>Son généré en temps réel · 2 octaves</small></div><div class="piano-keys">${notes.map((n,i)=>`<button class="piano-key ${n.includes('#')?'black':''}" data-note="${i}"><span>${n}</span></button>`).join('')}</div><div class="game-status">Clavier : A–W–S–E–D… ou touchez les touches.</div></div>`;stage.querySelectorAll('[data-note]').forEach(b=>{const f=()=>{const i=+b.dataset.note;b.classList.add('pressed');play(i);setTimeout(()=>b.classList.remove('pressed'),100)};b.addEventListener('pointerdown',f)});bindGameReset(reset)};draw();activeGameCleanup=()=>{};
+  }
+
+  function renderTetris(stage){
+    const W=10,H=20,shapes=[[[1,1,1,1]],[[1,1],[1,1]],[[0,1,0],[1,1,1]],[[1,0,0],[1,1,1]],[[0,0,1],[1,1,1]],[[1,1,0],[0,1,1]],[[0,1,1],[1,1,0]]];
+    let board,piece,x,y,score=0,lines=0,over=false,timer,dropMs=650;
+    const spawn=()=>{const si=Math.floor(Math.random()*shapes.length);piece=shapes[si].map(r=>r.slice());x=3;y=0;if(collide(x,y,piece))over=true};
+    const collide=(px,py,sh)=>sh.some((r,dy)=>r.some((v,dx)=>v&&(px+dx<0||px+dx>=W||py+dy>=H||(py+dy>=0&&board[py+dy][px+dx]))));
+    const merge=()=>piece.forEach((r,dy)=>r.forEach((v,dx)=>{if(v&&y+dy>=0)board[y+dy][x+dx]=1}));
+    const clear=()=>{let n=0;board=board.filter(r=>{if(r.every(Boolean)){n++;return false}return true});while(board.length<H)board.unshift(Array(W).fill(0));if(n){lines+=n;score+=([0,100,300,500,800][n]||1000);dropMs=Math.max(100,650-Math.floor(lines/3)*60);setGameScore('tetris',score)}};
+    const down=()=>{if(over)return;if(!collide(x,y+1,piece))y++;else{merge();clear();spawn()}draw()};
+    const rotate=()=>{const r=piece[0].map((_,i)=>piece.map(row=>row[i]).reverse());if(!collide(x,y,r))piece=r;draw()};
+    const reset=()=>{clearInterval(timer);board=Array.from({length:H},()=>Array(W).fill(0));score=0;lines=0;over=false;dropMs=650;spawn();timer=setInterval(down,dropMs);draw()};
+    const draw=()=>{let cells=board.map(r=>r.slice());piece?.forEach((r,dy)=>r.forEach((v,dx)=>{if(v&&y+dy>=0&&y+dy<H&&x+dx>=0&&x+dx<W)cells[y+dy][x+dx]=2}));stage.innerHTML=gameToolbar('Tetris Ultra','tetris','Score')+`<div class="tetris-board">${cells.flat().map(v=>`<i class="tetris-cell v${v||0}"></i>`).join('')}</div><div class="tetris-controls"><button id="tLeft">←</button><button id="tRotate">↻</button><button id="tDown">↓</button><button id="tRight">→</button></div><div class="game-status">${over?'Game over — Nouvelle partie pour rejouer.':`Lignes ${lines} · Niveau ${Math.floor(lines/3)+1}`}</div>`;if(over)clearInterval(timer);stage.querySelector('#tLeft').onclick=()=>{if(!collide(x-1,y,piece))x--;draw()};stage.querySelector('#tRight').onclick=()=>{if(!collide(x+1,y,piece))x++;draw()};stage.querySelector('#tDown').onclick=down;stage.querySelector('#tRotate').onclick=rotate;bindGameReset(reset)};reset();activeGameCleanup=()=>clearInterval(timer);
+  }
+
+  function renderMahjong(stage){
+    const tiles=['🀀','🀁','🀂','🀃','🀄','🀅','🀆','🀇','🀈','🀉','🀊','🀋','🀌','🀍','🀎','🀏','🀐','🀑'];let deck=[];let selected=null,removed=new Set(),moves=0;
+    const reset=()=>{deck=[...tiles,...tiles].sort(()=>Math.random()-.5).map((v,i)=>({v,i,layer:i<12?0:1}));selected=null;removed=new Set();moves=0;draw()};
+    const free=(i)=>{if(removed.has(i))return false;const t=deck[i];if(t.layer===1 && !removed.has(i-12))return false;const left=i-1,right=i+1;return (i%6===0||removed.has(left)) || (i%6===5||removed.has(right));};
+    const draw=()=>{stage.innerHTML=gameToolbar('Mahjong Elite','mahjong','Paires')+`<div class="mahjong-board">${deck.map((t,i)=>removed.has(i)?'':`<button class="mahjong-tile layer${t.layer} ${free(i)?'free':''} ${selected===i?'selected':''}" data-i="${i}" style="--x:${i%6};--y:${Math.floor(i/6)}">${t.v}</button>`).join('')}</div><div class="game-status">${removed.size===deck.length?'Mahjong terminé ! 🏆':`Tuiles restantes : ${deck.length-removed.size} · Coups : ${moves}`}</div>`;stage.querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>{const i=+b.dataset.i;if(!free(i))return toast('Cette tuile est bloquée.');if(selected===null){selected=i;draw();return}if(selected!==i&&deck[selected].v===deck[i].v&&free(selected)){removed.add(selected);removed.add(i);moves++;selected=null;setGameScore('mahjong',moves);draw()}else{selected=i;draw()}});bindGameReset(reset)};reset();activeGameCleanup=()=>{};
+  }
+
+  function renderCheckers(stage){
+    let b=Array(32).fill(0);for(let i=0;i<12;i++)b[i]=2;for(let i=20;i<32;i++)b[i]=1;let turn=1,sel=null,score=0,over=false;
+    const rc=i=>[Math.floor(i/4),i%4*2+((Math.floor(i/4)+1)%2)];const idx=(r,c)=>r<0||r>7||c<0||c>7||((r+c)%2===0)?-1:Math.floor(r*4+c/2);
+    const moves=(i,pl)=>{const [r,c]=rc(i),out=[];for(const dr of (pl===1?[-1]:[1]))for(const dc of [-1,1]){const j=idx(r+dr,c+dc),k=idx(r+2*dr,c+2*dc);if(j>=0&&!b[j])out.push(j);else if(j>=0&&b[j]===3-pl&&k>=0&&!b[k])out.push(k)}return out};
+    const reset=()=>{b=Array(32).fill(0);for(let i=0;i<12;i++)b[i]=2;for(let i=20;i<32;i++)b[i]=1;turn=1;sel=null;score=0;over=false;draw()};
+    const ai=()=>{const choices=[];b.forEach((v,i)=>{if(v===2)moves(i,2).forEach(j=>choices.push([i,j]))});if(!choices.length){over=true;draw();return}const [i,j]=choices[Math.floor(Math.random()*choices.length)];const [r,c]=rc(i),[rr,cc]=rc(j);if(Math.abs(rr-r)===2){const mid=idx((r+rr)/2,(c+cc)/2);if(mid>=0)b[mid]=0}b[j]=2;b[i]=0;turn=1;draw()};
+    const draw=()=>{stage.innerHTML=gameToolbar('Checkers Pro','checkers','Score')+`<div class="checkers-board">${b.map((v,i)=>`<button class="checker-cell ${(i+Math.floor(i/4))%2?'dark':'light'} ${sel===i?'selected':''}" data-i="${i}">${v===1?'⚪':v===2?'⚫':''}</button>`).join('')}</div><div class="game-status">${over?'Partie terminée.':turn===1?'À vous — sélectionnez un pion puis une case.':'IA joue…'}</div>`;stage.querySelectorAll('[data-i]').forEach(el=>el.onclick=()=>{const i=+el.dataset.i;if(turn!==1||over)return;if(sel===null){if(b[i]===1)sel=i;draw();return}const ms=moves(sel,1);if(ms.includes(i)){const [r,c]=rc(sel),[rr,cc]=rc(i);if(Math.abs(rr-r)===2){const mid=idx((r+rr)/2,(c+cc)/2);if(mid>=0)b[mid]=0;score+=100}b[i]=1;b[sel]=0;sel=null;turn=2;setGameScore('checkers',score);draw();setTimeout(ai,350)}else{sel=b[i]===1?i:null;draw()}});bindGameReset(reset)};draw();activeGameCleanup=()=>{};
+  }
+
+  function renderMemory(stage){
+    const vals=['🚀','🎧','⚽','🎹','🏎️','♟️','🎲','🪐','🚀','🎧','⚽','🎹','🏎️','♟️','🎲','🪐'];let cards=[],open=[],matched=new Set(),moves=0,lock=false;
+    const reset=()=>{cards=vals.slice().sort(()=>Math.random()-.5);open=[];matched=new Set();moves=0;lock=false;draw()};
+    const click=i=>{if(lock||matched.has(i)||open.includes(i))return;open.push(i);draw();if(open.length===2){moves++;lock=true;const [a,b]=open;if(cards[a]===cards[b]){matched.add(a);matched.add(b);open=[];lock=false;setGameScore('memory',Math.max(0,1000-moves*10));draw()}else setTimeout(()=>{open=[];lock=false;draw()},650)}};
+    const draw=()=>{stage.innerHTML=gameToolbar('Memory Pro','memory','Record')+`<div class="memory-board">${cards.map((v,i)=>`<button class="memory-card ${open.includes(i)||matched.has(i)?'revealed':''}" data-i="${i}">${open.includes(i)||matched.has(i)?v:'?'}</button>`).join('')}</div><div class="game-status">${matched.size===cards.length?'Bravo ! Toutes les paires sont trouvées 🏆':`Paires ${matched.size/2}/8 · Coups ${moves}`}</div>`;stage.querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>click(+b.dataset.i));bindGameReset(reset)};reset();activeGameCleanup=()=>{};
+  }
 
   function renderBattle(stage){
     let a=3,b=3,turn='player',over=false,round=1,score=0;
@@ -3088,6 +3213,7 @@ async function genericListPage(route) {
     if (action === "theme") return toggleTheme();
     if (action === "settings-focus-search") { $("settingsSearch")?.focus(); return; }
     if (action === "open-games") return gamesModal();
+    if (action === "capture-exact-location") return captureExactLocation();
     if (action === "close-games") { if (activeGameCleanup) { activeGameCleanup(); activeGameCleanup=null; } return closeModal(); }
     if (["save-profile-lock","save-privacy-assistance","save-find-contact-settings","save-notification-settings","save-family-settings","save-story-settings","save-publication-settings","save-public-content-settings","save-media-settings","save-time-settings","save-reaction-settings","save-audience-setting","save-followers-settings","save-profile-identification","save-online-settings","save-location-settings","save-professional-settings","save-accessibility-settings","save-effects-settings"].includes(action)) {
       if (action === "save-audience-setting") {
@@ -3318,6 +3444,13 @@ async function genericListPage(route) {
   });
   $("globalSearch").addEventListener("keydown", e => { if (e.key === "Enter") { const q=e.target.value; navigate("search"); setTimeout(()=>{ const input=$("searchInput"); if(input){input.value=q; searchPage(q);} },0); } });
   window.addEventListener("hashchange", () => { const r=location.hash.slice(1); if(routes.includes(r) && r !== state.route) navigate(r); });
+  document.addEventListener("contextmenu",e=>{ if(e.target.closest(".protected-media,.profile-page-premium.public-profile-page")) e.preventDefault(); });
+  document.addEventListener("dragstart",e=>{ if(e.target.closest(".protected-media,.profile-page-premium.public-profile-page")) e.preventDefault(); });
+  document.addEventListener("visibilitychange",()=>{
+    const locked=document.documentElement.classList.contains("tafass-secure-content");
+    document.documentElement.classList.toggle("tafass-private-blur",locked && document.visibilityState!=="visible");
+  });
+
   const initialRoute = routes.includes(location.hash.slice(1)) ? location.hash.slice(1) : "home";
   state.route = initialRoute; state.navStack = [initialRoute];
 
