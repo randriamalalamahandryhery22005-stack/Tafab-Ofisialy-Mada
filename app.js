@@ -14,7 +14,8 @@ document.documentElement.classList.add("app-boot");
   const state = {
     user: null, profile: null, route: "home", navStack: ["home"], backOverride: null, posts: [], friends: [], stories: [],
     channel: null, theme: "dark", entering: false, loggingOut: false, composerOpen: false, composerBackground: "plain", composerLocation: "",
-    composerDraftText: "", composerFile: null,
+    composerDraftText: "", composerFile: null, composerVisibility: "public", composerMeta: {},
+    liveFeedChannel: null, activeLive: null,
     profileTab: "posts", reactionSettingsCache:new Map(), locationWatchId:null, friendsTab: "suggestions", pagesTab: "mine", groupsTab: "mine", groupSort: "recent", selectedConversation: null, viewingProfileId: null, renderToken: 0, activePage: null, entityBackRoute: null
   };
 
@@ -355,6 +356,8 @@ function openMoreComposer(){openModal(`<div class="modal-box composer-modal-prem
 async function renderFeed() {
     const token = state.renderToken;
     const stories=await loadActiveStories();
+    const liveR=await sb.from("live_sessions").select("id,user_id,title,started_at,profiles(first_name,last_name,username,avatar_url)").eq("status","live").order("started_at",{ascending:false}).limit(12);
+    const activeLives=liveR.error ? [] : (liveR.data||[]);
     if (token !== state.renderToken || state.route !== "home") return;
     const storyGroups=[];
     const seen=new Set();
@@ -369,6 +372,10 @@ async function renderFeed() {
           ${storyGroups.map(s=>`<button class="story" data-action="open-story" data-id="${esc(s.id)}"><span class="story-ring">${s.media_type==="video"?`<video src="${esc(s.media_url)}" muted playsinline></video>`:s.media_type==="text"?`<span class="story-text-preview">${esc(s.text_overlay||"Texte")}</span>`:`<img src="${esc(s.media_url)}" alt="Story">`}</span><small>${esc(s.user_id===state.user.id?"Vous":nameOf(s.author))}</small></button>`).join("")}
         </div>
       </section>
+      ${activeLives.length ? `<section class="live-strip">
+        <div class="live-strip-head"><div><b>En direct maintenant</b><small>Regardez les directs des membres Tafaß</small></div><span class="live-pulse">● LIVE</span></div>
+        <div class="live-strip-list">${activeLives.map(l=>`<button class="live-card" data-action="watch-live" data-id="${esc(l.id)}"><span class="live-card-avatar">${avatarHTML(l.profiles||{})}</span><span><b>${esc(l.profiles ? nameOf(l.profiles) : "Membre Tafaß")}</b><small>${esc(l.title||"Direct Tafaß")}</small></span><strong>Regarder</strong></button>`).join("")}</div>
+      </section>` : ""}
 
       <section class="composer composer-news composer-launcher">
         <div class="composer-launcher-row">
@@ -408,6 +415,8 @@ function publisherBackgrounds(){
     state.composerBackground=state.composerBackground||"plain";
     state.composerLocation=state.composerLocation||"";
     state.composerFile=$("postFile")?.files?.[0]||state.composerFile||null;
+    state.composerVisibility=state.composerVisibility||"public";
+    state.composerMeta=state.composerMeta||{};
   }
   function openPublisher(){
     const restoring=!!state.composerOpen;
@@ -416,6 +425,8 @@ function publisherBackgrounds(){
       state.composerLocation="";
       state.composerDraftText="";
       state.composerFile=null;
+      state.composerVisibility="public";
+      state.composerMeta={};
     }
     state.composerOpen=true;
     openModal(`<div class="publisher-modal publisher-modal-v2">
@@ -432,7 +443,7 @@ function publisherBackgrounds(){
         <div class="publisher-author">
           ${avatarHTML(state.profile,"avatar publisher-avatar")}
           <div class="publisher-author-copy"><b>${esc(nameOf(state.profile))}</b>
-            <button class="publisher-audience" type="button"><span aria-hidden="true">◉</span> Public <span>⌄</span></button>
+            <button class="publisher-audience" type="button" data-action="publisher-audience"><span aria-hidden="true">◉</span> ${esc(state.composerVisibility==="friends"?"Amis":state.composerVisibility==="private"?"Moi uniquement":"Public")} <span>⌄</span></button>
           </div>
         </div>
 
@@ -488,6 +499,25 @@ function publisherBackgrounds(){
     setTimeout(()=>$("postText")?.focus(),80);
   }
 
+  function openPublisherAudience() {
+    savePublisherDraft();
+    const current=state.composerVisibility||"public";
+    openModal(`<div class="modal-box composer-audience-modal">
+      <button class="modal-close" data-action="close-publisher-field">×</button>
+      <div class="composer-field-brand"><img src="assets/tafass-logo-premium.svg" alt="Tafaß"></div>
+      <span class="eyebrow">TAFAß • AUDIENCE</span>
+      <h3>Qui peut voir votre publication ?</h3>
+      <p class="muted">Choisissez l’audience avant de publier.</p>
+      <div class="audience-options">
+        ${[
+          ["public","Public","Tout le monde peut voir cette publication.","◉"],
+          ["friends","Amis","Vos amis sur Tafaß.","👥"],
+          ["private","Moi uniquement","Visible uniquement par vous.","🔒"]
+        ].map(([v,t,s,ic])=>`<button class="audience-option ${current===v?"selected":""}" data-action="set-publisher-audience" data-audience="${v}"><span class="audience-option-icon">${ic}</span><span><b>${t}</b><small>${s}</small></span><i>${current===v?"✓":""}</i></button>`).join("")}
+      </div>
+    </div>`);
+  }
+
   function openPublisherField(field){
     const config={
       music:{eyebrow:"MUSIQUE",title:"Ajouter une musique",label:"Nom de la musique",placeholder:"Ex. Ma chanson préférée",action:"publisher-field-apply",button:"Ajouter"},
@@ -510,6 +540,120 @@ function publisherBackgrounds(){
     setTimeout(()=>$("publisherFieldInput")?.focus(),60);
   }
 
+  function openLiveSetup(){
+    savePublisherDraft();
+    openModal(`<div class="modal-box live-setup-modal">
+      <button class="modal-close" data-action="close-publisher-field">×</button>
+      <div class="composer-field-brand"><img src="assets/tafass-logo-premium.svg" alt="Tafaß"></div>
+      <span class="eyebrow">TAFAß • DIRECT</span>
+      <h3>Lancer un direct</h3>
+      <p class="muted">Votre caméra et votre microphone seront utilisés pendant le direct.</p>
+      <label class="composer-field-label">Titre du direct<input id="liveTitleInput" maxlength="120" placeholder="Ex. Direct Tafaß"></label>
+      <div class="live-permission-note">● Caméra · ● Microphone · Temps réel</div>
+      <button class="primary big" data-action="confirm-live-start">Lancer le direct</button>
+    </div>`);
+    setTimeout(()=>$("liveTitleInput")?.focus(),50);
+  }
+
+  const livePeers = new Map();
+  let liveStream = null;
+  let liveChannel = null;
+  let liveSessionId = null;
+  let liveRole = null;
+  let liveViewerPc = null;
+  let liveViewerId = null;
+
+  function liveChannelName(id){ return `tafass-live:${id}`; }
+
+  async function startLiveFromPublisher(){
+    savePublisherDraft();
+    let stream;
+    try {
+      if(!navigator.mediaDevices?.getUserMedia) throw new Error("unsupported");
+      stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:"user",width:{ideal:1280},height:{ideal:720}},audio:true});
+    } catch(e) {
+      return toast("Autorisez la caméra et le microphone pour lancer un direct.");
+    }
+    const title = (state.composerMeta?.live_title || "Direct Tafaß").trim().slice(0,120);
+    const {data:session,error} = await sb.from("live_sessions").insert({user_id:state.user.id,title,status:"live",started_at:new Date().toISOString()}).select().single();
+    if(error){ stream.getTracks().forEach(t=>t.stop()); return toast("Impossible de lancer le direct : "+error.message); }
+    liveStream=stream; liveSessionId=session.id; liveRole="broadcaster"; state.activeLive=session;
+    closeModal(); await openBroadcasterLive(session,stream);
+    if(state.route==="home") renderFeed();
+  }
+
+  async function openBroadcasterLive(session,stream){
+    liveChannel=sb.channel(liveChannelName(session.id),{config:{broadcast:{self:false}}});
+    liveChannel.on("broadcast",{event:"viewer-offer"},async ({payload})=>{
+      if(liveRole!=="broadcaster" || !payload?.viewerId || !payload?.offer) return;
+      const viewerId=payload.viewerId;
+      const old=livePeers.get(viewerId); if(old) old.close();
+      const pc=new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"}]});
+      livePeers.set(viewerId,pc);
+      stream.getTracks().forEach(track=>pc.addTrack(track,stream));
+      pc.onicecandidate=e=>{if(e.candidate) liveChannel?.send({type:"broadcast",event:"broadcaster-ice",payload:{viewerId,candidate:e.candidate}});};
+      pc.onconnectionstatechange=()=>{if(["failed","closed"].includes(pc.connectionState)){pc.close();livePeers.delete(viewerId);}};
+      try{
+        await pc.setRemoteDescription(new RTCSessionDescription(payload.offer));
+        const answer=await pc.createAnswer(); await pc.setLocalDescription(answer);
+        await liveChannel.send({type:"broadcast",event:"broadcaster-answer",payload:{viewerId,answer:pc.localDescription}});
+      }catch(err){console.error("Tafaß live answer:",err);}
+    });
+    liveChannel.on("broadcast",{event:"viewer-ice"},async ({payload})=>{
+      const pc=livePeers.get(payload?.viewerId);
+      if(pc && payload?.candidate) try{await pc.addIceCandidate(payload.candidate);}catch(_){}
+    });
+    await liveChannel.subscribe();
+    openModal(`<div class="modal-box live-modal live-broadcast-modal">
+      <button class="modal-close" data-action="end-live">×</button>
+      <div class="live-modal-head"><div><span class="eyebrow">TAFAß • DIRECT</span><h3>Vous êtes en direct</h3></div><span class="live-pulse">● LIVE</span></div>
+      <video id="liveLocalVideo" class="live-video" autoplay muted playsinline></video>
+      <div class="live-status"><span>●</span><b>Diffusion en temps réel</b><small>Les personnes présentes peuvent regarder votre direct.</small></div>
+      <button class="danger-action live-end-button" data-action="end-live">Terminer le direct</button>
+    </div>`);
+    const v=$("liveLocalVideo"); if(v){v.srcObject=stream;await v.play().catch(()=>{});}
+  }
+
+  async function watchLive(id){
+    const {data:session,error}=await sb.from("live_sessions").select("id,user_id,title,status,started_at,profiles(first_name,last_name,username,avatar_url)").eq("id",id).maybeSingle();
+    if(error || !session || session.status!=="live") return toast("Ce direct est terminé.");
+    if(session.user_id===state.user.id) return toast("Vous êtes déjà le diffuseur de ce direct.");
+    liveRole="viewer"; liveSessionId=id; liveViewerId=crypto.randomUUID();
+    liveChannel=sb.channel(liveChannelName(id),{config:{broadcast:{self:false}}});
+    liveViewerPc=new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"}]});
+    liveViewerPc.ontrack=e=>{const v=$("liveRemoteVideo");if(v)v.srcObject=e.streams[0];};
+    liveViewerPc.onicecandidate=e=>{if(e.candidate) liveChannel?.send({type:"broadcast",event:"viewer-ice",payload:{viewerId:liveViewerId,candidate:e.candidate}});};
+    liveChannel.on("broadcast",{event:"broadcaster-answer"},async ({payload})=>{
+      if(payload?.viewerId!==liveViewerId || !payload.answer)return;
+      try{await liveViewerPc.setRemoteDescription(new RTCSessionDescription(payload.answer));}catch(_){}
+    });
+    liveChannel.on("broadcast",{event:"broadcaster-ice"},async ({payload})=>{
+      if(payload?.viewerId!==liveViewerId || !payload.candidate)return;
+      try{await liveViewerPc.addIceCandidate(payload.candidate);}catch(_){}
+    });
+    await liveChannel.subscribe();
+    const offer=await liveViewerPc.createOffer(); await liveViewerPc.setLocalDescription(offer);
+    await liveChannel.send({type:"broadcast",event:"viewer-offer",payload:{viewerId:liveViewerId,offer:liveViewerPc.localDescription}});
+    openModal(`<div class="modal-box live-modal">
+      <button class="modal-close" data-action="close-live-viewer">×</button>
+      <div class="live-modal-head"><div><span class="eyebrow">TAFAß • EN DIRECT</span><h3>${esc(session.title||"Direct Tafaß")}</h3><small>${esc(nameOf(session.profiles||{}))}</small></div><span class="live-pulse">● LIVE</span></div>
+      <video id="liveRemoteVideo" class="live-video" autoplay playsinline controls></video>
+      <div class="live-status"><span>●</span><b>Direct en temps réel</b><small>Connexion en temps réel au diffuseur.</small></div>
+    </div>`);
+  }
+
+  async function endLive(){
+    if(!liveSessionId)return;
+    const id=liveSessionId;
+    try{await sb.from("live_sessions").update({status:"ended",ended_at:new Date().toISOString()}).eq("id",id).eq("user_id",state.user.id);}catch(_){}
+    livePeers.forEach(pc=>pc.close()); livePeers.clear();
+    if(liveStream) liveStream.getTracks().forEach(t=>t.stop());
+    liveViewerPc?.close();
+    if(liveChannel){try{await sb.removeChannel(liveChannel);}catch(_){}}
+    liveStream=null;liveViewerPc=null;liveChannel=null;liveSessionId=null;liveRole=null;state.activeLive=null;
+    closeModal(); if(state.route==="home") await renderFeed();
+  }
+
   async function publishPostNews(){
     const text=$("postText")?.value.trim()||"";
     const pf=$("postFile"), vf=$("postVideoFile"), file=pf?.files?.[0]||vf?.files?.[0];
@@ -526,15 +670,16 @@ function publisherBackgrounds(){
         media_url=sb.storage.from("posts").getPublicUrl(path).data.publicUrl;
         media_type=file.type.startsWith("video/")?"video":"image";
       }
-      const payload={user_id:state.user.id,content:text,media_url,media_type,visibility:"public",location:state.composerLocation||null,background_style:state.composerBackground||"plain"};
+      const payload={user_id:state.user.id,content:text,media_url,media_type,visibility:state.composerVisibility||"public",location:state.composerLocation||null,background_style:state.composerBackground||"plain",publication_meta:state.composerMeta||{}};
       let r=await sb.from("posts").insert(payload).select().single();
       if(r.error && String(r.error.code)==="42703"){
         delete payload.background_style;
+        delete payload.publication_meta;
         r=await sb.from("posts").insert(payload).select().single();
       }
       if(r.error)throw new Error(r.error.message);
       await logActivity("post_created","Publication créée","post",r.data?.id||null);
-      state.composerOpen=false; state.composerDraftText=""; state.composerFile=null; state.composerBackground="plain"; state.composerLocation="";
+      state.composerOpen=false; state.composerDraftText=""; state.composerFile=null; state.composerBackground="plain"; state.composerLocation=""; state.composerVisibility="public"; state.composerMeta={};
       closeModal(); toast("Publication publiée"); await loadPosts(); await render();
     }catch(e){toast(e?.message||"Publication impossible.");}
     finally{setLoading(btn,false,"Publier");}
@@ -553,6 +698,27 @@ function publisherBackgrounds(){
     const visible = r.error ? true : r.data?.show_reaction_counts !== false;
     state.reactionSettingsCache.set(ownerId, visible);
     return visible;
+  }
+
+  function captionHTML(text, limit = 280) {
+    const value = String(text || "");
+    if (value.length <= limit) return `<div class="post-caption">${esc(value)}</div>`;
+    const short = value.slice(0, limit).replace(/\s+\S*$/, "").trimEnd();
+    return `<div class="post-caption post-caption-collapsed" data-caption-state="collapsed">
+      <span class="caption-short">${esc(short)}…</span>
+      <span class="caption-full" hidden>${esc(value)}</span>
+      <button type="button" class="caption-toggle" data-action="toggle-caption">Voir plus</button>
+    </div>`;
+  }
+  function toggleCaption(btn) {
+    const box = btn?.closest(".post-caption");
+    if (!box) return;
+    const full = box.querySelector(".caption-full"), short = box.querySelector(".caption-short");
+    const collapsed = box.dataset.captionState !== "expanded";
+    if (full) full.hidden = !collapsed;
+    if (short) short.hidden = collapsed;
+    box.dataset.captionState = collapsed ? "expanded" : "collapsed";
+    btn.textContent = collapsed ? "Voir moins" : "Voir plus";
   }
 
   async function postHTML(p) {
@@ -579,7 +745,8 @@ function publisherBackgrounds(){
     const shareSummary = sh.length ? `<span class="share-summary">↗ ${shareNames}${sh.length > 3 ? ` +${sh.length-3}` : ""}</span>` : "";
     return `<article class="post post-premium" id="post-${esc(p.id)}" data-post-id="${esc(p.id)}" data-post-bg="${esc(p.background_style || "plain")}">
       <div class="post-head">${profileLink(p.author, avatarHTML(p.author), "profile-link profile-avatar-link")}<div class="meta">${profileLink(p.author, `<span class="post-author-name">${esc(nameOf(p.author))}</span>`, "profile-link profile-meta-link")}<span class="post-time"><small>${timeAgo(p.created_at)} · ${esc(p.visibility || "public")}</small></span></div><button class="post-menu" data-action="post-menu" data-id="${esc(p.id)}">⋯</button></div>
-      ${p.content ? `<div class="post-body ${p.background_style && p.background_style !== "plain" ? "post-body-has-bg" : ""}">${esc(p.content)}</div>` : ""}${media}
+      ${p.content ? `<div class="post-body ${p.background_style && p.background_style !== "plain" ? "post-body-has-bg" : ""}">${captionHTML(p.content)}</div>` : ""}${media}
+      ${p.publication_meta && typeof p.publication_meta === "object" && Object.keys(p.publication_meta).some(k=>p.publication_meta[k]) ? `<div class="post-meta-chips">${Object.entries(p.publication_meta).filter(([k,v])=>v && k!=="live_title").map(([k,v])=>`<span> ${k==="music"?"♫":k==="tag"?"👥":k==="location"?"📍":k==="event"?"📅":k==="mood"?"☺":"•"} ${esc(v)}</span>`).join("")}</div>` : ""}
       <div class="post-stats"><span class="reaction-summary">${reactionVisual || "<span class='muted-inline'>Aucune réaction</span>"}</span><span>${cs.length} commentaire(s) · ${Number(p.shares || sh.length || 0)} partage(s)</span></div>
       ${shareSummary}
       <div class="post-actions"><button class="react-btn" data-action="react" data-id="${esc(p.id)}">${reactionMeta[mine]?.[1] || "👍"} ${esc(reactionMeta[mine]?.[0] || "J’aime")}</button><button data-action="comment" data-id="${esc(p.id)}">💬 Commenter</button><button data-action="share" data-id="${esc(p.id)}">↗ Partager</button></div>
@@ -1018,6 +1185,8 @@ function publisherBackgrounds(){
     }
 
     const isMe = userId === state.user.id;
+    const liveQ = await sb.from("live_sessions").select("id,title,status,started_at").eq("user_id",userId).eq("status","live").order("started_at",{ascending:false}).limit(1).maybeSingle();
+    const activeProfileLive = liveQ.data || null;
     if(!isMe && await isBlockedBetween(userId)){ $("content").innerHTML=`<section class="profile-locked-screen profile-blocked-screen" data-page-route="profile"><div class="profile-lock-orbit"><div class="profile-lock-icon">⊘</div></div><span class="eyebrow">TAFAß • BLOCAGE</span><h2>Compte inaccessible</h2><h3>Profil masqué</h3><p class="profile-lock-message-fr">Ce compte et votre compte sont bloqués l’un pour l’autre. Les profils, publications, relations et interactions ne sont pas accessibles.</p><div class="profile-lock-status"><span>🔒</span><div><b>Accès totalement bloqué</b><small>Vous ne pouvez ni voir ni contacter ce compte tant que le blocage est actif.</small></div></div><div class="unavailable-actions"><button class="ghost-action" data-route="home">Retour à l’accueil</button></div></section>`; return; }
     const privacy = await getProfilePrivacy(userId);
     // Le propriétaire voit toujours son propre profil, même lorsqu'il est verrouillé.
@@ -1072,7 +1241,7 @@ function publisherBackgrounds(){
       <div class="profile-cover-wrap"><div class="profile-cover" ${cover}></div></div>
       <div class="profile-main-premium">
         <div class="profile-identity-row">${avatarHTML(p,"avatar profile-avatar")}</div>
-        <div class="profile-name-block"><h2 class="profile-name">${esc(nameOf(p))}${isLockedProfile ? ' <span class="profile-locked-badge profile-locked-badge-centered" title="Profil verrouillé">🔒 Profil verrouillé</span>' : ''}</h2>${isLockedProfile ? '<small class="profile-protection-note">🔐 Ny profil ankehitriny dia voasakan’ny tompony ny hiditra • Seul vous pouvez voir le contenu complet.</small>' : ''}</div>
+        <div class="profile-name-block"><h2 class="profile-name">${esc(nameOf(p))}${activeProfileLive ? ` <button class="profile-live-badge" data-action="watch-live" data-id="${esc(activeProfileLive.id)}">● EN DIRECT</button>` : ""}${isLockedProfile ? ' <span class="profile-locked-badge profile-locked-badge-centered" title="Profil verrouillé">🔒 Profil verrouillé</span>' : ''}</h2>${isLockedProfile ? '<small class="profile-protection-note">🔐 Ny profil ankehitriny dia voasakan’ny tompony ny hiditra • Seul vous pouvez voir le contenu complet.</small>' : ''}</div>
         <p class="profile-bio">${esc(p.bio || "")}</p>
         <div class="profile-actions">${actions}</div>
         <div class="profile-stats"><div class="profile-stat"><b>${postRows.length}</b><small>Publications</small></div><div class="profile-stat"><b>${friendsR.count || 0}</b><small>Amis</small></div><div class="profile-stat"><b>${followersR.count || 0}</b><small>Abonnés</small></div></div>
@@ -2648,9 +2817,10 @@ async function genericListPage(route) {
   async function enterApp() {
     if (state.entering || !state.user) return;
     state.entering = true;
-    // Keep the authenticated app visible during background re-entry. The auth
-    // screen is shown only when there is genuinely no session.
-    $("app").classList.add("hidden");
+    // Never hide an already authenticated app during token refresh/background re-entry.
+    // The auth screen is shown only when there is genuinely no session.
+    const appWasVisible = !$("app")?.classList.contains("hidden");
+    if (!appWasVisible) $("app")?.classList.add("hidden");
     document.body.classList.remove("modal-open");
     document.body.classList.toggle("light", state.theme === "light");
     syncThemeButton();
@@ -3321,12 +3491,13 @@ async function genericListPage(route) {
     if (action === "publisher-mood") return openMoodComposer();
     if (action === "publisher-message") { appendPublisherText("💬 Recevoir des messages"); return toast("Option ajoutée à la publication."); }
     if (action === "publisher-event") return openPublisherField("event");
-    if (action === "publisher-live") return openModal(`<div class="modal-box composer-field-modal"><button class="modal-close" data-action="close-modal" aria-label="Fermer">×</button><div class="composer-field-brand"><img src="assets/tafass-logo-premium.svg" alt="Tafaß"></div><span class="eyebrow">TAFAß • LIVE</span><h3>Lancer un direct</h3><p class="muted">Le module Live n’est pas encore activé sur ce projet. Votre publication reste intacte.</p><button class="primary big" data-action="close-modal">Fermer</button></div>`);
+    if (action === "publisher-live") return openLiveSetup();
     if (action === "close-publisher-field") { closeModal(); if(state.composerOpen) setTimeout(openPublisher,40); return; }
     if (action === "publisher-field-apply") {
       const field=actionEl.dataset.field, value=$("publisherFieldInput")?.value.trim()||"";
       if(!value)return toast("Saisissez une valeur.");
       const prefix=field==="music"?`♫ ${value}`:field==="tag"?`👥 ${value}`:field==="location"?`📍 ${value}`:field==="event"?`📅 ${value}`:`❓ ${value}`;
+      state.composerMeta={...(state.composerMeta||{}), [field]:value};
       if(field==="location") state.composerLocation=value;
       state.composerDraftText=(prefix+(state.composerDraftText.trim()?`\n${state.composerDraftText.trim()}`:"")).slice(0,5000);
       closeModal();
@@ -3337,11 +3508,16 @@ async function genericListPage(route) {
     if (action === "search-category") { searchCategory = actionEl.dataset.category || "accounts"; return searchPage($("searchInput")?.value || "", searchCategory); }
     if (action === "select-mood") { document.querySelectorAll(".mood-choice").forEach(x=>x.classList.remove("selected")); actionEl.classList.add("selected"); return; }
     if (action === "select-payment-method") { document.querySelectorAll(".payment-method").forEach(x=>x.classList.remove("active")); actionEl.classList.add("active"); return; }
-    if (action === "apply-mood") { const v=document.querySelector(".mood-choice.selected")?.dataset.moodValue||""; const extra=$("moodExtra")?.value.trim()||""; if(!v&&!extra)return toast("Choisissez une humeur ou écrivez un message."); const t=$("postText"); if(t)t.value=[v,extra].filter(Boolean).join(" — ").trim(); closeModal(); if(state.composerOpen) setTimeout(openPublisher,40); t?.focus(); return toast("Humeur ajoutée à votre publication"); }
+    if (action === "apply-mood") { const v=document.querySelector(".mood-choice.selected")?.dataset.moodValue||""; const extra=$("moodExtra")?.value.trim()||""; if(!v&&!extra)return toast("Choisissez une humeur ou écrivez un message."); state.composerMeta={...(state.composerMeta||{}),mood:[v,extra].filter(Boolean).join(" — ").trim()}; const t=$("postText"); if(t)t.value=[v,extra].filter(Boolean).join(" — ").trim(); closeModal(); if(state.composerOpen) setTimeout(openPublisher,40); t?.focus(); return toast("Humeur ajoutée à votre publication"); }
     if (action === "more-question") return openPublisherField("question");
     if (action === "more-location") return openPublisherField("location");
     if (action === "more-file") { closeModal(); $("postFile")?.click(); return; }
     if (action === "more-style") { closeModal(); toast("Style premium prêt pour votre publication"); return; }
+    if (action === "toggle-caption") return toggleCaption(actionEl);
+    if (action === "confirm-live-start") { state.composerMeta={...(state.composerMeta||{}),live_title:$("liveTitleInput")?.value?.trim()||"Direct Tafaß"}; closeModal(); return startLiveFromPublisher(); }
+    if (action === "watch-live") return watchLive(id);
+    if (action === "end-live") return endLive();
+    if (action === "close-live-viewer") { if(liveChannel){try{await sb.removeChannel(liveChannel);}catch(_){}} liveChannel=null; liveViewerPc?.close(); liveViewerPc=null; liveSessionId=null; liveRole=null; closeModal(); return; }
     if (action === "react") return showReactions(id);
     if (action === "comment") { $("comment-"+id)?.focus(); return; }
     if (action === "send-comment") return addComment(id);
@@ -3754,8 +3930,17 @@ async function genericListPage(route) {
   };
   const splashFallback = setTimeout(finishSplash, SPLASH_MAX_MS);
 
+  function ensureLiveFeedRealtime(){
+    if(state.liveFeedChannel) return;
+    state.liveFeedChannel=sb.channel("tafass-live-feed")
+      .on("postgres_changes",{event:"*",schema:"public",table:"live_sessions"},()=>{ if(state.route==="home") renderFeed(); })
+      .subscribe();
+  }
+
   let authBootComplete = false;
   let authEventTimer = null;
+  ensureLiveFeedRealtime();
+
   sb.auth.onAuthStateChange((event, session) => {
     if(authEventTimer) clearTimeout(authEventTimer);
     state.user = session?.user || null;
@@ -3784,7 +3969,7 @@ async function genericListPage(route) {
         // Keep the valid session. A transient database/render error must not
         // masquerade as a logout.
         if(!authBootComplete && !state.user) showLogin();
-        else $("app")?.classList.remove("hidden");
+        else { $("auth")?.classList.add("hidden"); $("app")?.classList.remove("hidden"); }
       }finally{
         authBootComplete=true;
       }
