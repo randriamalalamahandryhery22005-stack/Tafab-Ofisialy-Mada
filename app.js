@@ -518,6 +518,65 @@ function publisherBackgrounds(){
     </div>`);
   }
 
+  function publisherMusicCatalog(){
+    const styles=["Lo-fi Night","Afro Pulse","Tropical Flow","Piano Glow","Urban Wave","Sunset Drive","Acoustic Air","Future Pop","Ocean Dream","Cinematic Rise","Chill Focus","Island Beat"];
+    const moods=["Calme","Énergique","Romantique","Positif","Solaire","Nocturne","Élégant","Épique","Doux","Focus"];
+    const out=[];
+    for(let i=1;i<=120;i++) out.push({id:`ai-${i}`,title:`Tafaß Music ${String(i).padStart(3,'0')}`,style:styles[(i-1)%styles.length],mood:moods[(i*7-1)%moods.length],bpm:72+((i*11)%72),seed:i});
+    return out;
+  }
+  let musicAudioContext=null, musicNodes=[], currentMusicId=null, musicTimer=null;
+  function stopPublisherMusic(){
+    if(musicTimer)clearTimeout(musicTimer); musicTimer=null;
+    musicNodes.forEach(n=>{try{n.stop?.();n.disconnect?.();}catch(_){}}); musicNodes=[]; currentMusicId=null;
+  }
+  function playGeneratedMusic(track){
+    if(!track)return;
+    stopPublisherMusic();
+    try{
+      musicAudioContext ||= new (window.AudioContext||window.webkitAudioContext)();
+      const ctx=musicAudioContext; if(ctx.state==='suspended')ctx.resume().catch(()=>{});
+      const master=ctx.createGain(); master.gain.value=.055; master.connect(ctx.destination);
+      const scale=[220,247,277,330,370,440,494,554];
+      let step=0; currentMusicId=track.id;
+      const tick=()=>{
+        if(currentMusicId!==track.id)return;
+        const osc=ctx.createOscillator(), gain=ctx.createGain();
+        const freq=scale[(step*3+track.seed)%scale.length]*(step%8===7?.5:1);
+        osc.type=track.style.includes('Piano')?'sine':track.style.includes('Afro')?'triangle':'sine'; osc.frequency.value=freq;
+        gain.gain.setValueAtTime(.0001,ctx.currentTime); gain.gain.exponentialRampToValueAtTime(.7,ctx.currentTime+.025); gain.gain.exponentialRampToValueAtTime(.0001,ctx.currentTime+.24);
+        osc.connect(gain);gain.connect(master);osc.start();osc.stop(ctx.currentTime+.26);musicNodes.push(osc);step=(step+1)%16;
+        musicTimer=setTimeout(tick,Math.max(180,60000/track.bpm/2));
+      }; tick();
+    }catch(e){toast('Lecture audio indisponible sur cet appareil.');}
+  }
+  function openPublisherMusic(){
+    savePublisherDraft();
+    const tracks=publisherMusicCatalog();
+    openModal(`<div class="modal-box composer-field-modal publisher-music-modal">
+      <button class="modal-close" data-action="close-publisher-field" aria-label="Fermer">×</button>
+      <div class="composer-field-brand"><img src="assets/tafass-logo-premium.svg" alt="Tafaß"></div>
+      <span class="eyebrow">TAFAß • MUSIC LAB</span><h3>Choisir une musique</h3>
+      <p class="muted">120 pistes générées automatiquement. Une seule musique peut être attachée à la publication.</p>
+      <div class="music-search-row"><input id="publisherMusicSearch" class="premium-input" placeholder="Rechercher une piste, un style ou une ambiance…"><span class="music-count">120</span></div>
+      <div id="publisherMusicList" class="publisher-music-list">${tracks.map(t=>`<button type="button" class="publisher-music-item" data-action="select-publisher-music" data-music-id="${t.id}"><span class="music-cover">♫</span><span><b>${esc(t.title)}</b><small>${esc(t.style)} · ${esc(t.mood)} · ${t.bpm} BPM</small></span><span class="music-play">▶</span></button>`).join('')}</div>
+    </div>`);
+    const list=$('publisherMusicList'), search=$('publisherMusicSearch');
+    search?.addEventListener('input',()=>{const q=search.value.trim().toLowerCase();[...list.children].forEach(el=>el.classList.toggle('hidden',q&&!el.textContent.toLowerCase().includes(q)));});
+  }
+  async function openPublisherTag(){
+    savePublisherDraft();
+    const {data:rows}=await sb.from('friendships').select('user_id,friend_id').or(`user_id.eq.${state.user.id},friend_id.eq.${state.user.id}`).limit(200);
+    const ids=[...new Set((rows||[]).map(r=>r.user_id===state.user.id?r.friend_id:r.user_id).filter(Boolean))];
+    const {data:friends}=ids.length?await sb.from('profiles').select('id,first_name,last_name,username,avatar_url').in('id',ids).order('first_name'):{data:[]};
+    openModal(`<div class="modal-box composer-field-modal publisher-tag-modal"><button class="modal-close" data-action="close-publisher-field">×</button><div class="composer-field-brand"><img src="assets/tafass-logo-premium.svg" alt="Tafaß"></div><span class="eyebrow">TAFAß • AMIS</span><h3>Identifier des personnes</h3><p class="muted">Choisissez uniquement parmi vos amis Tafaß.</p><input id="publisherTagSearch" class="premium-input" placeholder="Rechercher un ami…"><div id="publisherTagList" class="publisher-tag-list">${(friends||[]).map(f=>`<button class="publisher-tag-person" type="button" data-action="select-publisher-tag" data-id="${esc(f.id)}" data-name="${esc(nameOf(f))}">${avatarHTML(f,'avatar tiny-avatar')}<span><b>${esc(nameOf(f))}</b><small>@${esc(f.username||'membre')}</small></span><i>＋</i></button>`).join('')||'<div class="empty">Vous n’avez pas encore d’amis à identifier.</div>'}</div><button class="primary big" data-action="close-publisher-field">Terminer</button></div>`);
+    $('publisherTagSearch')?.addEventListener('input',e=>{const q=e.target.value.toLowerCase();document.querySelectorAll('.publisher-tag-person').forEach(x=>x.classList.toggle('hidden',q&&!x.textContent.toLowerCase().includes(q)));});
+  }
+  function openPublisherLocation(){
+    savePublisherDraft();
+    openModal(`<div class="modal-box composer-field-modal publisher-location-modal"><button class="modal-close" data-action="close-publisher-field">×</button><div class="composer-field-brand"><img src="assets/tafass-logo-premium.svg" alt="Tafaß"></div><span class="eyebrow">TAFAß • LOCALISATION</span><h3>Ajouter un lieu</h3><p class="muted">Recherchez un lieu réel. Sélectionnez un résultat vérifié par la recherche géographique.</p><div class="place-search-wrap-v4"><input id="publisherPlaceInput" class="premium-input" placeholder="Rechercher un lieu, une rue, une ville…" autocomplete="off"><div id="publisherPlaceResults" class="place-results-v4"></div></div><button class="primary big" data-action="publisher-location-apply">Ajouter le lieu</button></div>`);
+    installPlaceSearch('publisherPlaceInput','publisherPlaceResults');
+  }
   function openPublisherField(field){
     const config={
       music:{eyebrow:"MUSIQUE",title:"Ajouter une musique",label:"Nom de la musique",placeholder:"Ex. Ma chanson préférée",action:"publisher-field-apply",button:"Ajouter"},
@@ -562,8 +621,48 @@ function publisherBackgrounds(){
   let liveRole = null;
   let liveViewerPc = null;
   let liveViewerId = null;
+  let liveCommentsChannel = null;
+  let liveCommentRows = [];
 
   function liveChannelName(id){ return `tafass-live:${id}`; }
+  async function loadLiveComments(sessionId){
+    const r=await sb.from('live_comments').select('id,user_id,content,created_at,profiles(first_name,last_name,username,avatar_url)').eq('live_session_id',sessionId).order('created_at',{ascending:true}).limit(150);
+    liveCommentRows=r.error?[]:(r.data||[]); renderLiveComments();
+  }
+  function renderLiveComments(){
+    const box=$('liveCommentsList'); if(!box)return;
+    box.innerHTML=liveCommentRows.slice(-80).map(c=>`<div class="live-comment-row">${avatarHTML(c.profiles||{},'avatar live-comment-avatar')}<div><b>${esc(nameOf(c.profiles||{}))}</b><span>${esc(c.content||'')}</span></div></div>`).join('') || `<div class="live-comments-empty">Les commentaires du direct apparaîtront ici.</div>`;
+    box.scrollTop=box.scrollHeight;
+  }
+  async function setupLiveComments(sessionId){
+    if(liveCommentsChannel){try{await sb.removeChannel(liveCommentsChannel);}catch(_){} liveCommentsChannel=null;}
+    await loadLiveComments(sessionId);
+    liveCommentsChannel=sb.channel(`tafass-live-comments:${sessionId}`)
+      .on('postgres_changes',{event:'INSERT',schema:'public',table:'live_comments',filter:`live_session_id=eq.${sessionId}`},async payload=>{
+        const c=payload.new;
+        const p=(await sb.from('profiles').select('first_name,last_name,username,avatar_url').eq('id',c.user_id).maybeSingle()).data||{};
+        if(!liveCommentRows.some(x=>x.id===c.id)){liveCommentRows.push({...c,profiles:p});renderLiveComments();}
+      })
+      .on('postgres_changes',{event:'UPDATE',schema:'public',table:'live_sessions',filter:`id=eq.${sessionId}`},async payload=>{
+        if(payload.new?.status==='ended' && liveRole==='viewer'){
+          try{liveViewerPc?.close();}catch(_){}
+          if(liveChannel){try{await sb.removeChannel(liveChannel);}catch(_){}}
+          liveViewerPc=null;liveChannel=null;liveSessionId=null;liveRole=null;liveViewerId=null;
+          if(liveCommentsChannel){try{await sb.removeChannel(liveCommentsChannel);}catch(_){} liveCommentsChannel=null;}
+          closeModal(); toast('Le direct est terminé.'); if(state.route==='home') renderFeed();
+        }
+      }).subscribe();
+  }
+  async function sendLiveComment(){
+    const input=$('liveCommentInput'), text=input?.value.trim()||'';
+    if(!text||!liveSessionId)return;
+    const r=await sb.from('live_comments').insert({live_session_id:liveSessionId,user_id:state.user.id,content:text.slice(0,500)});
+    if(r.error)return toast('Commentaire du direct impossible : '+r.error.message);
+    if(input)input.value='';
+  }
+  function liveCommentsMarkup(){
+    return `<section class="live-comments-panel"><div class="live-comments-head"><div><b>Commentaires en direct</b><small>Les messages sont visibles par le diffuseur et les spectateurs.</small></div><span>● LIVE</span></div><div id="liveCommentsList" class="live-comments-list"></div><form id="liveCommentForm" class="live-comment-form"><input id="liveCommentInput" maxlength="500" placeholder="Écrire un commentaire…" autocomplete="off"><button type="submit" aria-label="Envoyer">➤</button></form></section>`;
+  }
 
   async function startLiveFromPublisher(){
     savePublisherDraft();
@@ -604,14 +703,17 @@ function publisherBackgrounds(){
       if(pc && payload?.candidate) try{await pc.addIceCandidate(payload.candidate);}catch(_){}
     });
     await liveChannel.subscribe();
-    openModal(`<div class="modal-box live-modal live-broadcast-modal">
-      <button class="modal-close" data-action="end-live">×</button>
+    openModal(`<div class="modal-box live-modal live-broadcast-modal" data-live-broadcaster="true">
+      <div class="live-lock-badge">🔒 DIRECT ACTIF · Terminez le direct pour quitter</div>
       <div class="live-modal-head"><div><span class="eyebrow">TAFAß • DIRECT</span><h3>Vous êtes en direct</h3></div><span class="live-pulse">● LIVE</span></div>
       <video id="liveLocalVideo" class="live-video" autoplay muted playsinline></video>
-      <div class="live-status"><span>●</span><b>Diffusion en temps réel</b><small>Les personnes présentes peuvent regarder votre direct.</small></div>
+      <div class="live-status"><span>●</span><b>Diffusion en temps réel</b><small>Audio + vidéo en direct. Les spectateurs peuvent commenter et vous répondez en direct.</small></div>
+      ${liveCommentsMarkup()}
       <button class="danger-action live-end-button" data-action="end-live">Terminer le direct</button>
     </div>`);
     const v=$("liveLocalVideo"); if(v){v.srcObject=stream;await v.play().catch(()=>{});}
+    await setupLiveComments(session.id);
+    $("liveCommentForm")?.addEventListener("submit",e=>{e.preventDefault();sendLiveComment();});
   }
 
   async function watchLive(id){
@@ -634,12 +736,15 @@ function publisherBackgrounds(){
     await liveChannel.subscribe();
     const offer=await liveViewerPc.createOffer(); await liveViewerPc.setLocalDescription(offer);
     await liveChannel.send({type:"broadcast",event:"viewer-offer",payload:{viewerId:liveViewerId,offer:liveViewerPc.localDescription}});
-    openModal(`<div class="modal-box live-modal">
+    openModal(`<div class="modal-box live-modal live-viewer-modal">
       <button class="modal-close" data-action="close-live-viewer">×</button>
       <div class="live-modal-head"><div><span class="eyebrow">TAFAß • EN DIRECT</span><h3>${esc(session.title||"Direct Tafaß")}</h3><small>${esc(nameOf(session.profiles||{}))}</small></div><span class="live-pulse">● LIVE</span></div>
       <video id="liveRemoteVideo" class="live-video" autoplay playsinline controls></video>
-      <div class="live-status"><span>●</span><b>Direct en temps réel</b><small>Connexion en temps réel au diffuseur.</small></div>
+      <div class="live-status"><span>●</span><b>Direct en temps réel</b><small>Vous entendez l’audio du diffuseur. Vos commentaires sont transmis en temps réel.</small></div>
+      ${liveCommentsMarkup()}
     </div>`);
+    await setupLiveComments(id);
+    $("liveCommentForm")?.addEventListener("submit",e=>{e.preventDefault();sendLiveComment();});
   }
 
   async function endLive(){
@@ -650,7 +755,9 @@ function publisherBackgrounds(){
     if(liveStream) liveStream.getTracks().forEach(t=>t.stop());
     liveViewerPc?.close();
     if(liveChannel){try{await sb.removeChannel(liveChannel);}catch(_){}}
-    liveStream=null;liveViewerPc=null;liveChannel=null;liveSessionId=null;liveRole=null;state.activeLive=null;
+    if(liveCommentsChannel){try{await sb.removeChannel(liveCommentsChannel);}catch(_){} liveCommentsChannel=null;}
+    stopPublisherMusic();
+    liveStream=null;liveViewerPc=null;liveChannel=null;liveSessionId=null;liveRole=null;liveViewerId=null;liveCommentRows=[];state.activeLive=null;
     closeModal(); if(state.route==="home") await renderFeed();
   }
 
@@ -746,7 +853,8 @@ function publisherBackgrounds(){
     return `<article class="post post-premium" id="post-${esc(p.id)}" data-post-id="${esc(p.id)}" data-post-bg="${esc(p.background_style || "plain")}">
       <div class="post-head">${profileLink(p.author, avatarHTML(p.author), "profile-link profile-avatar-link")}<div class="meta">${profileLink(p.author, `<span class="post-author-name">${esc(nameOf(p.author))}</span>`, "profile-link profile-meta-link")}<span class="post-time"><small>${timeAgo(p.created_at)} · ${esc(p.visibility || "public")}</small></span></div><button class="post-menu" data-action="post-menu" data-id="${esc(p.id)}">⋯</button></div>
       ${p.content ? `<div class="post-body ${p.background_style && p.background_style !== "plain" ? "post-body-has-bg" : ""}">${captionHTML(p.content)}</div>` : ""}${media}
-      ${p.publication_meta && typeof p.publication_meta === "object" && Object.keys(p.publication_meta).some(k=>p.publication_meta[k]) ? `<div class="post-meta-chips">${Object.entries(p.publication_meta).filter(([k,v])=>v && k!=="live_title").map(([k,v])=>`<span> ${k==="music"?"♫":k==="tag"?"👥":k==="location"?"📍":k==="event"?"📅":k==="mood"?"☺":"•"} ${esc(v)}</span>`).join("")}</div>` : ""}
+      ${p.publication_meta && typeof p.publication_meta === "object" ? (()=>{const m=p.publication_meta||{};const chips=[];if(m.music)chips.push(`<button type="button" class="post-music-chip" data-action="play-post-music" data-music-id="${esc(m.music_id||'ai-1')}" data-music-seed="${esc(m.music_seed||1)}">♫ ${esc(m.music)} · Écouter</button>`);if(m.tag)chips.push(`<span>👥 ${esc(m.tag)}</span>`);if(m.location)chips.push(`<span>📍 ${esc(m.location)}</span>`);if(m.event)chips.push(`<span>📅 ${esc(m.event)}</span>`);if(m.mood)chips.push(`<span>☺ ${esc(m.mood)}</span>`);return chips.length?`<div class="post-meta-chips">${chips.join('')}</div>`:''})() : ""}
+      ${p.publication_meta?.receive_messages && p.user_id !== state.user.id ? `<div class="post-message-cta"><div><b>Messages ouverts</b><small>Envoyez un message privé directement à ${esc(nameOf(p.author||{}))}.</small></div><button type="button" data-action="post-receive-message" data-owner-id="${esc(p.user_id)}">💬 Message</button></div>` : ""}
       <div class="post-stats"><span class="reaction-summary">${reactionVisual || "<span class='muted-inline'>Aucune réaction</span>"}</span><span>${cs.length} commentaire(s) · ${Number(p.shares || sh.length || 0)} partage(s)</span></div>
       ${shareSummary}
       <div class="post-actions"><button class="react-btn" data-action="react" data-id="${esc(p.id)}">${reactionMeta[mine]?.[1] || "👍"} ${esc(reactionMeta[mine]?.[0] || "J’aime")}</button><button data-action="comment" data-id="${esc(p.id)}">💬 Commenter</button><button data-action="share" data-id="${esc(p.id)}">↗ Partager</button></div>
@@ -3485,14 +3593,36 @@ async function genericListPage(route) {
       if($("composerFileName"))$("composerFileName").textContent="Aucun média sélectionné";
       return;
     }
-    if (action === "publisher-music") return openPublisherField("music");
-    if (action === "publisher-tag") return openPublisherField("tag");
-    if (action === "publisher-location") return openPublisherField("location");
+    if (action === "publisher-music") return openPublisherMusic();
+    if (action === "publisher-tag") return openPublisherTag();
+    if (action === "publisher-location") return openPublisherLocation();
     if (action === "publisher-mood") return openMoodComposer();
-    if (action === "publisher-message") { appendPublisherText("💬 Recevoir des messages"); return toast("Option ajoutée à la publication."); }
+    if (action === "publisher-message") { state.composerMeta={...(state.composerMeta||{}),receive_messages:true}; return toast("Les messages directs seront activés sur cette publication."); }
     if (action === "publisher-event") return openPublisherField("event");
     if (action === "publisher-live") return openLiveSetup();
     if (action === "close-publisher-field") { closeModal(); if(state.composerOpen) setTimeout(openPublisher,40); return; }
+    if (action === "publisher-location-apply") {
+      const input=$("publisherPlaceInput"); if(!input?.dataset.placeValid || input.dataset.placeValid!=="true") return toast("Sélectionnez un lieu réel dans les résultats.");
+      const value=input.value.trim(); state.composerLocation=value; state.composerMeta={...(state.composerMeta||{}),location:value,location_lat:input.dataset.placeLat||null,location_lon:input.dataset.placeLon||null};
+      state.composerDraftText=(state.composerDraftText.trim()?state.composerDraftText.trim()+"\n":"")+`📍 ${value}`; closeModal(); if(state.composerOpen)setTimeout(()=>openPublisher(),40); return;
+    }
+    if (action === "select-publisher-tag") {
+      const tid=actionEl.dataset.id,name=actionEl.dataset.name||"Membre"; const current=Array.isArray(state.composerMeta?.tagged_users)?state.composerMeta.tagged_users:[];
+      const next=current.filter(x=>x.id!==tid); if(next.length===current.length)next.push({id:tid,name});
+      state.composerMeta={...(state.composerMeta||{}),tagged_users:next,tag:next.map(x=>x.name).join(", ")};
+      actionEl.classList.toggle("selected",next.some(x=>x.id===tid)); return;
+    }
+    if (action === "select-publisher-music") {
+      const track=publisherMusicCatalog().find(x=>x.id===actionEl.dataset.musicId); if(!track)return;
+      state.composerMeta={...(state.composerMeta||{}),music:track.title,music_id:track.id,music_style:track.style,music_seed:track.seed,music_bpm:track.bpm};
+      playGeneratedMusic(track); toast(`${track.title} sélectionnée`); closeModal(); if(state.composerOpen)setTimeout(()=>openPublisher(),40); return;
+    }
+    if (action === "play-post-music") {
+      const seed=Number(actionEl.dataset.musicSeed||1), idm=actionEl.dataset.musicId||`ai-${seed}`; const track=publisherMusicCatalog().find(x=>x.id===idm)||publisherMusicCatalog()[seed-1]||publisherMusicCatalog()[0]; playGeneratedMusic(track); toast(`Lecture : ${track.title}`); return;
+    }
+    if (action === "post-receive-message") {
+      const ownerId=actionEl.dataset.ownerId; if(!ownerId)return; return startConversation(ownerId);
+    }
     if (action === "publisher-field-apply") {
       const field=actionEl.dataset.field, value=$("publisherFieldInput")?.value.trim()||"";
       if(!value)return toast("Saisissez une valeur.");
@@ -3517,7 +3647,7 @@ async function genericListPage(route) {
     if (action === "confirm-live-start") { state.composerMeta={...(state.composerMeta||{}),live_title:$("liveTitleInput")?.value?.trim()||"Direct Tafaß"}; closeModal(); return startLiveFromPublisher(); }
     if (action === "watch-live") return watchLive(id);
     if (action === "end-live") return endLive();
-    if (action === "close-live-viewer") { if(liveChannel){try{await sb.removeChannel(liveChannel);}catch(_){}} liveChannel=null; liveViewerPc?.close(); liveViewerPc=null; liveSessionId=null; liveRole=null; closeModal(); return; }
+    if (action === "close-live-viewer") { if(liveChannel){try{await sb.removeChannel(liveChannel);}catch(_){}} if(liveCommentsChannel){try{await sb.removeChannel(liveCommentsChannel);}catch(_){} liveCommentsChannel=null;} liveChannel=null; liveViewerPc?.close(); liveViewerPc=null; liveSessionId=null; liveRole=null; liveViewerId=null; liveCommentRows=[]; closeModal(); return; }
     if (action === "react") return showReactions(id);
     if (action === "comment") { $("comment-"+id)?.focus(); return; }
     if (action === "send-comment") return addComment(id);
@@ -3831,46 +3961,74 @@ async function genericListPage(route) {
       return document.querySelector(`[data-action="group-open"][data-id="${id}"]`)?.click() || closeModal();
     }
     if (action === "delete-page-post") { const r=await sb.from("page_posts").delete().eq("id",id); if(r.error)return toast(r.error.message); toast("Publication supprimée"); return openPageDetail(actionEl.dataset.entityId); }
-    if (!email) { $("authMsg").textContent = "Saisissez votre adresse e-mail ou votre numéro."; return; }
-    $("authMsg").textContent = "Connexion en cours…";
-    let authEmail=email;
-    if(!email.includes("@")){
-      const normalized=normalizePhone(email,COUNTRY_META.MG);
-      const lookup=await sb.from("profiles").select("email").eq("phone",normalized).maybeSingle();
-      if(lookup.error || !lookup.data?.email){
-        $("authMsg").textContent="Compte introuvable. Utilisez l’adresse e-mail associée à votre compte.";
-        return;
-      }
-      authEmail=lookup.data.email;
+  });
+
+  // Auth UI — bound explicitly so login/signup/recovery remain clickable even while the app is loading.
+  const bindAuthUI = () => {
+    const loginForm=$("loginForm");
+    if(loginForm && !loginForm.dataset.bound){
+      loginForm.dataset.bound="1";
+      loginForm.addEventListener("submit", async e=>{
+        e.preventDefault();
+        const email=($("loginEmail")?.value||"").trim(), password=$("loginPassword")?.value||"";
+        if(!email){$("authMsg").textContent="Saisissez votre adresse e-mail ou votre numéro.";return;}
+        if(!password){$("authMsg").textContent="Saisissez votre mot de passe.";return;}
+        const btn=loginForm.querySelector('button[type="submit"]'); setLoading(btn,true,"Connexion"); $("authMsg").textContent="Connexion en cours…";
+        try{
+          let authEmail=email;
+          if(!email.includes("@")){
+            const normalized=normalizePhone(email,COUNTRY_META.MG);
+            const lookup=await sb.from("profiles").select("email").eq("phone",normalized).maybeSingle();
+            if(lookup.error||!lookup.data?.email) throw new Error("Compte introuvable. Utilisez l’adresse e-mail associée à votre compte.");
+            authEmail=lookup.data.email;
+          }
+          const {error}=await sb.auth.signInWithPassword({email:authEmail,password});
+          if(error) throw error;
+          $("authMsg").textContent="";
+        }catch(err){$("authMsg").textContent=err?.message||"Connexion impossible.";}
+        finally{setLoading(btn,false,"Connexion");}
+      });
     }
-    const { error } = await sb.auth.signInWithPassword({ email:authEmail, password });
-    $("authMsg").textContent = error ? error.message : "";
-  });
-  $("signupForm").addEventListener("submit", async e => {
-    e.preventDefault();
-    const first=$("firstName").value.trim(), last=$("lastName").value.trim(), email=$("signupEmail").value.trim(), password=$("signupPassword").value, confirm=$("signupPasswordConfirm")?.value || "";
-    if (!validateSignupStep(1) || !validateSignupStep(2) || !validateSignupStep(3) || !validateSignupStep(4)) return;
-    if ($("birth")?.value) { const d=new Date($("birth").value+"T00:00:00"); const age=new Date().getFullYear()-d.getFullYear()-((new Date().getMonth()<d.getMonth() || (new Date().getMonth()===d.getMonth() && new Date().getDate()<d.getDate()))?1:0); if(age<13) return toast("Vous devez avoir au moins 13 ans pour créer un compte."); }
-    if (!$("terms").checked) return toast("Acceptez les conditions pour continuer.");
-    $("signupMsg").textContent = "Création du compte…";
-    const signupPhone=normalizePhone($("phone").value,COUNTRY_META.MG); if(!COUNTRY_META.MG.test.test(signupPhone)) return toast('Numéro malgache invalide. Exemple : 330000000.'); const meta = { first_name:first, last_name:last, phone:signupPhone, phone_code:'+261', country:'Madagascar', birth:$("birth").value||null };
-    const { data, error } = await sb.auth.signUp({ email, password, data: meta });
-    if (error) { $("signupMsg").textContent = error.message; return; }
-    if (data.session) {
-      const patch = { first_name:first,last_name:last,email,phone:signupPhone,phone_code:'+261',country:'Madagascar',birth:$("birth").value||null,updated_at:new Date().toISOString() };
-      const profileResult = await sb.from("profiles").upsert(patch, { onConflict:"id" });
-      if (profileResult.error) {
-        console.error("Tafaß profile creation:", profileResult.error);
-        $("signupMsg").textContent = "Compte créé, mais le profil n'a pas pu être finalisé. Reconnectez-vous pour terminer la configuration.";
-        return;
-      }
-      $("signupMsg").textContent="Compte créé.";
-    } else $("signupMsg").textContent="Compte créé. Vérifiez votre e-mail si la confirmation est activée.";
-  });
-  document.querySelectorAll("[data-oauth]").forEach(btn => btn.addEventListener("click", () => signInWithProvider(btn.dataset.oauth)));
+    const signupForm=$("signupForm");
+    if(signupForm && !signupForm.dataset.bound){
+      signupForm.dataset.bound="1";
+      signupForm.addEventListener("submit", async e=>{
+        e.preventDefault();
+        const first=$("firstName")?.value.trim()||"",last=$("lastName")?.value.trim()||"",email=$("signupEmail")?.value.trim()||"",password=$("signupPassword")?.value||"",confirm=$("signupPasswordConfirm")?.value||"";
+        if(!validateSignupStep(1)||!validateSignupStep(2)||!validateSignupStep(3)||!validateSignupStep(4))return;
+        if(password!==confirm)return toast("Les deux mots de passe ne correspondent pas.");
+        if(!$("terms")?.checked)return toast("Acceptez les conditions pour continuer.");
+        const phone=normalizePhone($("phone")?.value||"",COUNTRY_META.MG); if(!COUNTRY_META.MG.test.test(phone))return toast("Numéro malgache invalide. Exemple : 330000000.");
+        const btn=signupForm.querySelector('button[type="submit"]');setLoading(btn,true,"Créer mon compte");$("signupMsg").textContent="Création du compte…";
+        try{
+          const meta={first_name:first,last_name:last,phone,phone_code:"+261",country:"Madagascar",birth:$("birth")?.value||null};
+          const {data,error}=await sb.auth.signUp({email,password,data:meta});
+          if(error)throw error;
+          if(data.session){
+            const pr=await sb.from("profiles").upsert({id:data.user.id,...meta,email,updated_at:new Date().toISOString()},{onConflict:"id"});
+            if(pr.error)throw pr.error;
+            state.user=data.user;await enterApp();
+          }else{$("signupMsg").textContent="Compte créé. Vérifiez votre e-mail si la confirmation est activée.";showLogin();$("loginEmail").value=email;}
+        }catch(err){$("signupMsg").textContent=err?.message||"Création du compte impossible.";}
+        finally{setLoading(btn,false,"Créer mon compte");}
+      });
+    }
+    $("forgotPasswordForm")?.addEventListener("submit",sendPasswordReset);
+    $("resetPasswordForm")?.addEventListener("submit",saveResetPassword);
+    $("showSignup")?.addEventListener("click",showSignup);
+    $("showLogin")?.addEventListener("click",showLogin);
+    $("forgotPassword")?.addEventListener("click",showForgotPassword);
+    $("forgotBackLogin")?.addEventListener("click",showLogin);
+    document.querySelectorAll("[data-password-toggle]").forEach(btn=>{if(btn.dataset.bound)return;btn.dataset.bound="1";btn.addEventListener("click",()=>{const input=$(btn.dataset.passwordToggle);if(!input)return;input.type=input.type==="password"?"text":"password";});});
+    document.querySelectorAll(".signup-next").forEach(btn=>{if(btn.dataset.bound)return;btn.dataset.bound="1";btn.addEventListener("click",()=>{const n=Number(btn.dataset.nextStep);if(validateSignupStep(n-1))setSignupStep(n);});});
+    document.querySelectorAll(".signup-prev").forEach(btn=>{if(btn.dataset.bound)return;btn.dataset.bound="1";btn.addEventListener("click",()=>setSignupStep(Number(btn.dataset.prevStep)));});
+    document.querySelectorAll("[data-oauth]").forEach(btn=>{if(btn.dataset.bound)return;btn.dataset.bound="1";btn.addEventListener("click",()=>signInWithProvider(btn.dataset.oauth));});
+  };
+  bindAuthUI();
+
   $("themeBtn").addEventListener("click", toggleTheme);
   syncThemeButton();
-  $("modal").addEventListener("click", e => { if (e.target.id === "modal") closeModal(); });
+  $("modal").addEventListener("click", e => { if (e.target.id === "modal") { if(liveRole==="broadcaster" && liveSessionId) return toast("Terminez le direct pour quitter."); closeModal(); } });
   document.addEventListener("change", e => {
     if (state.route === "settings" && state.settingsDetailAction) {
       const autoMap = {
@@ -4005,6 +4163,7 @@ async function genericListPage(route) {
   });
   document.addEventListener("dragstart", e => e.preventDefault());
   document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && liveRole === "broadcaster" && liveSessionId) { e.preventDefault(); toast("Terminez le direct pour quitter."); return; }
     if (isFormField(e.target)) return;
     const key = String(e.key || "").toLowerCase();
     if ((e.ctrlKey || e.metaKey) && ["c", "x", "a", "u", "s"].includes(key)) {
