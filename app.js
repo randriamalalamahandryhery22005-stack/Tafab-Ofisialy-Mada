@@ -994,8 +994,6 @@ async function publishPostNews() {
     state.profileTab = ["posts","photos","friends"].includes(tab) ? tab : "posts";
     tab = state.profileTab;
     const p = state.profile || {};
-    const privacy = await getProfilePrivacy(state.user.id);
-    const isLockedProfile = privacy.locked === true;
     const mine = await loadMyPosts();
     const photos = mine.filter(x => x.media_url && x.media_type === "image");
     const cover = p.cover_url ? `style="background-image:url('${esc(p.cover_url)}')"` : "";
