@@ -13,3 +13,9 @@ TAFAß PAGES + GROUPES PREMIUM V3 — ROLE / UI / MOBILE FIX
 - 2026-09-04: TAFAß V5 UPDATE — inscription navigation Retour/Connexion fixed on the same row; Apple OAuth icon replaced by vector mark; mobile safe-area spacing hardened; WebRTC ICE configuration centralized with optional TURN support via window.TAFASS_TURN_SERVERS; existing realtime/auth/live flows preserved.
 
 - 2026-09-04: TAFAß V6 PRODUCTION HARDENING — resilient Realtime reconnect with exponential backoff, per-user channel isolation, offline/online status UX, live-feed lifecycle cleanup, PWA manifest + service worker shell caching, media lazy-loading/metadata preloading, runtime error guards, and production package cleanup.
+
+V7 Realtime Messaging update
+- Conversation-level Supabase Realtime channel for typing indicators and Presence.
+- Online/offline status is ephemeral and not stored in the database.
+- Message read state is reflected in the conversation UI using the existing is_read field and mark-read RPC.
+- Conversation channel is cleaned up on navigation/logout to avoid duplicate subscriptions.

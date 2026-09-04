@@ -14,3 +14,6 @@ Les fonctions OAuth Google/Apple, FCM, TURN/WebRTC et les politiques Supabase d√
 
 ## D√©ploiement
 Servir le dossier via HTTPS (Netlify, Vercel ou serveur web). Le service worker ne fonctionne pas depuis `file://`.
+
+## V7 Realtime Messaging
+The production build now adds conversation-scoped Realtime Presence and typing indicators, plus clearer sent/read state for messages. Ephemeral presence is handled through Supabase Realtime rather than persisted as profile data. External push notifications, OAuth providers, and TURN still require their service configuration.

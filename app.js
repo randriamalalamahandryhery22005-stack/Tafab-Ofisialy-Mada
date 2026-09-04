@@ -15,7 +15,7 @@ document.documentElement.classList.add("app-boot");
     user: null, profile: null, route: "home", navStack: ["home"], backOverride: null, posts: [], friends: [], stories: [],
     channel: null, theme: "dark", entering: false, loggingOut: false, composerOpen: false, composerBackground: "plain", composerLocation: "",
     composerDraftText: "", composerFile: null, composerVisibility: "public", composerMeta: {},
-    liveFeedChannel: null, activeLive: null,
+    liveFeedChannel: null, conversationChannel: null, activeLive: null,
     profileTab: "posts", reactionSettingsCache:new Map(), locationWatchId:null, friendsTab: "suggestions", pagesTab: "mine", groupsTab: "mine", groupSort: "recent", selectedConversation: null, viewingProfileId: null, renderToken: 0, activePage: null, entityBackRoute: null
   };
 
@@ -1130,6 +1130,8 @@ function publisherBackgrounds(){
   }
 
   async function messagesPage() {
+    if(state.conversationChannel){ try{ await sb.removeChannel(state.conversationChannel); }catch(_){} state.conversationChannel=null; }
+    state.selectedConversation=null;
     if(pageModeActive()) return pageMessagesHub();
     const token = state.renderToken;
     const { data: memberships, error } = await sb.from("conversation_members")
@@ -1225,8 +1227,46 @@ function publisherBackgrounds(){
     const map = new Map((profiles || []).map(p => [p.id, p]));
     const otherId = (await sb.from("conversation_members").select("user_id").eq("conversation_id", id).neq("user_id", state.user.id).maybeSingle()).data?.user_id;
     const otherProfile = otherId ? (await sb.from("profiles").select("*").eq("id", otherId).maybeSingle()).data : null;
-    $("content").innerHTML = `<section class="clean-page messages-page conversation-page"><div class="page-header clean-page-header"><button class="page-back" data-action="page-back" type="button"><span aria-hidden="true">‹</span><small>Messages</small></button><div class="conversation-title">${avatarHTML(otherProfile || state.profile,"avatar conversation-avatar")}<h2>${esc(otherProfile ? nameOf(otherProfile) : "Discussion")}</h2></div><span></span></div><div class="message-list clean-message-list">${(msgs||[]).map(m=>`<div class="message ${m.sender_id===state.user.id?"mine":""}"><div>${esc(m.content)}</div><small>${timeAgo(m.created_at)}</small></div>`).join("")||`<div class="empty">Dites bonjour 👋</div>`}</div><form id="messageForm" class="comment-form clean-message-form"><input id="messageText" placeholder="Écrire un message..." required><button>Envoyer</button></form></section>`;
-    $("messageForm").addEventListener("submit", async e => { e.preventDefault(); const text=$("messageText").value.trim(); if(!text)return; const otherId=(await sb.from("conversation_members").select("user_id").eq("conversation_id",id).neq("user_id",state.user.id).maybeSingle()).data?.user_id; if(otherId && await denyIfBlocked(otherId,"Message impossible : ce compte est bloqué."))return; const r=await sb.from("messages").insert({conversation_id:id,sender_id:state.user.id,content:text,is_read:false}); if(r.error)toast(r.error.message); else {$("messageText").value=""; await openConversation(id);} });
+    $("content").innerHTML = `<section class="clean-page messages-page conversation-page"><div class="page-header clean-page-header"><button class="page-back" data-action="page-back" type="button"><span aria-hidden="true">‹</span><small>Messages</small></button><div class="conversation-title">${avatarHTML(otherProfile || state.profile,"avatar conversation-avatar")}<div><h2>${esc(otherProfile ? nameOf(otherProfile) : "Discussion")}</h2><small id="conversationPresence" class="conversation-presence">Connexion sécurisée</small></div></div><span></span></div><div id="typingIndicator" class="typing-indicator" hidden>écrit…</div><div class="message-list clean-message-list">${(msgs||[]).map(m=>`<div class="message ${m.sender_id===state.user.id?"mine":""}"><div>${esc(m.content)}</div><small>${timeAgo(m.created_at)}${m.sender_id===state.user.id ? (m.is_read ? " · Lu" : " · Envoyé") : ""}</small></div>`).join("")||`<div class="empty">Dites bonjour 👋</div>`}</div><form id="messageForm" class="comment-form clean-message-form"><input id="messageText" autocomplete="off" placeholder="Écrire un message..." required><button>Envoyer</button></form></section>`;
+
+    // Conversation-level Realtime: typing + online presence without storing ephemeral state in SQL.
+    if(state.conversationChannel){ try{ await sb.removeChannel(state.conversationChannel); }catch(_){} state.conversationChannel=null; }
+    const convChannel=sb.channel(`tafass-conversation:${id}`, { config:{ broadcast:{ self:false }, presence:{ key:state.user.id } } });
+    state.conversationChannel=convChannel;
+    let typingTimer=null;
+    const setTyping=(on)=>{ try{ convChannel.send({type:"broadcast",event:"typing",payload:{user_id:state.user.id,typing:!!on}}); }catch(_){} };
+    convChannel.on("broadcast",{event:"typing"},({payload})=>{
+      if(payload?.user_id===state.user.id) return;
+      const el=$("typingIndicator"); if(!el)return;
+      el.hidden=!payload?.typing; if(payload?.typing) el.textContent=`${esc(otherProfile ? nameOf(otherProfile) : "Votre contact")} écrit…`;
+    });
+    convChannel.on("presence",{event:"sync"},()=>{
+      const present=convChannel.presenceState();
+      const online=Object.keys(present||{}).some(k=>k!==state.user.id);
+      const el=$("conversationPresence"); if(el) el.textContent=online ? "En ligne" : "Hors ligne";
+    });
+    convChannel.on("postgres_changes",{event:"UPDATE",schema:"public",table:"messages",filter:`conversation_id=eq.${id}`},()=>{
+      if(state.selectedConversation===id && state.route==="messages") openConversation(id);
+      updateBadges();
+    });
+    convChannel.subscribe(async status=>{
+      if(status==="SUBSCRIBED"){
+        try{ await convChannel.track({user_id:state.user.id,online_at:new Date().toISOString()}); }catch(_){}
+      }
+    });
+
+    const input=$("messageText");
+    input?.addEventListener("input",()=>{
+      setTyping(true); clearTimeout(typingTimer); typingTimer=setTimeout(()=>setTyping(false),1200);
+    });
+    $("messageForm").addEventListener("submit", async e => {
+      e.preventDefault(); const text=$("messageText").value.trim(); if(!text)return;
+      setTyping(false); clearTimeout(typingTimer);
+      const otherId=(await sb.from("conversation_members").select("user_id").eq("conversation_id",id).neq("user_id",state.user.id).maybeSingle()).data?.user_id;
+      if(otherId && await denyIfBlocked(otherId,"Message impossible : ce compte est bloqué."))return;
+      const r=await sb.from("messages").insert({conversation_id:id,sender_id:state.user.id,content:text,is_read:false});
+      if(r.error)toast(r.error.message); else {$("messageText").value=""; await openConversation(id);}
+    });
   }
 
   async function notificationsPage() {
@@ -2765,6 +2805,7 @@ async function genericListPage(route) {
       document.body.classList.add("app-logging-out");
       if(state.channel){try{await sb.removeChannel(state.channel);}catch(_){} state.channel=null;}
       if(state.liveFeedChannel){try{await sb.removeChannel(state.liveFeedChannel);}catch(_){} state.liveFeedChannel=null;}
+      if(state.conversationChannel){try{await sb.removeChannel(state.conversationChannel);}catch(_){} state.conversationChannel=null;}
       if(realtimeRuntime.retryTimer){clearTimeout(realtimeRuntime.retryTimer);realtimeRuntime.retryTimer=null;}
       const {error}=await sb.auth.signOut();
       if(error)throw error;
