@@ -1,0 +1,16 @@
+{
+  "name": "Tafaß — Réseau social",
+  "short_name": "Tafaß",
+  "description": "Réseau social premium en temps réel",
+  "lang": "fr",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#070b18",
+  "theme_color": "#070b18",
+  "icons": [
+    {"src":"assets/tafass-logo-premium.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}
+  ]
+}

@@ -75,3 +75,11 @@ The settings SQL uses `public.friendships` as the source of accepted friendships
 ### FIX 2026-08-31 — friendships.status
 
 `public.friendships` does **not** contain a `status` column. The application and settings SQL now use the existence of a friendship row to determine an accepted friendship. `friend_requests.status` remains the source for pending/accepted/rejected requests. Do not add `status` to `friendships`.
+
+## V5 — Mise à jour du 4 septembre 2026
+
+- Navigation Inscription : **Retour** à gauche et **Connexion** à droite.
+- OAuth Apple : icône vectorielle propre au lieu du symbole temporaire.
+- Mobile : prise en compte renforcée des zones sûres Android/iOS (safe-area) pour l’authentification et la navigation basse.
+- Direct : configuration WebRTC centralisée avec possibilité d’ajouter un serveur TURN via `window.TAFASS_TURN_SERVERS`, sans mettre de secret dans le code.
+- Les fonctions Realtime, authentification, Pages, Groupes, Messages, Stories, Reels, publications et Direct existantes sont conservées.

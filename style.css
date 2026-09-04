@@ -3730,3 +3730,29 @@ button,.menu-card,.list-row,.page-menu-card{max-width:100%}
 /* Never let long account/page text widen the layout. */
 .clean-page,.card,.panel,.profile-page-premium,.account-redesign-v5,.redesign-section-v5,.list-row,.menu-card,.setting-card,.post,.post-body,.entity-description,.page-kicker,.page-header,.profile-name,.profile-bio{min-width:0;max-width:100%;box-sizing:border-box}.clean-page h1,.clean-page h2,.clean-page h3,.clean-page h4,.clean-page p,.clean-page small,.account-redesign-v5 h1,.account-redesign-v5 h2,.account-redesign-v5 h3,.account-redesign-v5 p,.profile-page-premium h1,.profile-page-premium h2,.profile-page-premium h3,.profile-page-premium p{overflow-wrap:anywhere;word-break:normal;white-space:normal}
 @media(max-width:600px){.auth-shell{padding:23px 15px!important;border-radius:24px!important}.auth-title{font-size:26px!important}.publisher-music-list,.publisher-tag-list{max-height:48dvh}.live-modal{width:100vw!important;max-width:100vw!important;border-radius:18px!important;padding:12px!important}.live-broadcast-modal .live-video,.live-viewer-modal .live-video{max-height:34dvh}.live-comments-list{max-height:125px}.post-message-cta{align-items:flex-start}.post-message-cta button{margin-left:auto}}
+
+/* TAFAß V5 — auth navigation + mobile safe-area polish */
+.signup-top-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:-6px 0 18px}
+.auth-side-button{min-height:40px;padding:0 13px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;gap:5px;font-weight:800;font-size:13px;transition:.16s ease}
+.auth-side-back{border:1px solid var(--line);background:rgba(18,29,49,.72);color:var(--text-2)}
+.auth-side-back span:first-child{font-size:24px;line-height:1;margin-top:-2px}
+.auth-side-connect{border:1px solid rgba(78,145,255,.28);background:rgba(36,107,255,.10);color:#79aaff}
+.auth-side-button:hover{transform:translateY(-1px);border-color:var(--line-strong)}
+.oauth-apple-mark{width:19px;height:19px;display:grid;place-items:center}
+.oauth-apple-mark svg{width:18px;height:18px;fill:currentColor}
+@media(max-width:720px){
+  .auth-screen{padding:calc(14px + env(safe-area-inset-top)) 12px calc(14px + env(safe-area-inset-bottom))}
+  .auth-shell{padding:24px 18px;border-radius:22px}
+  .signup-top-actions{margin:-2px 0 15px}
+  .auth-side-button{min-height:38px;padding:0 11px}
+  .bottom-nav{padding-bottom:env(safe-area-inset-bottom);height:calc(70px + env(safe-area-inset-bottom))}
+  .main-layout{padding-bottom:calc(86px + env(safe-area-inset-bottom))}
+  .modal-backdrop{padding-bottom:env(safe-area-inset-bottom)}
+}
+
+
+/* V6 production shell */
+.network-status{position:fixed;left:50%;top:max(10px,env(safe-area-inset-top));transform:translateX(-50%);z-index:10000;max-width:calc(100% - 24px);padding:9px 14px;border:1px solid rgba(255,255,255,.14);border-radius:999px;background:rgba(15,20,35,.94);backdrop-filter:blur(16px);font-size:12px;font-weight:700;box-shadow:0 10px 30px rgba(0,0,0,.25);text-align:center}
+.network-status.offline{display:block}
+.network-status.reconnecting{display:block}
+@media(max-width:640px){.network-status{font-size:11px;padding:8px 12px;top:max(8px,env(safe-area-inset-top))}}

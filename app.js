@@ -19,6 +19,31 @@ document.documentElement.classList.add("app-boot");
     profileTab: "posts", reactionSettingsCache:new Map(), locationWatchId:null, friendsTab: "suggestions", pagesTab: "mine", groupsTab: "mine", groupSort: "recent", selectedConversation: null, viewingProfileId: null, renderToken: 0, activePage: null, entityBackRoute: null
   };
 
+  // Production network/realtime guard: keeps the UI honest when connectivity changes.
+  const realtimeRuntime = { retryTimer:null, retryCount:0, lastStatus:"", reconnecting:false };
+  function networkBanner(message, mode="") {
+    const el=$("networkStatus"); if(!el)return;
+    if(!message){ el.hidden=true; el.className="network-status"; el.textContent=""; return; }
+    el.hidden=false; el.className=`network-status ${mode}`; el.textContent=message;
+  }
+  function scheduleRealtimeReconnect(){
+    if(!state.user || realtimeRuntime.retryTimer)return;
+    const delay=Math.min(30000,1000*Math.pow(2,Math.min(realtimeRuntime.retryCount,5)));
+    realtimeRuntime.retryCount++; realtimeRuntime.reconnecting=true;
+    networkBanner("Connexion temps réel…", "reconnecting");
+    realtimeRuntime.retryTimer=setTimeout(async()=>{
+      realtimeRuntime.retryTimer=null;
+      try{ await setupRealtime(); realtimeRuntime.retryCount=0; realtimeRuntime.reconnecting=false; networkBanner(""); }
+      catch(e){ console.warn("Tafaß realtime reconnect:",e); realtimeRuntime.reconnecting=false; scheduleRealtimeReconnect(); }
+    },delay);
+  }
+  function handleConnectivity(){
+    if(!navigator.onLine){ networkBanner("Hors connexion — vos données seront resynchronisées au retour du réseau.","offline"); return; }
+    if(state.user){ scheduleRealtimeReconnect(); } else networkBanner("");
+  }
+  window.addEventListener("offline",handleConnectivity);
+  window.addEventListener("online",()=>{ networkBanner("Réseau retrouvé — synchronisation…","reconnecting"); realtimeRuntime.retryCount=0; realtimeRuntime.reconnecting=false; if(state.user) setupRealtime().finally(()=>setTimeout(()=>networkBanner(""),700)); else networkBanner(""); });
+
   const DEFAULT_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop stop-color='%232d7cff'/%3E%3Cstop offset='.55' stop-color='%23745cff'/%3E%3Cstop offset='1' stop-color='%2310b8a6'/%3E%3C/linearGradient%3E%3ClinearGradient id='h' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop stop-color='%23ffffff' stop-opacity='.9'/%3E%3Cstop offset='1' stop-color='%23dce8ff' stop-opacity='.7'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='256' height='256' rx='128' fill='url(%23g)'/%3E%3Ccircle cx='128' cy='101' r='47' fill='url(%23h)'/%3E%3Cpath d='M52 218c10-47 38-70 76-70s66 23 76 70' fill='url(%23h)'/%3E%3Ccircle cx='128' cy='128' r='112' fill='none' stroke='%23ffffff' stroke-opacity='.22' stroke-width='5'/%3E%3C/svg%3E";
   function avatarHTML(p, cls = "avatar") {
     const url = p?.avatar_url || DEFAULT_AVATAR;
@@ -624,6 +649,15 @@ function publisherBackgrounds(){
   let liveCommentsChannel = null;
   let liveCommentRows = [];
 
+  // WebRTC: STUN is the safe default. A production TURN server can be supplied
+  // through window.TAFASS_TURN_SERVERS without hard-coding credentials in the app.
+  function liveIceServers(){
+    const configured = Array.isArray(window.TAFASS_TURN_SERVERS) ? window.TAFASS_TURN_SERVERS : [];
+    return [{urls:"stun:stun.l.google.com:19302"}, ...configured].filter(x => x && x.urls);
+  }
+  function createLivePeer(){
+    return new RTCPeerConnection({iceServers:liveIceServers(), bundlePolicy:"max-bundle", rtcpMuxPolicy:"require"});
+  }
   function liveChannelName(id){ return `tafass-live:${id}`; }
   async function loadLiveComments(sessionId){
     const r=await sb.from('live_comments').select('id,user_id,content,created_at,profiles(first_name,last_name,username,avatar_url)').eq('live_session_id',sessionId).order('created_at',{ascending:true}).limit(150);
@@ -687,7 +721,7 @@ function publisherBackgrounds(){
       if(liveRole!=="broadcaster" || !payload?.viewerId || !payload?.offer) return;
       const viewerId=payload.viewerId;
       const old=livePeers.get(viewerId); if(old) old.close();
-      const pc=new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"}]});
+      const pc=createLivePeer();
       livePeers.set(viewerId,pc);
       stream.getTracks().forEach(track=>pc.addTrack(track,stream));
       pc.onicecandidate=e=>{if(e.candidate) liveChannel?.send({type:"broadcast",event:"broadcaster-ice",payload:{viewerId,candidate:e.candidate}});};
@@ -722,7 +756,7 @@ function publisherBackgrounds(){
     if(session.user_id===state.user.id) return toast("Vous êtes déjà le diffuseur de ce direct.");
     liveRole="viewer"; liveSessionId=id; liveViewerId=crypto.randomUUID();
     liveChannel=sb.channel(liveChannelName(id),{config:{broadcast:{self:false}}});
-    liveViewerPc=new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"}]});
+    liveViewerPc=createLivePeer();
     liveViewerPc.ontrack=e=>{const v=$("liveRemoteVideo");if(v)v.srcObject=e.streams[0];};
     liveViewerPc.onicecandidate=e=>{if(e.candidate) liveChannel?.send({type:"broadcast",event:"viewer-ice",payload:{viewerId:liveViewerId,candidate:e.candidate}});};
     liveChannel.on("broadcast",{event:"broadcaster-answer"},async ({payload})=>{
@@ -2730,6 +2764,8 @@ async function genericListPage(route) {
     try{
       document.body.classList.add("app-logging-out");
       if(state.channel){try{await sb.removeChannel(state.channel);}catch(_){} state.channel=null;}
+      if(state.liveFeedChannel){try{await sb.removeChannel(state.liveFeedChannel);}catch(_){} state.liveFeedChannel=null;}
+      if(realtimeRuntime.retryTimer){clearTimeout(realtimeRuntime.retryTimer);realtimeRuntime.retryTimer=null;}
       const {error}=await sb.auth.signOut();
       if(error)throw error;
       state.user=null; state.profile=null; state.posts=[]; state.friends=[]; state.stories=[];
@@ -2748,12 +2784,14 @@ async function genericListPage(route) {
     }
   }
   async function setupRealtime() {
+    if (!state.user || !navigator.onLine) return;
     if (state.channel) {
       try { await sb.removeChannel(state.channel); } catch (_) {}
       state.channel = null;
     }
+    if (realtimeRuntime.retryTimer) { clearTimeout(realtimeRuntime.retryTimer); realtimeRuntime.retryTimer=null; }
 
-    const channel = sb.channel("tafa-live-ui");
+    const channel = sb.channel(`tafa-live-ui:${state.user.id}`, { config:{ broadcast:{ self:false } } });
     const refresh = {
       profiles: () => { loadProfile(); if (state.route==="search") searchPage($("searchInput")?.value||""); if (state.viewingProfileId && state.route==="profile") openUserProfile(state.viewingProfileId); },
       posts: async () => { await loadPosts(); if (["home","profile","reels","saved"].includes(state.route)) render(); },
@@ -2825,10 +2863,14 @@ async function genericListPage(route) {
 
     state.channel = channel;
     channel.subscribe(status => {
-      if (status === "SUBSCRIBED") console.info("Tafaß Realtime: connecté");
-      if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+      realtimeRuntime.lastStatus=status;
+      if (status === "SUBSCRIBED") {
+        realtimeRuntime.retryCount=0; realtimeRuntime.reconnecting=false; networkBanner("");
+        console.info("Tafaß Realtime: connecté");
+      }
+      if (["CHANNEL_ERROR","TIMED_OUT","CLOSED"].includes(status)) {
         console.warn("Tafaß Realtime:", status);
-        setTimeout(() => { if (state.user && state.channel === channel) setupRealtime(); }, 1500);
+        scheduleRealtimeReconnect();
       }
     });
   }
@@ -2918,7 +2960,7 @@ async function genericListPage(route) {
       const complete=Boolean(state.profile&&String(state.user.email||state.profile.email||'').trim()&&String(state.profile.first_name||'').trim()&&String(state.profile.last_name||'').trim()&&state.profile.birth&&String(state.profile.gender||'').trim()&&String(state.profile.phone||'').trim()&&String(state.profile.country||'').trim()&&String(state.profile.city_current||'').trim()&&String(state.profile.city_origin||'').trim());
       if(!complete){ setLoading(btn,false,'Déverrouiller Tafaß'); return toast('Le profil n’a pas été enregistré complètement. Réessayez.'); }
       $('oauthOnboardingView')?.remove(); $('auth')?.classList.add('hidden'); $('app')?.classList.remove('hidden'); state.entering=false;
-      await loadPosts(); await setupRealtime(); await render(); toast('Compte complété. Bienvenue sur Tafaß.');
+      await loadPosts(); await setupRealtime(); ensureLiveFeedRealtime(); await render(); toast('Compte complété. Bienvenue sur Tafaß.');
     } catch(e){ setLoading(btn,false,'Déverrouiller Tafaß'); toast(e?.message||'Impossible de valider le compte.'); }
   }
 
@@ -2940,7 +2982,7 @@ async function genericListPage(route) {
       }
       await splashReady;
       $("auth").classList.add("hidden"); $("app").classList.remove("hidden");
-      await loadPosts(); await setupRealtime();
+      await loadPosts(); await setupRealtime(); ensureLiveFeedRealtime();
       await render();
     }finally{
       state.entering = false;
@@ -4016,6 +4058,8 @@ async function genericListPage(route) {
     $("forgotPasswordForm")?.addEventListener("submit",sendPasswordReset);
     $("resetPasswordForm")?.addEventListener("submit",saveResetPassword);
     $("showSignup")?.addEventListener("click",showSignup);
+    $("signupBackToLogin")?.addEventListener("click",showLogin);
+    $("signupConnect")?.addEventListener("click",showLogin);
     $("showLogin")?.addEventListener("click",showLogin);
     $("forgotPassword")?.addEventListener("click",showForgotPassword);
     $("forgotBackLogin")?.addEventListener("click",showLogin);
@@ -4089,16 +4133,14 @@ async function genericListPage(route) {
   const splashFallback = setTimeout(finishSplash, SPLASH_MAX_MS);
 
   function ensureLiveFeedRealtime(){
-    if(state.liveFeedChannel) return;
-    state.liveFeedChannel=sb.channel("tafass-live-feed")
+    if(state.liveFeedChannel || !state.user || !navigator.onLine) return;
+    state.liveFeedChannel=sb.channel(`tafass-live-feed:${state.user.id}`)
       .on("postgres_changes",{event:"*",schema:"public",table:"live_sessions"},()=>{ if(state.route==="home") renderFeed(); })
       .subscribe();
   }
 
   let authBootComplete = false;
   let authEventTimer = null;
-  ensureLiveFeedRealtime();
-
   sb.auth.onAuthStateChange((event, session) => {
     if(authEventTimer) clearTimeout(authEventTimer);
     state.user = session?.user || null;
@@ -4138,6 +4180,7 @@ async function genericListPage(route) {
     try {
       const { data } = await sb.auth.getSession();
       state.user = data.session?.user || null;
+      if (state.user) ensureLiveFeedRealtime();
       if (state.user && location.search.includes("reset=1")) showResetPassword();
       else if (state.user) await enterApp(); else showLogin();
     } catch (err) {
@@ -4148,6 +4191,11 @@ async function genericListPage(route) {
       finishSplash();
     }
   })();
+
+  // PWA shell: cache-first for local assets, network-first for Supabase.
+  if("serviceWorker" in navigator && location.protocol !== "file:"){
+    window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js",{scope:"./"}).catch(e=>console.warn("Tafaß service worker:",e)));
+  }
 
   // Empêche la copie du contenu de l'application, tout en laissant les champs
   // de formulaire utilisables normalement.
@@ -4162,6 +4210,22 @@ async function genericListPage(route) {
     if (!isFormField(e.target)) e.preventDefault();
   });
   document.addEventListener("dragstart", e => e.preventDefault());
+  window.addEventListener("unhandledrejection", e => {
+    console.warn("Tafaß unhandled rejection:", e.reason);
+    if(!navigator.onLine) networkBanner("Hors connexion — reconnexion automatique dès que le réseau revient.","offline");
+  });
+  window.addEventListener("error", e => {
+    if(e?.message) console.warn("Tafaß runtime error:", e.message);
+  });
+  const markMediaForPerformance = root => {
+    root?.querySelectorAll?.("img:not([loading]), video:not([preload])").forEach(el => {
+      if(el.tagName === "IMG" && !el.closest(".splash-screen,.auth-screen")) el.loading="lazy";
+      if(el.tagName === "VIDEO") el.preload="metadata";
+    });
+  };
+  markMediaForPerformance(document);
+  new MutationObserver(muts => muts.forEach(m => m.addedNodes.forEach(n => { if(n.nodeType===1) markMediaForPerformance(n); }))).observe(document.body,{childList:true,subtree:true});
+
   document.addEventListener("keydown", e => {
     if (e.key === "Escape" && liveRole === "broadcaster" && liveSessionId) { e.preventDefault(); toast("Terminez le direct pour quitter."); return; }
     if (isFormField(e.target)) return;

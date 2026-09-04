@@ -4,14 +4,19 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#070b18">
-  <meta name="description" content="Tafaß — Réseau social">
+  <meta name="description" content="Tafaß — Réseau social premium en temps réel">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="manifest.webmanifest">
   <title>Tafaß — Réseau social</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=41">
+  <link rel="stylesheet" href="style.css?v=50">
 </head>
 <body>
+  <div id="networkStatus" class="network-status" role="status" aria-live="polite" hidden></div>
   <div id="splash" class="splash-screen" aria-label="Chargement de Tafaß" role="status">
     <div class="splash-noise" aria-hidden="true"></div>
     <div class="splash-orb splash-orb-a" aria-hidden="true"></div>
@@ -42,7 +47,7 @@
         </form>
         <button id="forgotPassword" class="text-link">Mot de passe oublié ?</button>
         <div class="auth-divider"><span>ou continuer avec</span></div>
-        <div class="social-auth social-auth-real"><button type="button" class="oauth-button google" data-oauth="google" aria-label="Continuer avec Google"><span class="oauth-google-mark">G</span><span>Google</span></button><button type="button" class="oauth-button apple" data-oauth="apple" aria-label="Continuer avec Apple"><span class="oauth-apple-mark">●</span><span>Apple</span></button></div>
+        <div class="social-auth social-auth-real"><button type="button" class="oauth-button google" data-oauth="google" aria-label="Continuer avec Google"><span class="oauth-google-mark">G</span><span>Google</span></button><button type="button" class="oauth-button apple" data-oauth="apple" aria-label="Continuer avec Apple"><span class="oauth-apple-mark" aria-hidden="true"><svg viewBox="0 0 24 24" role="img"><path d="M17.05 12.04c-.01-2.28 1.86-3.39 1.95-3.45-1.06-1.55-2.71-1.76-3.29-1.78-1.39-.15-2.74.83-3.45.83-.72 0-1.82-.81-2.99-.79-1.53.02-2.94.9-3.72 2.28-1.61 2.79-.41 6.89 1.15 9.15.78 1.1 1.69 2.32 2.9 2.28 1.17-.05 1.61-.74 3.02-.74 1.41 0 1.81.74 3.03.71 1.26-.02 2.04-1.1 2.8-2.21.88-1.28 1.24-2.52 1.26-2.58-.03-.01-2.42-.93-2.44-3.7ZM14.76 5.32c.63-.77 1.05-1.85.93-2.92-.91.04-2.01.61-2.67 1.38-.58.67-1.09 1.76-.95 2.8 1.02.08 2.06-.52 2.69-1.26Z"/></svg></span><span>Apple</span></button></div>
         <div class="auth-bottom">Pas de compte ? <button id="showSignup" class="text-link inline">S'inscrire</button></div>
         <div id="authMsg" class="auth-message"></div>
       </div>
@@ -72,6 +77,10 @@
       </div>
 
       <div id="signupView" class="auth-view hidden">
+        <div class="signup-top-actions" role="navigation" aria-label="Navigation inscription">
+          <button id="signupBackToLogin" type="button" class="auth-side-button auth-side-back" aria-label="Retour à la connexion"><span aria-hidden="true">‹</span><span>Retour</span></button>
+          <button id="signupConnect" type="button" class="auth-side-button auth-side-connect">Connexion</button>
+        </div>
         <div class="auth-step-indicator"><span class="active"></span><span></span><span></span><span></span><span></span></div>
         <div class="auth-title">Créer un compte</div>
         <p id="signupStepSubtitle" class="auth-subtitle">Commençons par votre identité</p>
@@ -165,6 +174,6 @@
   <div id="toast" class="toast"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="app.js?v=41"></script>
+  <script src="app.js?v=50"></script>
 </body>
 </html>

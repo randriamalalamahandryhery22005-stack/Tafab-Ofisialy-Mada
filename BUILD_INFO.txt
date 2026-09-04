@@ -9,3 +9,7 @@ TAFAß PAGES + GROUPES PREMIUM V3 — ROLE / UI / MOBILE FIX
 
 - 2026-08-31: FINAL UI/UX + Stories + Tafaß Business Suite + Paramètres & confidentialité.
 - Page mobile navigation: centered with side margins; duplicate bottom search removed in Page mode.
+
+- 2026-09-04: TAFAß V5 UPDATE — inscription navigation Retour/Connexion fixed on the same row; Apple OAuth icon replaced by vector mark; mobile safe-area spacing hardened; WebRTC ICE configuration centralized with optional TURN support via window.TAFASS_TURN_SERVERS; existing realtime/auth/live flows preserved.
+
+- 2026-09-04: TAFAß V6 PRODUCTION HARDENING — resilient Realtime reconnect with exponential backoff, per-user channel isolation, offline/online status UX, live-feed lifecycle cleanup, PWA manifest + service worker shell caching, media lazy-loading/metadata preloading, runtime error guards, and production package cleanup.
