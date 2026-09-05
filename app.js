@@ -1266,7 +1266,14 @@ function publisherBackgrounds(){
     if(otherIdCheck && await denyIfBlocked(otherIdCheck,"Conversation indisponible : ce compte est bloqué."))return;
     const { data: msgs } = await sb.from("messages").select("*").eq("conversation_id", id).order("created_at", { ascending: true }).limit(200);
     await sb.rpc("tafa_mark_conversation_read", { p_conversation_id:id });
-    const ids = [...new Set((msgs || []).map(m => m.sender_id))];
+    // Resolve reply targets in one extra query so replies remain visible after reload/reconnect.
+    const replyIds=[...new Set((msgs||[]).map(m=>m.reply_to_id).filter(Boolean))];
+    if(replyIds.length){
+      const rr=await sb.from("messages").select("id,content,sender_id").in("id",replyIds);
+      const rmap=new Map((rr.data||[]).map(x=>[x.id,x]));
+      (msgs||[]).forEach(m=>{ const r=rmap.get(m.reply_to_id); if(r){ m.reply_to_content=r.content||""; m.reply_to_author_id=r.sender_id; } });
+    }
+    const ids = [...new Set((msgs || []).flatMap(m => [m.sender_id,m.reply_to_author_id]).filter(Boolean))];
     const { data: profiles } = ids.length ? await sb.from("profiles").select("*").in("id", ids) : { data: [] };
     if (token !== state.renderToken) return;
     const map = new Map((profiles || []).map(p => [p.id, p]));
@@ -1291,7 +1298,7 @@ function publisherBackgrounds(){
       const globalOnline=otherId ? isUserOnline(otherId) : false;
       const el=$("conversationPresence"); if(el) el.textContent=(globalOnline||localOnline) ? "En ligne" : "Hors ligne";
     });
-    convChannel.on("postgres_changes",{event:"UPDATE",schema:"public",table:"messages",filter:`conversation_id=eq.${id}`},()=>{
+    convChannel.on("postgres_changes",{event:"*",schema:"public",table:"messages",filter:`conversation_id=eq.${id}`},()=>{
       if(state.selectedConversation===id && state.route==="messages") openConversation(id);
       updateBadges();
     });
@@ -1310,8 +1317,9 @@ function publisherBackgrounds(){
       setTyping(false); clearTimeout(typingTimer);
       const otherId=(await sb.from("conversation_members").select("user_id").eq("conversation_id",id).neq("user_id",state.user.id).maybeSingle()).data?.user_id;
       if(otherId && await denyIfBlocked(otherId,"Message impossible : ce compte est bloqué."))return;
-      const r=await sb.from("messages").insert({conversation_id:id,sender_id:state.user.id,content:text,is_read:false});
-      if(r.error)toast(r.error.message); else {$("messageText").value=""; await openConversation(id);}
+      const replyTo=$("messageText")?.dataset.replyTo || null;
+      const r=await sb.from("messages").insert({conversation_id:id,sender_id:state.user.id,content:text,is_read:false,reply_to_id:replyTo});
+      if(r.error)toast(r.error.message); else {$("messageText"); delete $("messageText").dataset.replyTo; cancelMessageReply(); $("messageText").value=""; await openConversation(id);}
     });
   }
 
@@ -3044,9 +3052,20 @@ async function genericListPage(route) {
       page_post_shares: () => { const id=document.querySelector('.page-detail')?.dataset.pageId; if(id) openPageDetail(id); },
       page_messages: () => { updateBadges(); if (state.businessSuiteOpen) pageBusinessSuite(); const id=document.querySelector('.page-detail')?.dataset.pageId; if(id && document.querySelector('.page-inbox-modal')) pageInbox(id); },
       group_posts: () => { const id=document.querySelector('.group-detail')?.querySelector('[data-action="group-publish"]')?.dataset.id; if(id) document.querySelector(`[data-action="group-open"][data-id="${id}"]`)?.click(); },
-      group_post_reactions: () => {},
-      group_post_comments: () => {},
-      group_messages: () => { updateBadges(); },
+      group_post_reactions: () => {
+        const root=document.querySelector('.group-detail'); const id=root?.querySelector('[data-action="group-publish"]')?.dataset.id;
+        if(id && state.route==="groups") openGroupDetail(id);
+      },
+      group_post_comments: () => {
+        const root=document.querySelector('.group-detail'); const id=root?.querySelector('[data-action="group-publish"]')?.dataset.id;
+        if(id && state.route==="groups") openGroupDetail(id);
+      },
+      group_messages: () => {
+        updateBadges();
+        const modal=document.querySelector('.group-chat-modal');
+        const id=modal?.querySelector('[data-action="send-group-chat"]')?.dataset.id;
+        if(id) groupChat(id);
+      },
       conversations: () => { if (state.route==="messages") state.selectedConversation ? openConversation(state.selectedConversation) : messagesPage(); },
       conversation_members: () => { if (state.route==="messages") messagesPage(); },
       tafab_listings: () => { if (state.route==="tafab") servicePage("marketplace"); },
