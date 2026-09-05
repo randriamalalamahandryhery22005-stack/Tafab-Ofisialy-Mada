@@ -3435,7 +3435,23 @@ async function genericListPage(route) {
   }
   async function render() {
     if (!state.user) return;
-    if(state.route==='menu'||state.route==='admin'){state.__isAdmin=await adminIsAllowed();}
+    /* V28.3.2 MENU SAFETY: never block the Menu on the admin RPC.
+       If Supabase is slow/unconfigured, the normal Menu must still open.
+       Admin access is checked in the background and the card is added only
+       after a positive server-side check. The Admin route itself remains gated. */
+    const requestedRoute=state.route;
+    if(requestedRoute==='admin'){
+      state.__isAdmin=await adminIsAllowed();
+    } else if(requestedRoute==='menu'){
+      const knownAdmin=state.__isAdmin===true;
+      state.__isAdmin=knownAdmin;
+      Promise.resolve().then(()=>adminIsAllowed()).then(ok=>{
+        if(state.route==='menu' && ok!==state.__isAdmin){
+          state.__isAdmin=ok;
+          render().catch(err=>console.warn('Tafaß menu admin refresh:',err));
+        }
+      }).catch(()=>{});
+    }
 
     const token = ++state.renderToken;
     const route = routes.includes(state.route) ? state.route : "home";
