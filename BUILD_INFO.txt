@@ -23,3 +23,9 @@ V7 Realtime Messaging update
 V8 Production Messaging — 2026-09-04: reply/edit/delete actions, message action UI, safe refresh and cache bump.
 
 - 2026-09-05: TAFAß V9 — Notifications realtime feedback, global ephemeral Presence channel, presence-aware conversation status, unread indexes, and cleanup/reconnect hardening.
+
+V12 Production Audit — 2026-09-05
+- Security/runtime audit documentation added.
+- External-service configuration requirements documented.
+- Supabase RLS/Storage/Realtime server-side verification checklist added.
+- Historical SQL migration ordering warning added.
