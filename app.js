@@ -1325,7 +1325,7 @@ function publisherBackgrounds(){
     const map = new Map((profiles || []).map(p => [p.id, p]));
     const otherId = (await sb.from("conversation_members").select("user_id").eq("conversation_id", id).neq("user_id", state.user.id).maybeSingle()).data?.user_id;
     const otherProfile = otherId ? (await sb.from("profiles").select("*").eq("id", otherId).maybeSingle()).data : null;
-    $("content").innerHTML = `<section class="clean-page messages-page conversation-page"><div class="page-header clean-page-header"><button class="page-back" data-action="page-back" type="button"><span aria-hidden="true">‹</span><small>Messages</small></button><div class="conversation-title">${avatarHTML(otherProfile || state.profile,"avatar conversation-avatar")}<div><h2>${esc(otherProfile ? nameOf(otherProfile) : "Discussion")}</h2><small id="conversationPresence" class="conversation-presence">Connexion sécurisée</small></div></div><span></span></div><div id="typingIndicator" class="typing-indicator" hidden>écrit…</div><div class="message-list clean-message-list">${(msgs||[]).map(m=>conversationMessageHTML(m,map)).join("")||`<div class="empty">Dites bonjour 👋</div>`}</div><form id="messageForm" class="comment-form clean-message-form"><input id="messageText" autocomplete="off" placeholder="Écrire un message..." required><button>Envoyer</button></form></section>`;
+    $("content").innerHTML = `<section class="clean-page messages-page conversation-page"><div class="page-header clean-page-header"><button class="page-back" data-action="page-back" type="button"><span aria-hidden="true">‹</span><small>Messages</small></button><div class="conversation-title">${avatarHTML(otherProfile || state.profile,"avatar conversation-avatar")}<div><h2>${esc(otherProfile ? nameOf(otherProfile) : "Discussion")}</h2><small id="conversationPresence" class="conversation-presence">Connexion sécurisée</small></div></div><span></span></div><div id="typingIndicator" class="typing-indicator" hidden>écrit…</div><div class="message-list clean-message-list">${(msgs||[]).map(m=>conversationMessageHTML(m,map)).join("")||`<div class="empty">Dites bonjour 👋</div>`}</div><form id="messageForm" class="comment-form clean-message-form"><div class="message-v22-tools"><button type="button" class="message-tool" data-action="message-attachment" title="Joindre un fichier">📎</button><button type="button" class="message-tool" data-action="message-voice" title="Message vocal">🎙️</button></div><input id="messageText" autocomplete="off" placeholder="Écrire un message..."><input id="messageAttachment" type="file" hidden accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip,.apk"><button type="submit">Envoyer</button></form></section>`;
 
     // Conversation-level Realtime: typing + online presence without storing ephemeral state in SQL.
     if(state.conversationChannel){ try{ await sb.removeChannel(state.conversationChannel); }catch(_){} state.conversationChannel=null; }
@@ -1358,6 +1358,7 @@ function publisherBackgrounds(){
     input?.addEventListener("input",()=>{
       setTyping(true); clearTimeout(typingTimer); typingTimer=setTimeout(()=>setTyping(false),1200);
     });
+    $("messageAttachment")?.addEventListener("change", sendMessageAttachment);
     $("messageForm").addEventListener("submit", async e => {
       e.preventDefault(); const text=$("messageText").value.trim(); if(!text)return;
       setTyping(false); clearTimeout(typingTimer);
@@ -1373,7 +1374,7 @@ function publisherBackgrounds(){
   function conversationMessageHTML(m, map){
     const mine=m.sender_id===state.user.id;
     const author=map.get(m.sender_id);
-    const body=esc(m.content);
+    const body=m.media_url ? (String(m.media_type||"").startsWith("audio/") ? `<audio controls preload="metadata" src="${esc(m.media_url)}"></audio>` : String(m.media_type||"").startsWith("video/") ? `<video class="message-media" controls src="${esc(m.media_url)}"></video>` : String(m.media_type||"").startsWith("image/") ? `<img class="message-media" src="${esc(m.media_url)}" alt="${esc(m.content||"Image")}"><span>${esc(m.content||"")}</span>` : `<a class="message-file" href="${esc(m.media_url)}" target="_blank" rel="noopener">📎 ${esc(m.content||"Fichier")}</a>`) : esc(m.content);
     const replyPreview = m.reply_to_content ? `<div class="message-reply-preview"><span class="message-reply-line"></span><div><b>${esc(m.reply_to_author || 'Message')}</b><span>${esc(String(m.reply_to_content).slice(0,180))}</span></div></div>` : '';
     const edited = m.updated_at && m.updated_at !== m.created_at ? ' · modifié' : '';
     return '<div class="message '+(mine?'mine':'')+'" data-message-id="'+esc(m.id)+'" data-author="'+esc(author?nameOf(author):'Membre')+'"><div class="message-card">'+replyPreview+'<div class="message-body">'+body+'</div><div class="message-meta"><small>'+timeAgo(m.created_at)+edited+(mine ? (m.is_read ? ' · Lu' : ' · Envoyé') : '')+'</small><button type="button" class="message-more" data-action="message-menu" data-id="'+esc(m.id)+'" aria-label="Options du message">⋯</button></div></div><div class="message-actions" role="group" aria-label="Actions du message"><button type="button" data-action="reply-message" data-id="'+esc(m.id)+'"><span>↩</span><small>Répondre</small></button>'+(mine?'<button type="button" data-action="edit-message" data-id="'+esc(m.id)+'"><span>✎</span><small>Modifier</small></button><button type="button" class="danger" data-action="delete-message" data-id="'+esc(m.id)+'"><span>⌫</span><small>Supprimer</small></button>':'')+'</div></div>';
@@ -2092,22 +2093,92 @@ async function genericListPage(route) {
     }
   }
 
+  async function toggleTafabFavorite(listingId){
+    const q=await sb.from("tafab_favorites").select("id").eq("listing_id",listingId).eq("user_id",state.user.id).maybeSingle();
+    if(q.data){ const d=await sb.from("tafab_favorites").delete().eq("id",q.data.id); if(d.error)return toast(d.error.message); toast("Retiré des favoris"); }
+    else { const i=await sb.from("tafab_favorites").insert({listing_id:listingId,user_id:state.user.id}); if(i.error)return toast(i.error.message); toast("Ajouté aux favoris"); }
+    return tafabPage();
+  }
+  async function orderTafabListing(id){
+    const {data:x,error}=await sb.from("tafab_listings").select("*").eq("id",id).maybeSingle();
+    if(error||!x)return toast(error?.message||"Offre introuvable");
+    if(x.seller_id===state.user.id)return toast("Vous ne pouvez pas commander votre propre offre.");
+    openModal(`<div class="modal-box v22-order-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • COMMANDE</span><h3>${esc(x.title)}</h3><p class="muted">Passez une demande de commande au vendeur.</p><div class="form-stack"><label>Quantité<input id="orderQty" type="number" min="1" value="1"></label><label>Note au vendeur<textarea id="orderNote" maxlength="1000" placeholder="Adresse, préférence de livraison, question…"></textarea></label><button class="primary big" data-action="confirm-tafab-order" data-id="${esc(id)}">Confirmer la commande</button></div></div>`);
+  }
+  async function confirmTafabOrder(id){
+    const qty=Math.max(1,Number($("orderQty")?.value||1));
+    const note=$("orderNote")?.value.trim()||"";
+    const {data:x,error}=await sb.from("tafab_listings").select("id,seller_id,price,currency,title").eq("id",id).maybeSingle();
+    if(error||!x)return toast(error?.message||"Offre introuvable");
+    const total=x.price==null?null:Number(x.price)*qty;
+    const r=await sb.from("tafab_orders").insert({buyer_id:state.user.id,seller_id:x.seller_id,status:"pending",total_amount:total,currency:x.currency||"MGA",note}).select().single();
+    if(r.error)return toast(r.error.message);
+    const oi=await sb.from("tafab_order_items").insert({order_id:r.data.id,listing_id:id,quantity:qty,unit_price:x.price});
+    if(oi.error){ await sb.from("tafab_orders").delete().eq("id",r.data.id); return toast(oi.error.message); }
+    await logActivity("tafab_order_created","Commande Tafaß créée","tafab_order",r.data.id);
+    closeModal(); toast("Commande envoyée au vendeur");
+  }
+  async function showTafabOrders(){
+    const {data:orders,error}=await sb.from("tafab_orders").select("id,status,total_amount,currency,note,created_at").or(`buyer_id.eq.${state.user.id},seller_id.eq.${state.user.id}`).order("created_at",{ascending:false}).limit(50);
+    if(error)return toast(error.message);
+    openModal(`<div class="modal-box v22-orders-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • COMMANDES</span><h3>Mes commandes</h3><div class="v22-order-list">${(orders||[]).map(o=>`<div class="v22-order-row"><div><b>#${esc(String(o.id).slice(0,8))}</b><small>${esc(o.status)} · ${timeAgo(o.created_at)}</small></div><strong>${o.total_amount==null?'Prix à confirmer':esc(o.total_amount)+" "+esc(o.currency||"MGA")}</strong></div>`).join("")||'<div class="empty">Aucune commande.</div>'}</div></div>`);
+  }
+
+  function openMessageAttachment(){ $("messageAttachment")?.click(); }
+  async function sendMessageAttachment(){
+    const input=$("messageAttachment"), file=input?.files?.[0]; if(!file)return;
+    const ok=file.type.startsWith("image/")||file.type.startsWith("video/")||file.type.startsWith("application/")||file.type.startsWith("text/");
+    if(!ok)return toast("Type de fichier non pris en charge.");
+    if(file.size>100*1024*1024)return toast("Fichier trop volumineux. Limite : 100 Mo.");
+    const id=state.selectedConversation; if(!id)return;
+    const ext=(file.name.split('.').pop()||'bin').toLowerCase(); const path=`${state.user.id}/messages/${id}-${crypto.randomUUID()}.${ext}`;
+    const up=await sb.storage.from("posts").upload(path,file,{upsert:false,contentType:file.type||"application/octet-stream"});
+    if(up.error)return toast("Upload impossible : "+up.error.message);
+    const url=sb.storage.from("posts").getPublicUrl(path).data.publicUrl;
+    const r=await sb.from("messages").insert({conversation_id:id,sender_id:state.user.id,content:file.name,media_url:url,media_type:file.type,is_read:false});
+    if(r.error)return toast(r.error.message);
+    input.value=""; toast("Fichier envoyé"); return openConversation(id);
+  }
+  async function toggleVoiceRecording(){
+    if(state.recording){ state.recording.stop(); return; }
+    if(!navigator.mediaDevices?.getUserMedia||typeof MediaRecorder==='undefined')return toast("Les messages vocaux ne sont pas disponibles sur cet appareil.");
+    try{
+      const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+      const rec=new MediaRecorder(stream); state.recording=rec; state.recordedChunks=[];
+      rec.ondataavailable=e=>{if(e.data.size)state.recordedChunks.push(e.data)};
+      rec.onstop=async()=>{
+        stream.getTracks().forEach(t=>t.stop()); state.recording=null;
+        const blob=new Blob(state.recordedChunks,{type:rec.mimeType||'audio/webm'}); state.recordedChunks=[];
+        if(!blob.size)return;
+        const id=state.selectedConversation; if(!id)return;
+        const path=`${state.user.id}/messages/${id}-${crypto.randomUUID()}.webm`;
+        const up=await sb.storage.from("posts").upload(path,blob,{upsert:false,contentType:blob.type});
+        if(up.error)return toast("Upload audio impossible : "+up.error.message);
+        const url=sb.storage.from("posts").getPublicUrl(path).data.publicUrl;
+        const r=await sb.from("messages").insert({conversation_id:id,sender_id:state.user.id,content:"🎙️ Message vocal",media_url:url,media_type:blob.type,is_read:false});
+        if(r.error)return toast(r.error.message); toast("Message vocal envoyé"); await openConversation(id);
+      };
+      rec.start(); toast("Enregistrement en cours… appuyez à nouveau pour arrêter");
+    }catch(e){ toast("Autorisez le microphone pour enregistrer un message vocal."); }
+  }
+
   async function tafabPage() {
     const token = state.renderToken;
-    const [listR, adsR] = await Promise.all([
-      sb.from("tafab_listings").select("*").eq("status","active").order("created_at",{ascending:false}).limit(30),
-      sb.from("tafab_ads").select("*").eq("status","active").order("created_at",{ascending:false}).limit(20)
+    const [listR, adsR, favR] = await Promise.all([
+      sb.from("tafab_listings").select("*").eq("status","active").order("created_at",{ascending:false}).limit(50),
+      sb.from("tafab_ads").select("*").eq("status","active").order("created_at",{ascending:false}).limit(20),
+      sb.from("tafab_favorites").select("listing_id").eq("user_id",state.user.id)
     ]);
     if (listR.error) return simplePage("Tafaß", `<div class="empty">${esc(listR.error.message)}</div>`);
     if (token !== state.renderToken) return;
-    const listings=listR.data||[], ads=adsR.data||[];
+    const listings=listR.data||[], ads=adsR.data||[], favorites=new Set((favR.data||[]).map(x=>x.listing_id));
     simplePage("Tafaß", `
       <div class="tafab-hero premium-hero clean-tafab-hero">
         <div class="tafab-brand-mark">T</div><div class="grow"><span class="eyebrow">TAFAß • MARCHÉ</span><h3>Vente & échanges</h3><p class="page-subtitle">Des offres publiées par les membres, synchronisées en temps réel.</p></div>
       </div>
-      <div class="page-header-actions"><button class="primary" data-action="create-tafab-listing">＋ Publier une offre</button><button class="ghost-action" data-action="create-tafab-ad">＋ Publier une publicité</button></div>
+      <div class="page-header-actions"><button class="primary" data-action="create-tafab-listing">＋ Publier une offre</button><button class="ghost-action" data-action="show-tafab-orders">📦 Commandes</button><button class="ghost-action" data-action="create-tafab-ad">＋ Publicité</button></div>
       <div class="tafab-grid">
-        ${listings.map(x=>`<article class="tafab-card tafab-ad"><div class="tafab-ad-label">OFFRE RÉELLE • TAFAß</div><h3>${esc(x.title)}</h3><p>${esc(x.description||"")}</p><div class="tafab-meta-line">${esc(x.location||"")} ${x.location&&x.price!=null?'• ':''}${x.price!=null?esc(x.price)+" "+esc(x.currency||"MGA"):""}</div><div class="tafab-actions"><button class="primary" data-action="tafab-contact" data-id="${esc(x.id)}">Contacter</button><button class="ghost-action" data-action="tafab-info" data-id="${esc(x.id)}">Détails</button></div></article>`).join("")}
+        ${listings.map(x=>`<article class="tafab-card tafab-ad"><div class="tafab-ad-label">OFFRE RÉELLE • TAFAß</div><h3>${esc(x.title)}</h3><p>${esc(x.description||"")}</p><div class="tafab-meta-line">${esc(x.location||"")} ${x.location&&x.price!=null?'• ':''}${x.price!=null?esc(x.price)+" "+esc(x.currency||"MGA"):""}</div><div class="tafab-actions v22-market-actions"><button class="primary" data-action="tafab-order" data-id="${esc(x.id)}">🛒 Commander</button><button class="ghost-action" data-action="tafab-contact" data-id="${esc(x.id)}">💬 Contacter</button><button class="ghost-action" data-action="tafab-favorite" data-id="${esc(x.id)}">${favorites.has(x.id)?'♥':'♡'} Favori</button><button class="ghost-action" data-action="tafab-info" data-id="${esc(x.id)}">Détails</button></div></article>`).join("")}
         ${ads.map(a=>`<article class="tafab-card tafab-discussion"><div class="tafab-card-head"><span class="tafab-icon">📢</span><div><b>${esc(a.title)}</b><small>Publicité Tafaß</small></div></div><p>${esc(a.description||"")}</p>${a.image_url?`<img class="post-media" src="${esc(a.image_url)}" alt="Publicité">`:""}<button class="primary big" data-action="tafab-ad" data-id="${esc(a.id)}">Voir la publicité</button></article>`).join("")}
         ${!listings.length&&!ads.length?`<div class="empty tafab-empty" style="grid-column:1/-1"><b>Aucune offre ni publicité pour le moment.</b><small>Les contenus apparaîtront ici dès qu'un membre en publiera un.</small></div>`:""}
       </div>`);
@@ -4227,6 +4298,12 @@ async function genericListPage(route) {
     }
     if (action === "save-tafab-ad") return saveTafabAd();
     if (action === "tafab-message") return contactTafabListing(id);
+    if (action === "tafab-order") return orderTafabListing(id);
+    if (action === "confirm-tafab-order") return confirmTafabOrder(id);
+    if (action === "tafab-favorite") return toggleTafabFavorite(id);
+    if (action === "show-tafab-orders") return showTafabOrders();
+    if (action === "message-attachment") return openMessageAttachment();
+    if (action === "message-voice") return toggleVoiceRecording();
     if (action === "tafab-contact") return contactTafabListing(id);
     if (action === "send-tafab-message") return sendTafabMessage(id);
     if (action === "tafab-info") { const x=(await sb.from("tafab_listings").select("*").eq("id",id).maybeSingle()).data; if(!x)return toast("Offre introuvable"); return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">OFFRE TAFAß</span><h3>${esc(x.title)}</h3><p>${esc(x.description||"")}</p><p class="muted">${esc(x.location||"")} ${x.price!=null?"• "+esc(x.price)+" "+esc(x.currency||"MGA"):""}</p><button class="primary big" data-action="tafab-contact" data-id="${esc(x.id)}">Contacter le vendeur</button></div>`); }
