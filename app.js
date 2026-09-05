@@ -356,15 +356,64 @@ document.documentElement.classList.add("app-boot");
   async function updateBadges(){
     if(!state.user) return;
     try{
-      const [notif, msg, friends]=await Promise.all([
+      const [notif, msg]=await Promise.all([
         countUnreadNotificationsForRoutes(),
-        sb.from("messages").select("id",{count:"exact",head:true}).neq("sender_id",state.user.id).eq("is_read",false),
-        sb.from("friend_requests").select("id",{count:"exact",head:true}).eq("receiver_id",state.user.id).eq("status","pending")
+        sb.from("messages").select("id",{count:"exact",head:true}).neq("sender_id",state.user.id).eq("is_read",false)
       ]);
       const n=notif||{};
-      setNavBadge("home",n.home); setNavBadge("friends",friends.count||n.friends); setNavBadge("messages",msg.count||0); setNavBadge("notifications",n.notifications);
+      // Badges represent NEW/unseen items, not permanent pending totals.
+      setNavBadge("home",n.home);
+      setNavBadge("friends",n.friends);
+      setNavBadge("messages",msg.count||0);
+      setNavBadge("notifications",n.notifications);
       ["pages","groups","reels","events","tafab","studio","creator","ai","music","business","saved","settings","menu"].forEach(r=>setNavBadge(r,n[r]||0));
     }catch(e){ console.warn("Tafaß badges:",e); }
+  }
+
+  async function markRouteBadgeSeen(route){
+    if(!state.user || !route) return;
+    // Clear the visible badge immediately, then persist the read state.
+    setNavBadge(route, 0);
+    try{
+      if(route === "messages") {
+        // Use the existing security-definer RPC instead of a broad client-side
+        // UPDATE, so RLS cannot reject the badge-read operation.
+        const {data: memberships}=await sb.from("conversation_members")
+          .select("conversation_id").eq("user_id",state.user.id);
+        const ids=[...new Set((memberships||[]).map(x=>x.conversation_id).filter(Boolean))];
+        if(ids.length) await Promise.all(ids.map(id=>sb.rpc("tafa_mark_conversation_read",{p_conversation_id:id})));
+        return;
+      }
+      const notificationRoutes = {
+        home: /post|comment|reaction|share|story/i,
+        friends: /friend|follow|request/i,
+        pages: /page/i,
+        groups: /group/i,
+        reels: /reel/i,
+        events: /event/i,
+        tafab: /listing|order|market|tafab/i,
+        studio: /studio|draft/i,
+        creator: /creator|gift|withdraw|subscription/i,
+        ai: /ai/i,
+        music: /music/i,
+        business: /business|ad/i,
+        saved: /saved|bookmark/i,
+        settings: /setting|security|privacy/i,
+        menu: /menu|system/i
+      };
+      const matcher=notificationRoutes[route];
+      if(route === "notifications") {
+        await sb.from("notifications").update({is_read:true})
+          .eq("user_id",state.user.id).eq("is_read",false);
+        return;
+      }
+      if(!matcher) return;
+      const {data}=await sb.from("notifications").select("id,type,entity_type")
+        .eq("user_id",state.user.id).eq("is_read",false).limit(1000);
+      const ids=(data||[]).filter(n=>matcher.test(String(n.type||"")+' '+String(n.entity_type||""))).map(n=>n.id);
+      if(ids.length) await sb.from("notifications").update({is_read:true}).in("id",ids).eq("user_id",state.user.id);
+    }catch(e){ console.warn("Tafaß badge seen:",route,e); }
+    finally{ updateBadges(); }
   }
   function syncIdentityUI(){
     document.body.classList.toggle("page-mode-active", pageModeActive());
@@ -3423,6 +3472,9 @@ async function genericListPage(route) {
     if (options.replaceStack) state.navStack = [route];
     state.renderToken++;
     state.route = route;
+    // Entering a section consumes its NEW/unseen badge. Do this immediately
+    // so the counter disappears as soon as the section is opened.
+    markRouteBadgeSeen(route);
     if (route === "profile") state.viewingProfileId = null;
     if (route === "groups") state.groupsTab = "mine";
     state.selectedConversation = route === "messages" ? state.selectedConversation : null;
