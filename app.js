@@ -10,7 +10,7 @@ document.documentElement.classList.add("app-boot");
 
   const $ = id => document.getElementById(id);
   const esc = s => String(s ?? "").replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]));
-  const routes = ["home","friends","search","messages","notifications","profile","reels","pages","groups","saved","menu","tafab","events","studio","settings"];
+  const routes = ["home","friends","search","messages","notifications","profile","reels","pages","groups","saved","menu","tafab","events","studio","settings","creator"];
 
   // V19 production upload guard: client-side validation is UX protection only;
   // Supabase Storage policies/server-side validation must remain the authority.
@@ -841,7 +841,7 @@ function publisherBackgrounds(){
       <div class="live-modal-head"><div><span class="eyebrow">TAFAß • EN DIRECT</span><h3>${esc(session.title||"Direct Tafaß")}</h3><small>${esc(nameOf(session.profiles||{}))}</small></div><span class="live-pulse">● LIVE</span></div>
       <video id="liveRemoteVideo" class="live-video" autoplay playsinline controls></video>
       <div class="live-status"><span>●</span><b>Direct en temps réel</b><small>Vous entendez l’audio du diffuseur. Vos commentaires sont transmis en temps réel.</small><strong id="liveViewerCount">1 spectateur</strong></div>
-      <div class="live-controls"><button class="secondary-action" data-action="live-toggle-mic">🔊 Audio</button></div>
+      <div class="live-controls"><button class="secondary-action" data-action="live-toggle-mic">🔊 Audio</button><button class="secondary-action" data-action="live-gift" data-gift="heart" data-coins="10">❤️ 10</button><button class="secondary-action" data-action="live-gift" data-gift="rose" data-coins="50">🌹 50</button><button class="secondary-action" data-action="live-gift" data-gift="star" data-coins="100">⭐ 100</button></div>
       ${liveCommentsMarkup()}
     </div>`);
     await setupLiveComments(id);
@@ -2316,6 +2316,7 @@ async function genericListPage(route) {
       ["reels","reels","Reels","Formats courts"],
       ["events","history","Évènements","Créer et découvrir des évènements"],
       ["studio","videos","Creator Studio","Créer et analyser vos contenus"],
+      ["creator","payment","Monétisation","Coins, revenus et soutien aux créateurs"],
       ["saved","saved","Enregistrements","Vos contenus sauvegardés"],
       ["search","search","Rechercher","Trouver un compte ou contenu"],
       ["settings","settings","Para & Conf","Compte et confidentialité"]
@@ -3053,6 +3054,49 @@ async function genericListPage(route) {
     setTimeout(() => { el.classList.remove("active","done"); }, 90);
   }
 
+
+  async function creatorMonetisationPage(){
+    const uid=state.user.id;
+    const [walletR,giftsR,subsR,withdrawR]=await Promise.all([
+      sb.from('tafab_wallets').select('coins,earnings_mga,updated_at').eq('user_id',uid).maybeSingle(),
+      sb.from('tafab_live_gifts').select('id,gift_type,coins,created_at,live_session_id').or(`sender_id.eq.${uid},receiver_id.eq.${uid}`).order('created_at',{ascending:false}).limit(30),
+      sb.from('tafab_creator_subscriptions').select('id,subscriber_id,status,monthly_price_mga,started_at,expires_at').eq('creator_id',uid).order('created_at',{ascending:false}).limit(30),
+      sb.from('tafab_withdrawal_requests').select('id,amount_mga,method,status,created_at').eq('user_id',uid).order('created_at',{ascending:false}).limit(20)
+    ]);
+    const w=walletR.data||{coins:0,earnings_mga:0};
+    const gifts=giftsR.data||[];
+    const subs=subsR.data||[];
+    const withdrawals=withdrawR.data||[];
+    simplePage('Monétisation',`<div class="v24-hero"><div><span class="eyebrow">TAFAß • CREATOR ECONOMY</span><h3>Transformez votre communauté en soutien réel.</h3><p>Gérez vos coins, vos cadeaux Live, vos abonnements créateur et vos revenus.</p></div><span class="v24-wallet-badge">🪙 ${Number(w.coins||0).toLocaleString('fr-FR')} coins</span></div>
+      <div class="v24-stats"><div><b>${Number(w.coins||0).toLocaleString('fr-FR')}</b><small>Coins disponibles</small></div><div><b>${Number(w.earnings_mga||0).toLocaleString('fr-FR')} Ar</b><small>Revenus créateur</small></div><div><b>${subs.length}</b><small>Abonnés créateur</small></div><div><b>${gifts.length}</b><small>Cadeaux récents</small></div></div>
+      <section class="v24-panel"><div class="section-title"><div><h3>Programme créateur</h3><small>Les cadeaux reçus pendant vos directs alimentent vos revenus.</small></div></div><div class="v24-action-grid"><button class="primary" data-action="request-withdrawal">💸 Demander un retrait</button><button class="secondary-action" data-action="creator-pricing">⭐ Abonnement créateur</button></div></section>
+      <section class="v24-panel"><div class="section-title"><div><h3>Derniers cadeaux</h3><small>Historique des cadeaux envoyés ou reçus.</small></div></div><div class="v24-list">${gifts.map(g=>`<div class="v24-row"><span class="v24-gift-icon">${g.gift_type==='rose'?'🌹':g.gift_type==='star'?'⭐':'❤️'}</span><div><b>${esc(g.gift_type||'heart')}</b><small>${Number(g.coins||0).toLocaleString('fr-FR')} coins · ${timeAgo(g.created_at)}</small></div><strong>${g.sender_id===uid?'−':'+'}${Number(g.coins||0).toLocaleString('fr-FR')}</strong></div>`).join('')||'<div class="empty">Aucun cadeau pour le moment.</div>'}</div></section>
+      <section class="v24-panel"><div class="section-title"><div><h3>Retraits</h3><small>Les demandes sont traitées par l’administration.</small></div></div><div class="v24-list">${withdrawals.map(x=>`<div class="v24-row"><span>💳</span><div><b>${Number(x.amount_mga||0).toLocaleString('fr-FR')} Ar</b><small>${esc(x.method||'mobile_money')} · ${timeAgo(x.created_at)}</small></div><strong class="v24-status">${esc(x.status||'pending')}</strong></div>`).join('')||'<div class="empty">Aucune demande de retrait.</div>'}</div></section>`);
+  }
+
+  function openWithdrawalRequest(){
+    openModal(`<div class="modal-box v24-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • RETRAIT</span><h3>Demander un retrait</h3><p class="muted">Minimum 1 000 Ar. La demande sera vérifiée par l’administration avant paiement.</p><label>Montant (Ar)<input id="withdrawAmount" type="number" min="1000" step="100" placeholder="Ex. 10000"></label><label>Destination<input id="withdrawDestination" maxlength="120" placeholder="Ex. numéro Mobile Money / indication de paiement"></label><button class="primary big" data-action="submit-withdrawal">Envoyer la demande</button></div>`);
+  }
+  async function submitWithdrawal(){
+    const amount=Math.floor(Number($('withdrawAmount')?.value||0)), dest=$('withdrawDestination')?.value.trim()||'';
+    if(!Number.isFinite(amount)||amount<1000)return toast('Montant minimum : 1 000 Ar.');
+    const w=await sb.from('tafab_wallets').select('earnings_mga').eq('user_id',state.user.id).maybeSingle();
+    if((w.data?.earnings_mga||0)<amount)return toast('Revenus insuffisants pour ce retrait.');
+    const r=await sb.from('tafab_withdrawal_requests').insert({user_id:state.user.id,amount_mga:amount,method:'mobile_money',destination_hint:dest,status:'pending'});
+    if(r.error)return toast(r.error.message); closeModal(); toast('Demande de retrait envoyée.'); await creatorMonetisationPage();
+  }
+  function openCreatorPricing(){
+    openModal(`<div class="modal-box v24-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • ABONNEMENT</span><h3>Abonnement créateur</h3><p class="muted">Permettez à votre communauté de soutenir votre contenu chaque mois.</p><div class="v24-price-card"><span>⭐ Soutien créateur</span><b>2 500 Ar / mois</b><small>Le paiement réel peut être relié à votre système de transactions existant avant activation commerciale.</small></div><button class="primary big" data-action="close-modal">Compris</button></div>`);
+  }
+  async function sendLiveGift(gift='heart',coins=10){
+    if(!liveSessionId || liveRole!=='viewer') return toast('Le cadeau est disponible pendant un direct.');
+    const r=await sb.from('live_sessions').select('user_id,status').eq('id',liveSessionId).maybeSingle();
+    if(r.error||!r.data||r.data.status!=='live')return toast('Ce direct est terminé.');
+    const rpc=await sb.rpc('tafab_send_live_gift',{p_live_session_id:liveSessionId,p_receiver_id:r.data.user_id,p_gift_type:gift,p_coins:coins});
+    if(rpc.error)return toast(rpc.error.message.includes('Insufficient')?'Coins insuffisants.':rpc.error.message);
+    toast(`Cadeau ${gift==='rose'?'🌹':gift==='star'?'⭐':'❤️'} envoyé !`);
+  }
+
   async function render() {
     if (!state.user) return;
     const token = ++state.renderToken;
@@ -3071,6 +3115,7 @@ async function genericListPage(route) {
       else if (["reels","pages","groups","saved"].includes(route)) await genericListPage(route);
       else if (route === "events") await eventsPage();
       else if (route === "studio") await creatorStudioPage();
+      else if (route === "creator") await creatorMonetisationPage();
       else if (route === "menu") menuPage();
       else if (route === "tafab") await tafabPage();
       else if (route === "settings") await settingsPage();
@@ -3265,7 +3310,11 @@ async function genericListPage(route) {
       tafab_ads: () => {},
       tafab_events: () => { if (state.route==="events") eventsPage(); },
       tafab_event_attendees: () => { if (state.route==="events") eventsPage(); },
-      tafab_creator_drafts: () => { if (state.route==="studio") creatorStudioPage(); }
+      tafab_creator_drafts: () => { if (state.route==="studio") creatorStudioPage(); },
+      tafab_live_gifts: () => { if (state.route==="creator") creatorMonetisationPage(); },
+      tafab_creator_subscriptions: () => { if (state.route==="creator") creatorMonetisationPage(); },
+      tafab_wallets: () => { if (state.route==="creator") creatorMonetisationPage(); },
+      tafab_withdrawal_requests: () => { if (state.route==="creator") creatorMonetisationPage(); }
     };
 
     Object.keys(refresh).forEach(table => {
@@ -4377,6 +4426,10 @@ async function genericListPage(route) {
     if (action === "show-tafab-orders") return showTafabOrders();
     if (action === "message-attachment") return openMessageAttachment();
     if (action === "message-voice") return toggleVoiceRecording();
+    if (action === "live-gift") return sendLiveGift(actionEl.dataset.gift||"heart",Number(actionEl.dataset.coins||10));
+    if (action === "request-withdrawal") return openWithdrawalRequest();
+    if (action === "submit-withdrawal") return submitWithdrawal();
+    if (action === "creator-pricing") return openCreatorPricing();
     if (action === "tafab-contact") return contactTafabListing(id);
     if (action === "send-tafab-message") return sendTafabMessage(id);
     if (action === "tafab-info") { const x=(await sb.from("tafab_listings").select("*").eq("id",id).maybeSingle()).data; if(!x)return toast("Offre introuvable"); return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">OFFRE TAFAß</span><h3>${esc(x.title)}</h3><p>${esc(x.description||"")}</p><p class="muted">${esc(x.location||"")} ${x.price!=null?"• "+esc(x.price)+" "+esc(x.currency||"MGA"):""}</p><button class="primary big" data-action="tafab-contact" data-id="${esc(x.id)}">Contacter le vendeur</button></div>`); }
