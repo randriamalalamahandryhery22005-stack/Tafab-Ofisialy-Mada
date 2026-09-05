@@ -3102,17 +3102,23 @@ async function genericListPage(route) {
   }
 
 
-  // V26.2: Tafaß AI uses the project Edge Function by default.
-  // A custom endpoint is still supported through window.TAFASS_AI_ENDPOINT.
-  const AI_ENDPOINT = window.TAFASS_AI_ENDPOINT || `${SUPABASE_URL}/functions/v1/tafass-ai`;
+  // V26.3: use Supabase Functions SDK instead of a manual fetch.
+  // This keeps the project URL/auth handling centralized and avoids browser
+  // "Failed to fetch" errors caused by a manually assembled endpoint.
   async function aiRequest(mode, prompt){
     const { data: sessionData } = await sb.auth.getSession();
-    const accessToken = sessionData?.session?.access_token;
-    if(!accessToken) throw new Error("Connectez-vous pour utiliser Tafaß AI.");
-    const r=await fetch(AI_ENDPOINT,{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${accessToken}`},body:JSON.stringify({mode,prompt,language:"fr"})});
-    if(!r.ok) throw new Error(`Service AI indisponible (${r.status}).`);
-    const data=await r.json();
-    const text=String(data.response||data.text||data.output||"").trim();
+    if(!sessionData?.session?.access_token) throw new Error("Connectez-vous pour utiliser Tafaß AI.");
+    const { data, error } = await sb.functions.invoke("tafass-ai", {
+      body: { mode, prompt, language: "fr" }
+    });
+    if(error){
+      const msg=String(error.message||"");
+      if(/failed to fetch|fetch failed|network/i.test(msg))
+        throw new Error("Impossible de joindre Tafaß AI. Vérifiez que l'Edge Function « tafass-ai » est bien déployée dans ce projet Supabase.");
+      throw new Error(msg||"Service AI indisponible.");
+    }
+    if(data?.error) throw new Error(String(data.error));
+    const text=String(data?.response||data?.text||data?.output||"").trim();
     if(!text) throw new Error("La réponse AI est vide.");
     return text;
   }
