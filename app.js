@@ -648,6 +648,9 @@ function publisherBackgrounds(){
   let liveViewerId = null;
   let liveCommentsChannel = null;
   let liveCommentRows = [];
+  let liveViewerCount = 0;
+  let liveFacingMode = "user";
+  let liveMicEnabled = true;
 
   // WebRTC: STUN is the safe default. A production TURN server can be supplied
   // through window.TAFASS_TURN_SERVERS without hard-coding credentials in the app.
@@ -710,13 +713,25 @@ function publisherBackgrounds(){
     const title = (state.composerMeta?.live_title || "Direct Tafaß").trim().slice(0,120);
     const {data:session,error} = await sb.from("live_sessions").insert({user_id:state.user.id,title,status:"live",started_at:new Date().toISOString()}).select().single();
     if(error){ stream.getTracks().forEach(t=>t.stop()); return toast("Impossible de lancer le direct : "+error.message); }
-    liveStream=stream; liveSessionId=session.id; liveRole="broadcaster"; state.activeLive=session;
+    liveStream=stream; liveSessionId=session.id; liveRole="broadcaster"; liveFacingMode="user"; liveMicEnabled=true; liveViewerCount=0; state.activeLive=session;
     closeModal(); await openBroadcasterLive(session,stream);
     if(state.route==="home") renderFeed();
   }
 
   async function openBroadcasterLive(session,stream){
     liveChannel=sb.channel(liveChannelName(session.id),{config:{broadcast:{self:false}}});
+    liveChannel.on("broadcast",{event:"viewer-join"},async ({payload})=>{
+      if(liveRole!=="broadcaster" || !payload?.viewerId) return;
+      liveViewerCount=Math.max(0,liveViewerCount+1);
+      renderLiveViewerCount();
+      await liveChannel.send({type:"broadcast",event:"viewer-count",payload:{count:liveViewerCount}});
+    });
+    liveChannel.on("broadcast",{event:"viewer-leave"},async ({payload})=>{
+      if(liveRole!=="broadcaster" || !payload?.viewerId) return;
+      const old=livePeers.get(payload.viewerId); if(old) old.close();
+      livePeers.delete(payload.viewerId); liveViewerCount=Math.max(0,liveViewerCount-1); renderLiveViewerCount();
+      await liveChannel.send({type:"broadcast",event:"viewer-count",payload:{count:liveViewerCount}});
+    });
     liveChannel.on("broadcast",{event:"viewer-offer"},async ({payload})=>{
       if(liveRole!=="broadcaster" || !payload?.viewerId || !payload?.offer) return;
       const viewerId=payload.viewerId;
@@ -741,7 +756,8 @@ function publisherBackgrounds(){
       <div class="live-lock-badge">🔒 DIRECT ACTIF · Terminez le direct pour quitter</div>
       <div class="live-modal-head"><div><span class="eyebrow">TAFAß • DIRECT</span><h3>Vous êtes en direct</h3></div><span class="live-pulse">● LIVE</span></div>
       <video id="liveLocalVideo" class="live-video" autoplay muted playsinline></video>
-      <div class="live-status"><span>●</span><b>Diffusion en temps réel</b><small>Audio + vidéo en direct. Les spectateurs peuvent commenter et vous répondez en direct.</small></div>
+      <div class="live-status"><span>●</span><b>Diffusion en temps réel</b><small>Audio + vidéo en direct. Les spectateurs peuvent commenter et vous répondez en direct.</small><strong id="liveViewerCount">0 spectateur</strong></div>
+      <div class="live-controls"><button class="secondary-action" data-action="live-flip-camera">↻ Caméra</button><button class="secondary-action" data-action="live-toggle-mic">🎙 Micro</button></div>
       ${liveCommentsMarkup()}
       <button class="danger-action live-end-button" data-action="end-live">Terminer le direct</button>
     </div>`);
@@ -759,6 +775,9 @@ function publisherBackgrounds(){
     liveViewerPc=createLivePeer();
     liveViewerPc.ontrack=e=>{const v=$("liveRemoteVideo");if(v)v.srcObject=e.streams[0];};
     liveViewerPc.onicecandidate=e=>{if(e.candidate) liveChannel?.send({type:"broadcast",event:"viewer-ice",payload:{viewerId:liveViewerId,candidate:e.candidate}});};
+    liveChannel.on("broadcast",{event:"viewer-count"},({payload})=>{
+      if(payload?.count!=null){ liveViewerCount=Number(payload.count)||0; renderLiveViewerCount(); }
+    });
     liveChannel.on("broadcast",{event:"broadcaster-answer"},async ({payload})=>{
       if(payload?.viewerId!==liveViewerId || !payload.answer)return;
       try{await liveViewerPc.setRemoteDescription(new RTCSessionDescription(payload.answer));}catch(_){}
@@ -768,19 +787,45 @@ function publisherBackgrounds(){
       try{await liveViewerPc.addIceCandidate(payload.candidate);}catch(_){}
     });
     await liveChannel.subscribe();
+    await liveChannel.send({type:"broadcast",event:"viewer-join",payload:{viewerId:liveViewerId}});
     const offer=await liveViewerPc.createOffer(); await liveViewerPc.setLocalDescription(offer);
     await liveChannel.send({type:"broadcast",event:"viewer-offer",payload:{viewerId:liveViewerId,offer:liveViewerPc.localDescription}});
     openModal(`<div class="modal-box live-modal live-viewer-modal">
       <button class="modal-close" data-action="close-live-viewer">×</button>
       <div class="live-modal-head"><div><span class="eyebrow">TAFAß • EN DIRECT</span><h3>${esc(session.title||"Direct Tafaß")}</h3><small>${esc(nameOf(session.profiles||{}))}</small></div><span class="live-pulse">● LIVE</span></div>
       <video id="liveRemoteVideo" class="live-video" autoplay playsinline controls></video>
-      <div class="live-status"><span>●</span><b>Direct en temps réel</b><small>Vous entendez l’audio du diffuseur. Vos commentaires sont transmis en temps réel.</small></div>
+      <div class="live-status"><span>●</span><b>Direct en temps réel</b><small>Vous entendez l’audio du diffuseur. Vos commentaires sont transmis en temps réel.</small><strong id="liveViewerCount">1 spectateur</strong></div>
+      <div class="live-controls"><button class="secondary-action" data-action="live-toggle-mic">🔊 Audio</button></div>
       ${liveCommentsMarkup()}
     </div>`);
     await setupLiveComments(id);
     $("liveCommentForm")?.addEventListener("submit",e=>{e.preventDefault();sendLiveComment();});
   }
 
+  function renderLiveViewerCount(){
+    const el=$("liveViewerCount"); if(!el)return;
+    const n=Math.max(0,Number(liveViewerCount)||0); el.textContent=`${n} ${n===1?"spectateur":"spectateurs"}`;
+  }
+  async function flipLiveCamera(){
+    if(!liveStream)return;
+    liveFacingMode=liveFacingMode==="user"?"environment":"user";
+    try{
+      const next=await navigator.mediaDevices.getUserMedia({video:{facingMode:liveFacingMode,width:{ideal:1280},height:{ideal:720}},audio:false});
+      const track=next.getVideoTracks()[0];
+      const old=liveStream.getVideoTracks()[0];
+      liveStream.removeTrack(old); old.stop(); liveStream.addTrack(track);
+      livePeers.forEach(pc=>{const sender=pc.getSenders().find(x=>x.track?.kind==="video"); if(sender)sender.replaceTrack(track).catch(()=>{});});
+      const v=$("liveLocalVideo"); if(v){v.srcObject=liveStream; await v.play().catch(()=>{});}
+    }catch(_){toast("Impossible de changer de caméra.");}
+  }
+  function toggleLiveMic(){
+    if(liveRole==="broadcaster" && liveStream){
+      liveMicEnabled=!liveMicEnabled; liveStream.getAudioTracks().forEach(t=>t.enabled=liveMicEnabled);
+      toast(liveMicEnabled?"Micro activé":"Micro coupé");
+    }else if(liveRole==="viewer" && liveViewerPc){
+      const v=$("liveRemoteVideo"); if(v){v.muted=!v.muted; toast(v.muted?"Audio coupé":"Audio activé");}
+    }
+  }
   async function endLive(){
     if(!liveSessionId)return;
     const id=liveSessionId;
@@ -791,7 +836,7 @@ function publisherBackgrounds(){
     if(liveChannel){try{await sb.removeChannel(liveChannel);}catch(_){}}
     if(liveCommentsChannel){try{await sb.removeChannel(liveCommentsChannel);}catch(_){} liveCommentsChannel=null;}
     stopPublisherMusic();
-    liveStream=null;liveViewerPc=null;liveChannel=null;liveSessionId=null;liveRole=null;liveViewerId=null;liveCommentRows=[];state.activeLive=null;
+    liveStream=null;liveViewerPc=null;liveChannel=null;liveSessionId=null;liveRole=null;liveViewerId=null;liveCommentRows=[];liveViewerCount=0;state.activeLive=null;
     closeModal(); if(state.route==="home") await renderFeed();
   }
 
@@ -3843,6 +3888,8 @@ async function genericListPage(route) {
     if (action === "confirm-live-start") { state.composerMeta={...(state.composerMeta||{}),live_title:$("liveTitleInput")?.value?.trim()||"Direct Tafaß"}; closeModal(); return startLiveFromPublisher(); }
     if (action === "watch-live") return watchLive(id);
     if (action === "end-live") return endLive();
+    if (action === "live-flip-camera") return flipLiveCamera();
+    if (action === "live-toggle-mic") return toggleLiveMic();
     if (action === "close-live-viewer") { if(liveChannel){try{await sb.removeChannel(liveChannel);}catch(_){}} if(liveCommentsChannel){try{await sb.removeChannel(liveCommentsChannel);}catch(_){} liveCommentsChannel=null;} liveChannel=null; liveViewerPc?.close(); liveViewerPc=null; liveSessionId=null; liveRole=null; liveViewerId=null; liveCommentRows=[]; closeModal(); return; }
     if (action === "react") return showReactions(id);
     if (action === "comment") { $("comment-"+id)?.focus(); return; }
