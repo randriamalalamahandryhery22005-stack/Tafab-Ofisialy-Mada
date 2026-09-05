@@ -10,7 +10,7 @@ document.documentElement.classList.add("app-boot");
 
   const $ = id => document.getElementById(id);
   const esc = s => String(s ?? "").replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]));
-  const routes = ["home","friends","search","messages","notifications","profile","reels","pages","groups","saved","menu","tafab","settings"];
+  const routes = ["home","friends","search","messages","notifications","profile","reels","pages","groups","saved","menu","tafab","events","studio","settings"];
 
   // V19 production upload guard: client-side validation is UX protection only;
   // Supabase Storage policies/server-side validation must remain the authority.
@@ -331,7 +331,7 @@ document.documentElement.classList.add("app-boot");
   }
   function restoreAccountNavigation(){
     const left=document.querySelector(".left-sidebar"), bottom=document.querySelector(".bottom-nav");
-    if(left) left.innerHTML=`<button data-route="profile" class="profile-shortcut"><span id="sideAvatar" class="avatar">T</span><span><b id="sideName">Mon profil</b><small>Voir mon profil</small></span></button><button data-route="home"><span class="nav-ico">${menuIcon("home")}</span>Actualités</button><button data-route="friends"><span class="nav-ico">${menuIcon("friends")}</span>Amis</button><button data-route="messages"><span class="nav-ico">${menuIcon("messages")}</span>Messages</button><button data-route="notifications"><span class="nav-ico">${menuIcon("notifications")}</span>Notifications</button><button data-route="pages"><span class="nav-ico">${menuIcon("pages")}</span>Pages</button><button data-route="groups"><span class="nav-ico">${menuIcon("groups")}</span>Groupes</button><button data-route="reels"><span class="nav-ico">${menuIcon("reels")}</span>Reels</button><button data-route="tafab"><span class="nav-ico">${menuIcon("tafab")}</span>Tafaß</button><button data-route="saved"><span class="nav-ico">${menuIcon("saved")}</span>Enregistrements</button><button data-route="menu"><span class="nav-ico">${menuIcon("settings")}</span>Menu</button>`;
+    if(left) left.innerHTML=`<button data-route="profile" class="profile-shortcut"><span id="sideAvatar" class="avatar">T</span><span><b id="sideName">Mon profil</b><small>Voir mon profil</small></span></button><button data-route="home"><span class="nav-ico">${menuIcon("home")}</span>Actualités</button><button data-route="friends"><span class="nav-ico">${menuIcon("friends")}</span>Amis</button><button data-route="messages"><span class="nav-ico">${menuIcon("messages")}</span>Messages</button><button data-route="notifications"><span class="nav-ico">${menuIcon("notifications")}</span>Notifications</button><button data-route="pages"><span class="nav-ico">${menuIcon("pages")}</span>Pages</button><button data-route="groups"><span class="nav-ico">${menuIcon("groups")}</span>Groupes</button><button data-route="reels"><span class="nav-ico">${menuIcon("reels")}</span>Reels</button><button data-route="events"><span class="nav-ico">${menuIcon("history")}</span>Évènements</button><button data-route="studio"><span class="nav-ico">${menuIcon("videos")}</span>Studio</button><button data-route="tafab"><span class="nav-ico">${menuIcon("tafab")}</span>Tafaß</button><button data-route="saved"><span class="nav-ico">${menuIcon("saved")}</span>Enregistrements</button><button data-route="menu"><span class="nav-ico">${menuIcon("settings")}</span>Menu</button>`;
     if(bottom) bottom.innerHTML=`<button data-route="home"><span class="nav-svg">${menuIcon("home")}</span><small>Actualités</small></button><button data-route="friends"><span class="nav-svg">${menuIcon("friends")}</span><small>Amis</small></button><button data-route="messages"><span class="nav-svg">${menuIcon("messages")}</span><small>Messages</small></button><button data-route="pages"><span class="nav-svg">${menuIcon("pages")}</span><small>Pages</small></button><button data-route="groups"><span class="nav-svg">${menuIcon("groups")}</span><small>Groupes</small></button><button data-route="tafab"><span class="nav-svg">${menuIcon("tafab")}</span><small>Tafaß</small></button>`;
     const nameEl=$("sideName"), avatarEl=$("sideAvatar"); if(nameEl) nameEl.textContent=nameOf(state.profile); if(avatarEl) avatarEl.outerHTML=avatarHTML(state.profile,"avatar").replace("<span ", '<span id="sideAvatar" ');
   }
@@ -2162,6 +2162,63 @@ async function genericListPage(route) {
     }catch(e){ toast("Autorisez le microphone pour enregistrer un message vocal."); }
   }
 
+  async function eventsPage(){
+    const token=state.renderToken;
+    const [ev, mine] = await Promise.all([
+      sb.from("tafab_events").select("*").eq("status","published").order("starts_at",{ascending:true}).limit(60),
+      sb.from("tafab_event_attendees").select("event_id,status").eq("user_id",state.user.id)
+    ]);
+    if(ev.error) return simplePage("Évènements",`<div class="empty">${esc(ev.error.message)}</div>`);
+    if(token!==state.renderToken)return;
+    const myMap=new Map((mine.data||[]).map(x=>[x.event_id,x.status]));
+    const now=new Date();
+    const cards=(ev.data||[]).map(x=>{
+      const status=myMap.get(x.id); const start=new Date(x.starts_at); const end=x.ends_at?new Date(x.ends_at):null;
+      const when=start.toLocaleString("fr-FR",{dateStyle:"medium",timeStyle:"short"});
+      return `<article class="v23-event-card"><div class="v23-event-date"><b>${start.toLocaleDateString("fr-FR",{day:"2-digit"})}</b><small>${start.toLocaleDateString("fr-FR",{month:"short"}).replace('.','')}</small></div><div class="grow"><span class="eyebrow">${esc(x.visibility||"PUBLIC")}</span><h3>${esc(x.title)}</h3><p>${esc(x.description||"")}</p><div class="v23-event-meta">📅 ${esc(when)} ${x.location?` · 📍 ${esc(x.location)}`:""}</div><div class="v23-event-actions"><button class="primary" data-action="event-rsvp" data-id="${esc(x.id)}" data-status="going">${status==='going'?'✓ Je participe':'Je participe'}</button><button class="ghost-action" data-action="event-rsvp" data-id="${esc(x.id)}" data-status="interested">${status==='interested'?'★ Intéressé':'☆ Intéressé'}</button><button class="ghost-action" data-action="event-detail" data-id="${esc(x.id)}">Détails</button></div></div></article>`;
+    }).join("");
+    simplePage("Évènements",`<div class="v23-hero"><div><span class="eyebrow">TAFAß • EVENTS</span><h3>Vos moments, en un seul endroit.</h3><p>Créez des évènements publics ou privés, invitez vos amis et gardez les participants synchronisés.</p></div><button class="primary big" data-action="create-event">＋ Créer un évènement</button></div><div class="page-header-actions"><button class="ghost-action" data-action="my-events">Mes participations</button></div><div class="v23-event-grid">${cards||`<div class="empty" style="grid-column:1/-1"><b>Aucun évènement publié.</b><small>Créez le premier évènement Tafaß.</small></div>`}</div>`);
+  }
+  function openCreateEvent(){
+    openModal(`<div class="modal-box v23-event-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • EVENTS</span><h3>Créer un évènement</h3><label>Titre<input id="eventTitle" maxlength="120" placeholder="Ex. Rencontre Tafaß"></label><label>Description<textarea id="eventDesc" maxlength="3000" placeholder="Présentez votre évènement…"></textarea></label><div class="grid2"><label>Date et heure<input id="eventStart" type="datetime-local"></label><label>Fin (facultatif)<input id="eventEnd" type="datetime-local"></label></div><label>Lieu<input id="eventLocation" maxlength="180" placeholder="Ex. Antananarivo ou En ligne"></label><label>Visibilité<select id="eventVisibility"><option value="public">Public</option><option value="private">Privé</option></select></label><button class="primary big" data-action="save-event">Publier l’évènement</button></div>`);
+    setTimeout(()=>$("eventTitle")?.focus(),40);
+  }
+  async function saveEvent(){
+    const title=$("eventTitle")?.value.trim(), description=$("eventDesc")?.value.trim()||"", start=$("eventStart")?.value, end=$("eventEnd")?.value||null, location=$("eventLocation")?.value.trim()||null, visibility=$("eventVisibility")?.value||"public";
+    if(!title||!start)return toast("Ajoutez un titre et une date.");
+    const sd=new Date(start), ed=end?new Date(end):null; if(Number.isNaN(sd.getTime())||sd<=new Date())return toast("La date de début doit être dans le futur."); if(ed&&(!Number.isFinite(ed.getTime())||ed<=sd))return toast("La fin doit être après le début.");
+    const r=await sb.from("tafab_events").insert({creator_id:state.user.id,title,description,starts_at:sd.toISOString(),ends_at:ed?ed.toISOString():null,location,visibility,status:"published"}).select("id").single();
+    if(r.error)return toast(r.error.message); await sb.from("tafab_event_attendees").insert({event_id:r.data.id,user_id:state.user.id,status:"going"}); await logActivity("tafab_event_created","Évènement Tafaß créé","tafab_event",r.data.id); closeModal(); toast("Évènement publié"); return eventsPage();
+  }
+  async function eventRsvp(id,status){
+    const existing=await sb.from("tafab_event_attendees").select("id").eq("event_id",id).eq("user_id",state.user.id).maybeSingle();
+    const r=existing.data ? await sb.from("tafab_event_attendees").update({status,updated_at:new Date().toISOString()}).eq("id",existing.data.id) : await sb.from("tafab_event_attendees").insert({event_id:id,user_id:state.user.id,status});
+    if(r.error)return toast(r.error.message); toast(status==='going'?"Participation confirmée":"Ajouté à vos intérêts"); return eventsPage();
+  }
+  async function eventDetail(id){
+    const r=await sb.from("tafab_events").select("*").eq("id",id).maybeSingle(); if(r.error||!r.data)return toast("Évènement introuvable.");
+    const e=r.data, a=await sb.from("tafab_event_attendees").select("status,profiles(first_name,last_name,username,avatar_url)").eq("event_id",id).order("created_at",{ascending:false}).limit(100); const rows=(a.data||[]).map(x=>`<div class="v23-attendee">${avatarHTML(x.profiles||{})}<span><b>${esc(nameOf(x.profiles||{}))}</b><small>${esc(x.status||"interested")}</small></span></div>`).join("");
+    openModal(`<div class="modal-box v23-event-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • ÉVÈNEMENT</span><h3>${esc(e.title)}</h3><p>${esc(e.description||"")}</p><div class="v23-detail-meta">📅 ${esc(new Date(e.starts_at).toLocaleString("fr-FR"))}${e.ends_at?` → ${esc(new Date(e.ends_at).toLocaleString("fr-FR"))}`:""}<br>${e.location?`📍 ${esc(e.location)}`:"🌐 En ligne"}</div><div class="v23-rsvp-row"><button class="primary" data-action="event-rsvp" data-id="${esc(id)}" data-status="going">Je participe</button><button class="ghost-action" data-action="event-rsvp" data-id="${esc(id)}" data-status="interested">Intéressé</button></div><h4>Participants</h4><div class="v23-attendees">${rows||`<div class="empty">Aucun participant pour le moment.</div>`}</div></div>`);
+  }
+  async function creatorStudioPage(){
+    const r=await sb.from("tafab_creator_drafts").select("*").eq("creator_id",state.user.id).order("updated_at",{ascending:false}).limit(50);
+    if(r.error)return simplePage("Creator Studio",`<div class="empty">${esc(r.error.message)}</div>`);
+    const drafts=r.data||[];
+    const posts=(state.posts||[]).filter(x=>x.user_id===state.user.id);
+    simplePage("Creator Studio",`<div class="v23-hero studio"><div><span class="eyebrow">TAFAß • CREATOR STUDIO</span><h3>Créez. Publiez. Analysez.</h3><p>Centralisez vos brouillons, vos contenus et vos statistiques de base.</p></div><button class="primary big" data-action="new-creator-draft">＋ Nouveau contenu</button></div><div class="v23-stats"><div><b>${posts.length}</b><small>Publications</small></div><div><b>${posts.reduce((n,p)=>n+Number(p.views_count||0),0)}</b><small>Vues</small></div><div><b>${posts.reduce((n,p)=>n+Number(p.likes_count||0),0)}</b><small>J'aime</small></div><div><b>${posts.reduce((n,p)=>n+Number(p.comments_count||0),0)}</b><small>Commentaires</small></div></div><section class="v23-studio-section"><div class="section-title"><h3>Brouillons</h3><small>Vos contenus en préparation</small></div><div class="v23-draft-grid">${drafts.map(d=>`<article class="v23-draft"><span class="eyebrow">${esc(d.content_type||"post").toUpperCase()}</span><h3>${esc(d.title||"Sans titre")}</h3><p>${esc(d.body||"")}</p><small>${d.scheduled_at?`Programmé · ${new Date(d.scheduled_at).toLocaleString("fr-FR")}`:`Modifié ${timeAgo(d.updated_at)}`}</small><div><button class="ghost-action" data-action="edit-creator-draft" data-id="${esc(d.id)}">Modifier</button><button class="danger-action" data-action="delete-creator-draft" data-id="${esc(d.id)}">Supprimer</button></div></article>`).join("")||`<div class="empty" style="grid-column:1/-1">Aucun brouillon.</div>`}</div></section>`);
+  }
+  function openCreatorDraft(id=""){
+    const load=id?sb.from("tafab_creator_drafts").select("*").eq("id",id).maybeSingle():Promise.resolve({data:null,error:null});
+    load.then(r=>{if(r.error)return toast(r.error.message);const d=r.data||{};openModal(`<div class="modal-box v23-studio-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • STUDIO</span><h3>${id?'Modifier':'Nouveau'} contenu</h3><label>Titre<input id="draftTitle" maxlength="140" value="${esc(d.title||"")}" placeholder="Titre de votre contenu"></label><label>Type<select id="draftType"><option value="post" ${d.content_type==='post'?'selected':''}>Publication</option><option value="video" ${d.content_type==='video'?'selected':''}>Vidéo</option><option value="reel" ${d.content_type==='reel'?'selected':''}>Reel</option><option value="story" ${d.content_type==='story'?'selected':''}>Story</option></select></label><label>Description / texte<textarea id="draftBody" maxlength="5000" placeholder="Écrivez votre contenu…">${esc(d.body||"")}</textarea><div class="grid2"><label>Programmer<input id="draftSchedule" type="datetime-local" value="${d.scheduled_at?new Date(d.scheduled_at).toISOString().slice(0,16):""}"></label><label>Statut<select id="draftStatus"><option value="draft">Brouillon</option><option value="scheduled">Programmé</option></select></label></div><button class="primary big" data-action="save-creator-draft" data-id="${esc(id)}">Enregistrer</button></div>`);setTimeout(()=>$("draftTitle")?.focus(),40);});
+  }
+  async function saveCreatorDraft(id=""){
+    const title=$("draftTitle")?.value.trim()||"Sans titre", body=$("draftBody")?.value.trim()||"", type=$("draftType")?.value||"post", schedule=$("draftSchedule")?.value||null, status=$("draftStatus")?.value||"draft";
+    const payload={creator_id:state.user.id,title,body,content_type:type,scheduled_at:schedule?new Date(schedule).toISOString():null,status,updated_at:new Date().toISOString()};
+    const r=id?await sb.from("tafab_creator_drafts").update(payload).eq("id",id).eq("creator_id",state.user.id):await sb.from("tafab_creator_drafts").insert(payload);
+    if(r.error)return toast(r.error.message); closeModal(); toast(status==='scheduled'?"Contenu programmé":"Brouillon enregistré"); return creatorStudioPage();
+  }
+  async function deleteCreatorDraft(id){const r=await sb.from("tafab_creator_drafts").delete().eq("id",id).eq("creator_id",state.user.id);if(r.error)return toast(r.error.message);toast("Brouillon supprimé");return creatorStudioPage();}
+
   async function tafabPage() {
     const token = state.renderToken;
     const [listR, adsR, favR] = await Promise.all([
@@ -2257,6 +2314,8 @@ async function genericListPage(route) {
       ["groups","groups","Groupes","Communautés"],
       ["pages","pages","Pages","Pages et gestion"],
       ["reels","reels","Reels","Formats courts"],
+      ["events","history","Évènements","Créer et découvrir des évènements"],
+      ["studio","videos","Creator Studio","Créer et analyser vos contenus"],
       ["saved","saved","Enregistrements","Vos contenus sauvegardés"],
       ["search","search","Rechercher","Trouver un compte ou contenu"],
       ["settings","settings","Para & Conf","Compte et confidentialité"]
@@ -3010,6 +3069,8 @@ async function genericListPage(route) {
       else if (route === "notifications") await notificationsPage();
       else if (route === "profile") await profilePage(state.profileTab);
       else if (["reels","pages","groups","saved"].includes(route)) await genericListPage(route);
+      else if (route === "events") await eventsPage();
+      else if (route === "studio") await creatorStudioPage();
       else if (route === "menu") menuPage();
       else if (route === "tafab") await tafabPage();
       else if (route === "settings") await settingsPage();
@@ -3201,7 +3262,10 @@ async function genericListPage(route) {
       conversation_members: () => { if (state.route==="messages") messagesPage(); },
       tafab_listings: () => { if (state.route==="tafab") servicePage("marketplace"); },
       tafab_listing_messages: () => { if (state.route==="tafab") servicePage("marketplace"); },
-      tafab_ads: () => {}
+      tafab_ads: () => {},
+      tafab_events: () => { if (state.route==="events") eventsPage(); },
+      tafab_event_attendees: () => { if (state.route==="events") eventsPage(); },
+      tafab_creator_drafts: () => { if (state.route==="studio") creatorStudioPage(); }
     };
 
     Object.keys(refresh).forEach(table => {
@@ -3999,6 +4063,15 @@ async function genericListPage(route) {
     if (action === "publisher-mood") return openMoodComposer();
     if (action === "publisher-message") { state.composerMeta={...(state.composerMeta||{}),receive_messages:true}; return toast("Les messages directs seront activés sur cette publication."); }
     if (action === "publisher-event") return openPublisherField("event");
+    if (action === "create-event") return openCreateEvent();
+    if (action === "save-event") return saveEvent();
+    if (action === "event-rsvp") return eventRsvp(id, actionEl.dataset.status || "going");
+    if (action === "event-detail") return eventDetail(id);
+    if (action === "my-events") return eventsPage();
+    if (action === "new-creator-draft") return openCreatorDraft();
+    if (action === "edit-creator-draft") return openCreatorDraft(id);
+    if (action === "save-creator-draft") return saveCreatorDraft(id);
+    if (action === "delete-creator-draft") return deleteCreatorDraft(id);
     if (action === "publisher-live") return openLiveSetup();
     if (action === "close-publisher-field") { closeModal(); if(state.composerOpen) setTimeout(openPublisher,40); return; }
     if (action === "publisher-location-apply") {
