@@ -10,7 +10,7 @@ document.documentElement.classList.add("app-boot");
 
   const $ = id => document.getElementById(id);
   const esc = s => String(s ?? "").replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]));
-  const routes = ["home","friends","search","messages","notifications","profile","reels","pages","groups","saved","menu","tafab","events","studio","settings","creator"];
+  const routes = ["home","friends","search","messages","notifications","profile","reels","pages","groups","saved","menu","tafab","events","studio","settings","creator","ai","music"];
 
   // V19 production upload guard: client-side validation is UX protection only;
   // Supabase Storage policies/server-side validation must remain the authority.
@@ -2317,6 +2317,8 @@ async function genericListPage(route) {
       ["events","history","Évènements","Créer et découvrir des évènements"],
       ["studio","videos","Creator Studio","Créer et analyser vos contenus"],
       ["creator","payment","Monétisation","Coins, revenus et soutien aux créateurs"],
+      ["ai","sparkles","Tafaß AI","Assistant, traduction, rédaction et résumé"],
+      ["music","music","Tafaß Music","Artistes, albums, playlists et favoris"],
       ["saved","saved","Enregistrements","Vos contenus sauvegardés"],
       ["search","search","Rechercher","Trouver un compte ou contenu"],
       ["settings","settings","Para & Conf","Compte et confidentialité"]
@@ -3097,6 +3099,56 @@ async function genericListPage(route) {
     toast(`Cadeau ${gift==='rose'?'🌹':gift==='star'?'⭐':'❤️'} envoyé !`);
   }
 
+
+  const AI_ENDPOINT = window.TAFASS_AI_ENDPOINT || "";
+  async function aiRequest(mode, prompt){
+    if(!AI_ENDPOINT) throw new Error("Tafaß AI n’est pas encore configurée côté serveur. Ajoutez TAFASS_AI_ENDPOINT vers une Edge Function sécurisée.");
+    const r=await fetch(AI_ENDPOINT,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mode,prompt,language:"fr"})});
+    if(!r.ok) throw new Error(`Service AI indisponible (${r.status}).`);
+    const data=await r.json();
+    const text=String(data.response||data.text||data.output||"").trim();
+    if(!text) throw new Error("La réponse AI est vide.");
+    return text;
+  }
+  async function aiWorkspacePage(){
+    const token=state.renderToken;
+    const h=await sb.from("tafab_ai_history").select("id,mode,prompt,response,created_at").eq("user_id",state.user.id).order("created_at",{ascending:false}).limit(12);
+    if(token!==state.renderToken||state.route!=="ai")return;
+    const rows=(h.data||[]).map(x=>`<div class="v25-ai-history"><div><b>${esc(x.mode)}</b><small>${timeAgo(x.created_at)}</small></div><p>${esc(x.prompt)}</p><details><summary>Voir la réponse</summary><div>${esc(x.response)}</div></details></div>`).join("")||`<div class="empty">Votre historique AI apparaîtra ici après une première utilisation.</div>`;
+    simplePage("Tafaß AI",`<div class="v25-ai-hero"><div><span class="eyebrow">TAFAß • AI WORKSPACE</span><h3>Un assistant pour créer plus vite.</h3><p>Rédaction, traduction, résumé et assistant général. La clé AI reste côté serveur : aucune clé secrète n’est stockée dans l’application.</p></div><span class="v25-ai-badge">✦ AI</span></div><section class="v25-ai-panel"><div class="v25-mode-tabs"><button class="active" data-action="ai-mode" data-mode="assistant">Assistant</button><button data-action="ai-mode" data-mode="write">Écrire</button><button data-action="ai-mode" data-mode="translate">Traduire</button><button data-action="ai-mode" data-mode="summarize">Résumer</button></div><textarea id="aiPrompt" class="premium-input v25-ai-input" maxlength="8000" placeholder="Posez votre question ou donnez votre texte…"></textarea><div class="v25-ai-bottom"><span id="aiModeHint" class="muted">Mode : Assistant</span><button class="primary big" data-action="run-ai">✦ Demander à Tafaß AI</button></div><div id="aiResponse" class="v25-ai-response hidden"></div></section><section class="v25-ai-panel"><div class="section-title"><div><h3>Historique récent</h3><small>Uniquement vos demandes.</small></div></div>${rows}</section>`);
+    window.__tafassAiMode="assistant";
+  }
+  async function runAi(){
+    const prompt=$("aiPrompt")?.value.trim(); if(!prompt)return toast("Écrivez une demande.");
+    const mode=window.__tafassAiMode||"assistant", box=$("aiResponse"), btn=document.querySelector('[data-action="run-ai"]');
+    setLoading(btn,true,"Traitement…");
+    try{ const text=await aiRequest(mode,prompt); if(box){box.classList.remove("hidden");box.innerHTML=`<div class="v25-ai-answer-head"><b>Réponse Tafaß AI</b><button class="ghost-action" data-action="copy-ai">Copier</button></div><div class="v25-ai-answer-text">${esc(text)}</div>`;box.dataset.copy=text;} await sb.from("tafab_ai_history").insert({user_id:state.user.id,mode,prompt,response:text}); }
+    catch(e){toast(e?.message||"Impossible de contacter Tafaß AI.");}
+    finally{setLoading(btn,false,"✦ Demander à Tafaß AI");}
+  }
+  async function musicHubPage(){
+    const token=state.renderToken;
+    const [tr,likes]=await Promise.all([sb.from("tafab_music_tracks").select("id,title,genre,mood,duration_seconds,audio_url,cover_url,play_count,artist_id").eq("is_published",true).order("created_at",{ascending:false}).limit(80),sb.from("tafab_music_likes").select("track_id").eq("user_id",state.user.id)]);
+    if(token!==state.renderToken||state.route!=="music")return;
+    const liked=new Set((likes.data||[]).map(x=>x.track_id));
+    const rows=(tr.data||[]).map(t=>`<article class="v25-track"><button class="v25-track-play" data-action="music-play-db" data-id="${esc(t.id)}">▶</button><div class="v25-track-cover">♫</div><div class="v25-track-main"><b>${esc(t.title)}</b><small>${esc(t.genre||"Tafaß Original")} · ${esc(t.mood||"Ambiance")}${t.play_count?` · ${Number(t.play_count).toLocaleString('fr-FR')} écoutes`:""}</small></div><button class="v25-track-like ${liked.has(t.id)?"active":""}" data-action="music-like" data-id="${esc(t.id)}">${liked.has(t.id)?"♥":"♡"}</button></article>`).join("")||`<div class="empty">Le catalogue Music 2.0 sera rempli lorsque des artistes ou créateurs publieront leurs pistes.</div>`;
+    simplePage("Tafaß Music",`<div class="v25-music-hero"><div><span class="eyebrow">TAFAß • MUSIC 2.0</span><h3>Écoutez, découvrez, créez vos playlists.</h3><p>Catalogue extensible pour artistes, albums, playlists et favoris. Les pistes sans fichier audio peuvent utiliser le moteur original généré de Tafaß.</p></div><button class="primary" data-action="music-create-playlist">＋ Nouvelle playlist</button></div><div class="v25-music-tools"><input id="musicSearch" class="premium-input" placeholder="Rechercher un titre, style ou ambiance…"><button class="secondary-action" data-action="publisher-music">♫ Music Lab</button></div><section class="v25-music-panel"><div class="section-title"><div><h3>Découvrir</h3><small>${(tr.data||[]).length} piste(s) du catalogue serveur</small></div></div><div id="musicTrackList" class="v25-track-list">${rows}</div></section>`);
+    $("musicSearch")?.addEventListener("input",e=>{const q=e.target.value.toLowerCase();document.querySelectorAll(".v25-track").forEach(x=>x.classList.toggle("hidden",q&&!x.textContent.toLowerCase().includes(q)));});
+  }
+  async function playDbMusic(id){
+    const t=(await sb.from("tafab_music_tracks").select("*").eq("id",id).maybeSingle()).data; if(!t)return toast("Piste introuvable.");
+    if(t.audio_url){ let a=window.__tafassMusicAudio; if(a){a.pause();a=null;} a=new Audio(t.audio_url); window.__tafassMusicAudio=a; a.play().catch(()=>toast("Lecture audio bloquée par le navigateur.")); }
+    else { const catalog=publisherMusicCatalog(); const fallback=catalog.find(x=>x.title.toLowerCase()===String(t.title).toLowerCase())||catalog[(Number(t.play_count)||0)%catalog.length]; playGeneratedMusic(fallback); }
+    sb.rpc("tafab_music_register_play",{p_track_id:id}).catch(()=>{}); toast(`Lecture : ${t.title}`);
+  }
+  async function toggleMusicLike(id){
+    const q=await sb.from("tafab_music_likes").select("track_id").eq("user_id",state.user.id).eq("track_id",id).maybeSingle();
+    const r=q.data?await sb.from("tafab_music_likes").delete().eq("user_id",state.user.id).eq("track_id",id):await sb.from("tafab_music_likes").insert({user_id:state.user.id,track_id:id});
+    if(r.error)return toast(r.error.message); return musicHubPage();
+  }
+  function openMusicPlaylist(){openModal(`<div class="modal-box v25-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • PLAYLIST</span><h3>Créer une playlist</h3><input id="playlistName" class="premium-input" maxlength="80" placeholder="Nom de la playlist"><textarea id="playlistDesc" class="premium-input" maxlength="300" placeholder="Description (optionnel)"></textarea><button class="primary big" data-action="save-music-playlist">Créer</button></div>`)}
+  async function saveMusicPlaylist(){const name=$("playlistName")?.value.trim();if(!name)return toast("Donnez un nom à la playlist.");const r=await sb.from("tafab_music_playlists").insert({user_id:state.user.id,name,description:$("playlistDesc")?.value.trim()||"",is_public:false});if(r.error)return toast(r.error.message);closeModal();toast("Playlist créée.");}
+
   async function render() {
     if (!state.user) return;
     const token = ++state.renderToken;
@@ -3116,6 +3168,8 @@ async function genericListPage(route) {
       else if (route === "events") await eventsPage();
       else if (route === "studio") await creatorStudioPage();
       else if (route === "creator") await creatorMonetisationPage();
+      else if (route === "ai") await aiWorkspacePage();
+      else if (route === "music") await musicHubPage();
       else if (route === "menu") menuPage();
       else if (route === "tafab") await tafabPage();
       else if (route === "settings") await settingsPage();
@@ -3314,7 +3368,10 @@ async function genericListPage(route) {
       tafab_live_gifts: () => { if (state.route==="creator") creatorMonetisationPage(); },
       tafab_creator_subscriptions: () => { if (state.route==="creator") creatorMonetisationPage(); },
       tafab_wallets: () => { if (state.route==="creator") creatorMonetisationPage(); },
-      tafab_withdrawal_requests: () => { if (state.route==="creator") creatorMonetisationPage(); }
+      tafab_withdrawal_requests: () => { if (state.route==="creator") creatorMonetisationPage(); },
+      tafab_music_tracks: () => { if (state.route==="music") musicHubPage(); },
+      tafab_music_likes: () => { if (state.route==="music") musicHubPage(); },
+      tafab_music_playlists: () => { if (state.route==="music") musicHubPage(); }
     };
 
     Object.keys(refresh).forEach(table => {
@@ -4427,6 +4484,13 @@ async function genericListPage(route) {
     if (action === "message-attachment") return openMessageAttachment();
     if (action === "message-voice") return toggleVoiceRecording();
     if (action === "live-gift") return sendLiveGift(actionEl.dataset.gift||"heart",Number(actionEl.dataset.coins||10));
+    if (action === "ai-mode") { window.__tafassAiMode=actionEl.dataset.mode||"assistant"; document.querySelectorAll('[data-action="ai-mode"]').forEach(x=>x.classList.toggle("active",x===actionEl)); const labels={assistant:"Assistant",write:"Écrire",translate:"Traduire",summarize:"Résumer"}; if($("aiModeHint"))$("aiModeHint").textContent=`Mode : ${labels[window.__tafassAiMode]||"Assistant"}`; return; }
+    if (action === "run-ai") return runAi();
+    if (action === "copy-ai") { const text=$("aiResponse")?.dataset.copy||""; if(!text)return; try{await navigator.clipboard.writeText(text);toast("Réponse copiée.");}catch(_){toast("Copie indisponible sur cet appareil.");} return; }
+    if (action === "music-play-db") return playDbMusic(id);
+    if (action === "music-like") return toggleMusicLike(id);
+    if (action === "music-create-playlist") return openMusicPlaylist();
+    if (action === "save-music-playlist") return saveMusicPlaylist();
     if (action === "request-withdrawal") return openWithdrawalRequest();
     if (action === "submit-withdrawal") return submitWithdrawal();
     if (action === "creator-pricing") return openCreatorPricing();
