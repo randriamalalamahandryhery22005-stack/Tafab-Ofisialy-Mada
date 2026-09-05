@@ -1274,7 +1274,9 @@ function publisherBackgrounds(){
     const mine=m.sender_id===state.user.id;
     const author=map.get(m.sender_id);
     const body=esc(m.content);
-    return '<div class="message '+(mine?'mine':'')+'" data-message-id="'+esc(m.id)+'" data-author="'+esc(author?nameOf(author):'Membre')+'"><div class="message-body">'+body+'</div><small>'+timeAgo(m.created_at)+(mine ? (m.is_read ? ' · Lu' : ' · Envoyé') : '')+'</small><div class="message-actions"><button type="button" data-action="reply-message" data-id="'+esc(m.id)+'" aria-label="Répondre">↩</button>'+(mine?'<button type="button" data-action="edit-message" data-id="'+esc(m.id)+'" aria-label="Modifier">✎</button><button type="button" data-action="delete-message" data-id="'+esc(m.id)+'" aria-label="Supprimer">⌫</button>':'')+'</div></div>';
+    const replyPreview = m.reply_to_content ? `<div class="message-reply-preview"><span class="message-reply-line"></span><div><b>${esc(m.reply_to_author || 'Message')}</b><span>${esc(String(m.reply_to_content).slice(0,180))}</span></div></div>` : '';
+    const edited = m.updated_at && m.updated_at !== m.created_at ? ' · modifié' : '';
+    return '<div class="message '+(mine?'mine':'')+'" data-message-id="'+esc(m.id)+'" data-author="'+esc(author?nameOf(author):'Membre')+'"><div class="message-card">'+replyPreview+'<div class="message-body">'+body+'</div><div class="message-meta"><small>'+timeAgo(m.created_at)+edited+(mine ? (m.is_read ? ' · Lu' : ' · Envoyé') : '')+'</small><button type="button" class="message-more" data-action="message-menu" data-id="'+esc(m.id)+'" aria-label="Options du message">⋯</button></div></div><div class="message-actions" role="group" aria-label="Actions du message"><button type="button" data-action="reply-message" data-id="'+esc(m.id)+'"><span>↩</span><small>Répondre</small></button>'+(mine?'<button type="button" data-action="edit-message" data-id="'+esc(m.id)+'"><span>✎</span><small>Modifier</small></button><button type="button" class="danger" data-action="delete-message" data-id="'+esc(m.id)+'"><span>⌫</span><small>Supprimer</small></button>':'')+'</div></div>';
   }
 
   async function refreshConversation(id){
@@ -1286,25 +1288,40 @@ function publisherBackgrounds(){
     if(!id) return;
     const r=await sb.from("messages").select("id,content,sender_id").eq("id",id).eq("sender_id",state.user.id).maybeSingle();
     if(r.error||!r.data) return toast("Ce message ne peut pas être modifié.");
-    const value=window.prompt("Modifier le message", r.data.content||"");
-    if(value===null) return;
-    const text=value.trim();
+    const current=String(r.data.content||"");
+    openModal(`<div class="modal-box message-action-modal edit-message-modal"><button class="modal-close" data-action="close-modal">×</button><div class="message-action-icon edit">✎</div><span class="eyebrow">MESSAGE</span><h3>Modifier le message</h3><p class="muted">Corrigez votre message puis enregistrez les modifications.</p><textarea id="editMessageText" class="premium-textarea message-edit-textarea" maxlength="5000">${esc(current)}</textarea><div class="message-action-footer"><button class="ghost-action" data-action="close-modal">Annuler</button><button class="primary big" data-action="save-message-edit" data-id="${esc(id)}">Enregistrer</button></div></div>`);
+    setTimeout(()=>{const el=$("editMessageText"); el?.focus(); el?.setSelectionRange(el.value.length,el.value.length);},40);
+  }
+
+  async function saveConversationMessageEdit(id){
+    const text=$("editMessageText")?.value.trim()||"";
     if(!text) return toast("Le message ne peut pas être vide.");
-    const u=await sb.from("messages").update({content:text}).eq("id",id).eq("sender_id",state.user.id);
+    const u=await sb.from("messages").update({content:text,updated_at:new Date().toISOString()}).eq("id",id).eq("sender_id",state.user.id);
     if(u.error) return toast(u.error.message);
-    toast("Message modifié");
+    closeModal(); toast("Message modifié");
     return refreshConversation(state.selectedConversation);
   }
 
   async function deleteConversationMessage(id){
     if(!id) return;
-    const r=await sb.from("messages").select("id,sender_id").eq("id",id).eq("sender_id",state.user.id).maybeSingle();
+    const r=await sb.from("messages").select("id,content,sender_id").eq("id",id).eq("sender_id",state.user.id).maybeSingle();
     if(r.error||!r.data) return toast("Ce message ne peut pas être supprimé.");
-    if(!window.confirm("Supprimer ce message ?")) return;
+    const preview=String(r.data.content||"").slice(0,120);
+    openModal(`<div class="modal-box message-action-modal delete-message-modal"><button class="modal-close" data-action="close-modal">×</button><div class="message-action-icon danger">⌫</div><span class="eyebrow danger-eyebrow">SUPPRESSION</span><h3>Supprimer ce message ?</h3><p class="muted">Cette action supprimera définitivement votre message.</p><div class="delete-message-preview">${esc(preview)}${String(r.data.content||"").length>120?'…':''}</div><div class="message-action-footer"><button class="ghost-action" data-action="close-modal">Annuler</button><button class="danger-button" data-action="confirm-delete-message" data-id="${esc(id)}">Supprimer</button></div></div>`);
+  }
+
+  async function confirmDeleteConversationMessage(id){
     const d=await sb.from("messages").delete().eq("id",id).eq("sender_id",state.user.id);
     if(d.error) return toast(d.error.message);
-    toast("Message supprimé");
+    closeModal(); toast("Message supprimé");
     return refreshConversation(state.selectedConversation);
+  }
+
+  function messageActionMenu(id){
+    const node=document.querySelector(`[data-message-id="${CSS.escape(String(id))}"]`);
+    if(!node) return;
+    const mine=node.classList.contains("mine");
+    openModal(`<div class="modal-box message-action-modal message-menu-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">MESSAGE</span><h3>Actions du message</h3><div class="message-menu-list"><button data-action="reply-message" data-id="${esc(id)}"><span class="menu-action-icon">↩</span><span><b>Répondre</b><small>Répondre à ce message</small></span><i>›</i></button>${mine?`<button data-action="edit-message" data-id="${esc(id)}"><span class="menu-action-icon">✎</span><span><b>Modifier</b><small>Changer le contenu du message</small></span><i>›</i></button><button class="danger-row" data-action="delete-message" data-id="${esc(id)}"><span class="menu-action-icon">⌫</span><span><b>Supprimer</b><small>Supprimer définitivement ce message</small></span><i>›</i></button>`:''}</div></div>`);
   }
 
   function replyConversationMessage(id){
@@ -1314,10 +1331,16 @@ function publisherBackgrounds(){
     const author=node.dataset.author||"Membre";
     const input=$("messageText");
     if(!input) return;
-    const quote=`↪ ${author}: ${text.slice(0,180)}\n`;
-    input.value=quote;
-    input.focus();
-    input.setSelectionRange(input.value.length,input.value.length);
+    const composer=$("messageForm")?.parentElement || input.parentElement;
+    let bar=$("replyComposerBar");
+    if(!bar && composer){ bar=document.createElement("div"); bar.id="replyComposerBar"; bar.className="reply-composer-bar"; composer.prepend(bar); }
+    if(bar) bar.innerHTML=`<span class="reply-composer-icon">↩</span><div><b>Répondre à ${esc(author)}</b><small>${esc(text.slice(0,120))}${text.length>120?'…':''}</small></div><button type="button" data-action="cancel-message-reply" aria-label="Annuler la réponse">×</button>`;
+    input.value=""; input.dataset.replyTo=id; input.focus();
+  }
+
+  function cancelMessageReply(){
+    const bar=$("replyComposerBar"); if(bar) bar.remove();
+    const input=$("messageText"); if(input){ delete input.dataset.replyTo; input.focus(); }
   }
 
   async function notificationsPage() {
@@ -3907,9 +3930,13 @@ async function genericListPage(route) {
     if (action === "unblock-profile") return unblockProfile(id);
     if (action === "new-message") return newMessage();
     if (action === "start-conversation") return startConversation(id);
-    if (action === "reply-message") return replyConversationMessage(id);
+    if (action === "reply-message") { closeModal(); return replyConversationMessage(id); }
+    if (action === "cancel-message-reply") return cancelMessageReply();
+    if (action === "message-menu") return messageActionMenu(id);
     if (action === "edit-message") return editConversationMessage(id);
+    if (action === "save-message-edit") return saveConversationMessageEdit(id);
     if (action === "delete-message") return deleteConversationMessage(id);
+    if (action === "confirm-delete-message") return confirmDeleteConversationMessage(id);
     if (action === "open-conversation") return openConversation(id);
     if (action === "mark-read") return markRead();
     if (action === "theme") return toggleTheme();

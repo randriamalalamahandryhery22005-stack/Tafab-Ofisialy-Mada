@@ -3765,3 +3765,58 @@ button,.menu-card,.list-row,.page-menu-card{max-width:100%}
 .message-actions button:hover{background:rgba(255,255,255,.16)}
 .message.mine .message-actions{right:8px}
 @media (hover:none){.message-actions{opacity:1}}
+
+
+/* V8.1 — Premium message actions / edit / delete / reply */
+.message{padding-bottom:10px}
+.message-card{position:relative;border-radius:18px;transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
+.message:hover .message-card{transform:translateY(-1px)}
+.message-meta{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:7px;min-height:24px}
+.message-meta small{opacity:.72;font-size:9px;letter-spacing:.01em}
+.message-more{width:27px;height:27px;border:1px solid rgba(255,255,255,.08);border-radius:9px;background:rgba(255,255,255,.055);color:inherit;display:grid;place-items:center;cursor:pointer;font-size:17px;line-height:1;opacity:.45;transition:.18s}
+.message-more:hover,.message:focus-within .message-more{opacity:1;background:rgba(255,255,255,.11);transform:scale(1.04)}
+.message-actions{position:absolute;right:10px;bottom:-1px;display:flex;align-items:center;gap:5px;padding:5px;border:1px solid rgba(255,255,255,.09);border-radius:13px;background:rgba(12,17,31,.88);backdrop-filter:blur(18px);box-shadow:0 10px 28px rgba(0,0,0,.22);opacity:0;visibility:hidden;transform:translateY(5px);transition:opacity .18s ease,transform .18s ease,visibility .18s}
+.message:hover .message-actions,.message:focus-within .message-actions{opacity:1;visibility:visible;transform:translateY(0)}
+.message-actions button{min-width:68px;height:35px;padding:4px 8px;border:0;border-radius:10px;background:transparent;color:inherit;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;font-size:12px;transition:.16s}
+.message-actions button span{font-size:15px}
+.message-actions button small{font-size:9px;font-weight:750}
+.message-actions button:hover{background:rgba(255,255,255,.09)}
+.message-actions button.danger{color:#ff7d8e}
+.message-actions button.danger:hover{background:rgba(255,72,100,.11)}
+.message-reply-preview{display:flex;gap:9px;margin-bottom:8px;padding:7px 9px;border-radius:11px;background:rgba(255,255,255,.055);overflow:hidden}
+.message-reply-line{width:3px;border-radius:99px;background:currentColor;opacity:.7;flex:none}
+.message-reply-preview div{min-width:0;display:grid;gap:2px}
+.message-reply-preview b{font-size:9px;opacity:.8}
+.message-reply-preview span{font-size:9px;opacity:.62;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.reply-composer-bar{display:flex;align-items:center;gap:10px;margin:0 0 7px;padding:9px 11px;border:1px solid rgba(90,137,255,.22);border-radius:13px;background:linear-gradient(135deg,rgba(46,91,190,.14),rgba(255,255,255,.035));box-shadow:0 8px 25px rgba(0,0,0,.12)}
+.reply-composer-icon{width:28px;height:28px;border-radius:9px;display:grid;place-items:center;background:rgba(91,133,255,.16);font-size:14px;flex:none}
+.reply-composer-bar>div{min-width:0;display:grid;gap:2px;flex:1}
+.reply-composer-bar b{font-size:10px}
+.reply-composer-bar small{font-size:9px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.reply-composer-bar>button{width:28px;height:28px;border:0;border-radius:8px;background:rgba(255,255,255,.06);color:inherit;cursor:pointer;font-size:16px}
+.message-action-modal{max-width:470px;border:1px solid rgba(255,255,255,.1);box-shadow:0 28px 90px rgba(0,0,0,.5)}
+.message-action-icon{width:48px;height:48px;border-radius:15px;display:grid;place-items:center;margin-bottom:12px;font-size:21px;background:rgba(91,133,255,.13);border:1px solid rgba(91,133,255,.2)}
+.message-action-icon.danger{background:rgba(255,72,100,.1);border-color:rgba(255,72,100,.2);color:#ff8090}
+.message-action-icon.edit{color:#8db0ff}
+.danger-eyebrow{color:#ff8090!important}
+.message-edit-textarea{min-height:150px;resize:vertical;margin-top:12px}
+.message-action-footer{display:flex;justify-content:flex-end;gap:9px;margin-top:16px}
+.danger-button{min-height:44px;padding:0 17px;border:0;border-radius:12px;background:linear-gradient(135deg,#ff4f6d,#e92f55);color:#fff;font-weight:800;cursor:pointer;box-shadow:0 10px 24px rgba(233,47,85,.2)}
+.delete-message-preview{margin-top:13px;padding:12px 13px;border-radius:12px;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.07);font-size:11px;line-height:1.5;color:var(--muted);word-break:break-word}
+.message-menu-modal h3{margin-bottom:14px}
+.message-menu-list{display:grid;gap:7px}
+.message-menu-list>button{width:100%;display:grid;grid-template-columns:40px minmax(0,1fr) 18px;align-items:center;gap:11px;padding:11px;border:1px solid rgba(255,255,255,.07);border-radius:14px;background:rgba(255,255,255,.035);color:inherit;text-align:left;cursor:pointer;transition:.17s}
+.message-menu-list>button:hover{background:rgba(255,255,255,.075);transform:translateY(-1px);border-color:rgba(91,133,255,.22)}
+.message-menu-list .menu-action-icon{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;background:rgba(91,133,255,.12);font-size:16px}
+.message-menu-list button>span:nth-child(2){display:grid;gap:3px;min-width:0}
+.message-menu-list b{font-size:11px}
+.message-menu-list small{font-size:9px;color:var(--muted)}
+.message-menu-list i{font-style:normal;font-size:19px;opacity:.45}
+.message-menu-list .danger-row{color:#ff8291}
+.message-menu-list .danger-row .menu-action-icon{background:rgba(255,72,100,.1)}
+@media(max-width:640px){
+ .message-actions{left:6px;right:6px;bottom:-4px;justify-content:stretch}
+ .message-actions button{flex:1;min-width:0}
+ .message-action-modal{width:calc(100vw - 24px);border-radius:20px}
+}
+@media(hover:none){.message-actions{opacity:0;visibility:hidden}.message:focus-within .message-actions{opacity:1;visibility:visible}}
