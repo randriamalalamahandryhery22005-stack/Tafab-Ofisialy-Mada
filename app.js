@@ -1319,6 +1319,10 @@ function publisherBackgrounds(){
     const hiddenR=await sb.from("tafab_message_hidden").select("message_id").eq("user_id",state.user.id);
     const hiddenIds=new Set((hiddenR.data||[]).map(x=>x.message_id));
     const msgs=(rawMsgs||[]).filter(m=>!hiddenIds.has(m.id));
+    const messageIds=(msgs||[]).map(m=>m.id).filter(Boolean);
+    const reactionsR=messageIds.length ? await sb.from("tafab_message_reactions").select("message_id,user_id,reaction").in("message_id",messageIds) : {data:[]};
+    const reactionMap=new Map();
+    (reactionsR.data||[]).forEach(r=>{ if(!reactionMap.has(r.message_id)) reactionMap.set(r.message_id,[]); reactionMap.get(r.message_id).push(r); });
     await sb.rpc("tafa_mark_conversation_read", { p_conversation_id:id });
     // Resolve reply targets in one extra query so replies remain visible after reload/reconnect.
     const replyIds=[...new Set((msgs||[]).map(m=>m.reply_to_id).filter(Boolean))];
@@ -1333,7 +1337,7 @@ function publisherBackgrounds(){
     const map = new Map((profiles || []).map(p => [p.id, p]));
     const otherId = (await sb.from("conversation_members").select("user_id").eq("conversation_id", id).neq("user_id", state.user.id).maybeSingle()).data?.user_id;
     const otherProfile = otherId ? (await sb.from("profiles").select("*").eq("id", otherId).maybeSingle()).data : null;
-    $("content").innerHTML = `<section class="clean-page messages-page conversation-page"><div class="page-header clean-page-header"><button class="page-back" data-action="page-back" type="button"><span aria-hidden="true">‹</span><small>Messages</small></button><div class="conversation-title">${avatarHTML(otherProfile || state.profile,"avatar conversation-avatar")}<div><h2>${esc(otherProfile ? nameOf(otherProfile) : "Discussion")}</h2><small id="conversationPresence" class="conversation-presence">Connexion sécurisée</small></div></div><span></span></div><div id="typingIndicator" class="typing-indicator" hidden>écrit…</div><div class="message-list clean-message-list">${(msgs||[]).map(m=>conversationMessageHTML(m,map)).join("")||`<div class="empty">Dites bonjour 👋</div>`}</div><form id="messageForm" class="comment-form clean-message-form"><div class="message-v22-tools"><button type="button" class="message-tool" data-action="message-attachment" title="Joindre un fichier">📎</button><button type="button" class="message-tool" data-action="message-voice" title="Message vocal">🎙️</button></div><input id="messageText" autocomplete="off" placeholder="Écrire un message..."><input id="messageAttachment" type="file" hidden accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip,.apk"><button type="submit">Envoyer</button></form></section>`;
+    $("content").innerHTML = `<section class="clean-page messages-page conversation-page"><div class="page-header clean-page-header"><button class="page-back" data-action="page-back" type="button"><span aria-hidden="true">‹</span><small>Messages</small></button><div class="conversation-title">${avatarHTML(otherProfile || state.profile,"avatar conversation-avatar")}<div><h2>${esc(otherProfile ? nameOf(otherProfile) : "Discussion")}</h2><small id="conversationPresence" class="conversation-presence">Connexion sécurisée</small></div></div><span></span></div><div id="typingIndicator" class="typing-indicator" hidden>écrit…</div><div class="message-list clean-message-list">${(msgs||[]).map(m=>conversationMessageHTML(m,map,reactionMap)).join("")||`<div class="empty">Dites bonjour 👋</div>`}</div><form id="messageForm" class="comment-form clean-message-form"><div class="message-v22-tools"><button type="button" class="message-tool" data-action="message-attachment" title="Joindre un fichier">📎</button><button type="button" class="message-tool" data-action="message-voice" title="Message vocal">🎙️</button></div><input id="messageText" autocomplete="off" placeholder="Écrire un message..."><input id="messageAttachment" type="file" hidden accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip,.apk"><button type="submit">Envoyer</button></form></section>`;
 
     // Conversation-level Realtime: typing + online presence without storing ephemeral state in SQL.
     if(state.conversationChannel){ try{ await sb.removeChannel(state.conversationChannel); }catch(_){} state.conversationChannel=null; }
@@ -1379,7 +1383,7 @@ function publisherBackgrounds(){
   }
 
 
-  function conversationMessageHTML(m, map){
+  function conversationMessageHTML(m, map, reactionMap=new Map()){
     const mine=m.sender_id===state.user.id;
     const author=map.get(m.sender_id);
     const mt=String(m.media_type||"");
@@ -1392,7 +1396,10 @@ function publisherBackgrounds(){
     } else body=esc(m.content||'');
     const replyPreview = m.reply_to_content ? `<div class="message-reply-preview"><span class="message-reply-line"></span><div><b>Message</b><span>${esc(String(m.reply_to_content).slice(0,180))}</span></div></div>` : '';
     const edited = m.updated_at && m.updated_at !== m.created_at ? ' · modifié' : '';
-    return `<div class="message ${mine?'mine':''}" data-message-id="${esc(m.id)}" data-author="${esc(author?nameOf(author):'Membre')}"><div class="message-card"><div class="message-reaction-badge" data-reaction-for="${esc(m.id)}"></div>${replyPreview}<div class="message-body">${body}</div><div class="message-meta"><small>${timeAgo(m.created_at)}${edited}${mine ? (m.is_read ? ' · Lu' : ' · Envoyé') : ''}</small><button type="button" class="message-more" data-action="message-menu" data-id="${esc(m.id)}" aria-label="Options du message">⋯</button></div></div></div>`;
+    const reactionRows=reactionMap.get(m.id)||[];
+    const reactionCounts={}; reactionRows.forEach(r=>reactionCounts[r.reaction]=(reactionCounts[r.reaction]||0)+1);
+    const reactionBadge=Object.entries(reactionCounts).map(([emoji,count])=>`<span class="message-reaction-chip">${esc(emoji)}${count>1?`<b>${count}</b>`:''}</span>`).join('');
+    return `<div class="message ${mine?'mine':''}" data-message-id="${esc(m.id)}" data-author="${esc(author?nameOf(author):'Membre')}"><div class="message-card">${reactionBadge?`<div class="message-reaction-badge visible">${reactionBadge}</div>`:''}${replyPreview}<div class="message-body">${body}</div><div class="message-meta"><small>${timeAgo(m.created_at)}${edited}${mine ? (m.is_read ? ' · Lu' : ' · Envoyé') : ''}</small><button type="button" class="message-more" data-action="message-menu" data-id="${esc(m.id)}" aria-label="Options du message">⋯</button></div></div></div>`;
   }
 
   async function refreshConversation(id){
@@ -1430,8 +1437,9 @@ function publisherBackgrounds(){
     if(r.error)return toast(r.error.message); closeModal(); return refreshConversation(state.selectedConversation);
   }
   async function deleteMessageForEveryone(id){
-    const r=await sb.from('messages').delete().eq('id',id).eq('sender_id',state.user.id);
-    if(r.error)return toast(r.error.message); closeModal(); toast('Message supprimé pour tout le monde'); return refreshConversation(state.selectedConversation);
+    const r=await sb.rpc('tafab_delete_message_for_everyone',{p_message_id:id});
+    if(r.error)return toast(r.error.message||'Suppression impossible.');
+    closeModal(); toast('Message supprimé pour tout le monde'); return refreshConversation(state.selectedConversation);
   }
   async function copyMessage(id){
     const r=await sb.from('messages').select('content').eq('id',id).maybeSingle();

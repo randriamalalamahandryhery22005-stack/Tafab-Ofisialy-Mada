@@ -3981,3 +3981,19 @@ body.light .publisher-modal-v2 .publisher-editor{background:#f7f9fc;color:#17263
 body.light .publisher-modal-v2 .publisher-tools{border-color:#dbe4ef}
 body.light .publisher-modal-v2 .publisher-tools button{color:#17263d}
 body.light .publisher-modal-v2 .publisher-audience{background:#f1f5fa;color:#17263d;border-color:#d7e0ec}
+
+
+/* V27.1 — Messages compact + outgoing red + visible reactions */
+.message{max-width:min(68%, 520px);padding:8px 10px;margin:5px 0;border-radius:15px;line-height:1.4;overflow:visible}
+.message.mine{margin-left:auto;background:linear-gradient(135deg,#e53950,#c91f3d);border-color:rgba(255,255,255,.06);color:#fff}
+body.light .message.mine{background:linear-gradient(135deg,#e53950,#c91f3d);color:#fff}
+.message-card{max-width:100%;overflow:visible}
+.message-body{overflow-wrap:anywhere;word-break:break-word;font-size:12px}
+.message-meta{margin-top:4px;min-height:20px}
+.message-meta small{font-size:8px}
+.message-more{width:24px;height:24px;font-size:15px}
+.message-reaction-badge.visible{display:flex;position:relative;right:auto;bottom:auto;gap:3px;align-items:center;justify-content:flex-start;margin:-2px 0 5px;padding:2px 0;background:transparent;border:0;box-shadow:none;min-height:0}
+.message-reaction-chip{display:inline-flex;align-items:center;gap:2px;padding:2px 5px;border-radius:999px;background:rgba(255,255,255,.11);border:1px solid rgba(255,255,255,.09);font-size:12px;line-height:1}
+.message-reaction-chip b{font-size:8px;opacity:.8}
+@media(max-width:720px){.message{max-width:78%;padding:7px 9px;border-radius:14px}.message-body{font-size:12px}.message-reaction-chip{font-size:11px}}
+@media(max-width:390px){.message{max-width:82%}}

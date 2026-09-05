@@ -78,3 +78,34 @@ exception when others then null; end $$;
 do $$ begin
   alter publication supabase_realtime add table public.tafab_message_reactions;
 exception when duplicate_object then null; when others then null; end $$;
+
+
+-- V27.1: definitive delete-for-everyone RPC.
+-- SECURITY DEFINER is used because normal client DELETE may be restricted by the base messages RLS.
+create or replace function public.tafab_delete_message_for_everyone(p_message_id uuid)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_deleted integer;
+begin
+  if auth.uid() is null then
+    raise exception 'Not authenticated';
+  end if;
+
+  delete from public.messages
+  where id = p_message_id
+    and sender_id = auth.uid();
+
+  get diagnostics v_deleted = row_count;
+  if v_deleted = 0 then
+    raise exception 'Message introuvable ou suppression non autorisée';
+  end if;
+  return true;
+end;
+$$;
+
+revoke all on function public.tafab_delete_message_for_everyone(uuid) from public;
+grant execute on function public.tafab_delete_message_for_everyone(uuid) to authenticated;
