@@ -2550,8 +2550,13 @@ async function genericListPage(route) {
     openModal(`<div class="modal-box page-settings-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • HISTORIQUE</span><h3>Historique des noms</h3><p class="muted">Nom actuel : <b>${esc(p.name)}</b>. Un changement de nom est autorisé une fois tous les 15 jours.</p><div class="page-history-list">${rows}</div></div>`);
   }
 
-  function menuPage() {
+  async function menuPage() {
     state.backOverride = null;
+    /* ADMIN MENU: resolve the server-side role before rendering the Menu.
+       This makes Administration appear immediately for a real Supabase admin. */
+    if(!pageModeActive()){
+      try { state.__isAdmin = await adminIsAllowed(); } catch(_) { state.__isAdmin = false; }
+    }
     if(pageModeActive()) return pageMenu();
     const p = state.profile || {};
     const items = [
@@ -3567,7 +3572,7 @@ async function genericListPage(route) {
       else if (route === "music") await musicHubPage();
       else if (route === "business") await businessAdsPage();
       else if (route === "admin") await adminTotalPage();
-      else if (route === "menu") menuPage();
+      else if (route === "menu") await menuPage();
       else if (route === "tafab") await tafabPage();
       else if (route === "settings") await settingsPage();
       if (token !== state.renderToken || route !== state.route) return;
