@@ -1258,10 +1258,11 @@ function publisherBackgrounds(){
       if(hiddenConv) continue;
       const { data: last } = await sb.from("messages").select("content,created_at")
         .eq("conversation_id", c.id).order("created_at", { ascending:false }).limit(1);
+      const alias=(person && (await sb.from("tafab_conversation_aliases").select("nickname").eq("conversation_id",c.id).eq("target_user_id",person.id).maybeSingle()).data?.nickname)||"";
       cards.push(`<button class="list-row message-conversation" style="width:100%;text-align:left"
         data-action="open-conversation" data-id="${esc(c.id)}" data-other-id="${esc(person?.id||"")}">
         ${avatarHTML(person || state.profile)}
-        <div class="grow"><b>${esc(c.name || (person ? nameOf(person) : "Conversation"))}</b>
+        <div class="grow"><b>${esc(c.name || (person ? (alias || nameOf(person)) : "Conversation"))}</b>
         <small>${esc(last?.[0]?.content || "Ouvrir la conversation")} · ${last?.[0] ? timeAgo(last[0].created_at) : ""}</small></div><small>›</small>
       </button>`);
     }
@@ -1294,7 +1295,10 @@ function publisherBackgrounds(){
     const cfg=(await sb.from("user_settings").select("allow_messages").eq("user_id",otherId).maybeSingle()).data;
     if(cfg?.allow_messages===false)return toast("Ce compte n’accepte pas les messages.");
     const { data: mine } = await sb.from("conversation_members").select("conversation_id").eq("user_id", state.user.id);
+    const hiddenRows = await sb.from("tafab_deleted_conversations").select("conversation_id").eq("user_id", state.user.id);
+    const hiddenConversationIds = new Set((hiddenRows.data || []).map(x => String(x.conversation_id)));
     for (const m of mine || []) {
+      if(hiddenConversationIds.has(String(m.conversation_id))) continue;
       const r = await sb.from("conversation_members").select("user_id").eq("conversation_id", m.conversation_id);
       if ((r.data || []).some(x => x.user_id === otherId)) { closeModal(); return openConversation(m.conversation_id); }
     }
@@ -1321,7 +1325,7 @@ function publisherBackgrounds(){
     const msgs=(rawMsgs||[]).filter(m=>!hiddenIds.has(m.id));
     const messageIds=(msgs||[]).map(m=>m.id).filter(Boolean);
     const reactionsR=messageIds.length ? await sb.from("tafab_message_reactions").select("message_id,user_id,reaction").in("message_id",messageIds) : {data:[]};
-    const themeR=await sb.from("tafab_message_themes").select("theme").eq("user_id",state.user.id).eq("conversation_id",id).maybeSingle();
+    const themeR=await sb.from("tafab_shared_message_themes").select("theme").eq("conversation_id",id).maybeSingle();
     const conversationTheme=themeR.data?.theme||"default";
     const reactionMap=new Map();
     (reactionsR.data||[]).forEach(r=>{ if(!reactionMap.has(r.message_id)) reactionMap.set(r.message_id,[]); reactionMap.get(r.message_id).push(r); });
@@ -1339,7 +1343,10 @@ function publisherBackgrounds(){
     const map = new Map((profiles || []).map(p => [p.id, p]));
     const otherId = (await sb.from("conversation_members").select("user_id").eq("conversation_id", id).neq("user_id", state.user.id).maybeSingle()).data?.user_id;
     const otherProfile = otherId ? (await sb.from("profiles").select("*").eq("id", otherId).maybeSingle()).data : null;
-    $("content").innerHTML = `<section class="clean-page messages-page conversation-page"><div class="page-header clean-page-header"><button class="page-back" data-action="page-back" type="button"><span aria-hidden="true">‹</span><small>Messages</small></button><div class="conversation-title">${avatarHTML(otherProfile || state.profile,"avatar conversation-avatar")}<div><h2>${esc(otherProfile ? nameOf(otherProfile) : "Discussion")}</h2><small id="conversationPresence" class="conversation-presence">Connexion sécurisée</small></div></div><button class="message-theme-button" data-action="message-theme" data-id="${esc(id)}" aria-label="Thème de la conversation" title="Personnaliser le fond">🎨</button></div><div id="typingIndicator" class="typing-indicator" hidden>écrit…</div><div class="message-list clean-message-list theme-${esc(conversationTheme)}">${(msgs||[]).map(m=>conversationMessageHTML(m,map,reactionMap)).join("")||`<div class="empty">Dites bonjour 👋</div>`}</div><form id="messageForm" class="comment-form clean-message-form"><div class="message-v22-tools"><button type="button" class="message-tool" data-action="message-attachment" title="Joindre un fichier">📎</button><button type="button" class="message-tool" data-action="message-voice" title="Message vocal">🎙️</button></div><input id="messageText" autocomplete="off" placeholder="Écrire un message..."><input id="messageAttachment" type="file" hidden accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip,.apk"><button type="submit">Envoyer</button></form></section>`;
+    const aliasRows=(await sb.from("tafab_conversation_aliases").select("target_user_id,nickname").eq("conversation_id",id)).data||[];
+    const aliasMap=new Map(aliasRows.map(x=>[String(x.target_user_id),x.nickname]));
+    const displayOtherName=otherProfile ? (aliasMap.get(String(otherProfile.id))||nameOf(otherProfile)) : "Discussion";
+    $("content").innerHTML = `<section class="clean-page messages-page conversation-page"><div class="page-header clean-page-header"><button class="page-back" data-action="page-back" type="button"><span aria-hidden="true">‹</span><small>Messages</small></button><div class="conversation-title">${avatarHTML(otherProfile || state.profile,"avatar conversation-avatar")}<div><h2>${esc(displayOtherName)}</h2><small id="conversationPresence" class="conversation-presence">Connexion sécurisée</small></div></div><button class="message-theme-button" data-action="message-theme" data-id="${esc(id)}" aria-label="Thème partagé de la conversation" title="Thème partagé pour les deux comptes">🎨</button></div><div id="typingIndicator" class="typing-indicator" hidden>écrit…</div><div class="message-list clean-message-list theme-${esc(conversationTheme)}">${(msgs||[]).map(m=>conversationMessageHTML(m,map,reactionMap)).join("")||renderFirstContactGreetings(otherProfile||{})}</div><form id="messageForm" class="comment-form clean-message-form"><div class="message-v22-tools"><button type="button" class="message-tool" data-action="message-attachment" title="Joindre un fichier">📎</button><button type="button" class="message-tool" data-action="message-voice" title="Message vocal">🎙️</button></div><input id="messageText" autocomplete="off" placeholder="Écrire un message..."><input id="messageAttachment" type="file" hidden accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip,.apk"><button type="submit">Envoyer</button></form></section>`;
 
     // Conversation-level Realtime: typing + online presence without storing ephemeral state in SQL.
     if(state.conversationChannel){ try{ await sb.removeChannel(state.conversationChannel); }catch(_){} state.conversationChannel=null; }
@@ -1457,11 +1464,42 @@ function publisherBackgrounds(){
   }
   async function openMessageTheme(id){
     const themes=[['default','Classique','💬'],['amoureux','Amoureux','❤️'],['triste','Triste','💙'],['heureux','Heureux','☀️'],['enemies','Enemies','⚡'],['nature','Nature','🌿'],['ocean','Océan','🌊'],['nuit','Nuit','🌙']];
-    openModal(`<div class="modal-box message-action-modal theme-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">MESSAGES</span><h3>Personnaliser le fond</h3><p class="muted">Choisissez le thème de cette conversation. Il est personnel à votre compte.</p><div class="message-theme-grid">${themes.map(t=>`<button class="message-theme-choice theme-${t[0]}" data-action="set-message-theme" data-id="${esc(id)}" data-theme="${t[0]}"><span>${t[2]}</span><b>${t[1]}</b></button>`).join('')}</div></div>`);
+    openModal(`<div class="modal-box message-action-modal theme-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">MESSAGES</span><h3>Thème partagé</h3><p class="muted">Le thème est commun à cette conversation : dès qu’un compte le change, il change automatiquement pour les deux comptes.</p><div class="message-theme-grid">${themes.map(t=>`<button class="message-theme-choice theme-${t[0]}" data-action="set-message-theme" data-id="${esc(id)}" data-theme="${t[0]}"><span>${t[2]}</span><b>${t[1]}</b></button>`).join('')}</div></div>`);
   }
   async function setMessageTheme(id,theme){
-    const r=await sb.from("tafab_message_themes").upsert({user_id:state.user.id,conversation_id:id,theme},{onConflict:"user_id,conversation_id"});
+    const r=await sb.from("tafab_shared_message_themes").upsert({conversation_id:id,theme,updated_by:state.user.id},{onConflict:"conversation_id"});
     if(r.error)return toast(r.error.message); closeModal(); return refreshConversation(id);
+  }
+
+  function renderFirstContactGreetings(person){
+    const n=nameOf(person||{})||'votre ami(e)';
+    const safe=esc(n);
+    const options=[
+      `Bonjour ${safe} 👋, heureux de faire ta connaissance !`,
+      `Salut ${safe} 😊, j’espère que tu vas bien.`,
+      `Coucou ${safe} ❤️, ravi de pouvoir discuter avec toi !`
+    ];
+    return `<div class="first-contact-greetings"><div class="first-contact-head"><span>👋</span><div><b>Premier message</b><small>Choisissez une formule ou écrivez directement votre propre message.</small></div></div><div class="first-contact-options">${options.map((text,i)=>`<button type="button" class="first-contact-option" data-action="send-greeting" data-index="${i}">${text}</button>`).join('')}</div><div class="first-contact-custom"><small>Vous pouvez aussi envoyer votre propre message ci-dessous.</small></div></div>`;
+  }
+  async function sendGreeting(index){
+    const id=state.selectedConversation; if(!id)return;
+    const otherId=(await sb.from("conversation_members").select("user_id").eq("conversation_id",id).neq("user_id",state.user.id).maybeSingle()).data?.user_id;
+    const other=otherId ? (await sb.from("profiles").select("*").eq("id",otherId).maybeSingle()).data : null;
+    const n=nameOf(other||{})||'votre ami(e)';
+    const messages=[`Bonjour ${n} 👋, heureux de faire ta connaissance !`,`Salut ${n} 😊, j’espère que tu vas bien.`,`Coucou ${n} ❤️, ravi de pouvoir discuter avec toi !`];
+    const text=messages[Number(index)]; if(!text)return;
+    const r=await sb.from("messages").insert({conversation_id:id,sender_id:state.user.id,content:text,is_read:false});
+    if(r.error)return toast(r.error.message); return refreshConversation(id);
+  }
+
+  async function messageAliases(id){
+    const members=(await sb.from("conversation_members").select("user_id").eq("conversation_id",id)).data||[];
+    const ids=members.map(x=>x.user_id);
+    const profiles=ids.length?(await sb.from("profiles").select("*").in("id",ids)).data||[]:[];
+    const aliases=(await sb.from("tafab_conversation_aliases").select("target_user_id,nickname,updated_by,updated_at").eq("conversation_id",id)).data||[];
+    const amap=new Map(aliases.map(x=>[String(x.target_user_id),x]));
+    openModal(`<div class="modal-box message-action-modal alias-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">MESSAGES</span><h3>Pseudos des comptes</h3><p class="muted">Modifiez le pseudo affiché dans cette conversation. Le changement est visible par les deux comptes.</p><div class="alias-list">${profiles.map(p=>{const a=amap.get(String(p.id));return `<form class="alias-row" data-alias-form="${esc(p.id)}"><div class="alias-person">${avatarHTML(p,'avatar sm')}<div><b>${esc(nameOf(p))}</b><small>${String(p.id)===String(state.user.id)?'Compte 1 · vous':'Compte 2 · interlocuteur'}</small></div></div><input name="nickname" maxlength="40" value="${esc(a?.nickname||nameOf(p)||'')}" aria-label="Pseudo de ${esc(nameOf(p))}"><button class="primary" type="submit">Enregistrer</button></form>`;}).join('')}</div></div>`);
+    document.querySelectorAll('[data-alias-form]').forEach(form=>form.onsubmit=async e=>{e.preventDefault();const target=form.dataset.aliasForm;const nickname=String(form.nickname?.value||'').trim();const r=await sb.from('tafab_conversation_aliases').upsert({conversation_id:id,target_user_id:target,nickname,updated_by:state.user.id},{onConflict:'conversation_id,target_user_id'});if(r.error)return toast(r.error.message);const notifyTarget=String(target)===String(state.user.id)?ids.find(x=>String(x)!==String(state.user.id)):target; if(notifyTarget) await sb.from('notifications').insert({user_id:notifyTarget,actor_id:state.user.id,type:'message_alias',title:'Pseudo modifié',message:`${nameOf(state.profile||{})} a changé votre pseudo dans cette conversation en « ${nickname} ».`,entity_type:'conversation',entity_id:id,is_read:false}).catch(()=>{});toast('Pseudo modifié ✓');return messageAliases(id);});
   }
 
   async function confirmDeleteConversation(id){
@@ -2231,12 +2269,12 @@ async function genericListPage(route) {
   async function blockUserAll(id){return blockProfile(id);}
   function conversationActionMenu(id){
     const row=document.querySelector(`[data-action="open-conversation"][data-id="${CSS.escape(String(id))}"]`);const name=row?.querySelector('b')?.textContent||'cette personne';
-    openModal(`<div class="modal-box message-action-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">CONVERSATION</span><h3>${esc(name)}</h3><div class="message-menu-list"><button data-action="confirm-delete-conversation" data-id="${esc(id)}"><span class="menu-action-icon">⌫</span><span><b>Supprimer la conversation</b><small>La retirer de votre liste.</small></span><i>›</i></button><button data-action="block-messages-user" data-id="${esc(row?.dataset.otherId||'')}><span class="menu-action-icon">◌</span><span><b>Bloquer les messages</b><small>Empêcher ce compte de vous écrire.</small></span><i>›</i></button></div></div>`);
+    openModal(`<div class="modal-box message-action-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">CONVERSATION</span><h3>${esc(name)}</h3><div class="message-menu-list"><button data-action="confirm-delete-conversation" data-id="${esc(id)}"><span class="menu-action-icon">⌫</span><span><b>Supprimer la conversation</b><small>La retirer de votre liste.</small></span><i>›</i></button><button data-action="block-messages-user" data-id="${esc(row?.dataset.otherId||'')}><span class="menu-action-icon">◌</span><span><b>Bloquer les messages</b><small>Empêcher ce compte de vous écrire.</small></span><i>›</i></button><button data-action="message-aliases" data-id="${esc(id)}"><span class="menu-action-icon">✎</span><span><b>Modifier les pseudos</b><small>Changer le nom affiché du compte 1 et du compte 2.</small></span><i>›</i></button></div></div>`);
   }
   function bindConversationLongPress(){
     document.querySelectorAll('.message-conversation').forEach(el=>{let timer=null,long=false;const start=e=>{long=false;timer=setTimeout(()=>{long=true;const id=el.dataset.id;const other=el.dataset.otherId;openConversationActions(id,other);},600)};const cancel=()=>{if(timer)clearTimeout(timer)};el.addEventListener('pointerdown',start);el.addEventListener('pointerup',cancel);el.addEventListener('pointerleave',cancel);el.addEventListener('pointercancel',cancel);el.addEventListener('contextmenu',e=>{e.preventDefault();openConversationActions(el.dataset.id,el.dataset.otherId)});});
   }
-  function openConversationActions(id,otherId){const row=document.querySelector(`[data-action="open-conversation"][data-id="${CSS.escape(String(id))}"]`);const name=row?.querySelector('b')?.textContent||'Conversation';openModal(`<div class="modal-box message-action-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">CONVERSATION</span><h3>${esc(name)}</h3><div class="message-menu-list"><button data-action="confirm-delete-conversation" data-id="${esc(id)}"><span class="menu-action-icon">⌫</span><span><b>Supprimer la conversation</b><small>La retirer uniquement de votre liste.</small></span><i>›</i></button><button data-action="block-messages-user" data-id="${esc(otherId||'')}"><span class="menu-action-icon">◌</span><span><b>Bloquer les messages</b><small>Ne plus recevoir de messages de cette personne.</small></span><i>›</i></button><button class="danger-row" data-action="block-user-all" data-id="${esc(otherId||'')}"><span class="menu-action-icon">⊘</span><span><b>Bloquer partout</b><small>Bloquer le compte et toutes les interactions.</small></span><i>›</i></button></div></div>`)}
+  function openConversationActions(id,otherId){const row=document.querySelector(`[data-action="open-conversation"][data-id="${CSS.escape(String(id))}"]`);const name=row?.querySelector('b')?.textContent||'Conversation';openModal(`<div class="modal-box message-action-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">CONVERSATION</span><h3>${esc(name)}</h3><div class="message-menu-list"><button data-action="confirm-delete-conversation" data-id="${esc(id)}"><span class="menu-action-icon">⌫</span><span><b>Supprimer la conversation</b><small>La retirer uniquement de votre liste.</small></span><i>›</i></button><button data-action="block-messages-user" data-id="${esc(otherId||'')}"><span class="menu-action-icon">◌</span><span><b>Bloquer les messages</b><small>Ne plus recevoir de messages de cette personne.</small></span><i>›</i></button><button data-action="message-aliases" data-id="${esc(id)}"><span class="menu-action-icon">✎</span><span><b>Modifier les pseudos</b><small>Changer le nom affiché du compte 1 et du compte 2.</small></span><i>›</i></button><button class="danger-row" data-action="block-user-all" data-id="${esc(otherId||'')}"><span class="menu-action-icon">⊘</span><span><b>Bloquer partout</b><small>Bloquer le compte et toutes les interactions.</small></span><i>›</i></button></div></div>`)}
 
   async function eventsPage(){
     const token=state.renderToken;
@@ -3469,6 +3507,8 @@ async function genericListPage(route) {
         if(id) groupChat(id);
       },
       conversations: () => { if (state.route==="messages") state.selectedConversation ? openConversation(state.selectedConversation) : messagesPage(); },
+      tafab_shared_message_themes: () => { if (state.route==="messages" && state.selectedConversation) openConversation(state.selectedConversation); },
+      tafab_conversation_aliases: () => { if (state.route==="messages" && state.selectedConversation) openConversation(state.selectedConversation); else if(state.route==="messages") messagesPage(); },
       conversation_members: () => { if (state.route==="messages") messagesPage(); },
       tafab_listings: () => { if (state.route==="tafab") servicePage("marketplace"); },
       tafab_listing_messages: () => { if (state.route==="tafab") servicePage("marketplace"); },
@@ -4524,7 +4564,9 @@ async function genericListPage(route) {
     if (action === "message-history") return messageHistory(id);
     if (action === "message-theme") return openMessageTheme(id);
     if (action === "set-message-theme") return setMessageTheme(id, actionEl.dataset.theme);
+    if (action === "send-greeting") return sendGreeting(actionEl.dataset.index);
     if (action === "confirm-delete-conversation") return confirmDeleteConversation(id);
+    if (action === "message-aliases") return messageAliases(id);
     if (action === "copy-message") return copyMessage(id);
     if (action === "react-message") return reactToMessage(id, actionEl.dataset.reaction||"👍");
     if (action === "download-message-file") return downloadMessageFile(actionEl.dataset.url, actionEl.dataset.name);
