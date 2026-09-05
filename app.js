@@ -4436,21 +4436,6 @@ async function genericListPage(route) {
   window.addEventListener("hashchange", () => { const r=location.hash.slice(1); if(routes.includes(r) && r !== state.route) navigate(r); });
   document.addEventListener("contextmenu",e=>{ if(e.target.closest(".protected-media,.profile-page-premium.public-profile-page")) e.preventDefault(); });
   document.addEventListener("dragstart",e=>{ if(e.target.closest(".protected-media,.profile-page-premium.public-profile-page")) e.preventDefault(); });
-  let visibilityRealtimeTimer = null;
-  document.addEventListener("visibilitychange",()=>{
-    const locked=document.documentElement.classList.contains("tafass-secure-content");
-    const hidden=document.visibilityState!=="visible";
-    document.documentElement.classList.toggle("tafass-private-blur",locked && hidden);
-    // After Android/background suspension, Supabase WebSocket channels can become stale.
-    // Re-establish subscriptions once the app is visible again, without creating a reconnect storm.
-    if (!hidden && state.user && navigator.onLine) {
-      clearTimeout(visibilityRealtimeTimer);
-      visibilityRealtimeTimer=setTimeout(()=>{
-        visibilityRealtimeTimer=null;
-        setupRealtime().catch(()=>{});
-      },350);
-    }
-  });
 
   const initialRoute = routes.includes(location.hash.slice(1)) ? location.hash.slice(1) : "home";
   state.route = initialRoute; state.navStack = [initialRoute];

@@ -1,1 +1,5 @@
-V19 | Final Production Security & Reliability Hardening | 2026-09-05
+TAFAß V20 — Final Production Verification & Bug Fix
+Date: 2026-09-05
+Base: V19 Final Production Security
+Asset cache: v120
+Service Worker: tafass-v20-shell-2026-09-05
