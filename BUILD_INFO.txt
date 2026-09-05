@@ -1,4 +1,1 @@
-Tafaß V25 — AI + Music 2.0
-Base: V24
-Modules: Tafaß AI Workspace, Music 2.0, playlists, likes, play counter, realtime
-SQL: TAFASS_V25_AI_MUSIC_2.sql
+V26.2 AI server fix

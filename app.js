@@ -3102,10 +3102,14 @@ async function genericListPage(route) {
   }
 
 
-  const AI_ENDPOINT = window.TAFASS_AI_ENDPOINT || "";
+  // V26.2: Tafaß AI uses the project Edge Function by default.
+  // A custom endpoint is still supported through window.TAFASS_AI_ENDPOINT.
+  const AI_ENDPOINT = window.TAFASS_AI_ENDPOINT || `${SUPABASE_URL}/functions/v1/tafass-ai`;
   async function aiRequest(mode, prompt){
-    if(!AI_ENDPOINT) throw new Error("Tafaß AI n’est pas encore configurée côté serveur. Ajoutez TAFASS_AI_ENDPOINT vers une Edge Function sécurisée.");
-    const r=await fetch(AI_ENDPOINT,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mode,prompt,language:"fr"})});
+    const { data: sessionData } = await sb.auth.getSession();
+    const accessToken = sessionData?.session?.access_token;
+    if(!accessToken) throw new Error("Connectez-vous pour utiliser Tafaß AI.");
+    const r=await fetch(AI_ENDPOINT,{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${accessToken}`},body:JSON.stringify({mode,prompt,language:"fr"})});
     if(!r.ok) throw new Error(`Service AI indisponible (${r.status}).`);
     const data=await r.json();
     const text=String(data.response||data.text||data.output||"").trim();
