@@ -1453,8 +1453,6 @@ function publisherBackgrounds(){
     const msgs=(rawMsgs||[]).filter(m=>!hiddenIds.has(m.id));
     const messageIds=(msgs||[]).map(m=>m.id).filter(Boolean);
     const reactionsR=messageIds.length ? await sb.from("tafab_message_reactions").select("message_id,user_id,reaction").in("message_id",messageIds) : {data:[]};
-    const themeR=await sb.from("tafab_shared_message_themes").select("theme").eq("conversation_id",id).maybeSingle();
-    const conversationTheme=themeR.data?.theme||"default";
     const reactionMap=new Map();
     (reactionsR.data||[]).forEach(r=>{ if(!reactionMap.has(r.message_id)) reactionMap.set(r.message_id,[]); reactionMap.get(r.message_id).push(r); });
     await sb.rpc("tafa_mark_conversation_read", { p_conversation_id:id });
@@ -1474,8 +1472,7 @@ function publisherBackgrounds(){
     const aliasRows=(await sb.from("tafab_conversation_aliases").select("target_user_id,nickname").eq("conversation_id",id)).data||[];
     const aliasMap=new Map(aliasRows.map(x=>[String(x.target_user_id),x.nickname]));
     const displayOtherName=otherProfile ? (aliasMap.get(String(otherProfile.id))||nameOf(otherProfile)) : "Discussion";
-    // V33 — conversation volontairement clean, inspirée du rendu Messenger fourni : aucun thème/cadre de fond.
-    $("content").innerHTML = `<section class="clean-page messages-page conversation-page conversation-page-clean theme-page-${esc(conversationTheme)}"><header class="conversation-clean-topbar"><button class="conversation-back" data-action="page-back" type="button" aria-label="Retour">‹</button><button class="conversation-person" data-action="view-profile" data-id="${esc(otherId||"")}" type="button">${avatarHTML(otherProfile || state.profile,"avatar conversation-avatar")}<span><b>${esc(displayOtherName)}</b><small id="conversationPresence" class="conversation-presence">Actif</small></span></button><div class="conversation-head-actions"><button type="button" aria-label="Appel Premium" title="Appel Premium" data-action="conversation-call"><span>⌕</span></button><button type="button" aria-label="Vidéo Premium" title="Vidéo Premium" data-action="conversation-video"><span>▣</span></button><button type="button" aria-label="Options" title="Options" data-action="conversation-menu" data-id="${esc(id)}">⚙</button></div></header><div id="typingIndicator" class="typing-indicator" hidden>écrit…</div><div class="message-list clean-message-list theme-${esc(conversationTheme)}">${(msgs||[]).map(m=>conversationMessageHTML(m,map,reactionMap)).join("")||renderFirstContactGreetings(otherProfile||{})}</div><form id="messageForm" class="comment-form clean-message-form"><button type="button" class="message-tool" data-action="message-attachment" title="Photo ou fichier" aria-label="Photo ou fichier">▧</button><button type="button" class="message-tool" data-action="message-voice" title="Message vocal" aria-label="Message vocal">●</button><input id="messageAttachment" type="file" hidden accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip,.apk"><div class="message-input-shell"><input id="messageText" autocomplete="off" placeholder="Message"><button type="button" class="message-emoji-button" data-action="message-emoji" title="Emoji" aria-label="Emoji">☺</button></div><button type="submit" class="message-send-button" aria-label="Envoyer">➤</button></form></section>`;
+    $("content").innerHTML = `<section class="clean-page messages-page conversation-page conversation-page-clean"><header class="conversation-clean-topbar"><button class="conversation-back" data-action="page-back" type="button" aria-label="Retour">‹</button><button class="conversation-person" data-action="view-profile" data-id="${esc(otherId||"")}" type="button">${avatarHTML(otherProfile || state.profile,"avatar conversation-avatar")}<span><b>${esc(displayOtherName)}</b><small id="conversationPresence" class="conversation-presence">Actif</small></span></button><div class="conversation-head-actions"><button type="button" aria-label="Appel Premium" title="Appel Premium" data-action="conversation-call"><span>⌕</span></button><button type="button" aria-label="Vidéo Premium" title="Vidéo Premium" data-action="conversation-video"><span>▣</span></button><button type="button" aria-label="Options" title="Options" data-action="conversation-menu" data-id="${esc(id)}">⚙</button></div></header><div id="typingIndicator" class="typing-indicator" hidden>écrit…</div><div class="message-list clean-message-list">${(msgs||[]).map(m=>conversationMessageHTML(m,map,reactionMap)).join("")||renderFirstContactGreetings(otherProfile||{})}</div><form id="messageForm" class="comment-form clean-message-form"><button type="button" class="message-tool" data-action="message-attachment" title="Photo ou fichier" aria-label="Photo ou fichier">▧</button><button type="button" class="message-tool" data-action="message-voice" title="Message vocal" aria-label="Message vocal">●</button><input id="messageAttachment" type="file" hidden accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip,.apk"><div class="message-input-shell"><input id="messageText" autocomplete="off" placeholder="Message"><button type="button" class="message-emoji-button" data-action="message-emoji" title="Emoji" aria-label="Emoji">☺</button></div><button type="submit" class="message-send-button" aria-label="Envoyer">➤</button></form></section>`;
 
     // Conversation-level Realtime: typing + online presence without storing ephemeral state in SQL.
     if(state.conversationChannel){ try{ await sb.removeChannel(state.conversationChannel); }catch(_){} state.conversationChannel=null; }
@@ -1521,6 +1518,13 @@ function publisherBackgrounds(){
     bindMessageLongPress();
   }
 
+
+  function toggleMessageReactionPicker(id){
+    const current=document.querySelector(`[data-picker-for="${CSS.escape(String(id))}"]`);
+    if(!current) return;
+    document.querySelectorAll(".message-reaction-picker:not([hidden])").forEach(p=>{ if(p!==current) p.hidden=true; });
+    current.hidden=!current.hidden;
+  }
 
   function bindMessageLongPress(){
     document.querySelectorAll('.conversation-page-clean .message[data-message-id]').forEach(el=>{
@@ -1574,7 +1578,7 @@ function publisherBackgrounds(){
     const reactionRows=reactionMap.get(m.id)||[];
     const reactionCounts={}; reactionRows.forEach(r=>reactionCounts[r.reaction]=(reactionCounts[r.reaction]||0)+1);
     const reactionBadge=Object.entries(reactionCounts).map(([emoji,count])=>`<span class="message-reaction-chip">${esc(emoji)}${count>1?`<b>${count}</b>`:''}</span>`).join('');
-    return `<div class="message ${mine?'mine':''}" data-message-id="${esc(m.id)}" data-author="${esc(author?nameOf(author):'Membre')}"><div class="message-card">${replyPreview}<div class="message-body">${body}</div>${reactionBadge?`<div class="message-reaction-badge visible">${reactionBadge}</div>`:''}<div class="message-meta"><small>${timeAgo(m.created_at)}${edited}${mine ? (m.is_read ? ' · Lu' : ' · Envoyé') : ''}</small><button type="button" class="message-more" data-action="message-menu" data-id="${esc(m.id)}" aria-label="Options du message">⋯</button></div></div></div>`;
+    return `<div class="message ${mine?'mine':''}" data-message-id="${esc(m.id)}" data-author="${esc(author?nameOf(author):'Membre')}"><div class="message-card">${replyPreview}<div class="message-body">${body}</div>${reactionBadge?`<div class="message-reaction-badge visible">${reactionBadge}</div>`:''}<div class="message-inline-reactions" aria-label="Réagir au message"><button type="button" class="message-react-trigger" data-action="toggle-message-reactions" data-id="${esc(m.id)}" aria-label="Réagir">☺</button><div class="message-reaction-picker" data-picker-for="${esc(m.id)}" hidden><button type="button" data-action="react-message" data-id="${esc(m.id)}" data-reaction="👍" aria-label="J’aime">👍</button><button type="button" data-action="react-message" data-id="${esc(m.id)}" data-reaction="❤️" aria-label="J’adore">❤️</button><button type="button" data-action="react-message" data-id="${esc(m.id)}" data-reaction="😂" aria-label="Haha">😂</button><button type="button" data-action="react-message" data-id="${esc(m.id)}" data-reaction="😮" aria-label="Waouh">😮</button><button type="button" data-action="react-message" data-id="${esc(m.id)}" data-reaction="😢" aria-label="Triste">😢</button><button type="button" data-action="react-message" data-id="${esc(m.id)}" data-reaction="😡" aria-label="En colère">😡</button><button type="button" data-action="react-message" data-id="${esc(m.id)}" data-reaction="🥰" aria-label="J’adore">🥰</button></div></div><div class="message-meta"><small>${timeAgo(m.created_at)}${edited}${mine ? (m.is_read ? ' · Lu' : ' · Envoyé') : ''}</small><button type="button" class="message-more" data-action="message-menu" data-id="${esc(m.id)}" aria-label="Options du message">⋯</button></div></div></div>`;
   }
 
   async function refreshConversation(id){
@@ -1626,25 +1630,6 @@ function publisherBackgrounds(){
     const rows=(r.data||[]).map(x=>`<div class="message-history-row"><small>${new Date(x.edited_at).toLocaleString("fr-FR")}</small><p>${esc(x.old_content||"")}</p></div>`).join("")||'<div class="empty">Aucune ancienne version disponible.</div>';
     openModal(`<div class="modal-box message-action-modal history-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">MESSAGE</span><h3>Historique des modifications</h3><p class="muted">Anciennes versions enregistrées de ce message.</p><div class="message-history-list">${rows}</div></div>`);
   }
-  async function openMessageTheme(id){
-    const themes=[['default','Classique','💬'],['amoureux','Amoureux','❤️'],['triste','Triste','💙'],['heureux','Heureux','☀️'],['enemies','Enemies','⚡'],['nature','Nature','🌿'],['ocean','Océan','🌊'],['nuit','Nuit','🌙']];
-    openModal(`<div class="modal-box message-action-modal theme-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">MESSAGES</span><h3>Thème partagé</h3><p class="muted">Le thème est commun à cette conversation : dès qu’un compte le change, il change automatiquement pour les deux comptes.</p><div class="message-theme-grid">${themes.map(t=>`<button class="message-theme-choice theme-${t[0]}" data-action="set-message-theme" data-id="${esc(id)}" data-theme="${t[0]}"><span>${t[2]}</span><b>${t[1]}</b></button>`).join('')}</div></div>`);
-  }
-  async function setMessageTheme(id,theme){
-    const allowed=new Set(["default","amoureux","triste","heureux","enemies","nature","ocean","nuit"]);
-    if(!allowed.has(theme)) return toast("Thème invalide.");
-    const r=await sb.from("tafab_shared_message_themes").upsert({conversation_id:id,theme,updated_by:state.user.id},{onConflict:"conversation_id"});
-    if(r.error)return toast(r.error.message||"Impossible d'enregistrer le thème.");
-    // Apply immediately so the selected theme is visible without waiting for a second render.
-    const section=document.querySelector('.conversation-page');
-    const list=document.querySelector('.clean-message-list');
-    if(section){ section.className=section.className.replace(/\btheme-page-[^\s]+/g,`theme-page-${theme}`); }
-    if(list){ list.className=list.className.replace(/\btheme-[^\s]+/g,`theme-${theme}`); }
-    closeModal();
-    toast("Thème appliqué ✓");
-    return refreshConversation(id);
-  }
-
   function renderFirstContactGreetings(person){
     const n=nameOf(person||{})||'votre ami(e)';
     const safe=esc(n);
@@ -1705,7 +1690,7 @@ function publisherBackgrounds(){
   function messageActionMenu(id){
     const node=document.querySelector(`[data-message-id="${CSS.escape(String(id))}"]`); if(!node)return;
     const mine=node.classList.contains('mine');
-    openModal(`<div class="modal-box message-action-modal message-menu-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">MESSAGE</span><h3>Options</h3><div class="message-reaction-row"><button data-action="react-message" data-id="${esc(id)}" data-reaction="❤️">❤️</button><button data-action="react-message" data-id="${esc(id)}" data-reaction="😂">😂</button><button data-action="react-message" data-id="${esc(id)}" data-reaction="😮">😮</button><button data-action="react-message" data-id="${esc(id)}" data-reaction="😢">😢</button><button data-action="react-message" data-id="${esc(id)}" data-reaction="👍">👍</button></div><div class="message-menu-list"><button data-action="reply-message" data-id="${esc(id)}"><span class="menu-action-icon">↩</span><span><b>Répondre</b><small>Répondre à ce message</small></span><i>›</i></button><button data-action="copy-message" data-id="${esc(id)}"><span class="menu-action-icon">⧉</span><span><b>Copier</b><small>Copier le texte</small></span><i>›</i></button>${mine?`<button data-action="edit-message" data-id="${esc(id)}"><span class="menu-action-icon">✎</span><span><b>Modifier</b><small>Changer le contenu</small></span><i>›</i></button>`:''}<button class="danger-row" data-action="delete-message" data-id="${esc(id)}"><span class="menu-action-icon">⌫</span><span><b>Supprimer</b><small>Pour moi ou pour tout le monde</small></span><i>›</i></button></div></div>`);
+    openModal(`<div class="modal-box message-action-modal message-menu-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">MESSAGE</span><h3>Options</h3><div class="message-menu-list"><button data-action="reply-message" data-id="${esc(id)}"><span class="menu-action-icon">↩</span><span><b>Répondre</b><small>Répondre à ce message</small></span><i>›</i></button><button data-action="copy-message" data-id="${esc(id)}"><span class="menu-action-icon">⧉</span><span><b>Copier</b><small>Copier le texte</small></span><i>›</i></button>${mine?`<button data-action="edit-message" data-id="${esc(id)}"><span class="menu-action-icon">✎</span><span><b>Modifier</b><small>Changer le contenu</small></span><i>›</i></button>`:''}<button class="danger-row" data-action="delete-message" data-id="${esc(id)}"><span class="menu-action-icon">⌫</span><span><b>Supprimer</b><small>Pour moi ou pour tout le monde</small></span><i>›</i></button></div></div>`);
   }
 
   function replyConversationMessage(id){
@@ -3867,7 +3852,6 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
         if(id) groupChat(id);
       },
       conversations: () => { if (state.route==="messages") state.selectedConversation ? openConversation(state.selectedConversation) : messagesPage(); },
-      tafab_shared_message_themes: () => { if (state.route==="messages" && state.selectedConversation) openConversation(state.selectedConversation); },
       tafab_conversation_aliases: () => { if (state.route==="messages" && state.selectedConversation) openConversation(state.selectedConversation); else if(state.route==="messages") messagesPage(); },
       conversation_members: () => { if (state.route==="messages") messagesPage(); },
       tafab_listings: () => { if (state.route==="tafab") servicePage("marketplace"); },
@@ -4929,6 +4913,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if (action === "reply-message") { closeModal(); return replyConversationMessage(id); }
     if (action === "cancel-message-reply") return cancelMessageReply();
     if (action === "message-menu") return messageActionMenu(id);
+    if (action === "toggle-message-reactions") return toggleMessageReactionPicker(id);
     if (action === "edit-message") return editConversationMessage(id);
     if (action === "save-message-edit") return saveConversationMessageEdit(id);
     if (action === "delete-message") return deleteConversationMessage(id);
@@ -4936,9 +4921,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if (action === "delete-message-everyone") return deleteMessageForEveryone(id);
     if (action === "confirm-delete-message") return confirmDeleteMessageForEveryone(id);
     if (action === "message-history") return messageHistory(id);
-    if (action === "message-theme") return openMessageTheme(id);
     if (action === "message-emoji") return openMessageEmojiPicker();
-    if (action === "set-message-theme") return setMessageTheme(id, actionEl.dataset.theme);
     if (action === "send-greeting") return sendGreeting(actionEl.dataset.index);
     if (action === "confirm-delete-conversation") return confirmDeleteConversation(id);
     if (action === "message-aliases") return messageAliases(id);
