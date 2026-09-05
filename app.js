@@ -2764,6 +2764,16 @@ async function genericListPage(route) {
     closeModal(); toast("Offre publiée"); await tafabPage();
   }
 
+  function safeHttpUrl(value, {allowEmpty=true}={}) {
+    const raw=String(value||'').trim();
+    if(!raw) return allowEmpty ? null : '';
+    try {
+      const u=new URL(raw);
+      if(!['http:','https:'].includes(u.protocol)) return null;
+      return u.href;
+    } catch (_) { return null; }
+  }
+
   function createTafabAd() {
     openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • PUBLICITÉ</span><h3>Publier une publicité</h3><div class="form-stack"><label>Titre<input id="adTitle" placeholder="Titre de la publicité" required></label><label>Description<textarea id="adDesc" placeholder="Votre message publicitaire"></textarea></label><label>Image URL <span class="muted-inline">(optionnel)</span><input id="adImage" type="url" placeholder="https://..."></label><label>Lien <span class="muted-inline">(optionnel)</span><input id="adUrl" type="url" placeholder="https://..."></label><button class="primary big" data-action="save-tafab-ad">Publier</button></div></div>`);
   }
@@ -2771,6 +2781,10 @@ async function genericListPage(route) {
   async function saveTafabAd() {
     const title=$("adTitle")?.value.trim();
     if(!title) return toast("Ajoutez un titre.");
+    const imageUrl=safeHttpUrl($("adImage")?.value, {allowEmpty:true});
+    const targetUrl=safeHttpUrl($("adUrl")?.value, {allowEmpty:true});
+    if($("adImage")?.value.trim() && !imageUrl) return toast("L’URL de l’image doit commencer par http:// ou https://.");
+    if($("adUrl")?.value.trim() && !targetUrl) return toast("Le lien doit commencer par http:// ou https://.");
     const r=await sb.from("tafab_ads").insert({ owner_id:state.user.id, title, description:$("adDesc")?.value.trim()||"", image_url:$("adImage")?.value.trim()||null, target_url:$("adUrl")?.value.trim()||null, status:"active" }).select().single();
     if(r.error) return toast(r.error.message);
     await logActivity("tafab_ad_created", "Publicité Tafaß publiée", "tafab_ad", r.data.id);

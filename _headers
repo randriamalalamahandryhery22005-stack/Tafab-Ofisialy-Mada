@@ -1,0 +1,9 @@
+/* Netlify production security baseline. Vercel/other hosts may ignore this file. */
+/* Do not add a restrictive CSP here: Tafaß currently loads Supabase, Google Fonts, jsDelivr and OAuth resources. */
+/* Managed by Tafaß V16 Production Audit. */
+/* global */
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: SAMEORIGIN
+  Permissions-Policy: camera=(self), microphone=(self), geolocation=(self), payment=(self)
+  Cross-Origin-Opener-Policy: same-origin-allow-popups
