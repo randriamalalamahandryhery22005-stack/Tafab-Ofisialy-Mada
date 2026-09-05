@@ -10,7 +10,7 @@ document.documentElement.classList.add("app-boot");
 
   const $ = id => document.getElementById(id);
   const esc = s => String(s ?? "").replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]));
-  const routes = ["home","friends","search","messages","notifications","profile","reels","pages","groups","saved","menu","tafab","events","studio","settings","creator","ai","music","business","admin"];
+  const routes = ["home","friends","search","messages","notifications","profile","reels","pages","groups","saved","menu","tafab","events","studio","settings","creator","ai","music","business","admin","verification"];
 
   // V19 production upload guard: client-side validation is UX protection only;
   // Supabase Storage policies/server-side validation must remain the authority.
@@ -1065,6 +1065,10 @@ function publisherBackgrounds(){
   async function postHTML(p) {
     const [rs, cs, sh, showReactionCounts] = await Promise.all([reactionsFor(p.id), commentsFor(p.id), sharersFor(p.id), reactionCountsVisibleFor(p.user_id)]);
     const counts = {}; rs.forEach(r => counts[r.reaction_type] = (counts[r.reaction_type] || 0) + 1);
+    const reactorIds=[...new Set(rs.map(r=>r.user_id).filter(Boolean))].slice(0,20);
+    const reactorProfiles=reactorIds.length ? (await sb.from("profiles").select("id,first_name,last_name,username,avatar_url").in("id",reactorIds)).data||[] : [];
+    const reactorMap=new Map(reactorProfiles.map(x=>[String(x.id),x]));
+    const reactionNames=rs.map(r=>reactorMap.get(String(r.user_id))).filter(Boolean).slice(0,8).map(x=>esc(nameOf(x))).join(", ");
     const mine = rs.find(r => r.user_id === state.user.id)?.reaction_type;
     const totalReactions = Object.values(counts).reduce((a,b) => a+b, 0);
     const reactionVisual = showReactionCounts ? Object.entries(counts).map(([k,v]) => `<span class="reaction-chip"><i>${reactionMeta[k]?.[1] || "👍"}</i><b>${v}</b></span>`).join("") : `<span class="reaction-hidden-badge">🔒 Réactions masquées</span>`;
@@ -1089,7 +1093,7 @@ function publisherBackgrounds(){
       ${p.content ? `<div class="post-body ${p.background_style && p.background_style !== "plain" ? "post-body-has-bg" : ""}">${captionHTML(p.content)}</div>` : ""}${media}
       ${p.publication_meta && typeof p.publication_meta === "object" ? (()=>{const m=p.publication_meta||{};const chips=[];if(m.music)chips.push(`<button type="button" class="post-music-chip" data-action="play-post-music" data-music-id="${esc(m.music_id||'ai-1')}" data-music-seed="${esc(m.music_seed||1)}">♫ ${esc(m.music)} · Écouter</button>`);if(m.tag)chips.push(`<span>👥 ${esc(m.tag)}</span>`);if(m.location)chips.push(`<span>📍 ${esc(m.location)}</span>`);if(m.event)chips.push(`<span>📅 ${esc(m.event)}</span>`);if(m.mood)chips.push(`<span>☺ ${esc(m.mood)}</span>`);return chips.length?`<div class="post-meta-chips">${chips.join('')}</div>`:''})() : ""}
       ${p.publication_meta?.receive_messages && p.user_id !== state.user.id ? `<div class="post-message-cta"><div><b>Messages ouverts</b><small>Envoyez un message privé directement à ${esc(nameOf(p.author||{}))}.</small></div><button type="button" data-action="post-receive-message" data-owner-id="${esc(p.user_id)}">💬 Message</button></div>` : ""}
-      <div class="post-stats"><span class="reaction-summary">${reactionVisual || "<span class='muted-inline'>Aucune réaction</span>"}</span><span>${cs.length} commentaire(s) · ${Number(p.shares || sh.length || 0)} partage(s)</span></div>
+      <div class="post-stats"><span class="reaction-summary">${reactionVisual || "<span class='muted-inline'>Aucune réaction</span>"}${showReactionCounts && totalReactions ? `<span class="reaction-people"><b>${totalReactions}</b> réaction${totalReactions>1?'s':''}${reactionNames ? ` · ${reactionNames}${totalReactions>8?'…':''}` : ''}</span>` : ""}</span><span>${cs.length} commentaire(s) · ${Number(p.shares || sh.length || 0)} partage(s)</span></div>
       ${shareSummary}
       <div class="post-actions"><button class="react-btn" data-action="react" data-id="${esc(p.id)}">${reactionMeta[mine]?.[1] || "👍"} ${esc(reactionMeta[mine]?.[0] || "J’aime")}</button><button data-action="comment" data-id="${esc(p.id)}">💬 Commenter</button><button data-action="share" data-id="${esc(p.id)}">↗ Partager</button></div>
       <div id="reaction-${esc(p.id)}"></div>
@@ -1366,14 +1370,11 @@ function publisherBackgrounds(){
       const { data: last } = await sb.from("messages").select("content,created_at")
         .eq("conversation_id", c.id).order("created_at", { ascending:false }).limit(1);
       const alias=(person && (await sb.from("tafab_conversation_aliases").select("nickname").eq("conversation_id",c.id).eq("target_user_id",person.id).maybeSingle()).data?.nickname)||"";
-      const themeRow=(await sb.from("tafab_shared_message_themes").select("theme").eq("conversation_id",c.id).maybeSingle()).data;
-      const themeKey=themeRow?.theme||"default";
-      const themeMeta={default:["Classique","💬"],amoureux:["Amoureux","❤️"],triste:["Triste","💙"],heureux:["Heureux","☀️"],enemies:["Enemies","⚡"],nature:["Nature","🌿"],ocean:["Océan","🌊"],nuit:["Nuit","🌙"]}[themeKey]||["Classique","💬"];
-      cards.push(`<button class="list-row message-conversation theme-conversation-row theme-row-${esc(themeKey)}" style="width:100%;text-align:left"
+      cards.push(`<button class="list-row message-conversation clean-conversation-row" style="width:100%;text-align:left"
         data-action="open-conversation" data-id="${esc(c.id)}" data-other-id="${esc(person?.id||"")}">
         ${avatarHTML(person || state.profile)}
         <div class="grow"><b>${esc(c.name || (person ? (alias || nameOf(person)) : "Conversation"))}</b>
-        <small>${esc(last?.[0]?.content || "Ouvrir la conversation")} · ${last?.[0] ? timeAgo(last[0].created_at) : ""}</small></div><span class="conversation-theme-badge theme-${esc(themeKey)}" title="Thème actuel : ${esc(themeMeta[0])}">${themeMeta[1]} <em>${esc(themeMeta[0])}</em></span><small>›</small>
+        <small>${esc(last?.[0]?.content || "Ouvrir la conversation")} · ${last?.[0] ? timeAgo(last[0].created_at) : ""}</small></div><small class="conversation-chevron">›</small>
       </button>`);
     }
 
@@ -1458,7 +1459,7 @@ function publisherBackgrounds(){
     const displayOtherName=otherProfile ? (aliasMap.get(String(otherProfile.id))||nameOf(otherProfile)) : "Discussion";
     const themeLabels={default:["Classique","💬"],amoureux:["Amoureux","❤️"],triste:["Triste","💙"],heureux:["Heureux","☀️"],enemies:["Enemies","⚡"],nature:["Nature","🌿"],ocean:["Océan","🌊"],nuit:["Nuit","🌙"]};
     const currentThemeMeta=themeLabels[conversationTheme]||themeLabels.default;
-    $("content").innerHTML = `<section class="clean-page messages-page conversation-page theme-page-${esc(conversationTheme)}"><div class="page-header clean-page-header"><button class="page-back" data-action="page-back" type="button"><span aria-hidden="true">‹</span><small>Messages</small></button><div class="conversation-title">${avatarHTML(otherProfile || state.profile,"avatar conversation-avatar")}<div><h2>${esc(displayOtherName)}</h2><small id="conversationPresence" class="conversation-presence">Connexion sécurisée</small><small class="conversation-theme-current">${currentThemeMeta[1]} ${esc(currentThemeMeta[0])} · partagé</small></div></div><button class="message-theme-button" data-action="message-theme" data-id="${esc(id)}" aria-label="Thème partagé de la conversation" title="Thème partagé pour les deux comptes">🎨</button></div><div id="typingIndicator" class="typing-indicator" hidden>écrit…</div><div class="message-list clean-message-list theme-${esc(conversationTheme)}">${(msgs||[]).map(m=>conversationMessageHTML(m,map,reactionMap)).join("")||renderFirstContactGreetings(otherProfile||{})}</div><form id="messageForm" class="comment-form clean-message-form"><div class="message-v22-tools"><button type="button" class="message-tool" data-action="message-attachment" title="Joindre un fichier">📎</button><button type="button" class="message-tool" data-action="message-voice" title="Message vocal">🎙️</button></div><input id="messageText" autocomplete="off" placeholder="Écrire un message..."><input id="messageAttachment" type="file" hidden accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip,.apk"><button type="submit">Envoyer</button></form></section>`;
+    $("content").innerHTML = `<section class="clean-page messages-page conversation-page"><div class="page-header clean-page-header conversation-clean-header"><button class="page-back" data-action="page-back" type="button"><span aria-hidden="true">‹</span><small>Messages</small></button><div class="conversation-title">${avatarHTML(otherProfile || state.profile,"avatar conversation-avatar")}<div><h2>${esc(displayOtherName)}</h2><small id="conversationPresence" class="conversation-presence">Connexion sécurisée</small></div></div></div><div id="typingIndicator" class="typing-indicator" hidden>écrit…</div><div class="message-list clean-message-list">${(msgs||[]).map(m=>conversationMessageHTML(m,map,reactionMap)).join("")||renderFirstContactGreetings(otherProfile||{})}</div><form id="messageForm" class="comment-form clean-message-form"><div class="message-v22-tools"><button type="button" class="message-tool" data-action="message-attachment" title="Joindre un fichier">📎</button><button type="button" class="message-tool" data-action="message-voice" title="Message vocal">🎙️</button></div><input id="messageText" autocomplete="off" placeholder="Écrire un message..."><input id="messageAttachment" type="file" hidden accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip,.apk"><button type="submit">Envoyer</button></form></section>`;
 
     // Conversation-level Realtime: typing + online presence without storing ephemeral state in SQL.
     if(state.conversationChannel){ try{ await sb.removeChannel(state.conversationChannel); }catch(_){} state.conversationChannel=null; }
@@ -2578,12 +2579,7 @@ async function genericListPage(route) {
       ["settings","settings","Para & Conf","Compte et confidentialité"]
     ];
     const adminCard = state.__isAdmin ? [
-      ["admin","shield","Admin Total","Tableau de bord complet de l’administration"],
-      ["admin","users","Comptes","Gérer les comptes, restrictions et réactivations"],
-      ["admin","shield","Vérifications","Demandes de badge bleu et décisions"],
-      ["admin","payment","Monétisation","Coins, revenus, paiements et retraits"],
-      ["admin","flag","Signalements","Contrôler les signalements et les actions de modération"],
-      ["admin","lock","Sécurité","Identité Admin, médias protégés et comptes restreints"]
+      ["admin","shield","Administration","Centre unique : comptes, vérifications, monétisation, signalements et sécurité"]
     ] : [];
     const verificationCard = !state.__isAdmin ? [["verification","shield","Vérification","Demander le badge bleu officiel"]] : [];
     const actions = [
@@ -3527,6 +3523,14 @@ async function genericListPage(route) {
     const q=(await sb.from('tafa_verification_requests').select('status,fee_mga,created_at').eq('user_id',state.user.id).order('created_at',{ascending:false}).limit(1).maybeSingle()).data;
     openModal(`<div class="modal-box verification-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • VÉRIFICATION</span><h3>Demander le badge bleu</h3><p class="muted">La demande est payante et doit ensuite être approuvée par l’administration.</p>${q?`<div class="settings-info-card"><b>Dernière demande</b><small>Statut : ${esc(q.status||'pending')} · ${Number(q.fee_mga||25000).toLocaleString('fr-FR')} Ar</small></div>`:''}<label>Référence du paiement<input id="verificationPaymentRef" class="premium-input" maxlength="120" placeholder="Référence de paiement"></label><label>Motif<textarea id="verificationReason" class="premium-input" maxlength="500" placeholder="Motif de la demande…"></textarea></label><button class="primary big" data-action="submit-verification-request">Envoyer · 25 000 Ar</button></div>`);
   }
+  async function verificationPage(){
+    const token=state.renderToken;
+    const q=(await sb.from('tafa_verification_requests').select('status,fee_mga,payment_reference,reason,created_at').eq('user_id',state.user.id).order('created_at',{ascending:false}).limit(1).maybeSingle()).data;
+    if(token!==state.renderToken || state.route!=='verification') return;
+    const statusLabel={pending:'En attente',approved:'Approuvée',rejected:'Refusée'}[q?.status]||'';
+    simplePage('Vérification',`<section class="verification-page-premium"><div class="verification-hero"><div><span class="eyebrow">TAFAß • VÉRIFICATION OFFICIELLE</span><h3>Obtenez le badge bleu Tafaß</h3><p>Une demande vérifiable, un traitement administratif et un badge affiché automatiquement sur votre profil et vos publications après approbation.</p></div><span class="verification-mark">✓</span></div><div class="verification-steps"><div><b>01</b><span>Paiement</span><small>25 000 Ar</small></div><div><b>02</b><span>Demande</span><small>Référence + motif</small></div><div><b>03</b><span>Validation</span><small>Administration</small></div></div>${q?`<section class="verification-status-card"><div><span class="eyebrow">DERNIÈRE DEMANDE</span><h4>${esc(statusLabel)}</h4><p>${esc(q.reason||'Demande de badge bleu')}</p><small>${Number(q.fee_mga||25000).toLocaleString('fr-FR')} Ar · ${timeAgo(q.created_at)}</small></div><span class="verification-status-dot status-${esc(q.status||'pending')}">●</span></section>`:''}<section class="verification-form-card"><div class="section-title"><div><h3>Nouvelle demande</h3><small>Ajoutez la référence exacte de votre paiement.</small></div></div><label>Référence du paiement<input id="verificationPaymentRef" class="premium-input" maxlength="120" placeholder="Référence de paiement"></label><label>Motif de la demande<textarea id="verificationReason" class="premium-input" maxlength="500" placeholder="Pourquoi souhaitez-vous le badge bleu ?"></textarea></label><button class="primary big" data-action="submit-verification-request">Envoyer la demande · 25 000 Ar</button></section></section>`);
+  }
+
   async function submitVerificationRequest(){ const ref=$("verificationPaymentRef")?.value.trim()||"", reason=$("verificationReason")?.value.trim()||""; if(!ref)return toast("Ajoutez la référence du paiement."); const r=await sb.rpc('tafa_submit_verification_request',{p_payment_reference:ref,p_reason:reason}); if(r.error)return toast(r.error.message); closeModal(); toast('Demande de vérification envoyée.'); }
   async function adminSetAppealStatus(id,status){ if(!confirm(status==='approved'?'Réactiver ce compte ?':'Refuser cette demande de réactivation ?'))return; const r=await sb.rpc('tafa_admin_set_appeal_status',{p_id:id,p_status:status}); if(r.error)return toast(r.error.message); toast(status==='approved'?'Compte réactivé.':'Demande refusée.'); return adminTotalPage(); }
   async function adminSetVerificationStatus(id,status){ if(!confirm(status==='approved'?'Approuver cette vérification ?':'Refuser cette demande ?'))return; const r=await sb.rpc('tafa_admin_set_verification_status',{p_id:id,p_status:status}); if(r.error)return toast(r.error.message); toast(status==='approved'?'Badge bleu activé.':'Demande refusée.'); return adminTotalPage(); }
@@ -3581,6 +3585,7 @@ async function genericListPage(route) {
       else if (route === "music") await musicHubPage();
       else if (route === "business") await businessAdsPage();
       else if (route === "admin") await adminTotalPage();
+      else if (route === "verification") await verificationPage();
       else if (route === "menu") await menuPage();
       else if (route === "tafab") await tafabPage();
       else if (route === "settings") await settingsPage();
@@ -4637,7 +4642,7 @@ async function genericListPage(route) {
       return;
     }
     if (notificationId && action !== "mark-read") { await sb.from("notifications").update({is_read:true}).eq("id",notificationId).eq("user_id",state.user.id); updateBadges(); }
-    if (action === "verification") return openVerificationRequest();
+    if (action === "verification") return navigate("verification");
     if (action === "open-restriction-appeal") return openRestrictionAppeal();
     if (action === "submit-appeal") return submitAppeal();
     if (action === "submit-verification-request") return submitVerificationRequest();
