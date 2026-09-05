@@ -509,21 +509,38 @@ async function createStory() {
     }
     const r=await sb.from("stories").insert({
       user_id:state.user.id, media_url:media_url||"data:text/plain;charset=utf-8,story",
-      media_type, text_overlay:text, visibility:"public"
+      media_type, text_overlay:text, visibility:"public",
+      expires_at:new Date(Date.now()+24*60*60*1000).toISOString()
     }).select().single();
     if(r.error) return toast(r.error.message);
     closeModal(); toast("Story publiée pendant 24 h."); await render();
 }
 
 async function storyComposer() {
-    openModal(`<div class="modal-box story-create-modal">
-      <button class="modal-close" data-action="close-modal">×</button>
-      <span class="eyebrow">TAFAß • STORIES</span><h3>Créer une story</h3>
-      <p class="muted">Partagez une photo, une vidéo ou un texte. La story expire automatiquement après 24 heures.</p>
-      <textarea id="storyText" maxlength="500" placeholder="Écrivez quelque chose…"></textarea>
-      <label class="story-upload"><span>${menuIcon("pages")}</span><b>Photo ou vidéo</b><small>Choisir un fichier</small><input id="storyFile" type="file" accept="image/*,video/*" hidden></label>
-      <button class="primary big" data-action="create-story">Publier la story</button>
+    openModal(`<div class="modal-box story-create-modal story-create-modal-v33">
+      <button class="modal-close story-close" data-action="close-modal" aria-label="Fermer">×</button>
+      <div class="story-create-head"><div><span class="eyebrow">TAFAß • STORIES</span><h3>Créer une story</h3><p>Partagez un moment. Votre story sera visible pendant 24 heures.</p></div><span class="story-create-badge">24 h</span></div>
+      <label class="story-text-field"><span>Votre story</span><textarea id="storyText" maxlength="500" placeholder="Écrivez quelque chose…"></textarea><small><b id="storyTextCount">0</b>/500</small></label>
+      <label class="story-upload story-upload-v33" for="storyFile"><span class="story-upload-icon">＋</span><span><b>Ajouter une photo ou une vidéo</b><small>JPG, PNG, WEBP ou vidéo</small></span><strong>Choisir</strong><input id="storyFile" type="file" accept="image/*,video/*" hidden></label>
+      <div id="storyPreview" class="story-preview-v33"><div class="story-preview-empty"><span>◉</span><b>Aperçu de votre story</b><small>Le média ou le texte apparaîtra ici avant publication.</small></div></div>
+      <div class="story-create-footer"><span>🌐 Public · expire dans 24 h</span><button class="primary big" data-action="create-story">Publier la story</button></div>
     </div>`);
+    const text=$("storyText"), file=$("storyFile"), preview=$("storyPreview"), count=$("storyTextCount");
+    const update=()=>{
+      if(count) count.textContent=String((text?.value||"").length);
+      const f=file?.files?.[0], t=(text?.value||"").trim();
+      if(!preview)return;
+      if(f){
+        const url=URL.createObjectURL(f);
+        preview.innerHTML=f.type.startsWith("video/")?`<video src="${url}" controls muted playsinline></video>`:`<img src="${url}" alt="Aperçu de la story">`;
+        if(t) preview.insertAdjacentHTML("beforeend",`<div class="story-preview-caption">${esc(t)}</div>`);
+      }else if(t){
+        preview.innerHTML=`<div class="story-text-live-preview">${esc(t)}</div>`;
+      }else {
+        preview.innerHTML=`<div class="story-preview-empty"><span>◉</span><b>Aperçu de votre story</b><small>Le média ou le texte apparaîtra ici avant publication.</small></div>`;
+      }
+    };
+    text?.addEventListener("input",update); file?.addEventListener("change",update); update();
 }
 
 function openMoodComposer(){openModal(`<div class="modal-box composer-modal-premium mood-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • HUMEUR</span><h3>Comment vous sentez-vous ?</h3><p class="muted">Ajoutez une humeur ou une activité à votre publication.</p><div class="mood-grid">${[["😊","Heureux / Heureuse"],["😍","Amoureux / Amoureuse"],["🥳","En fête"],["😎","Détendu(e)"],["🤩","Enthousiaste"],["😌","Serein(e)"],["💪","Motivé(e)"],["😢","Triste"],["😡","En colère"],["🤔","En réflexion"],["❤️","Avec mes proches"],["🙏","Reconnaissant(e)"]].map(([e,l])=>`<button class="mood-choice" data-action="select-mood" data-mood-value="${esc(e+' '+l)}"><span>${e}</span><b>${esc(l)}</b></button>`).join('')}</div><label class="mood-extra">Message complémentaire<textarea id="moodExtra" maxlength="500" placeholder="Ajoutez un message…"></textarea></label><button class="primary big" data-action="apply-mood">Ajouter à ma publication</button></div>`)}
@@ -1457,9 +1474,8 @@ function publisherBackgrounds(){
     const aliasRows=(await sb.from("tafab_conversation_aliases").select("target_user_id,nickname").eq("conversation_id",id)).data||[];
     const aliasMap=new Map(aliasRows.map(x=>[String(x.target_user_id),x.nickname]));
     const displayOtherName=otherProfile ? (aliasMap.get(String(otherProfile.id))||nameOf(otherProfile)) : "Discussion";
-    const themeLabels={default:["Classique","💬"],amoureux:["Amoureux","❤️"],triste:["Triste","💙"],heureux:["Heureux","☀️"],enemies:["Enemies","⚡"],nature:["Nature","🌿"],ocean:["Océan","🌊"],nuit:["Nuit","🌙"]};
-    const currentThemeMeta=themeLabels[conversationTheme]||themeLabels.default;
-    $("content").innerHTML = `<section class="clean-page messages-page conversation-page"><div class="page-header clean-page-header conversation-clean-header"><button class="page-back" data-action="page-back" type="button"><span aria-hidden="true">‹</span><small>Messages</small></button><div class="conversation-title">${avatarHTML(otherProfile || state.profile,"avatar conversation-avatar")}<div><h2>${esc(displayOtherName)}</h2><small id="conversationPresence" class="conversation-presence">Connexion sécurisée</small></div></div></div><div id="typingIndicator" class="typing-indicator" hidden>écrit…</div><div class="message-list clean-message-list">${(msgs||[]).map(m=>conversationMessageHTML(m,map,reactionMap)).join("")||renderFirstContactGreetings(otherProfile||{})}</div><form id="messageForm" class="comment-form clean-message-form"><div class="message-v22-tools"><button type="button" class="message-tool" data-action="message-attachment" title="Joindre un fichier">📎</button><button type="button" class="message-tool" data-action="message-voice" title="Message vocal">🎙️</button></div><input id="messageText" autocomplete="off" placeholder="Écrire un message..."><input id="messageAttachment" type="file" hidden accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip,.apk"><button type="submit">Envoyer</button></form></section>`;
+    // V33 — conversation volontairement clean, inspirée du rendu Messenger fourni : aucun thème/cadre de fond.
+    $("content").innerHTML = `<section class="clean-page messages-page conversation-page conversation-page-clean"><header class="conversation-clean-topbar"><button class="conversation-back" data-action="page-back" type="button" aria-label="Retour">‹</button><button class="conversation-person" data-action="view-profile" data-id="${esc(otherId||"")}" type="button">${avatarHTML(otherProfile || state.profile,"avatar conversation-avatar")}<span><b>${esc(displayOtherName)}</b><small id="conversationPresence" class="conversation-presence">Actif</small></span></button><div class="conversation-head-actions"><button type="button" aria-label="Appel" title="Appel" data-action="conversation-call">⌕</button><button type="button" aria-label="Appel vidéo" title="Appel vidéo" data-action="conversation-video">▣</button><button type="button" aria-label="Options" title="Options" data-action="conversation-menu" data-id="${esc(id)}">⚙</button></div></header><div id="typingIndicator" class="typing-indicator" hidden>écrit…</div><div class="message-list clean-message-list">${(msgs||[]).map(m=>conversationMessageHTML(m,map,reactionMap)).join("")||renderFirstContactGreetings(otherProfile||{})}</div><form id="messageForm" class="comment-form clean-message-form"><button type="button" class="message-tool" data-action="message-attachment" title="Photo ou fichier" aria-label="Photo ou fichier">▧</button><button type="button" class="message-tool" data-action="message-voice" title="Message vocal" aria-label="Message vocal">●</button><input id="messageAttachment" type="file" hidden accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip,.apk"><div class="message-input-shell"><input id="messageText" autocomplete="off" placeholder="Message"><button type="button" class="message-emoji-button" title="Emoji" aria-label="Emoji">☺</button></div><button type="submit" class="message-send-button" aria-label="Envoyer">➤</button></form></section>`;
 
     // Conversation-level Realtime: typing + online presence without storing ephemeral state in SQL.
     if(state.conversationChannel){ try{ await sb.removeChannel(state.conversationChannel); }catch(_){} state.conversationChannel=null; }
@@ -4918,6 +4934,8 @@ async function genericListPage(route) {
     }
     if (action === "create-story") return createStory();
     if (action === "story-create") return storyComposer();
+    if (action === "conversation-menu") return conversationActionMenu(id);
+    if (action === "conversation-call" || action === "conversation-video") return toast("Les appels seront disponibles dans une prochaine activation du service temps réel.");
     if (action === "open-story") {
       const s=(await sb.from("stories").select("*").eq("id",id).maybeSingle()).data;
       if(!s)return toast("Story introuvable ou expirée.");
