@@ -83,3 +83,9 @@ The settings SQL uses `public.friendships` as the source of accepted friendships
 - Mobile : prise en compte renforcée des zones sûres Android/iOS (safe-area) pour l’authentification et la navigation basse.
 - Direct : configuration WebRTC centralisée avec possibilité d’ajouter un serveur TURN via `window.TAFASS_TURN_SERVERS`, sans mettre de secret dans le code.
 - Les fonctions Realtime, authentification, Pages, Groupes, Messages, Stories, Reels, publications et Direct existantes sont conservées.
+
+
+## V8 Production Messaging
+- Actions premium sur les messages: répondre, modifier et supprimer ses propres messages.
+- Rechargement ciblé de la conversation après mutation.
+- Les opérations respectent les permissions du compte via `sender_id` et Supabase RLS.

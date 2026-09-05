@@ -19,3 +19,5 @@ V7 Realtime Messaging update
 - Online/offline status is ephemeral and not stored in the database.
 - Message read state is reflected in the conversation UI using the existing is_read field and mark-read RPC.
 - Conversation channel is cleaned up on navigation/logout to avoid duplicate subscriptions.
+
+V8 Production Messaging — 2026-09-04: reply/edit/delete actions, message action UI, safe refresh and cache bump.

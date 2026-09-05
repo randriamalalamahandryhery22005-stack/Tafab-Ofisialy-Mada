@@ -3756,3 +3756,12 @@ button,.menu-card,.list-row,.page-menu-card{max-width:100%}
 .network-status.offline{display:block}
 .network-status.reconnecting{display:block}
 @media(max-width:640px){.network-status{font-size:11px;padding:8px 12px;top:max(8px,env(safe-area-inset-top))}}
+
+/* V8 — premium message actions */
+.message{position:relative;padding-bottom:34px}
+.message-actions{position:absolute;right:8px;bottom:5px;display:flex;gap:4px;opacity:0;transition:opacity .18s ease}
+.message:hover .message-actions,.message:focus-within .message-actions{opacity:1}
+.message-actions button{width:28px;height:28px;border:0;border-radius:9px;background:rgba(255,255,255,.08);color:inherit;cursor:pointer;font-size:14px}
+.message-actions button:hover{background:rgba(255,255,255,.16)}
+.message.mine .message-actions{right:8px}
+@media (hover:none){.message-actions{opacity:1}}

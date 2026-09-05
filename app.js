@@ -1227,7 +1227,7 @@ function publisherBackgrounds(){
     const map = new Map((profiles || []).map(p => [p.id, p]));
     const otherId = (await sb.from("conversation_members").select("user_id").eq("conversation_id", id).neq("user_id", state.user.id).maybeSingle()).data?.user_id;
     const otherProfile = otherId ? (await sb.from("profiles").select("*").eq("id", otherId).maybeSingle()).data : null;
-    $("content").innerHTML = `<section class="clean-page messages-page conversation-page"><div class="page-header clean-page-header"><button class="page-back" data-action="page-back" type="button"><span aria-hidden="true">‹</span><small>Messages</small></button><div class="conversation-title">${avatarHTML(otherProfile || state.profile,"avatar conversation-avatar")}<div><h2>${esc(otherProfile ? nameOf(otherProfile) : "Discussion")}</h2><small id="conversationPresence" class="conversation-presence">Connexion sécurisée</small></div></div><span></span></div><div id="typingIndicator" class="typing-indicator" hidden>écrit…</div><div class="message-list clean-message-list">${(msgs||[]).map(m=>`<div class="message ${m.sender_id===state.user.id?"mine":""}"><div>${esc(m.content)}</div><small>${timeAgo(m.created_at)}${m.sender_id===state.user.id ? (m.is_read ? " · Lu" : " · Envoyé") : ""}</small></div>`).join("")||`<div class="empty">Dites bonjour 👋</div>`}</div><form id="messageForm" class="comment-form clean-message-form"><input id="messageText" autocomplete="off" placeholder="Écrire un message..." required><button>Envoyer</button></form></section>`;
+    $("content").innerHTML = `<section class="clean-page messages-page conversation-page"><div class="page-header clean-page-header"><button class="page-back" data-action="page-back" type="button"><span aria-hidden="true">‹</span><small>Messages</small></button><div class="conversation-title">${avatarHTML(otherProfile || state.profile,"avatar conversation-avatar")}<div><h2>${esc(otherProfile ? nameOf(otherProfile) : "Discussion")}</h2><small id="conversationPresence" class="conversation-presence">Connexion sécurisée</small></div></div><span></span></div><div id="typingIndicator" class="typing-indicator" hidden>écrit…</div><div class="message-list clean-message-list">${(msgs||[]).map(m=>conversationMessageHTML(m,map)).join("")||`<div class="empty">Dites bonjour 👋</div>`}</div><form id="messageForm" class="comment-form clean-message-form"><input id="messageText" autocomplete="off" placeholder="Écrire un message..." required><button>Envoyer</button></form></section>`;
 
     // Conversation-level Realtime: typing + online presence without storing ephemeral state in SQL.
     if(state.conversationChannel){ try{ await sb.removeChannel(state.conversationChannel); }catch(_){} state.conversationChannel=null; }
@@ -1267,6 +1267,57 @@ function publisherBackgrounds(){
       const r=await sb.from("messages").insert({conversation_id:id,sender_id:state.user.id,content:text,is_read:false});
       if(r.error)toast(r.error.message); else {$("messageText").value=""; await openConversation(id);}
     });
+  }
+
+
+  function conversationMessageHTML(m, map){
+    const mine=m.sender_id===state.user.id;
+    const author=map.get(m.sender_id);
+    const body=esc(m.content);
+    return '<div class="message '+(mine?'mine':'')+'" data-message-id="'+esc(m.id)+'" data-author="'+esc(author?nameOf(author):'Membre')+'"><div class="message-body">'+body+'</div><small>'+timeAgo(m.created_at)+(mine ? (m.is_read ? ' · Lu' : ' · Envoyé') : '')+'</small><div class="message-actions"><button type="button" data-action="reply-message" data-id="'+esc(m.id)+'" aria-label="Répondre">↩</button>'+(mine?'<button type="button" data-action="edit-message" data-id="'+esc(m.id)+'" aria-label="Modifier">✎</button><button type="button" data-action="delete-message" data-id="'+esc(m.id)+'" aria-label="Supprimer">⌫</button>':'')+'</div></div>';
+  }
+
+  async function refreshConversation(id){
+    if(!id || state.selectedConversation!==id || state.route!=="messages") return;
+    return openConversation(id);
+  }
+
+  async function editConversationMessage(id){
+    if(!id) return;
+    const r=await sb.from("messages").select("id,content,sender_id").eq("id",id).eq("sender_id",state.user.id).maybeSingle();
+    if(r.error||!r.data) return toast("Ce message ne peut pas être modifié.");
+    const value=window.prompt("Modifier le message", r.data.content||"");
+    if(value===null) return;
+    const text=value.trim();
+    if(!text) return toast("Le message ne peut pas être vide.");
+    const u=await sb.from("messages").update({content:text}).eq("id",id).eq("sender_id",state.user.id);
+    if(u.error) return toast(u.error.message);
+    toast("Message modifié");
+    return refreshConversation(state.selectedConversation);
+  }
+
+  async function deleteConversationMessage(id){
+    if(!id) return;
+    const r=await sb.from("messages").select("id,sender_id").eq("id",id).eq("sender_id",state.user.id).maybeSingle();
+    if(r.error||!r.data) return toast("Ce message ne peut pas être supprimé.");
+    if(!window.confirm("Supprimer ce message ?")) return;
+    const d=await sb.from("messages").delete().eq("id",id).eq("sender_id",state.user.id);
+    if(d.error) return toast(d.error.message);
+    toast("Message supprimé");
+    return refreshConversation(state.selectedConversation);
+  }
+
+  function replyConversationMessage(id){
+    const node=document.querySelector(`[data-message-id="${CSS.escape(String(id))}"]`);
+    if(!node) return;
+    const text=node.querySelector(".message-body")?.textContent?.trim()||"";
+    const author=node.dataset.author||"Membre";
+    const input=$("messageText");
+    if(!input) return;
+    const quote=`↪ ${author}: ${text.slice(0,180)}\n`;
+    input.value=quote;
+    input.focus();
+    input.setSelectionRange(input.value.length,input.value.length);
   }
 
   async function notificationsPage() {
@@ -3856,6 +3907,9 @@ async function genericListPage(route) {
     if (action === "unblock-profile") return unblockProfile(id);
     if (action === "new-message") return newMessage();
     if (action === "start-conversation") return startConversation(id);
+    if (action === "reply-message") return replyConversationMessage(id);
+    if (action === "edit-message") return editConversationMessage(id);
+    if (action === "delete-message") return deleteConversationMessage(id);
     if (action === "open-conversation") return openConversation(id);
     if (action === "mark-read") return markRead();
     if (action === "theme") return toggleTheme();
