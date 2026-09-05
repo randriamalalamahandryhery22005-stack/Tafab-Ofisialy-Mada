@@ -3445,8 +3445,17 @@ async function genericListPage(route) {
   async function deleteAdCampaign(id){if(!confirm('Supprimer cette campagne ?'))return;const r=await sb.from('tafab_ad_campaigns').delete().eq('id',id).eq('owner_id',state.user.id);if(r.error)return toast(r.error.message);toast('Campagne supprimée.');return businessAdsPage();}
 
   async function adminIsAllowed(){
-    if(!state.user || !supabaseReady()) return false;
-    try{const r=await sb.rpc('tafa_is_admin',{p_user_id:state.user.id});return !r.error&&r.data===true;}catch(_){return false;}
+    // V31.2: supabaseReady() was not defined in this build. That made the
+    // admin check throw and silently hide Administration from the Menu.
+    // The Supabase client is created at app startup, so only the session and
+    // the server-side role RPC need to be checked here.
+    if(!state.user || !sb) return false;
+    try{
+      const r=await sb.rpc('tafa_is_admin',{p_user_id:state.user.id});
+      return !r.error && (r.data === true || r.data === 'true');
+    }catch(_){
+      return false;
+    }
   }
 
   async function adminBadgeCount(){
