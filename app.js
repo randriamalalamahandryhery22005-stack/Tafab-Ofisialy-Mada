@@ -31,6 +31,8 @@ document.documentElement.classList.add("app-boot");
     return sb.storage.from("posts").upload(path, file, { upsert: false, ...options, contentType: options.contentType || file.type || undefined });
   }
   const state = {
+    voiceDraft: null,
+    voicePreviewUrl: null,
     user: null, profile: null, route: "home", navStack: ["home"], backOverride: null, posts: [], friends: [], stories: [],
     channel: null, theme: "dark", entering: false, loggingOut: false, composerOpen: false, composerBackground: "plain", composerLocation: "",
     composerDraftText: "", composerFile: null, composerVisibility: "public", composerMeta: {},
@@ -1252,10 +1254,12 @@ function publisherBackgrounds(){
         person = r.data || null;
       }
       if(person && blockedCache.ids.has(person.id)) continue;
+      const hiddenConv=(await sb.from("tafab_deleted_conversations").select("conversation_id").eq("user_id",state.user.id).eq("conversation_id",c.id).maybeSingle()).data;
+      if(hiddenConv) continue;
       const { data: last } = await sb.from("messages").select("content,created_at")
         .eq("conversation_id", c.id).order("created_at", { ascending:false }).limit(1);
       cards.push(`<button class="list-row message-conversation" style="width:100%;text-align:left"
-        data-action="open-conversation" data-id="${esc(c.id)}">
+        data-action="open-conversation" data-id="${esc(c.id)}" data-other-id="${esc(person?.id||"")}">
         ${avatarHTML(person || state.profile)}
         <div class="grow"><b>${esc(c.name || (person ? nameOf(person) : "Conversation"))}</b>
         <small>${esc(last?.[0]?.content || "Ouvrir la conversation")} · ${last?.[0] ? timeAgo(last[0].created_at) : ""}</small></div><small>›</small>
@@ -1275,6 +1279,7 @@ function publisherBackgrounds(){
         row.classList.toggle("hidden", q && !row.textContent.toLowerCase().includes(q));
       });
     });
+    bindConversationLongPress();
   }
 
   async function newMessage() {
@@ -1310,7 +1315,10 @@ function publisherBackgrounds(){
     if (!memberCheck) return toast("Conversation inaccessible.");
     const otherIdCheck=(await sb.from("conversation_members").select("user_id").eq("conversation_id",id).neq("user_id",state.user.id).maybeSingle()).data?.user_id;
     if(otherIdCheck && await denyIfBlocked(otherIdCheck,"Conversation indisponible : ce compte est bloqué."))return;
-    const { data: msgs } = await sb.from("messages").select("*").eq("conversation_id", id).order("created_at", { ascending: true }).limit(200);
+    const { data: rawMsgs } = await sb.from("messages").select("*").eq("conversation_id", id).order("created_at", { ascending: true }).limit(200);
+    const hiddenR=await sb.from("tafab_message_hidden").select("message_id").eq("user_id",state.user.id);
+    const hiddenIds=new Set((hiddenR.data||[]).map(x=>x.message_id));
+    const msgs=(rawMsgs||[]).filter(m=>!hiddenIds.has(m.id));
     await sb.rpc("tafa_mark_conversation_read", { p_conversation_id:id });
     // Resolve reply targets in one extra query so replies remain visible after reload/reconnect.
     const replyIds=[...new Set((msgs||[]).map(m=>m.reply_to_id).filter(Boolean))];
@@ -1374,10 +1382,17 @@ function publisherBackgrounds(){
   function conversationMessageHTML(m, map){
     const mine=m.sender_id===state.user.id;
     const author=map.get(m.sender_id);
-    const body=m.media_url ? (String(m.media_type||"").startsWith("audio/") ? `<audio controls preload="metadata" src="${esc(m.media_url)}"></audio>` : String(m.media_type||"").startsWith("video/") ? `<video class="message-media" controls src="${esc(m.media_url)}"></video>` : String(m.media_type||"").startsWith("image/") ? `<img class="message-media" src="${esc(m.media_url)}" alt="${esc(m.content||"Image")}"><span>${esc(m.content||"")}</span>` : `<a class="message-file" href="${esc(m.media_url)}" target="_blank" rel="noopener">📎 ${esc(m.content||"Fichier")}</a>`) : esc(m.content);
-    const replyPreview = m.reply_to_content ? `<div class="message-reply-preview"><span class="message-reply-line"></span><div><b>${esc(m.reply_to_author || 'Message')}</b><span>${esc(String(m.reply_to_content).slice(0,180))}</span></div></div>` : '';
+    const mt=String(m.media_type||"");
+    let body='';
+    if(m.media_url){
+      if(mt.startsWith('audio/')) body=`<div class="message-audio-wrap"><audio controls preload="metadata" src="${esc(m.media_url)}"></audio><button class="message-download" data-action="download-message-file" data-url="${esc(m.media_url)}" data-name="${esc(m.content||'message-vocal.webm')}">⬇</button></div>`;
+      else if(mt.startsWith('video/')) body=`<div class="message-media-wrap"><video class="message-media" controls playsinline preload="metadata" src="${esc(m.media_url)}"></video><button class="message-download" data-action="download-message-file" data-url="${esc(m.media_url)}" data-name="${esc(m.content||'video')}">⬇ Télécharger</button></div>`;
+      else if(mt.startsWith('image/')) body=`<div class="message-media-wrap"><img class="message-media" src="${esc(m.media_url)}" alt="${esc(m.content||'Image')}" loading="lazy"><button class="message-download" data-action="download-message-file" data-url="${esc(m.media_url)}" data-name="${esc(m.content||'image')}">⬇ Télécharger</button></div>`;
+      else body=`<div class="message-file-wrap"><a class="message-file" href="${esc(m.media_url)}" target="_blank" rel="noopener">📎 ${esc(m.content||'Fichier')}</a><button class="message-download" data-action="download-message-file" data-url="${esc(m.media_url)}" data-name="${esc(m.content||'Fichier')}">⬇ Télécharger</button></div>`;
+    } else body=esc(m.content||'');
+    const replyPreview = m.reply_to_content ? `<div class="message-reply-preview"><span class="message-reply-line"></span><div><b>Message</b><span>${esc(String(m.reply_to_content).slice(0,180))}</span></div></div>` : '';
     const edited = m.updated_at && m.updated_at !== m.created_at ? ' · modifié' : '';
-    return '<div class="message '+(mine?'mine':'')+'" data-message-id="'+esc(m.id)+'" data-author="'+esc(author?nameOf(author):'Membre')+'"><div class="message-card">'+replyPreview+'<div class="message-body">'+body+'</div><div class="message-meta"><small>'+timeAgo(m.created_at)+edited+(mine ? (m.is_read ? ' · Lu' : ' · Envoyé') : '')+'</small><button type="button" class="message-more" data-action="message-menu" data-id="'+esc(m.id)+'" aria-label="Options du message">⋯</button></div></div><div class="message-actions" role="group" aria-label="Actions du message"><button type="button" data-action="reply-message" data-id="'+esc(m.id)+'"><span>↩</span><small>Répondre</small></button>'+(mine?'<button type="button" data-action="edit-message" data-id="'+esc(m.id)+'"><span>✎</span><small>Modifier</small></button><button type="button" class="danger" data-action="delete-message" data-id="'+esc(m.id)+'"><span>⌫</span><small>Supprimer</small></button>':'')+'</div></div>';
+    return `<div class="message ${mine?'mine':''}" data-message-id="${esc(m.id)}" data-author="${esc(author?nameOf(author):'Membre')}"><div class="message-card"><div class="message-reaction-badge" data-reaction-for="${esc(m.id)}"></div>${replyPreview}<div class="message-body">${body}</div><div class="message-meta"><small>${timeAgo(m.created_at)}${edited}${mine ? (m.is_read ? ' · Lu' : ' · Envoyé') : ''}</small><button type="button" class="message-more" data-action="message-menu" data-id="${esc(m.id)}" aria-label="Options du message">⋯</button></div></div></div>`;
   }
 
   async function refreshConversation(id){
@@ -1404,25 +1419,33 @@ function publisherBackgrounds(){
   }
 
   async function deleteConversationMessage(id){
-    if(!id) return;
-    const r=await sb.from("messages").select("id,content,sender_id").eq("id",id).eq("sender_id",state.user.id).maybeSingle();
-    if(r.error||!r.data) return toast("Ce message ne peut pas être supprimé.");
-    const preview=String(r.data.content||"").slice(0,120);
-    openModal(`<div class="modal-box message-action-modal delete-message-modal"><button class="modal-close" data-action="close-modal">×</button><div class="message-action-icon danger">⌫</div><span class="eyebrow danger-eyebrow">SUPPRESSION</span><h3>Supprimer ce message ?</h3><p class="muted">Cette action supprimera définitivement votre message.</p><div class="delete-message-preview">${esc(preview)}${String(r.data.content||"").length>120?'…':''}</div><div class="message-action-footer"><button class="ghost-action" data-action="close-modal">Annuler</button><button class="danger-button" data-action="confirm-delete-message" data-id="${esc(id)}">Supprimer</button></div></div>`);
+    if(!id)return;
+    const r=await sb.from("messages").select("id,content,sender_id,media_url").eq("id",id).maybeSingle();
+    if(r.error||!r.data)return toast("Ce message n’existe plus.");
+    const mine=r.data.sender_id===state.user.id;
+    openModal(`<div class="modal-box message-action-modal message-menu-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">MESSAGE</span><h3>Supprimer le message</h3><p class="muted">Choisissez où supprimer ce message.</p><div class="message-menu-list"><button data-action="delete-message-me" data-id="${esc(id)}"><span class="menu-action-icon">⌫</span><span><b>Supprimer pour moi</b><small>Il disparaîtra uniquement de votre conversation.</small></span><i>›</i></button>${mine?`<button class="danger-row" data-action="delete-message-everyone" data-id="${esc(id)}"><span class="menu-action-icon">×</span><span><b>Supprimer pour tout le monde</b><small>Retirer définitivement le message de la conversation.</small></span><i>›</i></button>`:''}</div></div>`);
   }
-
-  async function confirmDeleteConversationMessage(id){
-    const d=await sb.from("messages").delete().eq("id",id).eq("sender_id",state.user.id);
-    if(d.error) return toast(d.error.message);
-    closeModal(); toast("Message supprimé");
-    return refreshConversation(state.selectedConversation);
+  async function hideMessageForMe(id){
+    const r=await sb.from('tafab_message_hidden').upsert({user_id:state.user.id,message_id:id},{onConflict:'user_id,message_id'});
+    if(r.error)return toast(r.error.message); closeModal(); return refreshConversation(state.selectedConversation);
   }
-
+  async function deleteMessageForEveryone(id){
+    const r=await sb.from('messages').delete().eq('id',id).eq('sender_id',state.user.id);
+    if(r.error)return toast(r.error.message); closeModal(); toast('Message supprimé pour tout le monde'); return refreshConversation(state.selectedConversation);
+  }
+  async function copyMessage(id){
+    const r=await sb.from('messages').select('content').eq('id',id).maybeSingle();
+    if(r.error||!r.data?.content)return toast('Rien à copier.');
+    try{await navigator.clipboard.writeText(r.data.content);toast('Message copié');}catch(_){toast('Copie impossible sur cet appareil.');}
+  }
+  async function reactToMessage(id,reaction){
+    const r=await sb.from('tafab_message_reactions').upsert({message_id:id,user_id:state.user.id,reaction},{onConflict:'message_id,user_id'});
+    if(r.error)return toast(r.error.message); closeModal(); toast('Réaction ajoutée'); return refreshConversation(state.selectedConversation);
+  }
   function messageActionMenu(id){
-    const node=document.querySelector(`[data-message-id="${CSS.escape(String(id))}"]`);
-    if(!node) return;
-    const mine=node.classList.contains("mine");
-    openModal(`<div class="modal-box message-action-modal message-menu-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">MESSAGE</span><h3>Actions du message</h3><div class="message-menu-list"><button data-action="reply-message" data-id="${esc(id)}"><span class="menu-action-icon">↩</span><span><b>Répondre</b><small>Répondre à ce message</small></span><i>›</i></button>${mine?`<button data-action="edit-message" data-id="${esc(id)}"><span class="menu-action-icon">✎</span><span><b>Modifier</b><small>Changer le contenu du message</small></span><i>›</i></button><button class="danger-row" data-action="delete-message" data-id="${esc(id)}"><span class="menu-action-icon">⌫</span><span><b>Supprimer</b><small>Supprimer définitivement ce message</small></span><i>›</i></button>`:''}</div></div>`);
+    const node=document.querySelector(`[data-message-id="${CSS.escape(String(id))}"]`); if(!node)return;
+    const mine=node.classList.contains('mine');
+    openModal(`<div class="modal-box message-action-modal message-menu-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">MESSAGE</span><h3>Options</h3><div class="message-reaction-row"><button data-action="react-message" data-id="${esc(id)}" data-reaction="❤️">❤️</button><button data-action="react-message" data-id="${esc(id)}" data-reaction="😂">😂</button><button data-action="react-message" data-id="${esc(id)}" data-reaction="😮">😮</button><button data-action="react-message" data-id="${esc(id)}" data-reaction="😢">😢</button><button data-action="react-message" data-id="${esc(id)}" data-reaction="👍">👍</button></div><div class="message-menu-list"><button data-action="reply-message" data-id="${esc(id)}"><span class="menu-action-icon">↩</span><span><b>Répondre</b><small>Répondre à ce message</small></span><i>›</i></button><button data-action="copy-message" data-id="${esc(id)}"><span class="menu-action-icon">⧉</span><span><b>Copier</b><small>Copier le texte</small></span><i>›</i></button>${mine?`<button data-action="edit-message" data-id="${esc(id)}"><span class="menu-action-icon">✎</span><span><b>Modifier</b><small>Changer le contenu</small></span><i>›</i></button>`:''}<button class="danger-row" data-action="delete-message" data-id="${esc(id)}"><span class="menu-action-icon">⌫</span><span><b>Supprimer</b><small>Pour moi ou pour tout le monde</small></span><i>›</i></button></div></div>`);
   }
 
   function replyConversationMessage(id){
@@ -2126,41 +2149,59 @@ async function genericListPage(route) {
 
   function openMessageAttachment(){ $("messageAttachment")?.click(); }
   async function sendMessageAttachment(){
-    const input=$("messageAttachment"), file=input?.files?.[0]; if(!file)return;
-    const ok=file.type.startsWith("image/")||file.type.startsWith("video/")||file.type.startsWith("application/")||file.type.startsWith("text/");
-    if(!ok)return toast("Type de fichier non pris en charge.");
-    if(file.size>100*1024*1024)return toast("Fichier trop volumineux. Limite : 100 Mo.");
+    const input=$('messageAttachment'), file=input?.files?.[0]; if(!file)return;
+    if(file.size>100*1024*1024)return toast('Fichier trop volumineux. Limite : 100 Mo.');
     const id=state.selectedConversation; if(!id)return;
-    const ext=(file.name.split('.').pop()||'bin').toLowerCase(); const path=`${state.user.id}/messages/${id}-${crypto.randomUUID()}.${ext}`;
-    const up=await sb.storage.from("posts").upload(path,file,{upsert:false,contentType:file.type||"application/octet-stream"});
-    if(up.error)return toast("Upload impossible : "+up.error.message);
-    const url=sb.storage.from("posts").getPublicUrl(path).data.publicUrl;
-    const r=await sb.from("messages").insert({conversation_id:id,sender_id:state.user.id,content:file.name,media_url:url,media_type:file.type,is_read:false});
-    if(r.error)return toast(r.error.message);
-    input.value=""; toast("Fichier envoyé"); return openConversation(id);
+    const bar=document.createElement('div'); bar.className='message-upload-progress'; bar.id='messageUploadProgress'; bar.innerHTML=`<div><b>Envoi de ${esc(file.name)}</b><span>0%</span></div><progress value="0" max="100"></progress>`; $('messageForm')?.before(bar);
+    try{
+      const ext=(file.name.split('.').pop()||'bin').toLowerCase(); const path=`${state.user.id}/messages/${id}-${crypto.randomUUID()}.${ext}`;
+      const up=await sb.storage.from('posts').upload(path,file,{upsert:false,contentType:file.type||'application/octet-stream'});
+      if(up.error)throw up.error;
+      bar.querySelector('progress').value=100; bar.querySelector('span').textContent='100%';
+      const url=sb.storage.from('posts').getPublicUrl(path).data.publicUrl;
+      const r=await sb.from('messages').insert({conversation_id:id,sender_id:state.user.id,content:file.name,media_url:url,media_type:file.type||'application/octet-stream',is_read:false});
+      if(r.error)throw r.error; input.value=''; toast('Fichier envoyé'); await openConversation(id);
+    }catch(e){toast('Upload impossible : '+(e.message||e));}finally{bar.remove();}
   }
   async function toggleVoiceRecording(){
-    if(state.recording){ state.recording.stop(); return; }
-    if(!navigator.mediaDevices?.getUserMedia||typeof MediaRecorder==='undefined')return toast("Les messages vocaux ne sont pas disponibles sur cet appareil.");
+    if(state.recording){state.recording.stop();return;}
+    if(!navigator.mediaDevices?.getUserMedia||typeof MediaRecorder==='undefined')return toast('Les messages vocaux ne sont pas disponibles sur cet appareil.');
     try{
-      const stream=await navigator.mediaDevices.getUserMedia({audio:true});
-      const rec=new MediaRecorder(stream); state.recording=rec; state.recordedChunks=[];
+      const stream=await navigator.mediaDevices.getUserMedia({audio:true}); const rec=new MediaRecorder(stream); state.recording=rec; state.recordedChunks=[];
       rec.ondataavailable=e=>{if(e.data.size)state.recordedChunks.push(e.data)};
-      rec.onstop=async()=>{
-        stream.getTracks().forEach(t=>t.stop()); state.recording=null;
-        const blob=new Blob(state.recordedChunks,{type:rec.mimeType||'audio/webm'}); state.recordedChunks=[];
-        if(!blob.size)return;
-        const id=state.selectedConversation; if(!id)return;
-        const path=`${state.user.id}/messages/${id}-${crypto.randomUUID()}.webm`;
-        const up=await sb.storage.from("posts").upload(path,blob,{upsert:false,contentType:blob.type});
-        if(up.error)return toast("Upload audio impossible : "+up.error.message);
-        const url=sb.storage.from("posts").getPublicUrl(path).data.publicUrl;
-        const r=await sb.from("messages").insert({conversation_id:id,sender_id:state.user.id,content:"🎙️ Message vocal",media_url:url,media_type:blob.type,is_read:false});
-        if(r.error)return toast(r.error.message); toast("Message vocal envoyé"); await openConversation(id);
-      };
-      rec.start(); toast("Enregistrement en cours… appuyez à nouveau pour arrêter");
-    }catch(e){ toast("Autorisez le microphone pour enregistrer un message vocal."); }
+      rec.onstop=()=>{stream.getTracks().forEach(t=>t.stop());state.recording=null;const blob=new Blob(state.recordedChunks,{type:rec.mimeType||'audio/webm'});state.recordedChunks=[];if(blob.size)showVoicePreview(blob);};
+      rec.start(); toast('Enregistrement… appuyez à nouveau pour arrêter');
+      const btn=document.querySelector('[data-action="message-voice"]'); if(btn){btn.textContent='⏹️';btn.classList.add('recording');}
+    }catch(e){toast('Autorisez le microphone pour enregistrer un message vocal.');}
   }
+  function showVoicePreview(blob){
+    if(state.voicePreviewUrl)URL.revokeObjectURL(state.voicePreviewUrl); state.voiceDraft=blob; state.voicePreviewUrl=URL.createObjectURL(blob);
+    const form=$('messageForm'); if(!form)return;
+    let box=$('voicePreviewBox'); if(!box){box=document.createElement('div');box.id='voicePreviewBox';box.className='voice-preview-box';form.before(box);}
+    box.innerHTML=`<div><b>Écouter avant d’envoyer</b><small>Vous pouvez supprimer et réenregistrer.</small></div><audio controls src="${esc(state.voicePreviewUrl)}"></audio><div><button type="button" class="ghost-action" data-action="discard-voice">Supprimer</button><button type="button" class="primary" data-action="send-voice-draft">Envoyer</button></div></div>`;
+    const btn=document.querySelector('[data-action="message-voice"]');if(btn){btn.textContent='🎙️';btn.classList.remove('recording');}
+  }
+  function discardVoice(){if(state.voicePreviewUrl)URL.revokeObjectURL(state.voicePreviewUrl);state.voicePreviewUrl=null;state.voiceDraft=null;$('voicePreviewBox')?.remove();}
+  async function sendVoiceDraft(){
+    const blob=state.voiceDraft,id=state.selectedConversation;if(!blob||!id)return;
+    const box=$('voicePreviewBox'); if(box)box.innerHTML='<b>Envoi du vocal…</b><progress max="100" value="70"></progress>';
+    const path=`${state.user.id}/messages/${id}-${crypto.randomUUID()}.webm`; const up=await sb.storage.from('posts').upload(path,blob,{upsert:false,contentType:blob.type||'audio/webm'});
+    if(up.error)return toast('Upload audio impossible : '+up.error.message);
+    const url=sb.storage.from('posts').getPublicUrl(path).data.publicUrl;const r=await sb.from('messages').insert({conversation_id:id,sender_id:state.user.id,content:'🎙️ Message vocal',media_url:url,media_type:blob.type||'audio/webm',is_read:false});
+    if(r.error)return toast(r.error.message);discardVoice();toast('Message vocal envoyé');return openConversation(id);
+  }
+  async function downloadMessageFile(url,name){try{const r=await fetch(url);if(!r.ok)throw new Error();const b=await r.blob();const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name||'fichier';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}catch(_){window.open(url,'_blank');}}
+  async function deleteConversationForMe(id){const r=await sb.from('tafab_deleted_conversations').upsert({user_id:state.user.id,conversation_id:id},{onConflict:'user_id,conversation_id'});if(r.error)return toast(r.error.message);closeModal();return messagesPage();}
+  async function blockMessagesUser(id){const r=await sb.from('tafab_message_blocks').upsert({blocker_id:state.user.id,blocked_id:id},{onConflict:'blocker_id,blocked_id'});if(r.error)return toast(r.error.message);closeModal();toast('Messages bloqués pour ce compte');return messagesPage();}
+  async function blockUserAll(id){return blockProfile(id);}
+  function conversationActionMenu(id){
+    const row=document.querySelector(`[data-action="open-conversation"][data-id="${CSS.escape(String(id))}"]`);const name=row?.querySelector('b')?.textContent||'cette personne';
+    openModal(`<div class="modal-box message-action-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">CONVERSATION</span><h3>${esc(name)}</h3><div class="message-menu-list"><button data-action="delete-conversation-me" data-id="${esc(id)}"><span class="menu-action-icon">⌫</span><span><b>Supprimer la conversation</b><small>La retirer de votre liste.</small></span><i>›</i></button><button data-action="block-messages-user" data-id="${esc(row?.dataset.otherId||'')}><span class="menu-action-icon">◌</span><span><b>Bloquer les messages</b><small>Empêcher ce compte de vous écrire.</small></span><i>›</i></button></div></div>`);
+  }
+  function bindConversationLongPress(){
+    document.querySelectorAll('.message-conversation').forEach(el=>{let timer=null,long=false;const start=e=>{long=false;timer=setTimeout(()=>{long=true;const id=el.dataset.id;const other=el.dataset.otherId;openConversationActions(id,other);},600)};const cancel=()=>{if(timer)clearTimeout(timer)};el.addEventListener('pointerdown',start);el.addEventListener('pointerup',cancel);el.addEventListener('pointerleave',cancel);el.addEventListener('pointercancel',cancel);el.addEventListener('contextmenu',e=>{e.preventDefault();openConversationActions(el.dataset.id,el.dataset.otherId)});});
+  }
+  function openConversationActions(id,otherId){const row=document.querySelector(`[data-action="open-conversation"][data-id="${CSS.escape(String(id))}"]`);const name=row?.querySelector('b')?.textContent||'Conversation';openModal(`<div class="modal-box message-action-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">CONVERSATION</span><h3>${esc(name)}</h3><div class="message-menu-list"><button data-action="delete-conversation-me" data-id="${esc(id)}"><span class="menu-action-icon">⌫</span><span><b>Supprimer la conversation</b><small>La retirer uniquement de votre liste.</small></span><i>›</i></button><button data-action="block-messages-user" data-id="${esc(otherId||'')}"><span class="menu-action-icon">◌</span><span><b>Bloquer les messages</b><small>Ne plus recevoir de messages de cette personne.</small></span><i>›</i></button><button class="danger-row" data-action="block-user-all" data-id="${esc(otherId||'')}"><span class="menu-action-icon">⊘</span><span><b>Bloquer partout</b><small>Bloquer le compte et toutes les interactions.</small></span><i>›</i></button></div></div>`)}
 
   async function eventsPage(){
     const token=state.renderToken;
@@ -4442,6 +4483,15 @@ async function genericListPage(route) {
     if (action === "edit-message") return editConversationMessage(id);
     if (action === "save-message-edit") return saveConversationMessageEdit(id);
     if (action === "delete-message") return deleteConversationMessage(id);
+    if (action === "delete-message-me") return hideMessageForMe(id);
+    if (action === "delete-message-everyone") return deleteMessageForEveryone(id);
+    if (action === "copy-message") return copyMessage(id);
+    if (action === "react-message") return reactToMessage(id, actionEl.dataset.reaction||"👍");
+    if (action === "download-message-file") return downloadMessageFile(actionEl.dataset.url, actionEl.dataset.name);
+    if (action === "conversation-menu") return conversationActionMenu(id);
+    if (action === "delete-conversation-me") return deleteConversationForMe(id);
+    if (action === "block-messages-user") return blockMessagesUser(id);
+    if (action === "block-user-all") return blockUserAll(id);
     if (action === "confirm-delete-message") return confirmDeleteConversationMessage(id);
     if (action === "open-conversation") return openConversation(id);
     if (action === "mark-read") return markRead();
@@ -4527,6 +4577,8 @@ async function genericListPage(route) {
     if (action === "show-tafab-orders") return showTafabOrders();
     if (action === "message-attachment") return openMessageAttachment();
     if (action === "message-voice") return toggleVoiceRecording();
+    if (action === "discard-voice") return discardVoice();
+    if (action === "send-voice-draft") return sendVoiceDraft();
     if (action === "live-gift") return sendLiveGift(actionEl.dataset.gift||"heart",Number(actionEl.dataset.coins||10));
     if (action === "ai-mode") { window.__tafassAiMode=actionEl.dataset.mode||"assistant"; document.querySelectorAll('[data-action="ai-mode"]').forEach(x=>x.classList.toggle("active",x===actionEl)); const labels={assistant:"Assistant",write:"Écrire",translate:"Traduire",summarize:"Résumer"}; if($("aiModeHint"))$("aiModeHint").textContent=`Mode : ${labels[window.__tafassAiMode]||"Assistant"}`; return; }
     if (action === "run-ai") return runAi();
