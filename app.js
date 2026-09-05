@@ -10,7 +10,7 @@ document.documentElement.classList.add("app-boot");
 
   const $ = id => document.getElementById(id);
   const esc = s => String(s ?? "").replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]));
-  const routes = ["home","friends","search","messages","notifications","profile","reels","pages","groups","saved","menu","tafab","events","studio","settings","creator","ai","music"];
+  const routes = ["home","friends","search","messages","notifications","profile","reels","pages","groups","saved","menu","tafab","events","studio","settings","creator","ai","music","business"];
 
   // V19 production upload guard: client-side validation is UX protection only;
   // Supabase Storage policies/server-side validation must remain the authority.
@@ -2261,7 +2261,8 @@ async function genericListPage(route) {
       privacy:'<rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
       tafab:'<path d="M6 4h7a5 5 0 0 1 0 10H9v6H6z"/><path d="M9 8h4a1.5 1.5 0 0 1 0 3H9z"/><path d="M16 15l3 3-3 3"/>',
       payment:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h4"/>',
-      logout:'<path d="M10 5H5v14h5M14 8l5 4-5 4M19 12H9"/>'
+      logout:'<path d="M10 5H5v14h5M14 8l5 4-5 4M19 12H9"/>',
+      business:'<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 20v-6h8v6M8 8h8M8 11h8"/>'
     };
     return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[type] || paths.settings}</svg>`;
   }
@@ -2319,6 +2320,7 @@ async function genericListPage(route) {
       ["creator","payment","Monétisation","Coins, revenus et soutien aux créateurs"],
       ["ai","sparkles","Tafaß AI","Assistant, traduction, rédaction et résumé"],
       ["music","music","Tafaß Music","Artistes, albums, playlists et favoris"],
+      ["business","business","Business & Publicité","Campagnes, audience et analytics"],
       ["saved","saved","Enregistrements","Vos contenus sauvegardés"],
       ["search","search","Rechercher","Trouver un compte ou contenu"],
       ["settings","settings","Para & Conf","Compte et confidentialité"]
@@ -3149,6 +3151,28 @@ async function genericListPage(route) {
   function openMusicPlaylist(){openModal(`<div class="modal-box v25-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • PLAYLIST</span><h3>Créer une playlist</h3><input id="playlistName" class="premium-input" maxlength="80" placeholder="Nom de la playlist"><textarea id="playlistDesc" class="premium-input" maxlength="300" placeholder="Description (optionnel)"></textarea><button class="primary big" data-action="save-music-playlist">Créer</button></div>`)}
   async function saveMusicPlaylist(){const name=$("playlistName")?.value.trim();if(!name)return toast("Donnez un nom à la playlist.");const r=await sb.from("tafab_music_playlists").insert({user_id:state.user.id,name,description:$("playlistDesc")?.value.trim()||"",is_public:false});if(r.error)return toast(r.error.message);closeModal();toast("Playlist créée.");}
 
+  async function businessAdsPage(){
+    const uid=state.user.id, token=state.renderToken;
+    const [b,c]=await Promise.all([
+      sb.from('tafab_business_profiles').select('*').eq('owner_id',uid).maybeSingle(),
+      sb.from('tafab_ad_campaigns').select('*').eq('owner_id',uid).order('created_at',{ascending:false}).limit(50)
+    ]);
+    if(token!==state.renderToken||state.route!=='business')return;
+    const campaigns=c.data||[], stats={};
+    await Promise.all(campaigns.map(async x=>{const r=await sb.rpc('tafab_ad_campaign_stats',{p_campaign_id:x.id});stats[x.id]=r.data?.[0]||{impressions:0,clicks:0,ctr:0};}));
+    const active=campaigns.filter(x=>x.status==='active').length;
+    const totalImp=Object.values(stats).reduce((n,x)=>n+Number(x.impressions||0),0), totalClicks=Object.values(stats).reduce((n,x)=>n+Number(x.clicks||0),0);
+    const rows=campaigns.map(x=>{const st=stats[x.id]||{};return `<article class="v26-campaign"><div class="v26-campaign-top"><div><span class="eyebrow">${esc(x.objective||'awareness').toUpperCase()}</span><h3>${esc(x.name)}</h3><small>${esc(x.audience_location||'Madagascar')} · ${Number(x.daily_budget_mga||0).toLocaleString('fr-FR')} Ar/jour</small></div><span class="v26-status ${esc(x.status)}">${esc(x.status)}</span></div><div class="v26-metrics"><div><b>${Number(st.impressions||0).toLocaleString('fr-FR')}</b><small>Impressions</small></div><div><b>${Number(st.clicks||0).toLocaleString('fr-FR')}</b><small>Clics</small></div><div><b>${Number(st.ctr||0).toFixed(2)}%</b><small>CTR</small></div></div><div class="v26-actions"><button class="ghost-action" data-action="toggle-ad-campaign" data-id="${esc(x.id)}" data-status="${x.status}">${x.status==='active'?'⏸ Pause':'▶ Activer'}</button><button class="danger-action" data-action="delete-ad-campaign" data-id="${esc(x.id)}">Supprimer</button></div></article>`}).join('')||'<div class="empty">Aucune campagne. Créez votre première campagne.</div>';
+    const biz=b.data;
+    simplePage('Business & Publicité',`<div class="v26-hero"><div><span class="eyebrow">TAFAß • BUSINESS</span><h3>Développez votre activité.</h3><p>Créez des campagnes, définissez votre audience et suivez les résultats. Les statistiques sont enregistrées côté serveur.</p></div><button class="primary big" data-action="new-ad-campaign">＋ Nouvelle campagne</button></div><div class="v26-kpis"><div><b>${active}</b><small>Campagnes actives</small></div><div><b>${totalImp.toLocaleString('fr-FR')}</b><small>Impressions</small></div><div><b>${totalClicks.toLocaleString('fr-FR')}</b><small>Clics</small></div><div><b>${totalImp?((100*totalClicks/totalImp).toFixed(2)): '0.00'}%</b><small>CTR global</small></div></div><section class="v26-panel"><div class="section-title"><div><h3>Profil Business</h3><small>${biz?'Votre identité professionnelle':'Présentez votre activité sur Tafaß'}</small></div><button class="secondary-action" data-action="edit-business-profile">${biz?'Modifier':'Créer'}</button></div>${biz?`<div class="v26-business-card"><div class="v26-business-logo">🏢</div><div class="grow"><b>${esc(biz.business_name)}</b><small>${esc(biz.category||'Entreprise')} · ${esc(biz.location||'Madagascar')}</small><p>${esc(biz.description||'')}</p></div>${biz.verified?'<span class="verified-mini">✓ Vérifié</span>':''}</div>`:'<div class="empty">Créez un profil Business pour centraliser votre activité.</div>'}</section><section class="v26-panel"><div class="section-title"><div><h3>Campagnes publicitaires</h3><small>${campaigns.length} campagne(s)</small></div></div><div class="v26-campaign-grid">${rows}</div></section>`);
+  }
+  function openBusinessProfile(){const b=window.__tafassBusiness||{};openModal(`<div class="modal-box v26-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • BUSINESS</span><h3>Profil professionnel</h3><label>Nom de l'entreprise<input id="bizName" class="premium-input" maxlength="120" value="${esc(b.business_name||'')}" placeholder="Ex. Tafaß Studio"></label><label>Catégorie<input id="bizCat" class="premium-input" maxlength="80" value="${esc(b.category||'Entreprise')}"></label><label>Localisation<input id="bizLoc" class="premium-input" maxlength="120" value="${esc(b.location||'Madagascar')}"></label><label>Description<textarea id="bizDesc" class="premium-input" maxlength="1000">${esc(b.description||'')}</textarea></label><label>Site web<input id="bizWeb" class="premium-input" maxlength="300" value="${esc(b.website||'')}"></label><button class="primary big" data-action="save-business-profile">Enregistrer</button></div>`)}
+  async function saveBusinessProfile(){const name=$('bizName')?.value.trim();if(!name)return toast("Nom de l'entreprise requis.");const payload={owner_id:state.user.id,business_name:name,category:$('bizCat')?.value.trim()||'Entreprise',location:$('bizLoc')?.value.trim()||'',description:$('bizDesc')?.value.trim()||'',website:$('bizWeb')?.value.trim()||''};const r=await sb.from('tafab_business_profiles').upsert(payload,{onConflict:'owner_id'});if(r.error)return toast(r.error.message);closeModal();toast('Profil Business enregistré.');return businessAdsPage();}
+  function openAdCampaign(){openModal(`<div class="modal-box v26-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • PUBLICITÉ</span><h3>Nouvelle campagne</h3><label>Nom<input id="adName" class="premium-input" maxlength="120" placeholder="Ex. Lancement produit"></label><label>Titre de l'annonce<input id="adCreativeTitle" class="premium-input" maxlength="120" placeholder="Message publicitaire"></label><label>Description<textarea id="adCreativeDesc" class="premium-input" maxlength="500" placeholder="Présentez votre offre…"></textarea></label><label>Lien de destination<input id="adTargetUrl" class="premium-input" maxlength="500" placeholder="https://…"></label><label>Objectif<select id="adObjective" class="premium-input"><option value="awareness">Notoriété</option><option value="traffic">Trafic</option><option value="engagement">Engagement</option><option value="sales">Ventes</option></select></label><label>Zone ciblée<input id="adLocation" class="premium-input" maxlength="120" value="Madagascar"></label><div class="grid2"><label>Budget/jour (Ar)<input id="adDaily" type="number" min="0" step="100" value="0"></label><label>Budget total (Ar)<input id="adTotal" type="number" min="0" step="100" value="0"></label></div><div class="grid2"><label>Âge min<input id="adAgeMin" type="number" min="13" max="100" value="18"></label><label>Âge max<input id="adAgeMax" type="number" min="13" max="100" value="65"></label></div><label>Centres d'intérêt<input id="adInterests" class="premium-input" maxlength="300" placeholder="mode, musique, technologie"></label><button class="primary big" data-action="save-ad-campaign">Créer la campagne</button></div>`)}
+  async function saveAdCampaign(){const name=$('adName')?.value.trim();if(!name)return toast('Nom de campagne requis.');const min=Number($('adAgeMin')?.value||18),max=Number($('adAgeMax')?.value||65);if(min>max)return toast("L'âge minimum doit être inférieur ou égal à l'âge maximum.");const interests=($('adInterests')?.value||'').split(',').map(x=>x.trim()).filter(Boolean).slice(0,20);const r=await sb.from('tafab_ad_campaigns').insert({owner_id:state.user.id,name,creative_title:$('adCreativeTitle')?.value.trim()||name,creative_description:$('adCreativeDesc')?.value.trim()||'',target_url:$('adTargetUrl')?.value.trim()||'',objective:$('adObjective')?.value||'awareness',status:'draft',daily_budget_mga:Math.max(0,Number($('adDaily')?.value||0)),total_budget_mga:Math.max(0,Number($('adTotal')?.value||0)),audience_location:$('adLocation')?.value.trim()||'Madagascar',audience_age_min:min,audience_age_max:max,audience_interests:interests});if(r.error)return toast(r.error.message);closeModal();toast('Campagne créée en brouillon.');return businessAdsPage();}
+  async function toggleAdCampaign(id,status){const next=status==='active'?'paused':'active';const q=await sb.from('tafab_ad_campaigns').select('*').eq('id',id).eq('owner_id',state.user.id).maybeSingle();if(q.error||!q.data)return toast('Campagne introuvable.');if(next==='active' && !Number(q.data.daily_budget_mga||0) && !Number(q.data.total_budget_mga||0))return toast('Ajoutez un budget avant d’activer la campagne.');const r=await sb.from('tafab_ad_campaigns').update({status:next,updated_at:new Date().toISOString()}).eq('id',id).eq('owner_id',state.user.id);if(r.error)return toast(r.error.message);const adPayload={owner_id:state.user.id,campaign_id:id,title:q.data.creative_title||q.data.name,description:q.data.creative_description||'',target_url:q.data.target_url||'',image_url:q.data.image_url||null,status:next==='active'?'active':'paused',starts_at:q.data.starts_at||new Date().toISOString(),ends_at:q.data.ends_at||null};const ar=await sb.from('tafab_ads').upsert(adPayload,{onConflict:'campaign_id'});if(ar.error)console.warn('Ad creative sync:',ar.error.message);toast(next==='active'?'Campagne activée.':'Campagne mise en pause.');return businessAdsPage();}
+  async function deleteAdCampaign(id){if(!confirm('Supprimer cette campagne ?'))return;const r=await sb.from('tafab_ad_campaigns').delete().eq('id',id).eq('owner_id',state.user.id);if(r.error)return toast(r.error.message);toast('Campagne supprimée.');return businessAdsPage();}
+
   async function render() {
     if (!state.user) return;
     const token = ++state.renderToken;
@@ -3170,6 +3194,7 @@ async function genericListPage(route) {
       else if (route === "creator") await creatorMonetisationPage();
       else if (route === "ai") await aiWorkspacePage();
       else if (route === "music") await musicHubPage();
+      else if (route === "business") await businessAdsPage();
       else if (route === "menu") menuPage();
       else if (route === "tafab") await tafabPage();
       else if (route === "settings") await settingsPage();
@@ -3371,7 +3396,10 @@ async function genericListPage(route) {
       tafab_withdrawal_requests: () => { if (state.route==="creator") creatorMonetisationPage(); },
       tafab_music_tracks: () => { if (state.route==="music") musicHubPage(); },
       tafab_music_likes: () => { if (state.route==="music") musicHubPage(); },
-      tafab_music_playlists: () => { if (state.route==="music") musicHubPage(); }
+      tafab_music_playlists: () => { if (state.route==="music") musicHubPage(); },
+      tafab_business_profiles: () => { if (state.route==="business") businessAdsPage(); },
+      tafab_ad_campaigns: () => { if (state.route==="business") businessAdsPage(); },
+      tafab_ad_events: () => { if (state.route==="business") businessAdsPage(); }
     };
 
     Object.keys(refresh).forEach(table => {
@@ -4349,6 +4377,12 @@ async function genericListPage(route) {
     }
 
     if (action === "auth-onboarding-back") { state.entering=false; state.user=null; sb.auth.signOut().catch(()=>{}); return showLogin(); }
+    if (action === "new-ad-campaign") return openAdCampaign();
+    if (action === "save-ad-campaign") return saveAdCampaign();
+    if (action === "toggle-ad-campaign") return toggleAdCampaign(id, actionEl.dataset.status||"draft");
+    if (action === "delete-ad-campaign") return deleteAdCampaign(id);
+    if (action === "edit-business-profile") { const r=await sb.from("tafab_business_profiles").select("*").eq("owner_id",state.user.id).maybeSingle(); window.__tafassBusiness=r.data||{}; return openBusinessProfile(); }
+    if (action === "save-business-profile") return saveBusinessProfile();
     if (action === "menu-route") { const target = actionEl.dataset.routeTarget; if (target) navigate(target); return; }
     if (action === "retry-route") { const target = actionEl.dataset.routeTarget; if (target) { state.renderToken++; state.route=target; await render(); } return; }
     if (action === "menu-info") { settingInfo(actionEl.dataset.name || "Menu"); return; }
