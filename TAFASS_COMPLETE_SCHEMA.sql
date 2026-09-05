@@ -560,9 +560,11 @@ create policy post_shares_insert on public.post_shares for insert to authenticat
 
 drop policy if exists blocked_select on public.blocked_profiles;
 drop policy if exists blocked_insert on public.blocked_profiles;
+drop policy if exists blocked_update on public.blocked_profiles;
 drop policy if exists blocked_delete on public.blocked_profiles;
 create policy blocked_select on public.blocked_profiles for select to authenticated using(blocker_id=auth.uid() or blocked_id=auth.uid());
-create policy blocked_insert on public.blocked_profiles for insert to authenticated with check(blocker_id=auth.uid());
+create policy blocked_insert on public.blocked_profiles for insert to authenticated with check(blocker_id=auth.uid() and blocker_id<>blocked_id);
+create policy blocked_update on public.blocked_profiles for update to authenticated using(blocker_id=auth.uid()) with check(blocker_id=auth.uid() and blocker_id<>blocked_id);
 create policy blocked_delete on public.blocked_profiles for delete to authenticated using(blocker_id=auth.uid());
 
 drop policy if exists profile_reports_select on public.profile_reports;

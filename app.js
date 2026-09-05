@@ -1800,8 +1800,15 @@ function publisherBackgrounds(){
     if(r.error)return toast(r.error.message); closeModal(); toast("Signalement envoyé"); await logActivity("profile_reported","Compte signalé","profile",id);
   }
   async function blockProfile(id) {
-    const r=await sb.from("blocked_profiles").upsert({blocker_id:state.user.id,blocked_id:id},{onConflict:"blocker_id,blocked_id"});
-    if(r.error)return toast(r.error.message);
+    if(!id || id===state.user.id)return;
+    // Insert-only flow: avoids PostgREST turning an upsert into UPDATE and
+    // hitting an UPDATE USING policy that may not exist on older schemas.
+    const existing=await sb.from("blocked_profiles").select("id").eq("blocker_id",state.user.id).eq("blocked_id",id).maybeSingle();
+    if(existing.error)return toast(existing.error.message);
+    if(!existing.data){
+      const r=await sb.from("blocked_profiles").insert({blocker_id:state.user.id,blocked_id:id});
+      if(r.error)return toast(r.error.message);
+    }
     await Promise.allSettled([
       sb.from("friend_requests").delete().or(`and(sender_id.eq.${state.user.id},receiver_id.eq.${id}),and(sender_id.eq.${id},receiver_id.eq.${state.user.id})`),
       sb.from("friendships").delete().or(`and(user_id.eq.${state.user.id},friend_id.eq.${id}),and(user_id.eq.${id},friend_id.eq.${state.user.id})`),
