@@ -4427,3 +4427,72 @@ body.light .conversation-page .clean-message-list .message:not(.mine){color:#182
  .conversation-page-clean .message-card{max-width:88%!important}
  .conversation-page-clean .message-body{font-size:14px!important}
 }
+
+
+/* =========================================================
+   TAFAß V36 — MESSAGE BUBBLE GEOMETRY + LONG PRESS OPTIONS
+   ========================================================= */
+.conversation-page-clean .clean-message-list{
+  display:flex!important; flex-direction:column!important; align-items:stretch!important;
+  gap:0!important; overflow-x:hidden!important; overflow-y:auto!important;
+  background-color:var(--bg)!important; background-image:none!important;
+}
+.conversation-page-clean.theme-page-amoureux .clean-message-list{background-color:#160b13!important;background-image:radial-gradient(circle at 15px 15px,rgba(255,90,140,.10) 0 2px,transparent 2.5px),radial-gradient(circle at 45px 45px,rgba(255,170,195,.06) 0 1.5px,transparent 2px)!important;background-size:60px 60px!important}
+.conversation-page-clean.theme-page-triste .clean-message-list{background-color:#081321!important;background-image:radial-gradient(circle at 18px 18px,rgba(70,150,255,.10) 0 2px,transparent 2.5px)!important;background-size:54px 54px!important}
+.conversation-page-clean.theme-page-heureux .clean-message-list{background-color:#171107!important;background-image:radial-gradient(circle at 15px 15px,rgba(255,204,70,.10) 0 2px,transparent 2.5px)!important;background-size:60px 60px!important}
+.conversation-page-clean.theme-page-enemies .clean-message-list{background-color:#16090c!important;background-image:repeating-linear-gradient(135deg,rgba(255,70,90,.045) 0 1px,transparent 1px 14px)!important}
+.conversation-page-clean.theme-page-nature .clean-message-list{background-color:#08170f!important;background-image:radial-gradient(circle at 12px 20px,rgba(70,210,125,.09) 0 2px,transparent 2.5px)!important;background-size:56px 56px!important}
+.conversation-page-clean.theme-page-ocean .clean-message-list{background-color:#06151f!important;background-image:radial-gradient(circle at 18px 20px,rgba(55,205,245,.10) 0 2px,transparent 2.5px)!important;background-size:58px 58px!important}
+.conversation-page-clean.theme-page-nuit .clean-message-list{background-color:#09091c!important;background-image:radial-gradient(circle at 10px 10px,rgba(145,140,255,.10) 0 1.5px,transparent 2px)!important;background-size:52px 52px!important}
+
+.conversation-page-clean .message,
+.conversation-page-clean .message.mine,
+.conversation-page-clean .message:not(.mine){
+  box-sizing:border-box!important; width:100%!important; max-width:none!important;
+  display:flex!important; flex-direction:column!important; align-items:flex-start!important;
+  margin:7px 0!important; padding:0 10px!important; background:transparent!important;
+  border:0!important; box-shadow:none!important; overflow:visible!important;
+  touch-action:pan-y!important; user-select:none!important;
+}
+.conversation-page-clean .message.mine{align-items:flex-end!important}
+.conversation-page-clean .message-card,
+.conversation-page-clean .message.mine .message-card,
+.conversation-page-clean .message:not(.mine) .message-card{
+  width:auto!important; max-width:86%!important; min-width:0!important;
+  display:flex!important; flex-direction:column!important; align-items:flex-start!important;
+  padding:0!important; margin:0!important; background:transparent!important;
+  border:0!important; box-shadow:none!important; overflow:visible!important;
+}
+.conversation-page-clean .message.mine .message-card{align-items:flex-end!important}
+.conversation-page-clean .message-body,
+.conversation-page-clean .message.mine .message-body,
+.conversation-page-clean .message:not(.mine) .message-body{
+  box-sizing:border-box!important; display:block!important; width:auto!important; max-width:100%!important;
+  min-width:0!important; margin:0!important; padding:10px 14px!important; border-radius:18px!important;
+  border:0!important; box-shadow:none!important; white-space:pre-wrap!important;
+  overflow-wrap:anywhere!important; word-break:normal!important; line-break:auto!important;
+  hyphens:none!important; writing-mode:horizontal-tb!important;
+  background:#263246!important; color:#f5f7fb!important;
+}
+.conversation-page-clean .message.mine .message-body{background:#1877f2!important;color:#fff!important}
+.conversation-page-clean .message-body{max-width:min(100%,540px)!important}
+.conversation-page-clean .message-reply-preview{max-width:100%!important;box-sizing:border-box!important}
+.conversation-page-clean .message-reaction-badge,
+.conversation-page-clean .message.mine .message-reaction-badge{
+  position:static!important; inset:auto!important; align-self:flex-start!important; width:auto!important;
+  max-width:100%!important; display:flex!important; flex-wrap:wrap!important; gap:3px!important;
+  margin:4px 0 0 7px!important; padding:0!important; background:transparent!important;
+  border:0!important; box-shadow:none!important; transform:none!important; z-index:1!important;
+}
+.conversation-page-clean .message.mine .message-reaction-badge{align-self:flex-end!important;margin:4px 7px 0 0!important}
+.conversation-page-clean .message-reaction-chip{display:inline-flex!important;align-items:center!important;gap:2px!important;min-height:18px!important;padding:2px 6px!important;border-radius:999px!important;background:rgba(12,18,30,.94)!important;border:1px solid rgba(255,255,255,.10)!important;font-size:11px!important;line-height:1!important}
+.conversation-page-clean .message-reaction-chip b{font-size:9px!important;color:#dbe6f8!important}
+.conversation-page-clean .message-meta{width:auto!important;max-width:100%!important;box-sizing:border-box!important;display:flex!important;align-items:center!important;gap:3px!important;padding:3px 7px 0!important;min-height:13px!important}
+.conversation-page-clean .message-meta small{font-size:8px!important;line-height:1.2!important;white-space:nowrap!important;color:var(--muted)!important}
+.conversation-page-clean .message-more{display:none!important}
+.conversation-page-clean .message.press-feedback .message-body{filter:brightness(.92)!important;transform:scale(.985)!important;transition:transform .08s ease,filter .08s ease!important}
+@media(max-width:620px){
+ .conversation-page-clean .message{padding:0 8px!important}
+ .conversation-page-clean .message-card{max-width:88%!important}
+ .conversation-page-clean .message-body{font-size:14px!important;line-height:1.4!important;padding:9px 13px!important;max-width:100%!important}
+}
