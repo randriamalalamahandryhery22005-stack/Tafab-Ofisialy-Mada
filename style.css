@@ -3820,3 +3820,11 @@ button,.menu-card,.list-row,.page-menu-card{max-width:100%}
  .message-action-modal{width:calc(100vw - 24px);border-radius:20px}
 }
 @media(hover:none){.message-actions{opacity:0;visibility:hidden}.message:focus-within .message-actions{opacity:1;visibility:visible}}
+
+
+/* V9 — Premium realtime notifications & presence */
+.conversation-presence{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;letter-spacing:.01em;transition:color .2s ease}
+.conversation-presence::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor;opacity:.55;box-shadow:0 0 0 3px color-mix(in srgb,currentColor 10%,transparent)}
+.typing-indicator{margin:0 16px 8px;padding:7px 12px;border:1px solid rgba(255,255,255,.08);border-radius:12px;background:rgba(255,255,255,.045);font-size:12px;font-weight:700;animation:tafassTyping .8s ease-in-out infinite alternate}
+@keyframes tafassTyping{from{opacity:.55;transform:translateY(1px)}to{opacity:1;transform:translateY(0)}}
+@media(max-width:640px){.conversation-presence{font-size:11px}.conversation-presence::before{width:6px;height:6px}.typing-indicator{margin-left:12px;margin-right:12px}}

@@ -15,7 +15,7 @@ document.documentElement.classList.add("app-boot");
     user: null, profile: null, route: "home", navStack: ["home"], backOverride: null, posts: [], friends: [], stories: [],
     channel: null, theme: "dark", entering: false, loggingOut: false, composerOpen: false, composerBackground: "plain", composerLocation: "",
     composerDraftText: "", composerFile: null, composerVisibility: "public", composerMeta: {},
-    liveFeedChannel: null, conversationChannel: null, activeLive: null,
+    liveFeedChannel: null, conversationChannel: null, presenceChannel: null, activeLive: null,
     profileTab: "posts", reactionSettingsCache:new Map(), locationWatchId:null, friendsTab: "suggestions", pagesTab: "mine", groupsTab: "mine", groupSort: "recent", selectedConversation: null, viewingProfileId: null, renderToken: 0, activePage: null, entityBackRoute: null
   };
 
@@ -1242,8 +1242,9 @@ function publisherBackgrounds(){
     });
     convChannel.on("presence",{event:"sync"},()=>{
       const present=convChannel.presenceState();
-      const online=Object.keys(present||{}).some(k=>k!==state.user.id);
-      const el=$("conversationPresence"); if(el) el.textContent=online ? "En ligne" : "Hors ligne";
+      const localOnline=Object.keys(present||{}).some(k=>k!==state.user.id);
+      const globalOnline=otherId ? isUserOnline(otherId) : false;
+      const el=$("conversationPresence"); if(el) el.textContent=(globalOnline||localOnline) ? "En ligne" : "Hors ligne";
     });
     convChannel.on("postgres_changes",{event:"UPDATE",schema:"public",table:"messages",filter:`conversation_id=eq.${id}`},()=>{
       if(state.selectedConversation===id && state.route==="messages") openConversation(id);
@@ -1398,6 +1399,19 @@ function publisherBackgrounds(){
       el.classList.toggle("hidden", !n.count);
     }
   }
+
+  function isUserOnline(userId){
+    if(!state.presenceChannel || !userId) return false;
+    const present=state.presenceChannel.presenceState();
+    return Object.prototype.hasOwnProperty.call(present||{}, userId);
+  }
+  async function refreshPresenceLabels(){
+    const id=state.selectedConversation; if(!id || state.route!=="messages") return;
+    const other=(await sb.from("conversation_members").select("user_id").eq("conversation_id",id).neq("user_id",state.user.id).maybeSingle()).data?.user_id;
+    const el=$("conversationPresence"); if(el) el.textContent=other && isUserOnline(other) ? "En ligne" : "Hors ligne";
+  }
+  window.addEventListener("tafass:presence-sync", refreshPresenceLabels);
+  window.addEventListener("tafass:presence-change", refreshPresenceLabels);
 
   async function getProfilePrivacy(userId) {
     if (!userId) return { locked:false, visibility:"public" };
@@ -2880,6 +2894,7 @@ async function genericListPage(route) {
       if(state.channel){try{await sb.removeChannel(state.channel);}catch(_){} state.channel=null;}
       if(state.liveFeedChannel){try{await sb.removeChannel(state.liveFeedChannel);}catch(_){} state.liveFeedChannel=null;}
       if(state.conversationChannel){try{await sb.removeChannel(state.conversationChannel);}catch(_){} state.conversationChannel=null;}
+      if(state.presenceChannel){try{await sb.removeChannel(state.presenceChannel);}catch(_){} state.presenceChannel=null;}
       if(realtimeRuntime.retryTimer){clearTimeout(realtimeRuntime.retryTimer);realtimeRuntime.retryTimer=null;}
       const {error}=await sb.auth.signOut();
       if(error)throw error;
@@ -2900,6 +2915,22 @@ async function genericListPage(route) {
   }
   async function setupRealtime() {
     if (!state.user || !navigator.onLine) return;
+    // Global Presence channel: ephemeral online state, never persisted to SQL.
+    if(state.presenceChannel){ try{ await sb.removeChannel(state.presenceChannel); }catch(_){} state.presenceChannel=null; }
+    const presence=sb.channel(`tafass-presence:${state.user.id}`, { config:{ presence:{ key:state.user.id } } });
+    state.presenceChannel=presence;
+    presence.on("presence", {event:"sync"}, ()=>{
+      window.dispatchEvent(new CustomEvent("tafass:presence-sync"));
+    });
+    presence.on("presence", {event:"join"}, ({key})=>{
+      window.dispatchEvent(new CustomEvent("tafass:presence-change", {detail:{key,online:true}}));
+    });
+    presence.on("presence", {event:"leave"}, ({key})=>{
+      window.dispatchEvent(new CustomEvent("tafass:presence-change", {detail:{key,online:false}}));
+    });
+    presence.subscribe(async status=>{
+      if(status==="SUBSCRIBED"){ try{ await presence.track({user_id:state.user.id, online_at:new Date().toISOString()}); }catch(_){} }
+    });
     if (state.channel) {
       try { await sb.removeChannel(state.channel); } catch (_) {}
       state.channel = null;
@@ -2915,7 +2946,15 @@ async function genericListPage(route) {
       comment_reactions: () => { if (["home","profile"].includes(state.route)) render(); },
       post_reactions: async () => { await loadPosts(); if (["home","profile"].includes(state.route)) render(); },
       post_shares: async () => { await loadPosts(); if (["home","profile"].includes(state.route)) render(); },
-      notifications: () => { updateBadges(); if (state.route==="notifications") notificationsPage(); },
+      notifications: payload => {
+        updateBadges();
+        const rec=payload?.new || payload?.record || payload;
+        if(rec?.user_id===state.user.id && rec?.actor_id!==state.user.id && rec?.is_read===false && state.route!=="notifications") {
+          const title=rec.title || "Nouvelle notification";
+          toast(title);
+        }
+        if (state.route==="notifications") notificationsPage();
+      },
       messages: payload => { updateBadges(); if (state.route==="messages") state.selectedConversation ? openConversation(state.selectedConversation) : messagesPage(); },
       friend_requests: () => { updateBadges(); if (state.route==="friends") friendsPage(); if (state.viewingProfileId && state.route==="profile") openUserProfile(state.viewingProfileId); },
       friendships: () => { if (state.route==="friends") friendsPage(); if (state.viewingProfileId && state.route==="profile") openUserProfile(state.viewingProfileId); },

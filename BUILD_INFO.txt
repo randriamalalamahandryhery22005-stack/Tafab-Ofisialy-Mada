@@ -21,3 +21,5 @@ V7 Realtime Messaging update
 - Conversation channel is cleaned up on navigation/logout to avoid duplicate subscriptions.
 
 V8 Production Messaging — 2026-09-04: reply/edit/delete actions, message action UI, safe refresh and cache bump.
+
+- 2026-09-05: TAFAß V9 — Notifications realtime feedback, global ephemeral Presence channel, presence-aware conversation status, unread indexes, and cleanup/reconnect hardening.
