@@ -4332,3 +4332,98 @@ body.light .conversation-page .clean-message-list .message:not(.mine){color:#182
  .emoji-grid{grid-template-columns:repeat(8,minmax(0,1fr));max-height:50dvh}.emoji-cell{font-size:23px}
 }
 @media(max-width:390px){.emoji-grid{grid-template-columns:repeat(7,minmax(0,1fr))}.emoji-cell{font-size:22px}}
+
+
+/* =========================================================
+   TAFAß V35 — FINAL MESSAGE CLEANUP
+   ========================================================= */
+/* Only the blue/grey message bubbles remain; no outer card/background. */
+.conversation-page-clean .message,
+.conversation-page-clean .message-card,
+.conversation-page-clean .message-body{
+  box-shadow:none!important;
+}
+.conversation-page-clean .message{
+  width:100%!important;
+  max-width:100%!important;
+  display:flex!important;
+  margin:7px 0!important;
+  padding:0!important;
+  background:transparent!important;
+  border:0!important;
+}
+.conversation-page-clean .message.mine{align-items:flex-end!important}
+.conversation-page-clean .message:not(.mine){align-items:flex-start!important}
+.conversation-page-clean .message-card{
+  width:fit-content!important;
+  max-width:min(82%,560px)!important;
+  display:flex!important;
+  flex-direction:column!important;
+  align-items:flex-start!important;
+  padding:0!important;
+  margin:0!important;
+  background:transparent!important;
+  border:0!important;
+}
+.conversation-page-clean .message.mine .message-card{align-items:flex-end!important}
+.conversation-page-clean .message-body{
+  width:fit-content!important;
+  max-width:100%!important;
+  min-width:0!important;
+  padding:9px 13px!important;
+  border-radius:18px!important;
+  background:#1b2638!important;
+  color:#f4f7fb!important;
+  border:0!important;
+  overflow-wrap:anywhere!important;
+  word-break:break-word!important;
+  white-space:pre-wrap!important;
+}
+.conversation-page-clean .message.mine .message-body{
+  background:#1877f2!important;
+  color:#fff!important;
+}
+/* Reactions are underneath the bubble, never over the text. */
+.conversation-page-clean .message-reaction-badge,
+.conversation-page-clean .message.mine .message-reaction-badge{
+  position:static!important;
+  inset:auto!important;
+  align-self:flex-start!important;
+  display:flex!important;
+  gap:3px!important;
+  margin:3px 0 0 7px!important;
+  padding:0!important;
+  z-index:1!important;
+  transform:none!important;
+}
+.conversation-page-clean .message.mine .message-reaction-badge{align-self:flex-end!important;margin:3px 7px 0 0!important}
+.conversation-page-clean .message-reaction-chip{
+  display:inline-flex!important;
+  align-items:center!important;
+  gap:2px!important;
+  min-height:18px!important;
+  padding:1px 6px!important;
+  border-radius:999px!important;
+  background:#111927!important;
+  border:1px solid rgba(255,255,255,.08)!important;
+  font-size:11px!important;
+  line-height:1!important;
+}
+.conversation-page-clean .message-reaction-chip b{font-size:9px!important;color:#dbe6f8!important}
+/* Premium actions are icon-only: no PRO text/badge. */
+.conversation-page-clean .conversation-head-actions button em,
+.conversation-page-clean .message-tool::after{display:none!important;content:none!important}
+.conversation-page-clean .conversation-head-actions button,
+.conversation-page-clean .message-tool{
+  position:relative!important;
+  border-radius:50%!important;
+}
+.conversation-page-clean .message-tool{border-radius:13px!important}
+/* Keep "Bloquer les messages" as a clean, independent row in conversation options. */
+.message-action-modal .message-menu-list{display:flex;flex-direction:column;gap:7px}
+.message-action-modal .message-menu-list>button{width:100%;display:flex;align-items:center;gap:10px;box-sizing:border-box;min-height:58px}
+.message-action-modal .message-menu-list>button+button{margin-top:0!important}
+@media(max-width:620px){
+ .conversation-page-clean .message-card{max-width:88%!important}
+ .conversation-page-clean .message-body{font-size:14px!important}
+}
