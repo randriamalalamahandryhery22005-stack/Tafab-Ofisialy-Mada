@@ -29,3 +29,6 @@ V12 Production Audit — 2026-09-05
 - External-service configuration requirements documented.
 - Supabase RLS/Storage/Realtime server-side verification checklist added.
 - Historical SQL migration ordering warning added.
+
+V13 — Full UX/UI Premium + Performance Polish — 2026-09-05
+- Mobile responsive layout, touch targets, accessibility focus states, reduced motion, modal viewport safety, media overflow protection, and lightweight loading surfaces.

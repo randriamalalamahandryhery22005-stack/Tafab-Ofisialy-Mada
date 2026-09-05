@@ -3830,3 +3830,49 @@ button,.menu-card,.list-row,.page-menu-card{max-width:100%}
 @media(max-width:640px){.conversation-presence{font-size:11px}.conversation-presence::before{width:6px;height:6px}.typing-indicator{margin-left:12px;margin-right:12px}}
 .live-controls{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin:10px 0}.live-controls .secondary-action{min-height:42px;border-radius:14px;padding:0 16px}.live-status strong{margin-left:auto;white-space:nowrap}.live-broadcast-modal .live-video,.live-viewer-modal .live-video{background:#000;border-radius:20px;aspect-ratio:16/9;object-fit:cover;box-shadow:0 12px 40px rgba(0,0,0,.28)}
 @media(max-width:640px){.live-status{gap:8px;flex-wrap:wrap}.live-status strong{margin-left:0;width:100%}.live-controls .secondary-action{flex:1}}
+
+/* V13 — Full UX/UI Premium + accessibility + mobile polish */
+:root{--v13-focus:rgba(91,153,255,.55)}
+button,a,input,select,textarea{touch-action:manipulation}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--v13-focus);outline-offset:2px}
+button{font:inherit}
+@media(max-width:760px){
+  .main-layout{display:block;padding:14px 12px 92px}
+  .left-sidebar,.right-sidebar{display:none}
+  .content{width:100%;max-width:720px;margin:0 auto}
+  .card,.post,.panel{border-radius:16px}
+  .page-header h2,.content-title{font-size:20px}
+  .post-head{padding:13px}.post-body{font-size:13px}
+  .composer{padding:13px}.composer-actions{grid-template-columns:1fr 1fr 1fr}
+}
+@media(max-width:480px){
+  .topbar{padding-left:10px;padding-right:10px;gap:8px}
+  .top-left{min-width:0;gap:8px}.logo-button{font-size:18px}.logo-button .mini-logo{width:32px;height:32px}
+  .top-actions{gap:5px}.round-button{width:38px;height:38px}
+  .post-actions button,.composer-actions button,.composer-actions label{min-height:42px;font-size:10px}
+  .grid2,.profile-form-v2,.onboarding-grid-v23,.settings-account-grid-v23{grid-template-columns:1fr}
+  .profile-field-wide-v2,.onboarding-grid-v23 .wide{grid-column:auto}
+}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.001ms!important}}
+
+/* Consistent premium modal surface */
+.modal,.profile-edit-modal,.message-action-modal,.message-menu-modal{overscroll-behavior:contain}
+.modal-overlay,.modal-backdrop{padding:12px;box-sizing:border-box}
+.modal-overlay>* ,.modal-backdrop>*{max-width:min(680px,100%);max-height:min(92dvh,900px);overflow:auto}
+
+/* V13 message actions: comfortable touch targets and clear hierarchy */
+.message-actions{z-index:5;gap:6px}
+.message-actions button{min-width:40px;min-height:40px;border-radius:12px;display:grid;place-items:center}
+.message-actions button:hover{transform:translateY(-1px)}
+.message-action-modal,.message-menu-modal{box-shadow:0 24px 70px rgba(0,0,0,.42),0 0 0 1px rgba(255,255,255,.035)}
+.message-menu-list>button:active,.message-actions button:active,.small-action:active,.ghost-action:active{transform:scale(.98)}
+
+/* Media safety: never let user-selected media break a card layout */
+img,video{max-width:100%}
+img{height:auto}
+.post-media,.reel-media,.video-media{contain:paint}
+
+/* Premium empty/loading feedback */
+.skeleton,.loading-card{border-radius:16px;background:linear-gradient(90deg,rgba(255,255,255,.035),rgba(255,255,255,.075),rgba(255,255,255,.035));background-size:200% 100%;animation:v13Shimmer 1.25s linear infinite}
+@keyframes v13Shimmer{to{background-position:-200% 0}}
+@media(prefers-reduced-motion:reduce){.skeleton,.loading-card{animation:none}}
