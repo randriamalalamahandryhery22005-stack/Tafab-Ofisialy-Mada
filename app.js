@@ -3796,6 +3796,15 @@ async function genericListPage(route) {
     const action = actionEl.dataset.action, id = actionEl.dataset.id;
     const notificationId = actionEl.dataset.notification;
     if (action === "new-logout") return newLogout();
+    if (action === "close-modal") { closeModal(); return; }
+    if (action === "change-password") return changePassword();
+    if (action === "publisher-audience") return openPublisherAudience();
+    if (action === "set-publisher-audience") {
+      state.composerVisibility = actionEl.dataset.audience || "public";
+      closeModal();
+      if (state.composerOpen) setTimeout(() => openPublisher(), 40);
+      return;
+    }
     if (action === "open-publisher") return openPublisher();
     if (action === "close-publisher") { closeModal(); state.composerOpen=false; state.composerDraftText=""; state.composerFile=null; state.composerBackground="plain"; state.composerLocation=""; return; }
     if (action === "select-publisher-bg") {
@@ -3917,6 +3926,22 @@ async function genericListPage(route) {
       return servicePage("activity");
     }
 
+    if (action === "page-mode-focus") {
+      const box = document.getElementById("pageModePostText");
+      if (box) { box.focus(); box.scrollIntoView({behavior:"smooth",block:"center"}); }
+      return;
+    }
+    if (action === "page-mode-publish") {
+      const pageId = id || state.activePage?.id;
+      const content = $("pageModePostText")?.value.trim() || "";
+      if (!pageId || !content) return toast("Ajoutez un texte à votre publication.");
+      const {data:pg} = await sb.from("pages").select("owner_id").eq("id",pageId).maybeSingle();
+      if (!pg || pg.owner_id !== state.user.id) return toast("Seul le propriétaire peut publier en mode Page.");
+      const r = await sb.from("page_posts").insert({page_id:pageId,user_id:state.user.id,content,media_url:null,media_type:null,visibility:"public"});
+      if (r.error) return toast(r.error.message);
+      toast("Publication de la Page publiée.");
+      return renderPageFeed();
+    }
     if (action === "page-exit-mode") { closeModal(); state.activePage=null; state.entityBackRoute=null; state.navStack=["home"]; state.route="home"; restoreAccountNavigation(); syncIdentityUI(); return navigate("home",{replaceStack:true}); }
     if (action === "page-manage-current") { return editPage(state.activePage?.id); }
     if (action === "page-settings") return pageSettings(id || state.activePage?.id);
@@ -3971,6 +3996,28 @@ async function genericListPage(route) {
       const r=await sb.from('group_post_comments').insert({group_post_id:id,user_id:state.user.id,content:text}); if(r.error)return toast(r.error.message); closeModal(); toast('Commentaire publié.'); return reopenGroupDetail(actionEl.dataset.entityId);
     }
     if (action === "share-group-post") return groupPostShare(id, actionEl.dataset.entityId);
+    if (action === "delete-group-post") {
+      const gid = actionEl.dataset.entityId;
+      const {data:g} = await sb.from("groups").select("owner_id").eq("id",gid).maybeSingle();
+      const {data:m} = await sb.from("group_members").select("role").eq("group_id",gid).eq("user_id",state.user.id).maybeSingle();
+      if (!g || (g.owner_id !== state.user.id && m?.role !== "admin")) return toast("Vous n’avez pas les droits pour supprimer cette publication.");
+      const r = await sb.from("group_posts").delete().eq("id",id).eq("group_id",gid);
+      if (r.error) return toast(r.error.message);
+      toast("Publication du groupe supprimée.");
+      return openGroupDetail(gid);
+    }
+    if (action === "send-group-chat") {
+      const text = $("groupChatText")?.value.trim();
+      if (!text) return toast("Écrivez un message.");
+      const gid = id;
+      const member = await sb.from("group_members").select("id").eq("group_id",gid).eq("user_id",state.user.id).maybeSingle();
+      if (member.error || !member.data) return toast("Rejoignez le groupe pour participer à la discussion.");
+      const r = await sb.from("group_messages").insert({group_id:gid,sender_id:state.user.id,message:text});
+      if (r.error) return toast(r.error.message);
+      $("groupChatText").value = "";
+      toast("Message envoyé.");
+      return groupChat(gid);
+    }
 
     if (action === "auth-onboarding-back") { state.entering=false; state.user=null; sb.auth.signOut().catch(()=>{}); return showLogin(); }
     if (action === "menu-route") { const target = actionEl.dataset.routeTarget; if (target) navigate(target); return; }
@@ -4093,6 +4140,12 @@ async function genericListPage(route) {
     if (action === "create-tafab-listing") return createTafabListing();
     if (action === "save-tafab-listing") return saveTafabListing();
     if (action === "create-tafab-ad") return createTafabAd();
+    if (action === "tafab-ad") {
+      const r = await sb.from("tafab_ads").select("*").eq("id",id).maybeSingle();
+      if (r.error || !r.data) return toast(r.error?.message || "Publicité introuvable.");
+      const a = r.data;
+      return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • PUBLICITÉ</span><h3>${esc(a.title)}</h3>${a.image_url?`<img class="post-media" src="${esc(a.image_url)}" alt="Publicité" loading="lazy">`:""}<p>${esc(a.description||"")}</p>${a.target_url?`<a class="primary big" href="${esc(a.target_url)}" target="_blank" rel="noopener noreferrer">Ouvrir le lien</a>`:""}</div>`);
+    }
     if (action === "save-tafab-ad") return saveTafabAd();
     if (action === "tafab-message") return contactTafabListing(id);
     if (action === "tafab-contact") return contactTafabListing(id);
