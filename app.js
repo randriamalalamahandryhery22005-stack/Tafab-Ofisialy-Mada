@@ -44,6 +44,33 @@ document.documentElement.classList.add("app-boot");
   window.addEventListener("offline",handleConnectivity);
   window.addEventListener("online",()=>{ networkBanner("Réseau retrouvé — synchronisation…","reconnecting"); realtimeRuntime.retryCount=0; realtimeRuntime.reconnecting=false; if(state.user) setupRealtime().finally(()=>setTimeout(()=>networkBanner(""),700)); else networkBanner(""); });
 
+  // Mobile/PWA foreground recovery: Android may suspend sockets while the app is
+  // backgrounded. On return, verify the session and rebuild realtime channels
+  // without forcing a logout or resetting the current route/conversation.
+  let foregroundRecoveryTimer = null;
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible" || !state.user) return;
+    if (foregroundRecoveryTimer) clearTimeout(foregroundRecoveryTimer);
+    foregroundRecoveryTimer = setTimeout(async () => {
+      foregroundRecoveryTimer = null;
+      try {
+        const { data, error } = await sb.auth.getSession();
+        if (error) throw error;
+        if (!data.session?.user) return;
+        state.user = data.session.user;
+        await setupRealtime();
+        ensureLiveFeedRealtime();
+        if (["messages","notifications","home","friends","pages","groups","reels","saved","tafab","profile"].includes(state.route)) {
+          await render();
+        }
+        networkBanner("");
+      } catch (e) {
+        console.warn("Tafaß foreground recovery:", e);
+        if (navigator.onLine) scheduleRealtimeReconnect();
+      }
+    }, 350);
+  });
+
   const DEFAULT_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop stop-color='%232d7cff'/%3E%3Cstop offset='.55' stop-color='%23745cff'/%3E%3Cstop offset='1' stop-color='%2310b8a6'/%3E%3C/linearGradient%3E%3ClinearGradient id='h' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop stop-color='%23ffffff' stop-opacity='.9'/%3E%3Cstop offset='1' stop-color='%23dce8ff' stop-opacity='.7'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='256' height='256' rx='128' fill='url(%23g)'/%3E%3Ccircle cx='128' cy='101' r='47' fill='url(%23h)'/%3E%3Cpath d='M52 218c10-47 38-70 76-70s66 23 76 70' fill='url(%23h)'/%3E%3Ccircle cx='128' cy='128' r='112' fill='none' stroke='%23ffffff' stroke-opacity='.22' stroke-width='5'/%3E%3C/svg%3E";
   function avatarHTML(p, cls = "avatar") {
     const url = p?.avatar_url || DEFAULT_AVATAR;
