@@ -1321,6 +1321,8 @@ function publisherBackgrounds(){
     const msgs=(rawMsgs||[]).filter(m=>!hiddenIds.has(m.id));
     const messageIds=(msgs||[]).map(m=>m.id).filter(Boolean);
     const reactionsR=messageIds.length ? await sb.from("tafab_message_reactions").select("message_id,user_id,reaction").in("message_id",messageIds) : {data:[]};
+    const themeR=await sb.from("tafab_message_themes").select("theme").eq("user_id",state.user.id).eq("conversation_id",id).maybeSingle();
+    const conversationTheme=themeR.data?.theme||"default";
     const reactionMap=new Map();
     (reactionsR.data||[]).forEach(r=>{ if(!reactionMap.has(r.message_id)) reactionMap.set(r.message_id,[]); reactionMap.get(r.message_id).push(r); });
     await sb.rpc("tafa_mark_conversation_read", { p_conversation_id:id });
@@ -1337,7 +1339,7 @@ function publisherBackgrounds(){
     const map = new Map((profiles || []).map(p => [p.id, p]));
     const otherId = (await sb.from("conversation_members").select("user_id").eq("conversation_id", id).neq("user_id", state.user.id).maybeSingle()).data?.user_id;
     const otherProfile = otherId ? (await sb.from("profiles").select("*").eq("id", otherId).maybeSingle()).data : null;
-    $("content").innerHTML = `<section class="clean-page messages-page conversation-page"><div class="page-header clean-page-header"><button class="page-back" data-action="page-back" type="button"><span aria-hidden="true">‹</span><small>Messages</small></button><div class="conversation-title">${avatarHTML(otherProfile || state.profile,"avatar conversation-avatar")}<div><h2>${esc(otherProfile ? nameOf(otherProfile) : "Discussion")}</h2><small id="conversationPresence" class="conversation-presence">Connexion sécurisée</small></div></div><span></span></div><div id="typingIndicator" class="typing-indicator" hidden>écrit…</div><div class="message-list clean-message-list">${(msgs||[]).map(m=>conversationMessageHTML(m,map,reactionMap)).join("")||`<div class="empty">Dites bonjour 👋</div>`}</div><form id="messageForm" class="comment-form clean-message-form"><div class="message-v22-tools"><button type="button" class="message-tool" data-action="message-attachment" title="Joindre un fichier">📎</button><button type="button" class="message-tool" data-action="message-voice" title="Message vocal">🎙️</button></div><input id="messageText" autocomplete="off" placeholder="Écrire un message..."><input id="messageAttachment" type="file" hidden accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip,.apk"><button type="submit">Envoyer</button></form></section>`;
+    $("content").innerHTML = `<section class="clean-page messages-page conversation-page"><div class="page-header clean-page-header"><button class="page-back" data-action="page-back" type="button"><span aria-hidden="true">‹</span><small>Messages</small></button><div class="conversation-title">${avatarHTML(otherProfile || state.profile,"avatar conversation-avatar")}<div><h2>${esc(otherProfile ? nameOf(otherProfile) : "Discussion")}</h2><small id="conversationPresence" class="conversation-presence">Connexion sécurisée</small></div></div><button class="message-theme-button" data-action="message-theme" data-id="${esc(id)}" aria-label="Thème de la conversation" title="Personnaliser le fond">🎨</button></div><div id="typingIndicator" class="typing-indicator" hidden>écrit…</div><div class="message-list clean-message-list theme-${esc(conversationTheme)}">${(msgs||[]).map(m=>conversationMessageHTML(m,map,reactionMap)).join("")||`<div class="empty">Dites bonjour 👋</div>`}</div><form id="messageForm" class="comment-form clean-message-form"><div class="message-v22-tools"><button type="button" class="message-tool" data-action="message-attachment" title="Joindre un fichier">📎</button><button type="button" class="message-tool" data-action="message-voice" title="Message vocal">🎙️</button></div><input id="messageText" autocomplete="off" placeholder="Écrire un message..."><input id="messageAttachment" type="file" hidden accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip,.apk"><button type="submit">Envoyer</button></form></section>`;
 
     // Conversation-level Realtime: typing + online presence without storing ephemeral state in SQL.
     if(state.conversationChannel){ try{ await sb.removeChannel(state.conversationChannel); }catch(_){} state.conversationChannel=null; }
@@ -1395,7 +1397,9 @@ function publisherBackgrounds(){
       else body=`<div class="message-file-wrap"><a class="message-file" href="${esc(m.media_url)}" target="_blank" rel="noopener">📎 ${esc(m.content||'Fichier')}</a><button class="message-download" data-action="download-message-file" data-url="${esc(m.media_url)}" data-name="${esc(m.content||'Fichier')}">⬇ Télécharger</button></div>`;
     } else body=esc(m.content||'');
     const replyPreview = m.reply_to_content ? `<div class="message-reply-preview"><span class="message-reply-line"></span><div><b>Message</b><span>${esc(String(m.reply_to_content).slice(0,180))}</span></div></div>` : '';
-    const edited = m.updated_at && m.updated_at !== m.created_at ? ' · modifié' : '';
+    const edited = m.updated_at && m.updated_at !== m.created_at ? ` · <button type="button" class="message-edited-link" data-action="message-history" data-id="${esc(m.id)}">modifié</button>` : '';
+    const deleted = !!m.deleted_for_everyone;
+    if(deleted){ body=`<div class="message-deleted-marker">🚫 <span>Ce message a été supprimé pour tout le monde</span></div>`; }
     const reactionRows=reactionMap.get(m.id)||[];
     const reactionCounts={}; reactionRows.forEach(r=>reactionCounts[r.reaction]=(reactionCounts[r.reaction]||0)+1);
     const reactionBadge=Object.entries(reactionCounts).map(([emoji,count])=>`<span class="message-reaction-chip">${esc(emoji)}${count>1?`<b>${count}</b>`:''}</span>`).join('');
@@ -1419,7 +1423,7 @@ function publisherBackgrounds(){
   async function saveConversationMessageEdit(id){
     const text=$("editMessageText")?.value.trim()||"";
     if(!text) return toast("Le message ne peut pas être vide.");
-    const u=await sb.from("messages").update({content:text,updated_at:new Date().toISOString()}).eq("id",id).eq("sender_id",state.user.id);
+    const u=await sb.rpc("tafab_edit_message",{p_message_id:id,p_new_content:text});
     if(u.error) return toast(u.error.message);
     closeModal(); toast("Message modifié");
     return refreshConversation(state.selectedConversation);
@@ -1427,10 +1431,11 @@ function publisherBackgrounds(){
 
   async function deleteConversationMessage(id){
     if(!id)return;
-    const r=await sb.from("messages").select("id,content,sender_id,media_url").eq("id",id).maybeSingle();
+    const r=await sb.from("messages").select("id,content,sender_id,media_url,deleted_for_everyone").eq("id",id).maybeSingle();
     if(r.error||!r.data)return toast("Ce message n’existe plus.");
+    if(r.data.deleted_for_everyone)return toast("Ce message a déjà été supprimé pour tout le monde.");
     const mine=r.data.sender_id===state.user.id;
-    openModal(`<div class="modal-box message-action-modal message-menu-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">MESSAGE</span><h3>Supprimer le message</h3><p class="muted">Choisissez où supprimer ce message.</p><div class="message-menu-list"><button data-action="delete-message-me" data-id="${esc(id)}"><span class="menu-action-icon">⌫</span><span><b>Supprimer pour moi</b><small>Il disparaîtra uniquement de votre conversation.</small></span><i>›</i></button>${mine?`<button class="danger-row" data-action="delete-message-everyone" data-id="${esc(id)}"><span class="menu-action-icon">×</span><span><b>Supprimer pour tout le monde</b><small>Retirer définitivement le message de la conversation.</small></span><i>›</i></button>`:''}</div></div>`);
+    openModal(`<div class="modal-box message-action-modal message-menu-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">MESSAGE</span><h3>Supprimer le message</h3><p class="muted">Choisissez où supprimer ce message.</p><div class="message-menu-list"><button data-action="delete-message-me" data-id="${esc(id)}"><span class="menu-action-icon">⌫</span><span><b>Supprimer pour moi</b><small>Il disparaîtra uniquement de votre conversation.</small></span><i>›</i></button>${mine?`<button class="danger-row" data-action="confirm-delete-message" data-id="${esc(id)}"><span class="menu-action-icon">×</span><span><b>Supprimer pour tout le monde</b><small>Une confirmation sera demandée avant suppression.</small></span><i>›</i></button>`:''}</div></div>`);
   }
   async function hideMessageForMe(id){
     const r=await sb.from('tafab_message_hidden').upsert({user_id:state.user.id,message_id:id},{onConflict:'user_id,message_id'});
@@ -1441,6 +1446,28 @@ function publisherBackgrounds(){
     if(r.error)return toast(r.error.message||'Suppression impossible.');
     closeModal(); toast('Message supprimé pour tout le monde'); return refreshConversation(state.selectedConversation);
   }
+  async function confirmDeleteMessageForEveryone(id){
+    openModal(`<div class="modal-box message-action-modal confirm-danger-modal"><button class="modal-close" data-action="close-modal">×</button><div class="message-action-icon danger">×</div><span class="eyebrow">CONFIRMATION</span><h3>Supprimer pour tout le monde ?</h3><p class="muted">Le message restera visible comme message supprimé, mais son contenu ne sera plus accessible. Cette action est définitive.</p><div class="message-action-footer"><button class="ghost-action" data-action="close-modal">Annuler</button><button class="primary danger-confirm" data-action="delete-message-everyone" data-id="${esc(id)}">Oui, supprimer</button></div></div>`);
+  }
+  async function messageHistory(id){
+    const r=await sb.from("tafab_message_edits").select("old_content,edited_at,editor_id").eq("message_id",id).order("edited_at",{ascending:false});
+    if(r.error)return toast(r.error.message);
+    const rows=(r.data||[]).map(x=>`<div class="message-history-row"><small>${new Date(x.edited_at).toLocaleString("fr-FR")}</small><p>${esc(x.old_content||"")}</p></div>`).join("")||'<div class="empty">Aucune ancienne version disponible.</div>';
+    openModal(`<div class="modal-box message-action-modal history-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">MESSAGE</span><h3>Historique des modifications</h3><p class="muted">Anciennes versions enregistrées de ce message.</p><div class="message-history-list">${rows}</div></div>`);
+  }
+  async function openMessageTheme(id){
+    const themes=[['default','Classique','💬'],['amoureux','Amoureux','❤️'],['triste','Triste','💙'],['heureux','Heureux','☀️'],['enemies','Enemies','⚡'],['nature','Nature','🌿'],['ocean','Océan','🌊'],['nuit','Nuit','🌙']];
+    openModal(`<div class="modal-box message-action-modal theme-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">MESSAGES</span><h3>Personnaliser le fond</h3><p class="muted">Choisissez le thème de cette conversation. Il est personnel à votre compte.</p><div class="message-theme-grid">${themes.map(t=>`<button class="message-theme-choice theme-${t[0]}" data-action="set-message-theme" data-id="${esc(id)}" data-theme="${t[0]}"><span>${t[2]}</span><b>${t[1]}</b></button>`).join('')}</div></div>`);
+  }
+  async function setMessageTheme(id,theme){
+    const r=await sb.from("tafab_message_themes").upsert({user_id:state.user.id,conversation_id:id,theme},{onConflict:"user_id,conversation_id"});
+    if(r.error)return toast(r.error.message); closeModal(); return refreshConversation(id);
+  }
+
+  async function confirmDeleteConversation(id){
+    openModal(`<div class="modal-box message-action-modal confirm-danger-modal"><button class="modal-close" data-action="close-modal">×</button><div class="message-action-icon danger">⌫</div><span class="eyebrow">CONVERSATION</span><h3>Supprimer cette conversation ?</h3><p class="muted">Elle sera retirée de votre liste. Les messages de l'autre personne ne seront pas supprimés.</p><div class="message-action-footer"><button class="ghost-action" data-action="close-modal">Annuler</button><button class="primary danger-confirm" data-action="delete-conversation-me" data-id="${esc(id)}">Oui, supprimer</button></div></div>`);
+  }
+
   async function copyMessage(id){
     const r=await sb.from('messages').select('content').eq('id',id).maybeSingle();
     if(r.error||!r.data?.content)return toast('Rien à copier.');
@@ -2204,12 +2231,12 @@ async function genericListPage(route) {
   async function blockUserAll(id){return blockProfile(id);}
   function conversationActionMenu(id){
     const row=document.querySelector(`[data-action="open-conversation"][data-id="${CSS.escape(String(id))}"]`);const name=row?.querySelector('b')?.textContent||'cette personne';
-    openModal(`<div class="modal-box message-action-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">CONVERSATION</span><h3>${esc(name)}</h3><div class="message-menu-list"><button data-action="delete-conversation-me" data-id="${esc(id)}"><span class="menu-action-icon">⌫</span><span><b>Supprimer la conversation</b><small>La retirer de votre liste.</small></span><i>›</i></button><button data-action="block-messages-user" data-id="${esc(row?.dataset.otherId||'')}><span class="menu-action-icon">◌</span><span><b>Bloquer les messages</b><small>Empêcher ce compte de vous écrire.</small></span><i>›</i></button></div></div>`);
+    openModal(`<div class="modal-box message-action-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">CONVERSATION</span><h3>${esc(name)}</h3><div class="message-menu-list"><button data-action="confirm-delete-conversation" data-id="${esc(id)}"><span class="menu-action-icon">⌫</span><span><b>Supprimer la conversation</b><small>La retirer de votre liste.</small></span><i>›</i></button><button data-action="block-messages-user" data-id="${esc(row?.dataset.otherId||'')}><span class="menu-action-icon">◌</span><span><b>Bloquer les messages</b><small>Empêcher ce compte de vous écrire.</small></span><i>›</i></button></div></div>`);
   }
   function bindConversationLongPress(){
     document.querySelectorAll('.message-conversation').forEach(el=>{let timer=null,long=false;const start=e=>{long=false;timer=setTimeout(()=>{long=true;const id=el.dataset.id;const other=el.dataset.otherId;openConversationActions(id,other);},600)};const cancel=()=>{if(timer)clearTimeout(timer)};el.addEventListener('pointerdown',start);el.addEventListener('pointerup',cancel);el.addEventListener('pointerleave',cancel);el.addEventListener('pointercancel',cancel);el.addEventListener('contextmenu',e=>{e.preventDefault();openConversationActions(el.dataset.id,el.dataset.otherId)});});
   }
-  function openConversationActions(id,otherId){const row=document.querySelector(`[data-action="open-conversation"][data-id="${CSS.escape(String(id))}"]`);const name=row?.querySelector('b')?.textContent||'Conversation';openModal(`<div class="modal-box message-action-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">CONVERSATION</span><h3>${esc(name)}</h3><div class="message-menu-list"><button data-action="delete-conversation-me" data-id="${esc(id)}"><span class="menu-action-icon">⌫</span><span><b>Supprimer la conversation</b><small>La retirer uniquement de votre liste.</small></span><i>›</i></button><button data-action="block-messages-user" data-id="${esc(otherId||'')}"><span class="menu-action-icon">◌</span><span><b>Bloquer les messages</b><small>Ne plus recevoir de messages de cette personne.</small></span><i>›</i></button><button class="danger-row" data-action="block-user-all" data-id="${esc(otherId||'')}"><span class="menu-action-icon">⊘</span><span><b>Bloquer partout</b><small>Bloquer le compte et toutes les interactions.</small></span><i>›</i></button></div></div>`)}
+  function openConversationActions(id,otherId){const row=document.querySelector(`[data-action="open-conversation"][data-id="${CSS.escape(String(id))}"]`);const name=row?.querySelector('b')?.textContent||'Conversation';openModal(`<div class="modal-box message-action-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">CONVERSATION</span><h3>${esc(name)}</h3><div class="message-menu-list"><button data-action="confirm-delete-conversation" data-id="${esc(id)}"><span class="menu-action-icon">⌫</span><span><b>Supprimer la conversation</b><small>La retirer uniquement de votre liste.</small></span><i>›</i></button><button data-action="block-messages-user" data-id="${esc(otherId||'')}"><span class="menu-action-icon">◌</span><span><b>Bloquer les messages</b><small>Ne plus recevoir de messages de cette personne.</small></span><i>›</i></button><button class="danger-row" data-action="block-user-all" data-id="${esc(otherId||'')}"><span class="menu-action-icon">⊘</span><span><b>Bloquer partout</b><small>Bloquer le compte et toutes les interactions.</small></span><i>›</i></button></div></div>`)}
 
   async function eventsPage(){
     const token=state.renderToken;
@@ -4493,6 +4520,11 @@ async function genericListPage(route) {
     if (action === "delete-message") return deleteConversationMessage(id);
     if (action === "delete-message-me") return hideMessageForMe(id);
     if (action === "delete-message-everyone") return deleteMessageForEveryone(id);
+    if (action === "confirm-delete-message") return confirmDeleteMessageForEveryone(id);
+    if (action === "message-history") return messageHistory(id);
+    if (action === "message-theme") return openMessageTheme(id);
+    if (action === "set-message-theme") return setMessageTheme(id, actionEl.dataset.theme);
+    if (action === "confirm-delete-conversation") return confirmDeleteConversation(id);
     if (action === "copy-message") return copyMessage(id);
     if (action === "react-message") return reactToMessage(id, actionEl.dataset.reaction||"👍");
     if (action === "download-message-file") return downloadMessageFile(actionEl.dataset.url, actionEl.dataset.name);
@@ -4500,7 +4532,6 @@ async function genericListPage(route) {
     if (action === "delete-conversation-me") return deleteConversationForMe(id);
     if (action === "block-messages-user") return blockMessagesUser(id);
     if (action === "block-user-all") return blockUserAll(id);
-    if (action === "confirm-delete-message") return confirmDeleteConversationMessage(id);
     if (action === "open-conversation") return openConversation(id);
     if (action === "mark-read") return markRead();
     if (action === "theme") return toggleTheme();

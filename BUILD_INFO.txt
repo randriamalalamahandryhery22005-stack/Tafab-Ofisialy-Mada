@@ -1,1 +1,1 @@
-V26.2 AI server fix
+V27.2.2 AI server fix
