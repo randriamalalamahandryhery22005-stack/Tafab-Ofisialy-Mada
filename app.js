@@ -1472,8 +1472,18 @@ function publisherBackgrounds(){
     openModal(`<div class="modal-box message-action-modal theme-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">MESSAGES</span><h3>Thème partagé</h3><p class="muted">Le thème est commun à cette conversation : dès qu’un compte le change, il change automatiquement pour les deux comptes.</p><div class="message-theme-grid">${themes.map(t=>`<button class="message-theme-choice theme-${t[0]}" data-action="set-message-theme" data-id="${esc(id)}" data-theme="${t[0]}"><span>${t[2]}</span><b>${t[1]}</b></button>`).join('')}</div></div>`);
   }
   async function setMessageTheme(id,theme){
+    const allowed=new Set(["default","amoureux","triste","heureux","enemies","nature","ocean","nuit"]);
+    if(!allowed.has(theme)) return toast("Thème invalide.");
     const r=await sb.from("tafab_shared_message_themes").upsert({conversation_id:id,theme,updated_by:state.user.id},{onConflict:"conversation_id"});
-    if(r.error)return toast(r.error.message); closeModal(); return refreshConversation(id);
+    if(r.error)return toast(r.error.message||"Impossible d'enregistrer le thème.");
+    // Apply immediately so the selected theme is visible without waiting for a second render.
+    const section=document.querySelector('.conversation-page');
+    const list=document.querySelector('.clean-message-list');
+    if(section){ section.className=section.className.replace(/\btheme-page-[^\s]+/g,`theme-page-${theme}`); }
+    if(list){ list.className=list.className.replace(/\btheme-[^\s]+/g,`theme-${theme}`); }
+    closeModal();
+    toast("Thème appliqué ✓");
+    return refreshConversation(id);
   }
 
   function renderFirstContactGreetings(person){

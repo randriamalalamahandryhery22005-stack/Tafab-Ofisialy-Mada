@@ -4042,3 +4042,53 @@ body.light .clean-message-list.theme-triste{background:linear-gradient(180deg,rg
 .alias-row input,.alias-person,.alias-person b,.conversation-theme-badge,.first-contact-option{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Color Emoji","Apple Color Emoji","Segoe UI Emoji",sans-serif}
 .alias-row input{font-variant-emoji:emoji;unicode-bidi:plaintext}
 @media(max-width:620px){.conversation-theme-badge em{display:none}.conversation-theme-badge{padding:5px 6px;min-width:27px}.conversation-theme-current{font-size:7px!important}.message-conversation{gap:7px!important}}
+
+
+/* V28.2 — REAL shared conversation themes: visible background + themed incoming/outgoing bubbles */
+.conversation-page{
+  --theme-bg-1:rgba(18,24,40,.98);
+  --theme-bg-2:rgba(10,14,25,.98);
+  --theme-in:#1b263b;
+  --theme-out:#e53950;
+  --theme-border:rgba(255,255,255,.10);
+}
+.conversation-page.theme-page-default{--theme-bg-1:rgba(18,24,40,.98);--theme-bg-2:rgba(10,14,25,.98);--theme-in:#1b263b;--theme-out:#e53950;--theme-border:rgba(255,255,255,.10)}
+.conversation-page.theme-page-amoureux{--theme-bg-1:#351124;--theme-bg-2:#170b16;--theme-in:#5a213d;--theme-out:#e62f59;--theme-border:rgba(255,117,155,.30)}
+.conversation-page.theme-page-triste{--theme-bg-1:#102442;--theme-bg-2:#091321;--theme-in:#193a62;--theme-out:#2878d8;--theme-border:rgba(96,164,255,.28)}
+.conversation-page.theme-page-heureux{--theme-bg-1:#3b2b08;--theme-bg-2:#171108;--theme-in:#5a4311;--theme-out:#e6a51e;--theme-border:rgba(255,213,91,.30)}
+.conversation-page.theme-page-enemies{--theme-bg-1:#3a1015;--theme-bg-2:#16090c;--theme-in:#571a21;--theme-out:#a9152b;--theme-border:rgba(255,91,108,.30)}
+.conversation-page.theme-page-nature{--theme-bg-1:#0d3020;--theme-bg-2:#08170f;--theme-in:#174a31;--theme-out:#159447;--theme-border:rgba(73,214,126,.28)}
+.conversation-page.theme-page-ocean{--theme-bg-1:#082f42;--theme-bg-2:#06151f;--theme-in:#124b67;--theme-out:#087fae;--theme-border:rgba(63,201,244,.28)}
+.conversation-page.theme-page-nuit{--theme-bg-1:#17183b;--theme-bg-2:#08091b;--theme-in:#25265b;--theme-out:#5149c9;--theme-border:rgba(133,130,255,.28)}
+.conversation-page .clean-message-list{
+  background:linear-gradient(180deg,var(--theme-bg-1) 0%,var(--theme-bg-2) 100%) !important;
+  border:1px solid var(--theme-border);
+  box-shadow:inset 0 0 70px rgba(0,0,0,.14);
+  transition:background .25s ease,border-color .25s ease;
+}
+.conversation-page .clean-message-list .message:not(.mine){
+  background:var(--theme-in) !important;
+  border-color:var(--theme-border) !important;
+  color:#fff;
+  box-shadow:0 5px 18px rgba(0,0,0,.12);
+}
+.conversation-page .clean-message-list .message.mine{
+  background:linear-gradient(135deg,var(--theme-out),color-mix(in srgb,var(--theme-out) 76%,#000)) !important;
+  border-color:transparent !important;
+  color:#fff;
+  box-shadow:0 5px 18px rgba(0,0,0,.16);
+}
+.conversation-page .clean-message-list .message-reaction-chip{background:rgba(255,255,255,.14);border-color:var(--theme-border)}
+.conversation-page.theme-page-default .clean-message-list .message.mine{background:linear-gradient(135deg,#e53950,#c91f3d) !important}
+body.light .conversation-page .clean-message-list{
+  box-shadow:inset 0 0 70px rgba(255,255,255,.12);
+}
+body.light .conversation-page.theme-page-amoureux{--theme-bg-1:#fff0f5;--theme-bg-2:#ffe4ed;--theme-in:#ffd5e2;--theme-out:#e62f59}
+body.light .conversation-page.theme-page-triste{--theme-bg-1:#eaf4ff;--theme-bg-2:#dcecff;--theme-in:#cce2fa;--theme-out:#2878d8}
+body.light .conversation-page.theme-page-heureux{--theme-bg-1:#fff8dc;--theme-bg-2:#fff0b9;--theme-in:#ffe6a0;--theme-out:#d99400}
+body.light .conversation-page.theme-page-enemies{--theme-bg-1:#ffecee;--theme-bg-2:#ffdfe3;--theme-in:#f6cbd0;--theme-out:#b5162d}
+body.light .conversation-page.theme-page-nature{--theme-bg-1:#eafaf0;--theme-bg-2:#d8f2e3;--theme-in:#c5e9d2;--theme-out:#128c42}
+body.light .conversation-page.theme-page-ocean{--theme-bg-1:#e8f9ff;--theme-bg-2:#d6f1fb;--theme-in:#c4e7f2;--theme-out:#087fae}
+body.light .conversation-page.theme-page-nuit{--theme-bg-1:#e9eaff;--theme-bg-2:#dcdcff;--theme-in:#cfcff5;--theme-out:#5149c9}
+body.light .conversation-page.theme-page-default{--theme-bg-1:#f5f7fb;--theme-bg-2:#edf1f7;--theme-in:#e3eaf4;--theme-out:#e53950}
+body.light .conversation-page .clean-message-list .message:not(.mine){color:#18243a}
