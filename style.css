@@ -4026,3 +4026,19 @@ body.light .clean-message-list.theme-triste{background:linear-gradient(180deg,rg
 .first-contact-greetings{margin:12px auto;padding:14px;max-width:520px;border:1px solid var(--border);border-radius:16px;background:var(--surface);box-shadow:0 6px 22px rgba(0,0,0,.08)}
 .first-contact-head{display:flex;gap:10px;align-items:flex-start;margin-bottom:11px}.first-contact-head>span{font-size:24px}.first-contact-head b{display:block;font-size:13px}.first-contact-head small{display:block;color:var(--muted);font-size:10px;margin-top:3px;line-height:1.35}.first-contact-options{display:grid;gap:8px}.first-contact-option{width:100%;text-align:left;border:1px solid var(--border);background:var(--bg);color:inherit;border-radius:12px;padding:10px 11px;font-size:11px;cursor:pointer}.first-contact-option:hover{border-color:rgba(212,175,55,.6);transform:translateY(-1px)}.first-contact-custom{margin-top:10px;color:var(--muted);font-size:9px;text-align:center}.alias-list{display:grid;gap:9px;margin-top:12px}.alias-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(120px,180px) auto;gap:8px;align-items:center;padding:9px;border:1px solid var(--border);border-radius:13px;background:var(--surface)}.alias-person{display:flex;align-items:center;gap:8px;min-width:0}.alias-person b,.alias-person small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.alias-person b{font-size:11px}.alias-person small{font-size:8px;color:var(--muted);margin-top:2px}.alias-row input{min-width:0;border:1px solid var(--border);border-radius:10px;background:var(--bg);color:inherit;padding:8px;font-size:10px}.alias-row .primary{border:0;border-radius:10px;padding:8px 10px;cursor:pointer}.theme-modal .muted{font-size:10px;line-height:1.4}
 @media(max-width:620px){.alias-row{grid-template-columns:1fr;}.alias-row .primary{width:100%}.first-contact-greetings{margin:8px 4px;padding:11px}.first-contact-option{font-size:10px}}
+
+/* V28.1 — shared theme must be visible in conversation list + header */
+.conversation-theme-badge{display:inline-flex;align-items:center;justify-content:center;gap:3px;flex:0 0 auto;min-height:24px;padding:4px 7px;border:1px solid var(--border);border-radius:999px;background:var(--surface);font-size:13px;line-height:1;white-space:nowrap}
+.conversation-theme-badge em{font-style:normal;font-size:8px;font-weight:800;opacity:.82}
+.theme-conversation-row{position:relative;overflow:hidden}
+.theme-conversation-row.theme-row-amoureux{background:linear-gradient(90deg,rgba(255,75,125,.10),transparent 55%)}
+.theme-conversation-row.theme-row-triste{background:linear-gradient(90deg,rgba(60,130,255,.10),transparent 55%)}
+.theme-conversation-row.theme-row-heureux{background:linear-gradient(90deg,rgba(255,190,55,.10),transparent 55%)}
+.theme-conversation-row.theme-row-enemies{background:linear-gradient(90deg,rgba(180,45,55,.11),transparent 55%)}
+.theme-conversation-row.theme-row-nature{background:linear-gradient(90deg,rgba(50,170,100,.10),transparent 55%)}
+.theme-conversation-row.theme-row-ocean{background:linear-gradient(90deg,rgba(25,160,210,.11),transparent 55%)}
+.theme-conversation-row.theme-row-nuit{background:linear-gradient(90deg,rgba(50,55,100,.13),transparent 55%)}
+.conversation-theme-current{display:block!important;margin-top:2px;color:var(--muted);font-size:8px!important;font-weight:700}
+.alias-row input,.alias-person,.alias-person b,.conversation-theme-badge,.first-contact-option{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Color Emoji","Apple Color Emoji","Segoe UI Emoji",sans-serif}
+.alias-row input{font-variant-emoji:emoji;unicode-bidi:plaintext}
+@media(max-width:620px){.conversation-theme-badge em{display:none}.conversation-theme-badge{padding:5px 6px;min-width:27px}.conversation-theme-current{font-size:7px!important}.message-conversation{gap:7px!important}}

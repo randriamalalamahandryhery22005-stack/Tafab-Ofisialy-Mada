@@ -1259,11 +1259,14 @@ function publisherBackgrounds(){
       const { data: last } = await sb.from("messages").select("content,created_at")
         .eq("conversation_id", c.id).order("created_at", { ascending:false }).limit(1);
       const alias=(person && (await sb.from("tafab_conversation_aliases").select("nickname").eq("conversation_id",c.id).eq("target_user_id",person.id).maybeSingle()).data?.nickname)||"";
-      cards.push(`<button class="list-row message-conversation" style="width:100%;text-align:left"
+      const themeRow=(await sb.from("tafab_shared_message_themes").select("theme").eq("conversation_id",c.id).maybeSingle()).data;
+      const themeKey=themeRow?.theme||"default";
+      const themeMeta={default:["Classique","💬"],amoureux:["Amoureux","❤️"],triste:["Triste","💙"],heureux:["Heureux","☀️"],enemies:["Enemies","⚡"],nature:["Nature","🌿"],ocean:["Océan","🌊"],nuit:["Nuit","🌙"]}[themeKey]||["Classique","💬"];
+      cards.push(`<button class="list-row message-conversation theme-conversation-row theme-row-${esc(themeKey)}" style="width:100%;text-align:left"
         data-action="open-conversation" data-id="${esc(c.id)}" data-other-id="${esc(person?.id||"")}">
         ${avatarHTML(person || state.profile)}
         <div class="grow"><b>${esc(c.name || (person ? (alias || nameOf(person)) : "Conversation"))}</b>
-        <small>${esc(last?.[0]?.content || "Ouvrir la conversation")} · ${last?.[0] ? timeAgo(last[0].created_at) : ""}</small></div><small>›</small>
+        <small>${esc(last?.[0]?.content || "Ouvrir la conversation")} · ${last?.[0] ? timeAgo(last[0].created_at) : ""}</small></div><span class="conversation-theme-badge theme-${esc(themeKey)}" title="Thème actuel : ${esc(themeMeta[0])}">${themeMeta[1]} <em>${esc(themeMeta[0])}</em></span><small>›</small>
       </button>`);
     }
 
@@ -1346,7 +1349,9 @@ function publisherBackgrounds(){
     const aliasRows=(await sb.from("tafab_conversation_aliases").select("target_user_id,nickname").eq("conversation_id",id)).data||[];
     const aliasMap=new Map(aliasRows.map(x=>[String(x.target_user_id),x.nickname]));
     const displayOtherName=otherProfile ? (aliasMap.get(String(otherProfile.id))||nameOf(otherProfile)) : "Discussion";
-    $("content").innerHTML = `<section class="clean-page messages-page conversation-page"><div class="page-header clean-page-header"><button class="page-back" data-action="page-back" type="button"><span aria-hidden="true">‹</span><small>Messages</small></button><div class="conversation-title">${avatarHTML(otherProfile || state.profile,"avatar conversation-avatar")}<div><h2>${esc(displayOtherName)}</h2><small id="conversationPresence" class="conversation-presence">Connexion sécurisée</small></div></div><button class="message-theme-button" data-action="message-theme" data-id="${esc(id)}" aria-label="Thème partagé de la conversation" title="Thème partagé pour les deux comptes">🎨</button></div><div id="typingIndicator" class="typing-indicator" hidden>écrit…</div><div class="message-list clean-message-list theme-${esc(conversationTheme)}">${(msgs||[]).map(m=>conversationMessageHTML(m,map,reactionMap)).join("")||renderFirstContactGreetings(otherProfile||{})}</div><form id="messageForm" class="comment-form clean-message-form"><div class="message-v22-tools"><button type="button" class="message-tool" data-action="message-attachment" title="Joindre un fichier">📎</button><button type="button" class="message-tool" data-action="message-voice" title="Message vocal">🎙️</button></div><input id="messageText" autocomplete="off" placeholder="Écrire un message..."><input id="messageAttachment" type="file" hidden accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip,.apk"><button type="submit">Envoyer</button></form></section>`;
+    const themeLabels={default:["Classique","💬"],amoureux:["Amoureux","❤️"],triste:["Triste","💙"],heureux:["Heureux","☀️"],enemies:["Enemies","⚡"],nature:["Nature","🌿"],ocean:["Océan","🌊"],nuit:["Nuit","🌙"]};
+    const currentThemeMeta=themeLabels[conversationTheme]||themeLabels.default;
+    $("content").innerHTML = `<section class="clean-page messages-page conversation-page theme-page-${esc(conversationTheme)}"><div class="page-header clean-page-header"><button class="page-back" data-action="page-back" type="button"><span aria-hidden="true">‹</span><small>Messages</small></button><div class="conversation-title">${avatarHTML(otherProfile || state.profile,"avatar conversation-avatar")}<div><h2>${esc(displayOtherName)}</h2><small id="conversationPresence" class="conversation-presence">Connexion sécurisée</small><small class="conversation-theme-current">${currentThemeMeta[1]} ${esc(currentThemeMeta[0])} · partagé</small></div></div><button class="message-theme-button" data-action="message-theme" data-id="${esc(id)}" aria-label="Thème partagé de la conversation" title="Thème partagé pour les deux comptes">🎨</button></div><div id="typingIndicator" class="typing-indicator" hidden>écrit…</div><div class="message-list clean-message-list theme-${esc(conversationTheme)}">${(msgs||[]).map(m=>conversationMessageHTML(m,map,reactionMap)).join("")||renderFirstContactGreetings(otherProfile||{})}</div><form id="messageForm" class="comment-form clean-message-form"><div class="message-v22-tools"><button type="button" class="message-tool" data-action="message-attachment" title="Joindre un fichier">📎</button><button type="button" class="message-tool" data-action="message-voice" title="Message vocal">🎙️</button></div><input id="messageText" autocomplete="off" placeholder="Écrire un message..."><input id="messageAttachment" type="file" hidden accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip,.apk"><button type="submit">Envoyer</button></form></section>`;
 
     // Conversation-level Realtime: typing + online presence without storing ephemeral state in SQL.
     if(state.conversationChannel){ try{ await sb.removeChannel(state.conversationChannel); }catch(_){} state.conversationChannel=null; }
@@ -1499,7 +1504,20 @@ function publisherBackgrounds(){
     const aliases=(await sb.from("tafab_conversation_aliases").select("target_user_id,nickname,updated_by,updated_at").eq("conversation_id",id)).data||[];
     const amap=new Map(aliases.map(x=>[String(x.target_user_id),x]));
     openModal(`<div class="modal-box message-action-modal alias-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">MESSAGES</span><h3>Pseudos des comptes</h3><p class="muted">Modifiez le pseudo affiché dans cette conversation. Le changement est visible par les deux comptes.</p><div class="alias-list">${profiles.map(p=>{const a=amap.get(String(p.id));return `<form class="alias-row" data-alias-form="${esc(p.id)}"><div class="alias-person">${avatarHTML(p,'avatar sm')}<div><b>${esc(nameOf(p))}</b><small>${String(p.id)===String(state.user.id)?'Compte 1 · vous':'Compte 2 · interlocuteur'}</small></div></div><input name="nickname" maxlength="40" value="${esc(a?.nickname||nameOf(p)||'')}" aria-label="Pseudo de ${esc(nameOf(p))}"><button class="primary" type="submit">Enregistrer</button></form>`;}).join('')}</div></div>`);
-    document.querySelectorAll('[data-alias-form]').forEach(form=>form.onsubmit=async e=>{e.preventDefault();const target=form.dataset.aliasForm;const nickname=String(form.nickname?.value||'').trim();const r=await sb.from('tafab_conversation_aliases').upsert({conversation_id:id,target_user_id:target,nickname,updated_by:state.user.id},{onConflict:'conversation_id,target_user_id'});if(r.error)return toast(r.error.message);const notifyTarget=String(target)===String(state.user.id)?ids.find(x=>String(x)!==String(state.user.id)):target; if(notifyTarget) await sb.from('notifications').insert({user_id:notifyTarget,actor_id:state.user.id,type:'message_alias',title:'Pseudo modifié',message:`${nameOf(state.profile||{})} a changé votre pseudo dans cette conversation en « ${nickname} ».`,entity_type:'conversation',entity_id:id,is_read:false}).catch(()=>{});toast('Pseudo modifié ✓');return messageAliases(id);});
+    document.querySelectorAll('[data-alias-form]').forEach(form=>form.onsubmit=async e=>{
+      e.preventDefault();
+      const target=form.dataset.aliasForm;
+      const nickname=String(form.nickname?.value||'').trim();
+      const btn=form.querySelector('button[type="submit"]');
+      if(btn){btn.disabled=true;btn.textContent='Enregistrement…';}
+      const r=await sb.from('tafab_conversation_aliases').upsert({conversation_id:id,target_user_id:target,nickname,updated_by:state.user.id},{onConflict:'conversation_id,target_user_id'});
+      if(r.error){if(btn){btn.disabled=false;btn.textContent='Enregistrer';}return toast(r.error.message);}
+      const notifyTarget=String(target)===String(state.user.id)?ids.find(x=>String(x)!==String(state.user.id)):target;
+      if(notifyTarget) await sb.from('notifications').insert({user_id:notifyTarget,actor_id:state.user.id,type:'message_alias',title:'Pseudo modifié',message:`${nameOf(state.profile||{})} a changé votre pseudo dans cette conversation en « ${nickname} ».`,entity_type:'conversation',entity_id:id,is_read:false}).catch(()=>{});
+      closeModal();
+      toast('Pseudo enregistré ✓');
+      return openConversation(id);
+    });
   }
 
   async function confirmDeleteConversation(id){
