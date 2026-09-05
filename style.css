@@ -4095,3 +4095,35 @@ body.light .conversation-page.theme-page-default{--theme-bg-1:#f5f7fb;--theme-bg
 body.light .conversation-page .clean-message-list .message:not(.mine){color:#18243a}
 /* TAFAß V28.3.2 — ADMIN TOTAL */
 .admin-total-page{width:100%;max-width:1100px;margin:0 auto;padding:8px 0 100px}.admin-total-hero{padding:18px 4px 14px}.admin-total-hero h2{margin:5px 0;font-size:27px}.admin-total-hero p{margin:0;color:var(--tfa-muted,#8b96a8);font-size:12px}.admin-total-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.admin-stat{border:1px solid var(--tfa-border,rgba(255,255,255,.08));background:var(--surface,#111722);border-radius:16px;padding:14px;min-width:0}.admin-stat span{font-size:18px}.admin-stat b{display:block;font-size:22px;margin-top:7px}.admin-stat small{color:var(--tfa-muted,#8b96a8);font-size:10px}.admin-total-section{margin-top:14px}.admin-section-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:9px}.admin-section-head h3{margin:0;font-size:16px}.admin-section-head small{color:var(--tfa-muted,#8b96a8);font-size:10px}.admin-users{display:grid;gap:7px}.admin-user-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:9px;padding:10px 11px;border:1px solid var(--tfa-border,rgba(255,255,255,.08));background:var(--surface,#111722);border-radius:14px}.admin-user-main{display:flex;align-items:center;gap:9px;min-width:0}.admin-user-main img,.admin-user-avatar{width:40px;height:40px;border-radius:50%;object-fit:cover;flex:0 0 40px}.admin-user-avatar{display:grid;place-items:center;background:#222936}.admin-user-main b,.admin-user-main small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.admin-user-main b{font-size:12px}.admin-user-main small{font-size:9px;color:var(--tfa-muted,#8b96a8);margin-top:2px}.admin-status{font-size:9px;padding:5px 8px;border-radius:20px;background:rgba(45,200,120,.12);color:#65d99c}.admin-status.blocked{background:rgba(255,70,70,.12);color:#ff8888}.admin-user-row .ghost-action{font-size:9px;padding:7px 9px}@media(max-width:700px){.admin-total-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.admin-user-row{grid-template-columns:minmax(0,1fr) auto}.admin-user-row .ghost-action{grid-column:2;grid-row:1}.admin-status{grid-column:2;grid-row:2;justify-self:end}}
+
+
+/* TAFAß ADMIN TOTAL V29 — red alert badge + monetisation console */
+.admin-red-badge{display:inline-flex;align-items:center;justify-content:center;min-width:34px;height:34px;padding:0 10px;border-radius:999px;background:#d92d20;color:#fff;font-weight:900;box-shadow:0 8px 22px rgba(217,45,32,.28)}
+.admin-menu-badge{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:#d92d20;color:#fff;font-size:12px;font-weight:900;margin-left:auto}
+.admin-menu-badge.hidden{display:none}
+.admin-admin-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:12px 0 16px}
+.admin-mini-card{padding:16px;border:1px solid rgba(127,127,127,.18);border-radius:16px;background:rgba(127,127,127,.06);display:flex;flex-direction:column;gap:5px}
+.admin-mini-card b{font-size:20px}
+.admin-mini-card small,.admin-data-row small{color:var(--muted,#888)}
+.admin-data-list{display:flex;flex-direction:column;gap:8px}
+.admin-data-row{display:flex;align-items:center;gap:10px;padding:12px;border:1px solid rgba(127,127,127,.15);border-radius:14px;background:rgba(127,127,127,.035)}
+.admin-data-row .ghost-action{white-space:nowrap}
+.admin-status.paid{background:rgba(16,185,129,.14);color:#059669}
+.admin-status.approved{background:rgba(16,185,129,.14);color:#059669}
+.admin-status.rejected,.admin-status.failed{background:rgba(217,45,32,.12);color:#d92d20}
+@media(max-width:700px){.admin-admin-grid{grid-template-columns:1fr}.admin-data-row{align-items:flex-start;flex-wrap:wrap}.admin-data-row .grow{min-width:calc(100% - 45px)}.admin-data-row .ghost-action{flex:1}}
+
+/* TAFAß V30 — official verified badges */
+.tafa-display-name{display:inline-flex;align-items:center;gap:5px;min-width:0;vertical-align:middle}
+.tafa-display-name>span:first-child{min-width:0}
+.tafa-verified-badge{display:inline-grid;place-items:center;flex:0 0 auto;width:17px;height:17px;border-radius:50%;background:#2677ff;color:#fff;border:2px solid var(--surface,#111722);font-size:10px;font-weight:1000;line-height:1;box-sizing:border-box;box-shadow:0 2px 7px rgba(38,119,255,.25)}
+.tafa-verified-badge.tafa-admin-badge{background:#e53935;box-shadow:0 2px 8px rgba(229,57,53,.34)}
+.profile-name .tafa-display-name{font-size:inherit}
+.post-author-name .tafa-display-name{font-size:inherit}
+.verification-modal,.restriction-modal{max-width:560px}
+.verification-modal textarea,.restriction-modal textarea{width:100%;min-height:110px;box-sizing:border-box;resize:vertical;margin-top:7px}
+.restriction-screen{max-width:650px;margin:70px auto;padding:30px;text-align:center;border:1px solid rgba(229,57,53,.25);border-radius:24px;background:rgba(229,57,53,.045)}
+.restriction-icon{font-size:48px;margin-bottom:10px}
+.restriction-screen h2{margin:5px 0 10px;font-size:28px}
+.restriction-screen p{color:var(--muted,#8b96a8);line-height:1.6;margin:0 auto 20px;max-width:560px}
+@media(max-width:600px){.tafa-verified-badge{width:16px;height:16px;font-size:9px}.restriction-screen{margin:25px 15px;padding:24px 18px}}

@@ -110,6 +110,11 @@ document.documentElement.classList.add("app-boot");
   }
 
   function nameOf(p) { return [p?.first_name, p?.last_name].filter(Boolean).join(" ") || "Membre Tafaß"; }
+  function isAdminProfile(p){ return p?.is_admin===true || p?.admin_badge===true; }
+  function verifiedBadgeHTML(p){ if(!p || (!p.is_verified && !isAdminProfile(p))) return ""; const admin=isAdminProfile(p); return `<span class="tafa-verified-badge ${admin?"tafa-admin-badge":""}" title="${admin?"Administrateur officiel Tafaß":"Compte vérifié"}">✓</span>`; }
+  function displayNameHTML(p){ return `<span class="tafa-display-name"><span>${esc(nameOf(p))}</span>${verifiedBadgeHTML(p)}</span>`; }
+  async function sha256File(file){ const b=await file.arrayBuffer(),h=await crypto.subtle.digest("SHA-256",b); return Array.from(new Uint8Array(h)).map(x=>x.toString(16).padStart(2,"0")).join(""); }
+  async function moderationCheckMedia(file,kind){ try{ const hash=await sha256File(file); const r=await sb.rpc("tafa_moderation_check_media",{p_sha256:hash,p_kind:kind}); if(r.error) return {ok:true,hash}; if(r.data?.ok===false){ toast(r.data.message||"Ce média est protégé par l’administration Tafaß."); return {ok:false,hash}; } return {ok:true,hash}; }catch(_){ return {ok:true}; } }
   const blockedCache={ids:new Set(),loadedAt:0,promise:null};
   async function getBlockedIds(force=false){
     if(!state.user)return new Set();
@@ -367,6 +372,7 @@ document.documentElement.classList.add("app-boot");
       setNavBadge("messages",msg.count||0);
       setNavBadge("notifications",n.notifications);
       ["pages","groups","reels","events","tafab","studio","creator","ai","music","business","saved","settings","menu"].forEach(r=>setNavBadge(r,n[r]||0));
+      if(state.__isAdmin===true){ adminBadgeCount().then(c=>{ document.querySelectorAll('[data-admin-badge]').forEach(el=>{el.textContent=c>0?String(c):''; el.classList.toggle('hidden',c<=0);}); setNavBadge('menu',Math.max(Number(n.menu||0),c)); }).catch(()=>{}); }
     }catch(e){ console.warn("Tafaß badges:",e); }
   }
 
@@ -993,6 +999,8 @@ function publisherBackgrounds(){
     try{
       let media_url=null,media_type=null;
       if(file){
+        const moderation=await moderationCheckMedia(file,file.type.startsWith("video/")?"post_video":"post_image");
+        if(!moderation.ok) throw new Error("Publication refusée : média protégé de l’administration Tafaß.");
         const ext=(file.name.split(".").pop()||"bin").toLowerCase();
         const path=`${state.user.id}/${crypto.randomUUID()}.${ext}`;
         const up=await uploadPostMedia(path,file,{upsert:false,contentType:file.type||undefined});
@@ -1000,6 +1008,9 @@ function publisherBackgrounds(){
         media_url=sb.storage.from("posts").getPublicUrl(path).data.publicUrl;
         media_type=file.type.startsWith("video/")?"video":"image";
       }
+      const guard=await sb.rpc("tafa_account_guard",{p_user_id:state.user.id});
+      if(guard.error) throw new Error(guard.error.message);
+      if(guard.data?.allowed===false) throw new Error(guard.data.message||"Votre compte est restreint.");
       const payload={user_id:state.user.id,content:text,media_url,media_type,visibility:state.composerVisibility||"public",location:state.composerLocation||null,background_style:state.composerBackground||"plain",publication_meta:state.composerMeta||{}};
       let r=await sb.from("posts").insert(payload).select().single();
       if(r.error && String(r.error.code)==="42703"){
@@ -1069,12 +1080,12 @@ function publisherBackgrounds(){
       const postOwner = p.user_id === state.user.id;
       const actions = `<div class="comment-actions"><button data-action="reply-comment" data-id="${esc(c.id)}">Répondre</button>${own || postOwner ? `<button data-action="delete-comment" data-id="${esc(c.id)}">Supprimer</button>` : ""}</div>`;
       const commentAuthor = c.author || (own ? state.profile : null);
-      return `<div class="comment comment-depth-${Math.min(depth,3)}" data-comment-id="${esc(c.id)}">${profileLink(commentAuthor, avatarHTML(commentAuthor), "profile-link profile-avatar-link") }<div class="bubble"><div class="comment-author-line">${profileLink(commentAuthor, `<b>${esc(nameOf(commentAuthor))}</b>`, "profile-link profile-comment-name")}<small>${timeAgo(c.created_at)}</small></div><div class="comment-text">${esc(c.content || c.text || "")}</div>${actions}<div class="reply-box" id="reply-${esc(c.id)}"></div>${commentHTML(c.id, depth+1)}</div></div>`;
+      return `<div class="comment comment-depth-${Math.min(depth,3)}" data-comment-id="${esc(c.id)}">${profileLink(commentAuthor, avatarHTML(commentAuthor), "profile-link profile-avatar-link") }<div class="bubble"><div class="comment-author-line">${profileLink(commentAuthor, `${displayNameHTML(commentAuthor)}`, "profile-link profile-comment-name")}<small>${timeAgo(c.created_at)}</small></div><div class="comment-text">${esc(c.content || c.text || "")}</div>${actions}<div class="reply-box" id="reply-${esc(c.id)}"></div>${commentHTML(c.id, depth+1)}</div></div>`;
     }).join("");
     const shareNames = sh.slice(0,3).map(x => esc(nameOf(x.user))).join(", ");
     const shareSummary = sh.length ? `<span class="share-summary">↗ ${shareNames}${sh.length > 3 ? ` +${sh.length-3}` : ""}</span>` : "";
     return `<article class="post post-premium" id="post-${esc(p.id)}" data-post-id="${esc(p.id)}" data-post-bg="${esc(p.background_style || "plain")}">
-      <div class="post-head">${profileLink(p.author, avatarHTML(p.author), "profile-link profile-avatar-link")}<div class="meta">${profileLink(p.author, `<span class="post-author-name">${esc(nameOf(p.author))}</span>`, "profile-link profile-meta-link")}<span class="post-time"><small>${timeAgo(p.created_at)} · ${esc(p.visibility || "public")}</small></span></div><button class="post-menu" data-action="post-menu" data-id="${esc(p.id)}">⋯</button></div>
+      <div class="post-head">${profileLink(p.author, avatarHTML(p.author), "profile-link profile-avatar-link")}<div class="meta">${profileLink(p.author, `<span class="post-author-name">${displayNameHTML(p.author)}</span>`, "profile-link profile-meta-link")}<span class="post-time"><small>${timeAgo(p.created_at)} · ${esc(p.visibility || "public")}</small></span></div><button class="post-menu" data-action="post-menu" data-id="${esc(p.id)}">⋯</button></div>
       ${p.content ? `<div class="post-body ${p.background_style && p.background_style !== "plain" ? "post-body-has-bg" : ""}">${captionHTML(p.content)}</div>` : ""}${media}
       ${p.publication_meta && typeof p.publication_meta === "object" ? (()=>{const m=p.publication_meta||{};const chips=[];if(m.music)chips.push(`<button type="button" class="post-music-chip" data-action="play-post-music" data-music-id="${esc(m.music_id||'ai-1')}" data-music-seed="${esc(m.music_seed||1)}">♫ ${esc(m.music)} · Écouter</button>`);if(m.tag)chips.push(`<span>👥 ${esc(m.tag)}</span>`);if(m.location)chips.push(`<span>📍 ${esc(m.location)}</span>`);if(m.event)chips.push(`<span>📅 ${esc(m.event)}</span>`);if(m.mood)chips.push(`<span>☺ ${esc(m.mood)}</span>`);return chips.length?`<div class="post-meta-chips">${chips.join('')}</div>`:''})() : ""}
       ${p.publication_meta?.receive_messages && p.user_id !== state.user.id ? `<div class="post-message-cta"><div><b>Messages ouverts</b><small>Envoyez un message privé directement à ${esc(nameOf(p.author||{}))}.</small></div><button type="button" data-action="post-receive-message" data-owner-id="${esc(p.user_id)}">💬 Message</button></div>` : ""}
@@ -1227,7 +1238,7 @@ function publisherBackgrounds(){
   function friendRow(p,type,commonCount=0) {
     const common = commonCount > 0 ? `<small class="mutual-friends">${commonCount} ami${commonCount > 1 ? "s" : ""} en commun</small>` : "";
     const action = type === "friend" ? `<button class="ghost-action" data-action="view-profile" data-id="${esc(p.id)}">Profil</button>` : type === "sent" ? `<button class="ghost-action" disabled>Demande envoyée</button>` : type === "incoming" ? `<div class="friend-actions"><button class="small-action" data-action="accept-friend" data-id="${esc(p.id)}">Confirmer</button><button class="ghost-action" data-action="decline-friend" data-id="${esc(p.id)}">Refuser</button></div>` : `<button class="small-action" data-action="add-friend" data-id="${esc(p.id)}">Ajouter</button>`;
-    return `<div class="list-row friend-row">${avatarHTML(p)}<div class="grow"><b>${esc(nameOf(p))}</b>${common}</div>${action}</div>`;
+    return `<div class="list-row friend-row">${avatarHTML(p)}<div class="grow">${displayNameHTML(p)}${common}</div>${action}</div>`;
   }
   async function addFriend(id) {
     if (!id || id === state.user.id) return;
@@ -1284,7 +1295,7 @@ function publisherBackgrounds(){
     }
     if (token !== state.renderToken || state.route !== "search") return;
 
-    const peopleHtml=people.length ? people.map(p=>`<div class="list-row search-result-row">${avatarHTML(p)}<div class="grow"><b>${esc(nameOf(p))}</b></div><button class="small-action" data-action="view-profile" data-id="${esc(p.id)}">Voir le profil</button></div>`).join("") : `<div class="empty">Aucun compte trouvé.</div>`;
+    const peopleHtml=people.length ? people.map(p=>`<div class="list-row search-result-row">${avatarHTML(p)}<div class="grow">${displayNameHTML(p)}</div><button class="small-action" data-action="view-profile" data-id="${esc(p.id)}">Voir le profil</button></div>`).join("") : `<div class="empty">Aucun compte trouvé.</div>`;
     const postHtml=posts.length ? posts.map(p=>`<div class="list-row search-result-row"><div class="grow"><b>${esc(nameOf(p.author||{}))}</b><small>${esc((p.content||"Publication sans texte").slice(0,140))}</small></div><button class="small-action" data-action="search-post" data-id="${esc(p.id)}">Voir</button></div>`).join("") : `<div class="empty">Aucune publication trouvée.</div>`;
     const pageHtml=pages.length ? pages.map(x=>`<div class="list-row search-result-row"><div class="entity-search-icon">▣</div><div class="grow"><b>${esc(x.name)}</b><small>${esc(x.category||"Page")} · ${esc(x.bio||"")}</small></div><button class="small-action" data-action="page-open" data-id="${esc(x.id)}">Ouvrir</button></div>`).join("") : `<div class="empty">Aucune Page trouvée.</div>`;
     const groupHtml=groups.length ? groups.map(x=>`<div class="list-row search-result-row"><div class="entity-search-icon">◎</div><div class="grow"><b>${esc(x.name)}</b><small>${esc(x.privacy||"public")} · ${esc(x.description||"")}</small></div><button class="small-action" data-action="group-open" data-id="${esc(x.id)}">Ouvrir</button></div>`).join("") : `<div class="empty">Aucun groupe trouvé.</div>`;
@@ -1940,7 +1951,7 @@ function publisherBackgrounds(){
       <div class="profile-cover-wrap"><div class="profile-cover" ${cover}></div></div>
       <div class="profile-main-premium">
         <div class="profile-identity-row">${avatarHTML(p,"avatar profile-avatar")}</div>
-        <div class="profile-name-block"><h2 class="profile-name">${esc(nameOf(p))}${isLockedProfile ? ' <span class="profile-locked-badge" title="Profil verrouillé">🔒 Profil verrouillé</span>' : ''}</h2>${isLockedProfile ? '<small class="profile-protection-note">🔐 Contenu protégé par les paramètres de confidentialité Tafaß</small>' : ''}</div>
+        <div class="profile-name-block"><h2 class="profile-name">${displayNameHTML(p)}${isLockedProfile ? ' <span class="profile-locked-badge" title="Profil verrouillé">🔒 Profil verrouillé</span>' : ''}</h2>${isLockedProfile ? '<small class="profile-protection-note">🔐 Contenu protégé par les paramètres de confidentialité Tafaß</small>' : ''}</div>
         <p class="profile-bio">${esc(p.bio || "")}</p>
         <div class="profile-actions"><button class="primary" data-action="edit-profile">Modifier le profil</button></div>
         <div class="profile-stats"><div class="profile-stat"><b>${mine.length}</b><small>Publications</small></div><div class="profile-stat"><b>${friendsCount}</b><small>Amis</small></div><div class="profile-stat"><b>${followersCount}</b><small>Abonnés</small></div></div>
@@ -2061,11 +2072,14 @@ function publisherBackgrounds(){
         if (!file) continue;
         if (!file.type.startsWith('image/')) throw new Error('Choisissez uniquement une image.');
         if (file.size > 8*1024*1024) throw new Error('Image trop volumineuse (maximum 8 Mo).');
+        const moderation=await moderationCheckMedia(file,key==='avatar_url'?'profile_avatar':'profile_cover');
+        if(!moderation.ok) throw new Error('Image protégée de l’administration Tafaß.');
         const ext=(file.name.split('.').pop()||'jpg').toLowerCase();
         const path=`${state.user.id}/${key.replace('_url','')}-${crypto.randomUUID()}.${ext}`;
         const up=await uploadPostMedia(path,file,{upsert:false,contentType:file.type||'image/jpeg'});
         if(up.error) throw new Error('Upload : '+up.error.message);
         patch[key]=sb.storage.from('posts').getPublicUrl(path).data.publicUrl;
+        if(state.__isAdmin===true && moderation?.hash){ await sb.rpc('tafa_admin_register_media_hash',{p_sha256:moderation.hash,p_kind:key==='avatar_url'?'profile_avatar':'profile_cover',p_url:patch[key]}).catch(()=>{}); }
       }
       const r=await sb.from('profiles').update(patch).eq('id',state.user.id);
       if(r.error) throw new Error(r.error.message);
@@ -2295,7 +2309,7 @@ async function genericListPage(route) {
       const wanted = ["reel","video"];
       const rows = state.posts.filter(p => wanted.includes(p.media_type));
       if (token !== state.renderToken || state.route !== route) return;
-      $("content").innerHTML = `<div class="card"><div class="page-header"><h2>Reels</h2><span class="muted">Découvrir</span></div>${rows.length?rows.map(p=>`<article class="post"><div class="post-head">${profileLink(p.author, avatarHTML(p.author), "profile-link profile-avatar-link")}<div class="meta">${profileLink(p.author, `<span class="post-author-name">${esc(nameOf(p.author))}</span>`, "profile-link profile-meta-link")}<span class="post-time"><small>${timeAgo(p.created_at)}</small></span></div></div>${p.content?`<div class="post-body">${esc(p.content)}</div>`:""}<video class="post-media" src="${esc(p.media_url)}" controls></video></article>`).join(""):`<div class="empty">Aucun Reel pour le moment.</div>`}</div>`;
+      $("content").innerHTML = `<div class="card"><div class="page-header"><h2>Reels</h2><span class="muted">Découvrir</span></div>${rows.length?rows.map(p=>`<article class="post"><div class="post-head">${profileLink(p.author, avatarHTML(p.author), "profile-link profile-avatar-link")}<div class="meta">${profileLink(p.author, `<span class="post-author-name">${displayNameHTML(p.author)}</span>`, "profile-link profile-meta-link")}<span class="post-time"><small>${timeAgo(p.created_at)}</small></span></div></div>${p.content?`<div class="post-body">${esc(p.content)}</div>`:""}<video class="post-media" src="${esc(p.media_url)}" controls></video></article>`).join(""):`<div class="empty">Aucun Reel pour le moment.</div>`}</div>`;
       return;
     }
     if (route === "pages") return pagesHub();
@@ -2559,13 +2573,14 @@ async function genericListPage(route) {
       ["settings","settings","Para & Conf","Compte et confidentialité"]
     ];
     const adminCard = state.__isAdmin ? [["admin","shield","Admin Total","Centre de contrôle de Tafaß"]] : [];
+    const verificationCard = !state.__isAdmin ? [["verification","shield","Vérification","Demander le badge bleu officiel"]] : [];
     const actions = [
       ["history","history","Historique d'activité","Vos actions enregistrées", "activity"],
       ["payment","payment","Paiement","Vos paiements et transactions", "payment"],
       ["help","help","Aide","Assistance et signalement", "help"]
     ];
-    const card = x => `<button type="button" class="menu-card premium-menu-card" ${x[4] ? `data-action="menu-service" data-name="${esc(x[2])}" data-service="${esc(x[4])}"` : `data-action="menu-route" data-route-target="${esc(x[0])}"`} aria-label="${esc(x[2])}"><span class="menu-icon">${menuIcon(x[1])}</span><span class="menu-card-copy"><b>${esc(x[2])}</b><small title="${esc(x[3])}">${esc(x[3])}</small></span><span class="menu-arrow">›</span></button>`;
-    simplePage("Menu", `<div class="menu-profile premium-menu-profile" data-route="profile"><button class="profile-link menu-profile-avatar" data-action="view-profile" data-id="${esc(p.id || "")}">${avatarHTML(p)}</button><div class="grow"><b>${esc(nameOf(p))}</b><small title="${esc(p.email || state.user?.email || "")}">${esc(p.email || state.user?.email || "")}</small></div><button class="small-action" data-route="profile">Profil</button></div><div class="menu-section-title">Raccourcis</div><div class="menu-grid premium-menu-grid">${items.map(card).join("")}</div><div class="menu-section-title">Services</div><div class="menu-grid premium-menu-grid">${adminCard.map(card).join("")}${actions.map(card).join("")}</div><div class="menu-section-title">Compte</div><div class="menu-grid premium-menu-grid"><button class="menu-card premium-menu-card danger-card" data-action="new-logout"><span class="menu-icon">${menuIcon("logout")}</span><span class="menu-card-copy"><b>Quitter le compte</b><small>Fermer la session sur cet appareil</small></span><span class="menu-arrow">›</span></button></div>`);
+    const card = x => `<button type="button" class="menu-card premium-menu-card" ${x[4] ? `data-action="menu-service" data-name="${esc(x[2])}" data-service="${esc(x[4])}"` : `data-action="menu-route" data-route-target="${esc(x[0])}"`} aria-label="${esc(x[2])}"><span class="menu-icon">${menuIcon(x[1])}</span><span class="menu-card-copy"><b>${esc(x[2])}</b><small title="${esc(x[3])}">${esc(x[3])}</small></span>${x[0]==="admin"?`<span class="admin-menu-badge" data-admin-badge>•</span>`:""}<span class="menu-arrow">›</span></button>`;
+    simplePage("Menu", `<div class="menu-profile premium-menu-profile" data-route="profile"><button class="profile-link menu-profile-avatar" data-action="view-profile" data-id="${esc(p.id || "")}">${avatarHTML(p)}</button><div class="grow"><b>${esc(nameOf(p))}</b><small title="${esc(p.email || state.user?.email || "")}">${esc(p.email || state.user?.email || "")}</small></div><button class="small-action" data-route="profile">Profil</button></div><div class="menu-section-title">Raccourcis</div><div class="menu-grid premium-menu-grid">${items.map(card).join("")}</div><div class="menu-section-title">Services</div><div class="menu-grid premium-menu-grid">${verificationCard.map(card).join("")}${adminCard.map(card).join("")}${actions.map(card).join("")}</div><div class="menu-section-title">Compte</div><div class="menu-grid premium-menu-grid"><button class="menu-card premium-menu-card danger-card" data-action="new-logout"><span class="menu-icon">${menuIcon("logout")}</span><span class="menu-card-copy"><b>Quitter le compte</b><small>Fermer la session sur cet appareil</small></span><span class="menu-arrow">›</span></button></div>`);
   }
 
   async function servicePage(service) {
@@ -3421,20 +3436,91 @@ async function genericListPage(route) {
     if(!state.user || !supabaseReady()) return false;
     try{const r=await sb.rpc('tafa_is_admin',{p_user_id:state.user.id});return !r.error&&r.data===true;}catch(_){return false;}
   }
+
+  async function adminBadgeCount(){
+    if(!(state.__isAdmin===true || await adminIsAllowed())) return 0;
+    try{const r=await sb.rpc('tafa_admin_badge_count'); return Number(r.data||0);}catch(_){return 0;}
+  }
+
+  function adminMoney(v){ return `${Number(v||0).toLocaleString('fr-FR')} Ar`; }
+
   async function adminTotalPage(){
     if(!(await adminIsAllowed())){toast('Accès réservé à l’administration.');return navigate('home',{replaceStack:true});}
-    const [sr,ur]=await Promise.all([sb.rpc('tafa_admin_total_stats'),sb.rpc('tafa_admin_list_users',{p_limit:80,p_offset:0})]);
-    if(sr.error) throw sr.error; const st=sr.data||{}; const users=ur.error?[]:(ur.data||[]);
-    const cards=[['👥','Comptes',st.total_accounts||0],['🟢','Actifs',st.active_accounts||0],['⛔','Bloqués',st.blocked_accounts||0],['📝','Publications',st.total_posts||0],['💬','Commentaires',st.total_comments||0],['🔔','Notifications',st.total_notifications||0]];
+    state.__isAdmin=true;
+    const [sr,ur,wr,pr,rr,vr,ar]=await Promise.all([
+      sb.rpc('tafa_admin_total_stats'),
+      sb.rpc('tafa_admin_list_users',{p_limit:80,p_offset:0}),
+      sb.rpc('tafa_admin_list_withdrawals',{p_limit:50}),
+      sb.rpc('tafa_admin_list_payments',{p_limit:50}),
+      sb.rpc('tafa_admin_list_reports',{p_limit:50}),
+      sb.rpc('tafa_admin_list_verification_requests',{p_limit:50}),
+      sb.rpc('tafa_admin_list_account_appeals',{p_limit:50})
+    ]);
+    if(sr.error) throw sr.error;
+    const st=sr.data||{}, users=ur.error?[]:(ur.data||[]), withdrawals=wr.error?[]:(wr.data||[]), payments=pr.error?[]:(pr.data||[]), reports=rr.error?[]:(rr.data||[]), verifications=vr.error?[]:(vr.data||[]), appeals=ar.error?[]:(ar.data||[]);
+    const cards=[
+      ['👥','Comptes',st.total_accounts||0],
+      ['🟢','Actifs',st.active_accounts||0],
+      ['⛔','Bloqués',st.blocked_accounts||0],
+      ['💰','Coins',Number(st.total_coins||0).toLocaleString('fr-FR')],
+      ['💵','Revenus créateurs',adminMoney(st.total_creator_earnings_mga)],
+      ['⏳','Retraits en attente',st.pending_withdrawals||0],
+      ['💳','Paiements en attente',st.pending_payments||0],
+      ['🚨','Signalements',st.pending_reports||0],
+      ['🔵','Vérifications',st.pending_verifications||0]
+    ];
     const rows=users.map(u=>`<div class="admin-user-row"><div class="admin-user-main">${u.avatar_url?`<img src="${esc(u.avatar_url)}">`:'<div class="admin-user-avatar">👤</div>'}<div><b>${esc(([u.first_name,u.last_name].filter(Boolean).join(' ')||u.username||u.email||'Compte'))}</b><small>${esc(u.email||'')} · @${esc(u.username||'')}</small></div></div><span class="admin-status ${u.account_status==='blocked'?'blocked':''}">${u.account_status==='blocked'?'Bloqué':'Actif'}</span><button class="ghost-action" data-action="admin-toggle-user" data-id="${esc(u.id)}" data-status="${esc(u.account_status||'active')}">${u.account_status==='blocked'?'Réactiver':'Bloquer'}</button></div>`).join('')||'<div class="empty">Aucun compte.</div>';
-    return simplePage('Admin Total',`<section class="admin-total-page"><div class="admin-total-hero"><span class="eyebrow">TAFAß · ADMINISTRATION TOTALE</span><h2>Centre de contrôle</h2><p>Vue globale de la plateforme et gestion sécurisée des comptes.</p></div><div class="admin-total-grid">${cards.map(c=>`<div class="admin-stat"><span>${c[0]}</span><b>${Number(c[2]).toLocaleString('fr-FR')}</b><small>${esc(c[1])}</small></div>`).join('')}</div><div class="admin-total-section"><div class="admin-section-head"><div><h3>Comptes utilisateurs</h3><small>Gestion des comptes avec contrôle côté Supabase.</small></div><button class="ghost-action" data-action="admin-refresh">Actualiser</button></div><div class="admin-users">${rows}</div></div></section>`);
+    const withdrawalRows=withdrawals.map(x=>`<div class="admin-data-row"><div class="grow"><b>${esc(x.display_name||'Compte')}</b><small>${adminMoney(x.amount_mga)} · ${esc(x.method||'mobile_money')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${esc(x.status||'pending')}">${esc(x.status||'pending')}</span>${x.status==='pending'?`<button class="ghost-action" data-action="admin-withdrawal-status" data-id="${esc(x.id)}" data-status="approved">Approuver</button><button class="ghost-action danger-history-action" data-action="admin-withdrawal-status" data-id="${esc(x.id)}" data-status="rejected">Refuser</button>`:''}</div>`).join('')||'<div class="empty">Aucun retrait.</div>';
+    const paymentRows=payments.map(x=>`<div class="admin-data-row"><div class="grow"><b>${esc(x.display_name||'Compte')}</b><small>${adminMoney(x.amount)} · ${esc(x.method||'')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${esc(x.status||'pending')}">${esc(x.status||'pending')}</span>${x.status==='pending'?`<button class="ghost-action" data-action="admin-payment-status" data-id="${esc(x.id)}" data-status="paid">Valider</button><button class="ghost-action danger-history-action" data-action="admin-payment-status" data-id="${esc(x.id)}" data-status="failed">Refuser</button>`:''}</div>`).join('')||'<div class="empty">Aucun paiement.</div>';
+    const reportRows=reports.map(x=>`<div class="admin-data-row"><div class="grow"><b>${esc(x.reporter_name||'Compte')} → ${esc(x.reported_name||'Compte')}</b><small>${esc(x.reason||'Signalement')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${x.status==='resolved'?'paid':''}">${esc(x.status||'pending')}</span>${x.status==='pending'?`<button class="ghost-action" data-action="admin-report-status" data-id="${esc(x.id)}" data-status="resolved">Traiter</button>`:''}</div>`).join('')||'<div class="empty">Aucun signalement.</div>';
+    const appealRows=appeals.map(x=>`<div class="admin-data-row"><div class="grow"><b>${esc(x.display_name||'Compte')}</b><small>${esc(x.email||'')} · ${esc(x.reason||'Demande de réactivation')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${x.status==='approved'?'paid':x.status==='rejected'?'rejected':''}">${esc(x.status||'pending')}</span>${x.status==='pending'?`<button class="ghost-action" data-action="admin-appeal-status" data-id="${esc(x.id)}" data-status="approved">Approuver</button><button class="ghost-action danger-history-action" data-action="admin-appeal-status" data-id="${esc(x.id)}" data-status="rejected">Refuser</button>`:''}</div>`).join('')||'<div class="empty">Aucune demande de réactivation.</div>';
+    const verificationRows=verifications.map(x=>`<div class="admin-data-row"><div class="grow"><b>${esc(x.display_name||'Compte')}</b><small>${esc(x.email||'')} · ${esc(x.reason||'Demande de vérification')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${x.status==='approved'?'paid':x.status==='rejected'?'rejected':''}">${esc(x.status||'pending')}</span>${x.status==='pending'?`<button class="ghost-action" data-action="admin-verification-status" data-id="${esc(x.id)}" data-status="approved">Approuver</button><button class="ghost-action danger-history-action" data-action="admin-verification-status" data-id="${esc(x.id)}" data-status="rejected">Refuser</button>`:''}</div>`).join('')||'<div class="empty">Aucune demande de vérification.</div>';
+    return simplePage('Admin Total',`<section class="admin-total-page">
+      <div class="admin-total-hero"><div><span class="eyebrow">TAFAß · ADMINISTRATION TOTALE</span><h2>Centre de contrôle</h2><p>Gestion globale des comptes, monétisation, paiements et sécurité.</p></div><span class="admin-red-badge">${Number(st.pending_total||0)}</span></div>
+      <div class="admin-total-grid">${cards.map(c=>`<div class="admin-stat"><span>${c[0]}</span><b>${c[2]}</b><small>${esc(c[1])}</small></div>`).join('')}</div>
+      <div class="admin-total-section"><div class="admin-section-head"><div><h3>Comptes utilisateurs</h3><small>Activation et blocage contrôlés côté Supabase.</small></div><button class="ghost-action" data-action="admin-refresh">Actualiser</button></div><div class="admin-users">${rows}</div></div>
+      <div class="admin-total-section"><div class="admin-section-head"><div><h3>💰 Monétisation</h3><small>Coins, revenus créateurs et demandes de retrait.</small></div></div><div class="admin-admin-grid"><div class="admin-mini-card"><b>${adminMoney(st.total_creator_earnings_mga)}</b><small>Revenus créateurs</small></div><div class="admin-mini-card"><b>${Number(st.total_coins||0).toLocaleString('fr-FR')}</b><small>Coins en circulation</small></div></div><div class="admin-data-list">${withdrawalRows}</div></div>
+      <div class="admin-total-section"><div class="admin-section-head"><div><h3>💳 Paiements</h3><small>Demandes reçues et validation administrative.</small></div></div><div class="admin-data-list">${paymentRows}</div></div>
+      <div class="admin-total-section"><div class="admin-section-head"><div><h3>🚨 Signalements</h3><small>Comptes signalés par la communauté.</small></div></div><div class="admin-data-list">${reportRows}</div></div>
+      <div class="admin-total-section"><div class="admin-section-head"><div><h3>🔵 Demandes de vérification</h3><small>Le badge bleu est activé uniquement après paiement et approbation.</small></div></div><div class="admin-data-list">${verificationRows}</div></div>
+      <div class="admin-total-section"><div class="admin-section-head"><div><h3>♻️ Demandes de réactivation</h3><small>Les comptes restreints peuvent envoyer plusieurs demandes. L’administration décide.</small></div></div><div class="admin-data-list">${appealRows}</div></div>
+    </section>`);
   }
   async function adminToggleUser(id,status){
     const next=status==='blocked'?'active':'blocked'; if(!confirm(next==='blocked'?'Bloquer ce compte ?':'Réactiver ce compte ?'))return;
     const r=await sb.rpc('tafa_admin_set_account_status',{p_user_id:id,p_status:next}); if(r.error)return toast(r.error.message); toast(next==='blocked'?'Compte bloqué.':'Compte réactivé.'); return adminTotalPage();
   }
+  async function adminSetWithdrawalStatus(id,status){
+    if(!confirm(status==='approved'?'Approuver ce retrait ?':'Refuser ce retrait ?'))return;
+    const r=await sb.rpc('tafa_admin_set_withdrawal_status',{p_id:id,p_status:status}); if(r.error)return toast(r.error.message); toast('Retrait mis à jour.'); return adminTotalPage();
+  }
+  async function adminSetPaymentStatus(id,status){
+    if(!confirm(status==='paid'?'Valider ce paiement ?':'Refuser ce paiement ?'))return;
+    const r=await sb.rpc('tafa_admin_set_payment_status',{p_id:id,p_status:status}); if(r.error)return toast(r.error.message); toast('Paiement mis à jour.'); return adminTotalPage();
+  }
+  async function adminSetReportStatus(id,status){
+    const r=await sb.rpc('tafa_admin_set_report_status',{p_id:id,p_status:status}); if(r.error)return toast(r.error.message); toast('Signalement traité.'); return adminTotalPage();
+  }
+  async function openVerificationRequest(){
+    if(isAdminProfile(state.profile)) return toast("L’administrateur possède automatiquement son badge rouge.");
+    const q=(await sb.from('tafa_verification_requests').select('status,fee_mga,created_at').eq('user_id',state.user.id).order('created_at',{ascending:false}).limit(1).maybeSingle()).data;
+    openModal(`<div class="modal-box verification-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • VÉRIFICATION</span><h3>Demander le badge bleu</h3><p class="muted">La demande est payante et doit ensuite être approuvée par l’administration.</p>${q?`<div class="settings-info-card"><b>Dernière demande</b><small>Statut : ${esc(q.status||'pending')} · ${Number(q.fee_mga||25000).toLocaleString('fr-FR')} Ar</small></div>`:''}<label>Référence du paiement<input id="verificationPaymentRef" class="premium-input" maxlength="120" placeholder="Référence de paiement"></label><label>Motif<textarea id="verificationReason" class="premium-input" maxlength="500" placeholder="Motif de la demande…"></textarea></label><button class="primary big" data-action="submit-verification-request">Envoyer · 25 000 Ar</button></div>`);
+  }
+  async function submitVerificationRequest(){ const ref=$("verificationPaymentRef")?.value.trim()||"", reason=$("verificationReason")?.value.trim()||""; if(!ref)return toast("Ajoutez la référence du paiement."); const r=await sb.rpc('tafa_submit_verification_request',{p_payment_reference:ref,p_reason:reason}); if(r.error)return toast(r.error.message); closeModal(); toast('Demande de vérification envoyée.'); }
+  async function adminSetAppealStatus(id,status){ if(!confirm(status==='approved'?'Réactiver ce compte ?':'Refuser cette demande de réactivation ?'))return; const r=await sb.rpc('tafa_admin_set_appeal_status',{p_id:id,p_status:status}); if(r.error)return toast(r.error.message); toast(status==='approved'?'Compte réactivé.':'Demande refusée.'); return adminTotalPage(); }
+  async function adminSetVerificationStatus(id,status){ if(!confirm(status==='approved'?'Approuver cette vérification ?':'Refuser cette demande ?'))return; const r=await sb.rpc('tafa_admin_set_verification_status',{p_id:id,p_status:status}); if(r.error)return toast(r.error.message); toast(status==='approved'?'Badge bleu activé.':'Demande refusée.'); return adminTotalPage(); }
+  async function openRestrictionAppeal(){
+    const r=await sb.from('tafa_account_appeals').select('status,created_at').eq('user_id',state.user.id).order('created_at',{ascending:false}).limit(3);
+    const rows=(r.data||[]).map(x=>`<div class="settings-info-card"><b>Demande ${esc(x.status||'pending')}</b><small>${timeAgo(x.created_at)}</small></div>`).join('');
+    openModal(`<div class="modal-box restriction-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • COMPTE RESTREINT</span><h3>Demander la réactivation</h3><p class="muted">Votre compte a été restreint après utilisation d’un contenu protégé. Vous pouvez envoyer plusieurs demandes ; seule l’administration peut réactiver le compte.</p>${rows}<textarea id="appealReason" class="premium-input" maxlength="1000" placeholder="Expliquez votre demande…"></textarea><button class="primary big" data-action="submit-appeal">Envoyer une demande</button></div>`);
+  }
+  async function submitAppeal(){ const reason=$("appealReason")?.value.trim()||""; if(!reason)return toast("Expliquez votre demande."); const r=await sb.rpc('tafa_submit_account_appeal',{p_reason:reason}); if(r.error)return toast(r.error.message); closeModal(); toast('Demande de réactivation envoyée à l’administration.'); }
   async function render() {
     if (!state.user) return;
+    if(state.profile?.account_status==='restricted'){
+      $("content").innerHTML=`<section class="restriction-screen"><div class="restriction-icon">⛔</div><span class="eyebrow">TAFAß • SÉCURITÉ</span><h2>Compte restreint</h2><p>Ce compte a été restreint car un contenu protégé de l’administration a été utilisé. Les publications, changements de profil et autres actions sensibles sont suspendus.</p><button class="primary big" data-action="open-restriction-appeal">Demander la réactivation</button><button class="ghost-action" data-action="new-logout">Quitter le compte</button></section>`;
+      return;
+    }
     /* V28.3.2 MENU SAFETY: never block the Menu on the admin RPC.
        If Supabase is slow/unconfigured, the normal Menu must still open.
        Admin access is checked in the background and the card is added only
@@ -4530,8 +4616,17 @@ async function genericListPage(route) {
       return;
     }
     if (notificationId && action !== "mark-read") { await sb.from("notifications").update({is_read:true}).eq("id",notificationId).eq("user_id",state.user.id); updateBadges(); }
+    if (action === "verification") return openVerificationRequest();
+    if (action === "open-restriction-appeal") return openRestrictionAppeal();
+    if (action === "submit-appeal") return submitAppeal();
+    if (action === "submit-verification-request") return submitVerificationRequest();
+    if (action === "admin-verification-status") return adminSetVerificationStatus(id, actionEl.dataset.status);
+    if (action === "admin-appeal-status") return adminSetAppealStatus(id, actionEl.dataset.status);
     if (action === "admin-refresh") return adminTotalPage();
     if (action === "admin-toggle-user") return adminToggleUser(id,actionEl.dataset.status||'active');
+    if (action === "admin-withdrawal-status") return adminSetWithdrawalStatus(id,actionEl.dataset.status||'rejected');
+    if (action === "admin-payment-status") return adminSetPaymentStatus(id,actionEl.dataset.status||'failed');
+    if (action === "admin-report-status") return adminSetReportStatus(id,actionEl.dataset.status||'resolved');
     if (action === "search-category") { searchCategory = actionEl.dataset.category || "accounts"; return searchPage($("searchInput")?.value || "", searchCategory); }
     if (action === "select-mood") { document.querySelectorAll(".mood-choice").forEach(x=>x.classList.remove("selected")); actionEl.classList.add("selected"); return; }
     if (action === "select-payment-method") { document.querySelectorAll(".payment-method").forEach(x=>x.classList.remove("active")); actionEl.classList.add("active"); return; }
