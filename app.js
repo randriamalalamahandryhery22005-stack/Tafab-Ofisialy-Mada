@@ -319,6 +319,53 @@ document.documentElement.classList.add("app-boot");
 
   function pageModeActive(){ return !!state.activePage?.id; }
   function pageModeLabel(){ return pageModeActive() ? (state.activePage.name || "Page Tafaß") : "Mon compte"; }
+  function navBadge(route){ return `<span class="nav-badge hidden" data-badge-route="${esc(route)}" aria-label="Notifications ${esc(route)}"></span>`; }
+  function navButton(route, icon, label, mobile=false){
+    return `<button data-route="${esc(route)}"><span class="${mobile?'nav-svg':'nav-ico'}">${menuIcon(icon)}</span>${mobile?`<small>${esc(label)}</small>`:esc(label)}${navBadge(route)}</button>`;
+  }
+  function formatBadgeCount(value){ const n=Number(value||0); return n>10 ? "10+" : String(n); }
+  function setNavBadge(route, value){
+    const n=Number(value||0);
+    document.querySelectorAll(`[data-badge-route="${CSS.escape(String(route))}"]`).forEach(el=>{
+      el.textContent=formatBadgeCount(n);
+      el.classList.toggle("hidden", n<=0);
+    });
+  }
+  async function countUnreadNotificationsForRoutes(){
+    const result={home:0, friends:0, notifications:0, pages:0, groups:0, reels:0, events:0, tafab:0, studio:0, creator:0, ai:0, music:0, business:0, saved:0, settings:0, menu:0};
+    const r=await sb.from("notifications").select("type,entity_type").eq("user_id",state.user.id).eq("is_read",false).limit(1000);
+    if(r.error) return result;
+    for(const n of (r.data||[])){
+      const t=String(n.type||"").toLowerCase(), e=String(n.entity_type||"").toLowerCase();
+      result.notifications++;
+      if(/friend|follow|request/.test(t) || /friend|follow/.test(e)) result.friends++;
+      if(/page/.test(t) || /page/.test(e)) result.pages++;
+      if(/group/.test(t) || /group/.test(e)) result.groups++;
+      if(/reel/.test(t) || /reel/.test(e)) result.reels++;
+      if(/event/.test(t) || /event/.test(e)) result.events++;
+      if(/listing|order|market|tafab/.test(t) || /listing|order|market|tafab/.test(e)) result.tafab++;
+      if(/creator|gift|withdraw|subscription/.test(t) || /creator|gift|withdraw|subscription/.test(e)) result.creator++;
+      if(/ai/.test(t) || /ai/.test(e)) result.ai++;
+      if(/music/.test(t) || /music/.test(e)) result.music++;
+      if(/business|ad/.test(t) || /business|ad/.test(e)) result.business++;
+      if(/post|comment|reaction|share|story|follow/.test(t) || /post|comment|reaction|share|story/.test(e)) result.home++;
+      if(/studio|draft/.test(t) || /studio|draft/.test(e)) result.studio++;
+    }
+    return result;
+  }
+  async function updateBadges(){
+    if(!state.user) return;
+    try{
+      const [notif, msg, friends]=await Promise.all([
+        countUnreadNotificationsForRoutes(),
+        sb.from("messages").select("id",{count:"exact",head:true}).neq("sender_id",state.user.id).eq("is_read",false),
+        sb.from("friend_requests").select("id",{count:"exact",head:true}).eq("receiver_id",state.user.id).eq("status","pending")
+      ]);
+      const n=notif||{};
+      setNavBadge("home",n.home); setNavBadge("friends",friends.count||n.friends); setNavBadge("messages",msg.count||0); setNavBadge("notifications",n.notifications);
+      ["pages","groups","reels","events","tafab","studio","creator","ai","music","business","saved","settings","menu"].forEach(r=>setNavBadge(r,n[r]||0));
+    }catch(e){ console.warn("Tafaß badges:",e); }
+  }
   function syncIdentityUI(){
     document.body.classList.toggle("page-mode-active", pageModeActive());
     const p = pageModeActive() ? state.activePage : state.profile;
@@ -328,13 +375,13 @@ document.documentElement.classList.add("app-boot");
     const logo = document.querySelector(".logo-button strong"); if(logo) logo.textContent = pageModeActive() ? p.name : "Tafaß";
     const logoMark = document.querySelector(".logo-button .mini-logo"); if(logoMark) logoMark.textContent = pageModeActive() ? "▣" : "T";
     const left=document.querySelector(".left-sidebar"), bottom=document.querySelector(".bottom-nav");
-    if(left && pageModeActive()) left.innerHTML=`<button data-route="home" class="profile-shortcut page-nav-identity">${entityAvatarHTML(p,"page","avatar")}<span><b>${esc(p.name)}</b><small>Mode Page actif</small></span></button><button data-route="home"><span class="nav-ico">${menuIcon("home")}</span>Actualités</button><button data-route="messages"><span class="nav-ico">${menuIcon("messages")}</span>Messages</button><button data-route="search"><span class="nav-ico">${menuIcon("search")}</span>Rechercher</button><button data-route="notifications"><span class="nav-ico">${menuIcon("history")}</span>Alertes</button><button data-route="groups"><span class="nav-ico">${menuIcon("groups")}</span>Groupes</button><button data-route="pages"><span class="nav-ico">${menuIcon("pages")}</span>Pages</button><button data-route="menu"><span class="nav-ico">${menuIcon("settings")}</span>Menu</button>`;
-    if(bottom && pageModeActive()) bottom.innerHTML=`<button data-route="home"><span class="nav-svg">${menuIcon("home")}</span><small>Actualités</small></button><button data-route="messages"><span class="nav-svg">${menuIcon("messages")}</span><small>Messages</small></button><button data-route="notifications"><span class="nav-svg">${menuIcon("history")}</span><small>Alertes</small></button><button data-route="menu"><span class="nav-svg">${menuIcon("settings")}</span><small>Menu</small></button>`;
+    if(left && pageModeActive()) left.innerHTML=`<button data-route="home" class="profile-shortcut page-nav-identity">${entityAvatarHTML(p,"page","avatar")}<span><b>${esc(p.name)}</b><small>Mode Page actif</small></span></button>${navButton("home","home","Actualités")}${navButton("messages","messages","Messages")}${navButton("search","search","Rechercher")}${navButton("notifications","history","Alertes")}${navButton("groups","groups","Groupes")}${navButton("pages","pages","Pages")}${navButton("menu","settings","Menu")}`;
+    if(bottom && pageModeActive()) bottom.innerHTML=`${navButton("home","home","Actualités",true)}${navButton("messages","messages","Messages",true)}${navButton("notifications","history","Alertes",true)}${navButton("menu","settings","Menu",true)}`;
   }
   function restoreAccountNavigation(){
     const left=document.querySelector(".left-sidebar"), bottom=document.querySelector(".bottom-nav");
-    if(left) left.innerHTML=`<button data-route="profile" class="profile-shortcut"><span id="sideAvatar" class="avatar">T</span><span><b id="sideName">Mon profil</b><small>Voir mon profil</small></span></button><button data-route="home"><span class="nav-ico">${menuIcon("home")}</span>Actualités</button><button data-route="friends"><span class="nav-ico">${menuIcon("friends")}</span>Amis</button><button data-route="messages"><span class="nav-ico">${menuIcon("messages")}</span>Messages</button><button data-route="notifications"><span class="nav-ico">${menuIcon("notifications")}</span>Notifications</button><button data-route="pages"><span class="nav-ico">${menuIcon("pages")}</span>Pages</button><button data-route="groups"><span class="nav-ico">${menuIcon("groups")}</span>Groupes</button><button data-route="reels"><span class="nav-ico">${menuIcon("reels")}</span>Reels</button><button data-route="events"><span class="nav-ico">${menuIcon("history")}</span>Évènements</button><button data-route="studio"><span class="nav-ico">${menuIcon("videos")}</span>Studio</button><button data-route="tafab"><span class="nav-ico">${menuIcon("tafab")}</span>Tafaß</button><button data-route="saved"><span class="nav-ico">${menuIcon("saved")}</span>Enregistrements</button><button data-route="menu"><span class="nav-ico">${menuIcon("settings")}</span>Menu</button>`;
-    if(bottom) bottom.innerHTML=`<button data-route="home"><span class="nav-svg">${menuIcon("home")}</span><small>Actualités</small></button><button data-route="friends"><span class="nav-svg">${menuIcon("friends")}</span><small>Amis</small></button><button data-route="messages"><span class="nav-svg">${menuIcon("messages")}</span><small>Messages</small></button><button data-route="pages"><span class="nav-svg">${menuIcon("pages")}</span><small>Pages</small></button><button data-route="groups"><span class="nav-svg">${menuIcon("groups")}</span><small>Groupes</small></button><button data-route="tafab"><span class="nav-svg">${menuIcon("tafab")}</span><small>Tafaß</small></button>`;
+    if(left) left.innerHTML=`<button data-route="profile" class="profile-shortcut"><span id="sideAvatar" class="avatar">T</span><span><b id="sideName">Mon profil</b><small>Voir mon profil</small></span></button>${navButton("home","home","Actualités")}${navButton("friends","friends","Amis")}${navButton("messages","messages","Messages")}${navButton("notifications","notifications","Notifications")}${navButton("pages","pages","Pages")}${navButton("groups","groups","Groupes")}${navButton("reels","reels","Reels")}${navButton("events","history","Évènements")}${navButton("studio","videos","Studio")}${navButton("tafab","tafab","Tafaß")}${navButton("saved","saved","Enregistrements")}${navButton("menu","settings","Menu")}`;
+    if(bottom) bottom.innerHTML=`${navButton("home","home","Actualités",true)}${navButton("friends","friends","Amis",true)}${navButton("messages","messages","Messages",true)}${navButton("pages","pages","Pages",true)}${navButton("groups","groups","Groupes",true)}${navButton("tafab","tafab","Tafaß",true)}`;
     const nameEl=$("sideName"), avatarEl=$("sideAvatar"); if(nameEl) nameEl.textContent=nameOf(state.profile); if(avatarEl) avatarEl.outerHTML=avatarHTML(state.profile,"avatar").replace("<span ", '<span id="sideAvatar" ');
   }
   function pageContextBanner(){
@@ -1610,18 +1657,6 @@ function publisherBackgrounds(){
     toast("Alertes lues");
     await notificationsPage();
     updateBadges();
-  }
-
-  async function updateBadges() {
-    const n = await sb.from("notifications").select("id", { count:"exact", head:true })
-      .eq("user_id", state.user.id).eq("is_read", false);
-    const m = await sb.from("messages").select("id", { count:"exact", head:true }).neq("sender_id", state.user.id).eq("is_read", false);
-    const mb = $("msgBadge"); if (mb) { mb.textContent=String(m.count||0); mb.classList.toggle("hidden", !(m.count||0)); }
-    const el = $("notifBadge");
-    if (el) {
-      el.textContent = String(n.count || 0);
-      el.classList.toggle("hidden", !n.count);
-    }
   }
 
   function isUserOnline(userId){
@@ -3475,8 +3510,9 @@ async function genericListPage(route) {
       post_reactions: async () => { await loadPosts(); if (["home","profile"].includes(state.route)) render(); },
       post_shares: async () => { await loadPosts(); if (["home","profile"].includes(state.route)) render(); },
       notifications: payload => {
-        updateBadges();
         const rec=payload?.new || payload?.record || payload;
+        if(rec?.user_id && rec.user_id!==state.user.id) return;
+        updateBadges();
         if(rec?.user_id===state.user.id && rec?.actor_id!==state.user.id && rec?.is_read===false && state.route!=="notifications") {
           const title=rec.title || "Nouvelle notification";
           toast(title);
@@ -3564,7 +3600,9 @@ async function genericListPage(route) {
     };
 
     Object.keys(refresh).forEach(table => {
-      channel.on("postgres_changes", { event:"*", schema:"public", table }, payload => {
+      const change = { event:"*", schema:"public", table };
+      if(table === "notifications") change.filter = `user_id=eq.${state.user.id}`;
+      channel.on("postgres_changes", change, payload => {
         try { refresh[table](payload); } catch (e) { console.warn("Tafaß realtime refresh error:", table, e); }
       });
     });
@@ -3574,6 +3612,7 @@ async function genericListPage(route) {
       realtimeRuntime.lastStatus=status;
       if (status === "SUBSCRIBED") {
         realtimeRuntime.retryCount=0; realtimeRuntime.reconnecting=false; networkBanner("");
+        updateBadges();
         console.info("Tafaß Realtime: connecté");
       }
       if (["CHANNEL_ERROR","TIMED_OUT","CLOSED"].includes(status)) {
