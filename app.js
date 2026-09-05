@@ -10,7 +10,7 @@ document.documentElement.classList.add("app-boot");
 
   const $ = id => document.getElementById(id);
   const esc = s => String(s ?? "").replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]));
-  const routes = ["home","friends","search","messages","notifications","profile","reels","pages","groups","saved","menu","tafab","events","studio","settings","creator","ai","music","business"];
+  const routes = ["home","friends","search","messages","notifications","profile","reels","pages","groups","saved","menu","tafab","events","studio","settings","creator","ai","music","business","admin"];
 
   // V19 production upload guard: client-side validation is UX protection only;
   // Supabase Storage policies/server-side validation must remain the authority.
@@ -2558,13 +2558,14 @@ async function genericListPage(route) {
       ["search","search","Rechercher","Trouver un compte ou contenu"],
       ["settings","settings","Para & Conf","Compte et confidentialité"]
     ];
+    const adminCard = state.__isAdmin ? [["admin","shield","Admin Total","Centre de contrôle de Tafaß"]] : [];
     const actions = [
       ["history","history","Historique d'activité","Vos actions enregistrées", "activity"],
       ["payment","payment","Paiement","Vos paiements et transactions", "payment"],
       ["help","help","Aide","Assistance et signalement", "help"]
     ];
     const card = x => `<button type="button" class="menu-card premium-menu-card" ${x[4] ? `data-action="menu-service" data-name="${esc(x[2])}" data-service="${esc(x[4])}"` : `data-action="menu-route" data-route-target="${esc(x[0])}"`} aria-label="${esc(x[2])}"><span class="menu-icon">${menuIcon(x[1])}</span><span class="menu-card-copy"><b>${esc(x[2])}</b><small title="${esc(x[3])}">${esc(x[3])}</small></span><span class="menu-arrow">›</span></button>`;
-    simplePage("Menu", `<div class="menu-profile premium-menu-profile" data-route="profile"><button class="profile-link menu-profile-avatar" data-action="view-profile" data-id="${esc(p.id || "")}">${avatarHTML(p)}</button><div class="grow"><b>${esc(nameOf(p))}</b><small title="${esc(p.email || state.user?.email || "")}">${esc(p.email || state.user?.email || "")}</small></div><button class="small-action" data-route="profile">Profil</button></div><div class="menu-section-title">Raccourcis</div><div class="menu-grid premium-menu-grid">${items.map(card).join("")}</div><div class="menu-section-title">Services</div><div class="menu-grid premium-menu-grid">${actions.map(card).join("")}</div><div class="menu-section-title">Compte</div><div class="menu-grid premium-menu-grid"><button class="menu-card premium-menu-card danger-card" data-action="new-logout"><span class="menu-icon">${menuIcon("logout")}</span><span class="menu-card-copy"><b>Quitter le compte</b><small>Fermer la session sur cet appareil</small></span><span class="menu-arrow">›</span></button></div>`);
+    simplePage("Menu", `<div class="menu-profile premium-menu-profile" data-route="profile"><button class="profile-link menu-profile-avatar" data-action="view-profile" data-id="${esc(p.id || "")}">${avatarHTML(p)}</button><div class="grow"><b>${esc(nameOf(p))}</b><small title="${esc(p.email || state.user?.email || "")}">${esc(p.email || state.user?.email || "")}</small></div><button class="small-action" data-route="profile">Profil</button></div><div class="menu-section-title">Raccourcis</div><div class="menu-grid premium-menu-grid">${items.map(card).join("")}</div><div class="menu-section-title">Services</div><div class="menu-grid premium-menu-grid">${adminCard.map(card).join("")}${actions.map(card).join("")}</div><div class="menu-section-title">Compte</div><div class="menu-grid premium-menu-grid"><button class="menu-card premium-menu-card danger-card" data-action="new-logout"><span class="menu-icon">${menuIcon("logout")}</span><span class="menu-card-copy"><b>Quitter le compte</b><small>Fermer la session sur cet appareil</small></span><span class="menu-arrow">›</span></button></div>`);
   }
 
   async function servicePage(service) {
@@ -3416,8 +3417,26 @@ async function genericListPage(route) {
   async function toggleAdCampaign(id,status){const next=status==='active'?'paused':'active';const q=await sb.from('tafab_ad_campaigns').select('*').eq('id',id).eq('owner_id',state.user.id).maybeSingle();if(q.error||!q.data)return toast('Campagne introuvable.');if(next==='active' && !Number(q.data.daily_budget_mga||0) && !Number(q.data.total_budget_mga||0))return toast('Ajoutez un budget avant d’activer la campagne.');const r=await sb.from('tafab_ad_campaigns').update({status:next,updated_at:new Date().toISOString()}).eq('id',id).eq('owner_id',state.user.id);if(r.error)return toast(r.error.message);const adPayload={owner_id:state.user.id,campaign_id:id,title:q.data.creative_title||q.data.name,description:q.data.creative_description||'',target_url:q.data.target_url||'',image_url:q.data.image_url||null,status:next==='active'?'active':'paused',starts_at:q.data.starts_at||new Date().toISOString(),ends_at:q.data.ends_at||null};const ar=await sb.from('tafab_ads').upsert(adPayload,{onConflict:'campaign_id'});if(ar.error)console.warn('Ad creative sync:',ar.error.message);toast(next==='active'?'Campagne activée.':'Campagne mise en pause.');return businessAdsPage();}
   async function deleteAdCampaign(id){if(!confirm('Supprimer cette campagne ?'))return;const r=await sb.from('tafab_ad_campaigns').delete().eq('id',id).eq('owner_id',state.user.id);if(r.error)return toast(r.error.message);toast('Campagne supprimée.');return businessAdsPage();}
 
+  async function adminIsAllowed(){
+    if(!state.user || !supabaseReady()) return false;
+    try{const r=await sb.rpc('tafa_is_admin',{p_user_id:state.user.id});return !r.error&&r.data===true;}catch(_){return false;}
+  }
+  async function adminTotalPage(){
+    if(!(await adminIsAllowed())){toast('Accès réservé à l’administration.');return navigate('home',{replaceStack:true});}
+    const [sr,ur]=await Promise.all([sb.rpc('tafa_admin_total_stats'),sb.rpc('tafa_admin_list_users',{p_limit:80,p_offset:0})]);
+    if(sr.error) throw sr.error; const st=sr.data||{}; const users=ur.error?[]:(ur.data||[]);
+    const cards=[['👥','Comptes',st.total_accounts||0],['🟢','Actifs',st.active_accounts||0],['⛔','Bloqués',st.blocked_accounts||0],['📝','Publications',st.total_posts||0],['💬','Commentaires',st.total_comments||0],['🔔','Notifications',st.total_notifications||0]];
+    const rows=users.map(u=>`<div class="admin-user-row"><div class="admin-user-main">${u.avatar_url?`<img src="${esc(u.avatar_url)}">`:'<div class="admin-user-avatar">👤</div>'}<div><b>${esc(([u.first_name,u.last_name].filter(Boolean).join(' ')||u.username||u.email||'Compte'))}</b><small>${esc(u.email||'')} · @${esc(u.username||'')}</small></div></div><span class="admin-status ${u.account_status==='blocked'?'blocked':''}">${u.account_status==='blocked'?'Bloqué':'Actif'}</span><button class="ghost-action" data-action="admin-toggle-user" data-id="${esc(u.id)}" data-status="${esc(u.account_status||'active')}">${u.account_status==='blocked'?'Réactiver':'Bloquer'}</button></div>`).join('')||'<div class="empty">Aucun compte.</div>';
+    return simplePage('Admin Total',`<section class="admin-total-page"><div class="admin-total-hero"><span class="eyebrow">TAFAß · ADMINISTRATION TOTALE</span><h2>Centre de contrôle</h2><p>Vue globale de la plateforme et gestion sécurisée des comptes.</p></div><div class="admin-total-grid">${cards.map(c=>`<div class="admin-stat"><span>${c[0]}</span><b>${Number(c[2]).toLocaleString('fr-FR')}</b><small>${esc(c[1])}</small></div>`).join('')}</div><div class="admin-total-section"><div class="admin-section-head"><div><h3>Comptes utilisateurs</h3><small>Gestion des comptes avec contrôle côté Supabase.</small></div><button class="ghost-action" data-action="admin-refresh">Actualiser</button></div><div class="admin-users">${rows}</div></div></section>`);
+  }
+  async function adminToggleUser(id,status){
+    const next=status==='blocked'?'active':'blocked'; if(!confirm(next==='blocked'?'Bloquer ce compte ?':'Réactiver ce compte ?'))return;
+    const r=await sb.rpc('tafa_admin_set_account_status',{p_user_id:id,p_status:next}); if(r.error)return toast(r.error.message); toast(next==='blocked'?'Compte bloqué.':'Compte réactivé.'); return adminTotalPage();
+  }
   async function render() {
     if (!state.user) return;
+    if(state.route==='menu'||state.route==='admin'){state.__isAdmin=await adminIsAllowed();}
+
     const token = ++state.renderToken;
     const route = routes.includes(state.route) ? state.route : "home";
     state.route = route;
@@ -3438,6 +3457,7 @@ async function genericListPage(route) {
       else if (route === "ai") await aiWorkspacePage();
       else if (route === "music") await musicHubPage();
       else if (route === "business") await businessAdsPage();
+      else if (route === "admin") await adminTotalPage();
       else if (route === "menu") menuPage();
       else if (route === "tafab") await tafabPage();
       else if (route === "settings") await settingsPage();
@@ -4494,6 +4514,8 @@ async function genericListPage(route) {
       return;
     }
     if (notificationId && action !== "mark-read") { await sb.from("notifications").update({is_read:true}).eq("id",notificationId).eq("user_id",state.user.id); updateBadges(); }
+    if (action === "admin-refresh") return adminTotalPage();
+    if (action === "admin-toggle-user") return adminToggleUser(id,actionEl.dataset.status||'active');
     if (action === "search-category") { searchCategory = actionEl.dataset.category || "accounts"; return searchPage($("searchInput")?.value || "", searchCategory); }
     if (action === "select-mood") { document.querySelectorAll(".mood-choice").forEach(x=>x.classList.remove("selected")); actionEl.classList.add("selected"); return; }
     if (action === "select-payment-method") { document.querySelectorAll(".payment-method").forEach(x=>x.classList.remove("active")); actionEl.classList.add("active"); return; }
