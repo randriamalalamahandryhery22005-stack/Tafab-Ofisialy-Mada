@@ -2572,15 +2572,22 @@ async function genericListPage(route) {
       ["search","search","Rechercher","Trouver un compte ou contenu"],
       ["settings","settings","Para & Conf","Compte et confidentialité"]
     ];
-    const adminCard = state.__isAdmin ? [["admin","shield","Admin Total","Centre de contrôle de Tafaß"]] : [];
+    const adminCard = state.__isAdmin ? [
+      ["admin","shield","Admin Total","Tableau de bord complet de l’administration"],
+      ["admin","users","Comptes","Gérer les comptes, restrictions et réactivations"],
+      ["admin","shield","Vérifications","Demandes de badge bleu et décisions"],
+      ["admin","payment","Monétisation","Coins, revenus, paiements et retraits"],
+      ["admin","flag","Signalements","Contrôler les signalements et les actions de modération"],
+      ["admin","lock","Sécurité","Identité Admin, médias protégés et comptes restreints"]
+    ] : [];
     const verificationCard = !state.__isAdmin ? [["verification","shield","Vérification","Demander le badge bleu officiel"]] : [];
     const actions = [
       ["history","history","Historique d'activité","Vos actions enregistrées", "activity"],
       ["payment","payment","Paiement","Vos paiements et transactions", "payment"],
       ["help","help","Aide","Assistance et signalement", "help"]
     ];
-    const card = x => `<button type="button" class="menu-card premium-menu-card" ${x[4] ? `data-action="menu-service" data-name="${esc(x[2])}" data-service="${esc(x[4])}"` : `data-action="menu-route" data-route-target="${esc(x[0])}"`} aria-label="${esc(x[2])}"><span class="menu-icon">${menuIcon(x[1])}</span><span class="menu-card-copy"><b>${esc(x[2])}</b><small title="${esc(x[3])}">${esc(x[3])}</small></span>${x[0]==="admin"?`<span class="admin-menu-badge" data-admin-badge>•</span>`:""}<span class="menu-arrow">›</span></button>`;
-    simplePage("Menu", `<div class="menu-profile premium-menu-profile" data-route="profile"><button class="profile-link menu-profile-avatar" data-action="view-profile" data-id="${esc(p.id || "")}">${avatarHTML(p)}</button><div class="grow"><b>${esc(nameOf(p))}</b><small title="${esc(p.email || state.user?.email || "")}">${esc(p.email || state.user?.email || "")}</small></div><button class="small-action" data-route="profile">Profil</button></div><div class="menu-section-title">Raccourcis</div><div class="menu-grid premium-menu-grid">${items.map(card).join("")}</div><div class="menu-section-title">Services</div><div class="menu-grid premium-menu-grid">${verificationCard.map(card).join("")}${adminCard.map(card).join("")}${actions.map(card).join("")}</div><div class="menu-section-title">Compte</div><div class="menu-grid premium-menu-grid"><button class="menu-card premium-menu-card danger-card" data-action="new-logout"><span class="menu-icon">${menuIcon("logout")}</span><span class="menu-card-copy"><b>Quitter le compte</b><small>Fermer la session sur cet appareil</small></span><span class="menu-arrow">›</span></button></div>`);
+    const card = x => `<button type="button" class="menu-card premium-menu-card ${x[0]==="admin" ? "admin-menu-card" : ""}" ${x[4] ? `data-action="menu-service" data-name="${esc(x[2])}" data-service="${esc(x[4])}"` : `data-action="menu-route" data-route-target="${esc(x[0])}"`} aria-label="${esc(x[2])}"><span class="menu-icon">${menuIcon(x[1])}</span><span class="menu-card-copy"><b>${esc(x[2])}</b><small title="${esc(x[3])}">${esc(x[3])}</small></span>${x[0]==="admin"?`<span class="admin-menu-badge" data-admin-badge aria-label="Alertes administration"></span>`:""}<span class="menu-arrow">›</span></button>`;
+    simplePage("Menu", `<div class="menu-profile premium-menu-profile" data-route="profile"><button class="profile-link menu-profile-avatar" data-action="view-profile" data-id="${esc(p.id || "")}">${avatarHTML(p)}</button><div class="grow"><b>${esc(nameOf(p))}</b><small title="${esc(p.email || state.user?.email || "")}">${esc(p.email || state.user?.email || "")}</small></div><button class="small-action" data-route="profile">Profil</button></div><div class="menu-section-title">Raccourcis</div><div class="menu-grid premium-menu-grid">${items.map(card).join("")}</div>${state.__isAdmin ? `<div class="menu-section-title admin-menu-section-title">Administration</div><div class="menu-grid premium-menu-grid admin-menu-grid">${adminCard.map(card).join("")}</div>` : `<div class="menu-section-title">Services</div><div class="menu-grid premium-menu-grid">${verificationCard.map(card).join("")}${actions.map(card).join("")}</div>`}<div class="menu-section-title">Compte</div><div class="menu-grid premium-menu-grid"><button class="menu-card premium-menu-card danger-card" data-action="new-logout"><span class="menu-icon">${menuIcon("logout")}</span><span class="menu-card-copy"><b>Quitter le compte</b><small>Fermer la session sur cet appareil</small></span><span class="menu-arrow">›</span></button></div>`);
   }
 
   async function servicePage(service) {
