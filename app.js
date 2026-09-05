@@ -11,6 +11,25 @@ document.documentElement.classList.add("app-boot");
   const $ = id => document.getElementById(id);
   const esc = s => String(s ?? "").replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]));
   const routes = ["home","friends","search","messages","notifications","profile","reels","pages","groups","saved","menu","tafab","settings"];
+
+  // V19 production upload guard: client-side validation is UX protection only;
+  // Supabase Storage policies/server-side validation must remain the authority.
+  const UPLOAD_LIMITS = Object.freeze({ imageBytes: 20 * 1024 * 1024, videoBytes: 150 * 1024 * 1024 });
+  function validateMediaFile(file) {
+    if (!file) return { ok: true };
+    const type = String(file.type || "").toLowerCase();
+    const isImage = type.startsWith("image/");
+    const isVideo = type.startsWith("video/");
+    if (!isImage && !isVideo) return { ok: false, message: "Format non pris en charge. Utilisez une image ou une vidéo." };
+    const max = isImage ? UPLOAD_LIMITS.imageBytes : UPLOAD_LIMITS.videoBytes;
+    if (Number(file.size || 0) > max) return { ok: false, message: `Fichier trop volumineux. Limite : ${isImage ? "20 Mo" : "150 Mo"}.` };
+    return { ok: true };
+  }
+  async function uploadPostMedia(path, file, options = {}) {
+    const check = validateMediaFile(file);
+    if (!check.ok) return { data: null, error: new Error(check.message) };
+    return sb.storage.from("posts").upload(path, file, { upsert: false, ...options, contentType: options.contentType || file.type || undefined });
+  }
   const state = {
     user: null, profile: null, route: "home", navStack: ["home"], backOverride: null, posts: [], friends: [], stories: [],
     channel: null, theme: "dark", entering: false, loggingOut: false, composerOpen: false, composerBackground: "plain", composerLocation: "",
@@ -379,7 +398,7 @@ async function createStory() {
     if(file){
       const ext=(file.name.split(".").pop()||"bin").toLowerCase();
       const path=`${state.user.id}/story-${crypto.randomUUID()}.${ext}`;
-      const up=await sb.storage.from("posts").upload(path,file,{upsert:false,contentType:file.type||undefined});
+      const up=await uploadPostMedia(path,file,{upsert:false,contentType:file.type||undefined});
       if(up.error) return toast("Upload : "+up.error.message);
       media_url=sb.storage.from("posts").getPublicUrl(path).data.publicUrl;
       media_type=file.type.startsWith("video/")?"video":"image";
@@ -878,7 +897,7 @@ function publisherBackgrounds(){
       if(file){
         const ext=(file.name.split(".").pop()||"bin").toLowerCase();
         const path=`${state.user.id}/${crypto.randomUUID()}.${ext}`;
-        const up=await sb.storage.from("posts").upload(path,file,{upsert:false,contentType:file.type||undefined});
+        const up=await uploadPostMedia(path,file,{upsert:false,contentType:file.type||undefined});
         if(up.error)throw new Error("Upload : "+up.error.message);
         media_url=sb.storage.from("posts").getPublicUrl(path).data.publicUrl;
         media_type=file.type.startsWith("video/")?"video":"image";
@@ -1057,7 +1076,7 @@ function publisherBackgrounds(){
       let media_url = null, media_type = null;
       if (file) {
         const ext = file.name.split(".").pop().toLowerCase(), path = `${state.user.id}/${crypto.randomUUID()}.${ext}`;
-        const up = await sb.storage.from("posts").upload(path, file, { upsert: false });
+        const up = await uploadPostMedia(path, file, { upsert: false });
         if (up.error) throw new Error("Upload : " + up.error.message);
         media_url = sb.storage.from("posts").getPublicUrl(path).data.publicUrl;
         media_type = file.type.startsWith("video/") ? "reel" : "image";
@@ -1828,7 +1847,7 @@ function publisherBackgrounds(){
         if (file.size > 8*1024*1024) throw new Error('Image trop volumineuse (maximum 8 Mo).');
         const ext=(file.name.split('.').pop()||'jpg').toLowerCase();
         const path=`${state.user.id}/${key.replace('_url','')}-${crypto.randomUUID()}.${ext}`;
-        const up=await sb.storage.from('posts').upload(path,file,{upsert:false,contentType:file.type||'image/jpeg'});
+        const up=await uploadPostMedia(path,file,{upsert:false,contentType:file.type||'image/jpeg'});
         if(up.error) throw new Error('Upload : '+up.error.message);
         patch[key]=sb.storage.from('posts').getPublicUrl(path).data.publicUrl;
       }
@@ -3549,7 +3568,7 @@ async function genericListPage(route) {
           if(Date.now()<next.getTime()){setLoading(btn,false,'Enregistrer');return toast(`Le nom de la Page ne peut être modifié qu’une fois tous les 15 jours. Prochain changement : ${next.toLocaleDateString('fr-FR')}.`);}
         }
       }
-      for(const [input,key] of [['editPageLogo','logo_url'],['editPageCover','cover_url']]){const file=$(input)?.files?.[0]; if(!file) continue; const ext=(file.name.split('.').pop()||'jpg').toLowerCase(); const path=`${state.user.id}/page-${id}-${key}-${crypto.randomUUID()}.${ext}`; const up=await sb.storage.from('posts').upload(path,file,{upsert:false,contentType:file.type||'image/jpeg'}); if(up.error){setLoading(btn,false,'Enregistrer');return toast('Upload impossible : '+up.error.message);} patch[key]=sb.storage.from('posts').getPublicUrl(path).data.publicUrl;}
+      for(const [input,key] of [['editPageLogo','logo_url'],['editPageCover','cover_url']]){const file=$(input)?.files?.[0]; if(!file) continue; const ext=(file.name.split('.').pop()||'jpg').toLowerCase(); const path=`${state.user.id}/page-${id}-${key}-${crypto.randomUUID()}.${ext}`; const up=await uploadPostMedia(path,file,{upsert:false,contentType:file.type||'image/jpeg'}); if(up.error){setLoading(btn,false,'Enregistrer');return toast('Upload impossible : '+up.error.message);} patch[key]=sb.storage.from('posts').getPublicUrl(path).data.publicUrl;}
       const r=await sb.from('pages').update(patch).eq('id',id); if(r.error){setLoading(btn,false,'Enregistrer');return toast(r.error.message);}
       if(patch.name!==current.name){await logActivity('page_name_changed',`Ancien nom : ${current.name} → Nouveau nom : ${patch.name}`,'page',id);}
       setLoading(btn,false,'Enregistrer'); closeModal(); toast('Page mise à jour.');
@@ -3627,7 +3646,7 @@ async function genericListPage(route) {
     const file=$("editGroupCover")?.files?.[0] || $("editGroupAvatar")?.files?.[0];
     if(file){
       const ext=(file.name.split('.').pop()||'jpg').toLowerCase(); const path=`${state.user.id}/group-${id}-cover-${crypto.randomUUID()}.${ext}`;
-      const up=await sb.storage.from('posts').upload(path,file,{upsert:false,contentType:file.type||'image/jpeg'});
+      const up=await uploadPostMedia(path,file,{upsert:false,contentType:file.type||'image/jpeg'});
       if(up.error){setLoading(btn,false,'Enregistrer');return toast('Upload impossible : '+up.error.message);}
       patch.cover_url=sb.storage.from('posts').getPublicUrl(path).data.publicUrl;
     }
@@ -4038,7 +4057,7 @@ async function genericListPage(route) {
       if(!content && !file)return toast('Ajoutez un texte ou un média.');
       const btn=actionEl; setLoading(btn,true,'Publier');
       let media_url=null, media_type=null;
-      if(file){ const ext=(file.name.split('.').pop()||'bin').toLowerCase(); const path=`${state.user.id}/page-post-${id}-${crypto.randomUUID()}.${ext}`; const up=await sb.storage.from('posts').upload(path,file,{upsert:false,contentType:file.type||undefined}); if(up.error){setLoading(btn,false,'Publier');return toast(up.error.message);} media_url=sb.storage.from('posts').getPublicUrl(path).data.publicUrl; media_type=file.type||''; }
+      if(file){ const ext=(file.name.split('.').pop()||'bin').toLowerCase(); const path=`${state.user.id}/page-post-${id}-${crypto.randomUUID()}.${ext}`; const up=await uploadPostMedia(path,file,{upsert:false,contentType:file.type||undefined}); if(up.error){setLoading(btn,false,'Publier');return toast(up.error.message);} media_url=sb.storage.from('posts').getPublicUrl(path).data.publicUrl; media_type=file.type||''; }
       const r=await sb.from('page_posts').insert({page_id:id,user_id:state.user.id,content:content||'',media_url,media_type,visibility:'public'});
       setLoading(btn,false,'Publier'); if(r.error)return toast(r.error.message); toast('Publication publiée.'); return openPageDetail(id);
     }
@@ -4244,7 +4263,7 @@ async function genericListPage(route) {
       await sb.from("group_members").insert({group_id:g.id,user_id:state.user.id,role:"admin"});
       const patch={};
       const coverFile=$("newGroupCover")?.files?.[0] || $("newGroupAvatar")?.files?.[0];
-      if(coverFile){ const ext=(coverFile.name.split('.').pop()||'jpg').toLowerCase(); const path=`${state.user.id}/group-${g.id}-cover-${crypto.randomUUID()}.${ext}`; const up=await sb.storage.from('posts').upload(path,coverFile,{upsert:false,contentType:coverFile.type||'image/jpeg'}); if(up.error){ toast('Groupe créé. Image non envoyée : '+up.error.message); } else patch.cover_url=sb.storage.from('posts').getPublicUrl(path).data.publicUrl; }
+      if(coverFile){ const ext=(coverFile.name.split('.').pop()||'jpg').toLowerCase(); const path=`${state.user.id}/group-${g.id}-cover-${crypto.randomUUID()}.${ext}`; const up=await uploadPostMedia(path,coverFile,{upsert:false,contentType:coverFile.type||'image/jpeg'}); if(up.error){ toast('Groupe créé. Image non envoyée : '+up.error.message); } else patch.cover_url=sb.storage.from('posts').getPublicUrl(path).data.publicUrl; }
       if(Object.keys(patch).length) await sb.from('groups').update(patch).eq('id',g.id).eq('owner_id',state.user.id);
       closeModal(); toast("Groupe créé"); return genericListPage("groups");
     }
@@ -4266,7 +4285,7 @@ async function genericListPage(route) {
       const pg=r.data;
       await sb.from("page_members").upsert({page_id:pg.id,user_id:state.user.id,role:"owner"},{onConflict:"page_id,user_id"});
       const patch={};
-      for(const [input,key] of [["newPageAvatar","logo_url"],["newPageCover","cover_url"]]){ const file=$(input)?.files?.[0]; if(!file) continue; const ext=(file.name.split('.').pop()||'jpg').toLowerCase(); const path=`${state.user.id}/page-${pg.id}-${key}-${crypto.randomUUID()}.${ext}`; const up=await sb.storage.from('posts').upload(path,file,{upsert:false,contentType:file.type||'image/jpeg'}); if(up.error){ toast('Page créée. Image non envoyée : '+up.error.message); break; } patch[key]=sb.storage.from('posts').getPublicUrl(path).data.publicUrl; }
+      for(const [input,key] of [["newPageAvatar","logo_url"],["newPageCover","cover_url"]]){ const file=$(input)?.files?.[0]; if(!file) continue; const ext=(file.name.split('.').pop()||'jpg').toLowerCase(); const path=`${state.user.id}/page-${pg.id}-${key}-${crypto.randomUUID()}.${ext}`; const up=await uploadPostMedia(path,file,{upsert:false,contentType:file.type||'image/jpeg'}); if(up.error){ toast('Page créée. Image non envoyée : '+up.error.message); break; } patch[key]=sb.storage.from('posts').getPublicUrl(path).data.publicUrl; }
       if(Object.keys(patch).length) await sb.from('pages').update(patch).eq('id',pg.id).eq('owner_id',state.user.id);
       closeModal(); toast("Page créée"); return genericListPage("pages");
     }
@@ -4319,7 +4338,7 @@ async function genericListPage(route) {
     if (action === "group-publish") {
       const content=$('groupPostText')?.value.trim(); const file=$("groupPostMedia")?.files?.[0]; if(!content && !file)return toast("Ajoutez un texte ou un média.");
       let media_url=null, media_type=null;
-      if(file){ const ext=(file.name.split('.').pop()||'bin').toLowerCase(); const path=`${state.user.id}/group-post-${id}-${crypto.randomUUID()}.${ext}`; const up=await sb.storage.from('posts').upload(path,file,{upsert:false,contentType:file.type||undefined}); if(up.error)return toast(up.error.message); media_url=sb.storage.from('posts').getPublicUrl(path).data.publicUrl; media_type=file.type||''; }
+      if(file){ const ext=(file.name.split('.').pop()||'bin').toLowerCase(); const path=`${state.user.id}/group-post-${id}-${crypto.randomUUID()}.${ext}`; const up=await uploadPostMedia(path,file,{upsert:false,contentType:file.type||undefined}); if(up.error)return toast(up.error.message); media_url=sb.storage.from('posts').getPublicUrl(path).data.publicUrl; media_type=file.type||''; }
       const r=await sb.from("group_posts").insert({group_id:id,user_id:state.user.id,content:content||"",media_url,media_type}).select().single(); if(r.error)return toast(r.error.message); toast("Publication publiée dans le groupe");
       return document.querySelector(`[data-action="group-open"][data-id="${id}"]`)?.click() || closeModal();
     }
