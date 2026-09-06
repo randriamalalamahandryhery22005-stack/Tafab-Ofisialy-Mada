@@ -4708,3 +4708,24 @@ body.light body.light
   object-fit: cover !important;
   border-radius: 50% !important;
 }
+
+/* =========================================================
+   Tafaß — Feed / vues / publication status / instant counters
+   ========================================================= */
+.post-counts-inline{display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap}
+.post-view-count{font-weight:700}
+.reaction-chip[data-reaction-chip]{display:inline-flex;align-items:center;gap:4px}
+.optimistic-comment{animation:tafassCommentIn .18s ease-out}
+@keyframes tafassCommentIn{from{opacity:.35;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+.story-viewers-panel{margin-top:18px;border-top:1px solid rgba(255,255,255,.08);padding-top:14px}
+.story-viewers-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.story-viewers-head span{font-size:.82rem;opacity:.7}
+.story-viewers-list{display:flex;flex-direction:column;gap:8px;max-height:260px;overflow:auto}
+.story-viewer-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:14px;background:rgba(255,255,255,.035)}
+.story-viewer-row>div{display:flex;flex-direction:column;min-width:0}
+.story-viewer-row small{opacity:.65;margin-top:2px}
+
+/* Make the status of media publication obvious while it is being sent. */
+button[data-action="publish-post-news"].loading,
+button[data-action="create-story"].loading{opacity:.72;pointer-events:none}

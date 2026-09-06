@@ -268,8 +268,32 @@ document.documentElement.classList.add("app-boot");
   async function loadPosts() {
     if (!state.user) return;
     await getBlockedIds();
-    const { data, error } = await sb.from("posts").select("*").order("created_at", { ascending: false }).limit(60);
-    state.posts = error ? [] : filterBlocked(data || [],"user_id");
+    const { data, error } = await sb.from("posts").select("*").order("created_at", { ascending: false }).limit(100);
+    if (error) { state.posts = []; return; }
+    let rows = filterBlocked(data || [], "user_id");
+
+    // Fil Actualités : vos publications + celles de vos amis + les publications
+    // publiques qui dépassent 100 réactions. Cela permet à une publication
+    // vraiment populaire d'être découverte même sans relation d'amitié.
+    const fr = await sb.from("friendships").select("user_id,friend_id")
+      .or(`user_id.eq.${state.user.id},friend_id.eq.${state.user.id}`).limit(500);
+    const friendIds = new Set((fr.data || []).map(x =>
+      String(x.user_id) === String(state.user.id) ? String(x.friend_id) : String(x.user_id)
+    ));
+    friendIds.add(String(state.user.id));
+
+    const ids = rows.map(x => x.id).filter(Boolean);
+    const reactionTotals = new Map();
+    if (ids.length) {
+      const rr = await sb.from("post_reactions").select("post_id").in("post_id", ids);
+      for (const r of (rr.data || [])) reactionTotals.set(String(r.post_id), (reactionTotals.get(String(r.post_id)) || 0) + 1);
+    }
+    rows = rows.filter(post => {
+      const owner = String(post.user_id || "");
+      const publicPost = String(post.visibility || "public").toLowerCase() === "public";
+      return friendIds.has(owner) || (publicPost && (reactionTotals.get(String(post.id)) || 0) > 100);
+    });
+    state.posts = rows;
     await hydratePosts();
   }
 
@@ -497,23 +521,34 @@ document.documentElement.classList.add("app-boot");
 async function createStory() {
     const file=$("storyFile")?.files?.[0];
     const text=$("storyText")?.value.trim()||"";
+    const btn=document.querySelector('[data-action="create-story"]');
     if(!file && !text) return toast("Ajoutez une photo, une vidéo ou un texte à votre story.");
-    let media_url=null, media_type="text";
-    if(file){
-      const ext=(file.name.split(".").pop()||"bin").toLowerCase();
-      const path=`${state.user.id}/story-${crypto.randomUUID()}.${ext}`;
-      const up=await uploadPostMedia(path,file,{upsert:false,contentType:file.type||undefined});
-      if(up.error) return toast("Upload : "+up.error.message);
-      media_url=sb.storage.from("posts").getPublicUrl(path).data.publicUrl;
-      media_type=file.type.startsWith("video/")?"video":"image";
+    setLoading(btn,true,"Publier la story");
+    toast("Publication de la story en cours…");
+    try {
+      let media_url=null, media_type="text";
+      if(file){
+        const ext=(file.name.split(".").pop()||"bin").toLowerCase();
+        const path=`${state.user.id}/story-${crypto.randomUUID()}.${ext}`;
+        const up=await uploadPostMedia(path,file,{upsert:false,contentType:file.type||undefined});
+        if(up.error) throw new Error("Upload : "+up.error.message);
+        media_url=sb.storage.from("posts").getPublicUrl(path).data.publicUrl;
+        media_type=file.type.startsWith("video/")?"video":"image";
+      }
+      const r=await sb.from("stories").insert({
+        user_id:state.user.id, media_url:media_url||"data:text/plain;charset=utf-8,story",
+        media_type, text_overlay:text, visibility:"public",
+        expires_at:new Date(Date.now()+24*60*60*1000).toISOString()
+      }).select().single();
+      if(r.error) throw new Error(r.error.message);
+      closeModal();
+      toast("✓ Story publiée pendant 24 h.");
+      await render();
+    } catch(e) {
+      toast("✕ Story non publiée : "+(e?.message||"Erreur inconnue."));
+    } finally {
+      setLoading(btn,false,"Publier la story");
     }
-    const r=await sb.from("stories").insert({
-      user_id:state.user.id, media_url:media_url||"data:text/plain;charset=utf-8,story",
-      media_type, text_overlay:text, visibility:"public",
-      expires_at:new Date(Date.now()+24*60*60*1000).toISOString()
-    }).select().single();
-    if(r.error) return toast(r.error.message);
-    closeModal(); toast("Story publiée pendant 24 h."); await render();
 }
 
 async function storyComposer() {
@@ -1129,8 +1164,21 @@ function publisherBackgrounds(){
     btn.textContent = collapsed ? "Voir moins" : "Voir plus";
   }
 
+  async function postViewCount(postId) {
+    const r = await sb.rpc("tafa_post_view_count", { p_post_id: postId });
+    return r.error ? Number(0) : Number(r.data || 0);
+  }
+  async function recordPostView(postId) {
+    if (!state.user || !postId) return;
+    const r = await sb.rpc("tafa_record_post_view", { p_post_id: postId });
+    if (!r.error) {
+      const el = document.querySelector(`[data-post-views="${CSS.escape(String(postId))}"]`);
+      if (el && r.data != null) el.textContent = `${Number(r.data) || 0} vue${Number(r.data)===1?'':'s'}`;
+    }
+  }
+
   async function postHTML(p) {
-    const [rs, cs, sh, showReactionCounts] = await Promise.all([reactionsFor(p.id), commentsFor(p.id), sharersFor(p.id), reactionCountsVisibleFor(p.user_id)]);
+    const [rs, cs, sh, showReactionCounts, views] = await Promise.all([reactionsFor(p.id), commentsFor(p.id), sharersFor(p.id), reactionCountsVisibleFor(p.user_id), postViewCount(p.id)]);
     const counts = {}; rs.forEach(r => counts[r.reaction_type] = (counts[r.reaction_type] || 0) + 1);
     const reactorIds=[...new Set(rs.map(r=>r.user_id).filter(Boolean))].slice(0,20);
     const reactorProfiles=reactorIds.length ? (await sb.from("profiles").select("id,first_name,last_name,username,avatar_url").in("id",reactorIds)).data||[] : [];
@@ -1138,10 +1186,10 @@ function publisherBackgrounds(){
     const reactionNames=rs.map(r=>reactorMap.get(String(r.user_id))).filter(Boolean).slice(0,8).map(x=>esc(nameOf(x))).join(", ");
     const mine = rs.find(r => r.user_id === state.user.id)?.reaction_type;
     const totalReactions = Object.values(counts).reduce((a,b) => a+b, 0);
-    const reactionVisual = showReactionCounts ? Object.entries(counts).map(([k,v]) => `<span class="reaction-chip"><i>${reactionMeta[k]?.[1] || "👍"}</i><b>${v}</b></span>`).join("") : `<span class="reaction-hidden-badge">🔒 Réactions masquées</span>`;
+    const reactionVisual = showReactionCounts ? Object.entries(counts).map(([k,v]) => `<span class="reaction-chip" data-reaction-chip="${esc(k)}"><i>${reactionMeta[k]?.[1] || "👍"}</i><b>${v}</b></span>`).join("") : `<span class="reaction-hidden-badge">🔒 Réactions masquées</span>`;
     const media = p.media_url
       ? (p.media_type === "video" || p.media_type === "reel"
-        ? `<video class="post-media protected-media" src="${esc(p.media_url)}" controls preload="metadata"></video>`
+        ? `<video class="post-media protected-media" data-post-viewable="1" data-post-id="${esc(p.id)}" src="${esc(p.media_url)}" controls preload="metadata"></video>`
         : `<img class="post-media protected-media" src="${esc(p.media_url)}" alt="Publication">`)
       : "";
     const byParent = new Map();
@@ -1155,14 +1203,14 @@ function publisherBackgrounds(){
     }).join("");
     const shareNames = sh.slice(0,3).map(x => esc(nameOf(x.user))).join(", ");
     const shareSummary = sh.length ? `<span class="share-summary">↗ ${shareNames}${sh.length > 3 ? ` +${sh.length-3}` : ""}</span>` : "";
-    return `<article class="post post-premium" id="post-${esc(p.id)}" data-post-id="${esc(p.id)}" data-post-bg="${esc(p.background_style || "plain")}">
+    return `<article class="post post-premium" id="post-${esc(p.id)}" data-post-id="${esc(p.id)}" data-post-bg="${esc(p.background_style || "plain")}" data-media-type="${esc(p.media_type || "")}">
       <div class="post-head">${profileLink(p.author, avatarHTML(p.author), "profile-link profile-avatar-link")}<div class="meta">${profileLink(p.author, `<span class="post-author-name">${displayNameHTML(p.author)}</span>`, "profile-link profile-meta-link")}<span class="post-time"><small>${timeAgo(p.created_at)} · ${esc(p.visibility || "public")}</small></span></div><button class="post-menu" data-action="post-menu" data-id="${esc(p.id)}">⋯</button></div>
       ${p.content ? `<div class="post-body ${p.background_style && p.background_style !== "plain" ? "post-body-has-bg" : ""}">${captionHTML(p.content)}</div>` : ""}${media}
       ${p.publication_meta && typeof p.publication_meta === "object" ? (()=>{const m=p.publication_meta||{};const chips=[];if(m.music)chips.push(`<button type="button" class="post-music-chip" data-action="play-post-music" data-music-id="${esc(m.music_id||'ai-1')}" data-music-seed="${esc(m.music_seed||1)}">♫ ${esc(m.music)} · Écouter</button>`);if(m.tag)chips.push(`<span>👥 ${esc(m.tag)}</span>`);if(m.location)chips.push(`<span>📍 ${esc(m.location)}</span>`);if(m.event)chips.push(`<span>📅 ${esc(m.event)}</span>`);if(m.mood)chips.push(`<span>☺ ${esc(m.mood)}</span>`);return chips.length?`<div class="post-meta-chips">${chips.join('')}</div>`:''})() : ""}
       ${p.publication_meta?.receive_messages && p.user_id !== state.user.id ? `<div class="post-message-cta"><div><b>Messages ouverts</b><small>Envoyez un message privé directement à ${esc(nameOf(p.author||{}))}.</small></div><button type="button" data-action="post-receive-message" data-owner-id="${esc(p.user_id)}">💬 Message</button></div>` : ""}
-      <div class="post-stats"><span class="reaction-summary">${reactionVisual || "<span class='muted-inline'>Aucune réaction</span>"}${showReactionCounts && totalReactions ? `<span class="reaction-people"><b>${totalReactions}</b> réaction${totalReactions>1?'s':''}${reactionNames ? ` · ${reactionNames}${totalReactions>8?'…':''}` : ''}</span>` : ""}</span><span>${cs.length} commentaire(s) · ${Number(p.shares || sh.length || 0)} partage(s)</span></div>
+      <div class="post-stats" data-post-stats="${esc(p.id)}"><span class="reaction-summary" data-reaction-total="${totalReactions}">${reactionVisual || "<span class='muted-inline'>Aucune réaction</span>"}${showReactionCounts && totalReactions ? `<span class="reaction-people"><b data-reaction-total-number="${esc(p.id)}">${totalReactions}</b> réaction${totalReactions>1?'s':''}${reactionNames ? ` · ${reactionNames}${totalReactions>8?'…':''}` : ''}</span>` : ""}</span><span class="post-counts-inline"><span data-comment-count="${esc(p.id)}">${cs.length}</span> commentaire${cs.length!==1?'s':''} · <span data-share-count="${esc(p.id)}">${Number(p.shares || sh.length || 0)}</span> partage${Number(p.shares || sh.length || 0)!==1?'s':''}${(p.media_type === 'video' || p.media_type === 'reel') ? ` · <span class="post-view-count" data-post-views="${esc(p.id)}">${views} vue${views!==1?'s':''}</span>` : ''}</span></div>
       ${shareSummary}
-      <div class="post-actions"><button class="react-btn" data-action="react" data-id="${esc(p.id)}">${reactionMeta[mine]?.[1] || "👍"} ${esc(reactionMeta[mine]?.[0] || "J’aime")}</button><button data-action="comment" data-id="${esc(p.id)}">💬 Commenter</button><button data-action="share" data-id="${esc(p.id)}">↗ Partager</button></div>
+      <div class="post-actions"><button class="react-btn" data-action="react" data-id="${esc(p.id)}" data-current-reaction="${esc(mine||"")}">${reactionMeta[mine]?.[1] || "👍"} ${esc(reactionMeta[mine]?.[0] || "J’aime")}</button><button data-action="comment" data-id="${esc(p.id)}">💬 Commenter</button><button data-action="share" data-id="${esc(p.id)}">↗ Partager</button></div>
       <div id="reaction-${esc(p.id)}"></div>
       <div class="comments">${commentHTML()}<div class="comment-form"><input id="comment-${esc(p.id)}" placeholder="Écrire un commentaire..."><button data-action="send-comment" data-id="${esc(p.id)}">Envoyer</button></div></div>
     </article>`;
@@ -1173,14 +1221,33 @@ function publisherBackgrounds(){
     box.innerHTML = `<div class="reaction-picker-premium">${Object.entries(reactionMeta).map(([key,[label,icon]]) => `<button data-reaction="${key}" title="${esc(label)}"><span>${icon}</span><small>${esc(label)}</small></button>`).join("")}</div>`;
     box.querySelectorAll("[data-reaction]").forEach(b => b.addEventListener("click", () => setReaction(id, b.dataset.reaction), { once: true }));
   }
+  function optimisticReactionUI(postId, oldReaction, newReaction) {
+    const summary=document.querySelector(`[data-post-stats="${CSS.escape(String(postId))}"] .reaction-summary`);
+    const totalEl=document.querySelector(`[data-reaction-total-number="${CSS.escape(String(postId))}"]`);
+    const btn=document.querySelector(`[data-action="react"][data-id="${CSS.escape(String(postId))}"]`);
+    if(!summary) return;
+    const chip=(key)=>summary.querySelector(`[data-reaction-chip="${CSS.escape(String(key))}"] b`);
+    if(oldReaction && oldReaction!==newReaction){
+      const el=chip(oldReaction); if(el) el.textContent=String(Math.max(0,Number(el.textContent||0)-1));
+    }
+    if(!oldReaction){
+      const total=Number(summary.dataset.reactionTotal||0)+1; summary.dataset.reactionTotal=String(total); if(totalEl) totalEl.textContent=String(total);
+    }
+    const next=chip(newReaction);
+    if(next) next.textContent=String(Number(next.textContent||0)+1);
+    if(btn){ btn.dataset.currentReaction=newReaction; btn.classList.add("is-reacted"); const meta=reactionMeta[newReaction]||reactionMeta.like; btn.innerHTML=`${meta[1]} ${esc(meta[0])}`; }
+  }
+
   async function setReaction(postId, reaction) {
     const target=state.posts.find(x=>String(x.id)===String(postId));
     if(target?.user_id && await denyIfBlocked(target.user_id,"Réaction impossible : ce compte est bloqué."))return;
     // Instant UI: reflect the selected reaction immediately, then sync Supabase.
     const picker = $("reaction-" + postId);
     const button = document.querySelector(`[data-action="react"][data-id="${CSS.escape(String(postId))}"]`);
+    const oldReaction = button?.dataset.currentReaction || "";
     const meta = reactionMeta[reaction] || ["J’aime", "👍"];
-    if (button) { button.innerHTML = `${meta[1]} ${esc(meta[0])}`; button.classList.add("is-reacted"); }
+    if (oldReaction === reaction) return;
+    optimisticReactionUI(postId, oldReaction, reaction);
     if (picker) picker.innerHTML = "";
     const { error } = await sb.rpc("tafa_set_post_reaction", { p_post_id: postId, p_reaction_type: reaction });
     if (error) {
@@ -1198,9 +1265,15 @@ function publisherBackgrounds(){
     const payload = { post_id: postId, user_id: state.user.id, content: text, parent_id: parentId || null };
     const { error } = await sb.from("comments").insert(payload);
     if (error) return toast(error.message);
-    const post = state.posts.find(x => x.id === postId);
-    input.value = ""; toast(parentId ? "Réponse publiée" : "Commentaire publié"); await loadPosts();
-    if (state.route === "profile") await profilePage(state.profileTab);
+    input.value = "";
+    const commentsBox=document.querySelector(`#post-${CSS.escape(String(postId))} .comments`);
+    const form=commentsBox?.querySelector('.comment-form');
+    const row=`<div class="comment comment-depth-${parentId?1:0} optimistic-comment">${avatarHTML(state.profile,'avatar')}<div class="bubble"><div class="comment-author-line"><b>${esc(nameOf(state.profile))}</b><small>à l’instant</small></div><div class="comment-text">${esc(text)}</div></div></div>`;
+    if(form) form.insertAdjacentHTML('beforebegin',row);
+    const count=document.querySelector(`[data-comment-count="${CSS.escape(String(postId))}"]`);
+    if(count) count.textContent=String(Number(count.textContent||0)+1);
+    toast(parentId ? "✓ Réponse publiée" : "✓ Commentaire publié");
+    loadPosts().then(()=>{ if(state.route === "profile") profilePage(state.profileTab); }).catch(()=>{});
   }
   async function sharePost(id) {
     const target=state.posts.find(x=>String(x.id)===String(id));
@@ -1208,8 +1281,10 @@ function publisherBackgrounds(){
     const { error } = await sb.rpc("tafa_share_post", { p_post_id: id, p_share_message: "" });
     if (error) return toast(error.message);
     await logActivity("post_shared", "Publication partagée", "post", id);
-    toast("Publication partagée"); await loadPosts();
-    if (state.route === "profile") await profilePage(state.profileTab);
+    const count=document.querySelector(`[data-share-count="${CSS.escape(String(id))}"]`);
+    if(count) count.textContent=String(Number(count.textContent||0)+1);
+    toast("✓ Publication partagée");
+    loadPosts().then(()=>{ if (state.route === "profile") profilePage(state.profileTab); }).catch(()=>{});
   }
 
   async function deleteComment(id) {
@@ -2396,7 +2471,7 @@ async function genericListPage(route) {
       const wanted = ["reel","video"];
       const rows = state.posts.filter(p => wanted.includes(p.media_type));
       if (token !== state.renderToken || state.route !== route) return;
-      $("content").innerHTML = `<div class="card"><div class="page-header"><h2>Reels</h2><span class="muted">Découvrir</span></div>${rows.length?rows.map(p=>`<article class="post"><div class="post-head">${profileLink(p.author, avatarHTML(p.author), "profile-link profile-avatar-link")}<div class="meta">${profileLink(p.author, `<span class="post-author-name">${displayNameHTML(p.author)}</span>`, "profile-link profile-meta-link")}<span class="post-time"><small>${timeAgo(p.created_at)}</small></span></div></div>${p.content?`<div class="post-body">${esc(p.content)}</div>`:""}<video class="post-media" src="${esc(p.media_url)}" controls></video></article>`).join(""):`<div class="empty">Aucun Reel pour le moment.</div>`}</div>`;
+      $("content").innerHTML = `<div class="card"><div class="page-header"><h2>Reels</h2><span class="muted">Découvrir</span></div>${rows.length?rows.map(p=>`<article class="post"><div class="post-head">${profileLink(p.author, avatarHTML(p.author), "profile-link profile-avatar-link")}<div class="meta">${profileLink(p.author, `<span class="post-author-name">${displayNameHTML(p.author)}</span>`, "profile-link profile-meta-link")}<span class="post-time"><small>${timeAgo(p.created_at)}</small></span></div></div>${p.content?`<div class="post-body">${esc(p.content)}</div>`:""}<video class="post-media" data-post-viewable="1" data-post-id="${esc(p.id)}" src="${esc(p.media_url)}" controls></video></article>`).join(""):`<div class="empty">Aucun Reel pour le moment.</div>`}</div>`;
       return;
     }
     if (route === "pages") return pagesHub();
@@ -4652,6 +4727,14 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   function renderMines(stage){let n=8,total=n*n,mines=new Set(),open=new Set(),flags=new Set(),first=true,over=false;const build=()=>{mines=new Set();while(mines.size<10){const i=Math.floor(Math.random()*total);if(i!==first)mines.add(i)}};const near=i=>{let r=Math.floor(i/n),c=i%n,s=0;for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){if(!dr&&!dc)continue;const j=(r+dr)*n+c+dc;if(r+dr>=0&&r+dr<n&&c+dc>=0&&c+dc<n&&mines.has(j))s++}return s};const reset=()=>{open=new Set();flags=new Set();first=true;over=false;draw()};const draw=()=>{stage.innerHTML=gameToolbar('Mines Pro','mines','Record')+`<div class="mines-board">${Array.from({length:total},(_,i)=>`<button class="mine-cell ${open.has(i)?'open':''}" data-i="${i}">${open.has(i)?(mines.has(i)?'💣':near(i)||''):flags.has(i)?'⚑':''}</button>`).join('')}</div><div class="game-status" id="mineStatus">10 mines · clic gauche pour ouvrir, appui long pour drapeau.</div>`;stage.querySelectorAll('.mine-cell').forEach(x=>{let timer;x.addEventListener('pointerdown',()=>timer=setTimeout(()=>{const i=+x.dataset.i;if(!open.has(i)&&!over){flags.has(i)?flags.delete(i):flags.add(i);draw()}},420));x.addEventListener('pointerup',()=>{clearTimeout(timer);const i=+x.dataset.i;if(over||flags.has(i))return;if(first){first=false;build()}if(mines.has(i)){over=true;open.add(i);$('mineStatus').textContent='Mine ! Partie terminée.'}else{open.add(i);if(open.size>=total-mines.size){over=true;$('mineStatus').textContent='Champ nettoyé ! 🏆';setGameScore('mines',open.size)}}draw()})});bindGameReset(reset)};draw();activeGameCleanup=()=>{}}
   function renderSudoku(stage){const solved=[5,3,4,6,7,8,9,1,2,6,7,2,1,9,5,3,4,8,1,9,8,3,4,2,5,6,7,8,5,9,7,6,1,4,2,3,4,2,6,8,5,3,7,9,1,7,1,3,9,2,4,8,5,6,9,6,1,5,3,7,2,8,4,2,8,7,4,1,9,6,3,5,3,4,5,2,8,6,1,7,9];let puzzle=solved.map((v,i)=>i%3===0||i%7===0?v:0);const reset=()=>{puzzle=solved.map((v,i)=>i%3===0||i%7===0?v:0);draw()};const draw=()=>{stage.innerHTML=gameToolbar('Sudoku Master','sudoku','Score')+`<div class="sudoku-board">${puzzle.map((v,i)=>`<input class="sudoku-cell" data-i="${i}" value="${v||''}" inputmode="numeric" maxlength="1" ${v?'readonly':''}>`).join('')}</div><button class="primary big" id="checkSudoku">Vérifier la grille</button><div class="game-status" id="sudokuStatus">Complétez la grille puis vérifiez.</div>`;stage.querySelector('#checkSudoku').onclick=()=>{const vals=[...stage.querySelectorAll('.sudoku-cell')].map(x=>Number(x.value));const ok=vals.every((v,i)=>v===solved[i]);$('sudokuStatus').textContent=ok?'Sudoku résolu ! 🏆':'Il reste des erreurs ou des cases vides.';if(ok){setGameScore('sudoku',1);$('liveScore').textContent=1}};bindGameReset(reset)};draw();activeGameCleanup=()=>{}}
 
+  document.addEventListener("play", e => {
+    const media=e.target?.closest?.('video[data-post-viewable]');
+    if(media && !media.dataset.viewRecorded){
+      media.dataset.viewRecorded='1';
+      recordPostView(media.dataset.postId);
+    }
+  }, true);
+
   document.addEventListener("click", async e => {
     const gameTab = e.target.closest("[data-game]");
     if (gameTab && $("gameStage")) { e.preventDefault(); return startGame(gameTab.dataset.game); }
@@ -5051,7 +5134,15 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       const s=(await sb.from("stories").select("*").eq("id",id).maybeSingle()).data;
       if(!s)return toast("Story introuvable ou expirée.");
       await sb.from("story_views").upsert({story_id:s.id,user_id:state.user.id},{onConflict:"story_id,user_id"});
-      return openModal(`<div class="modal-box story-view-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • STORY</span><div class="story-view-content">${s.media_type==="video"?`<video src="${esc(s.media_url)}" controls autoplay playsinline></video>`:s.media_type==="text"?`<div class="story-view-text">${esc(s.text_overlay||"")}</div>`:`<img src="${esc(s.media_url)}" alt="Story">`}</div>${s.text_overlay&&s.media_type!=="text"?`<p class="story-view-caption">${esc(s.text_overlay)}</p>`:""}<small class="muted">Expire automatiquement après 24 heures.</small></div>`);
+      let viewersHtml="";
+      if(String(s.user_id)===String(state.user.id)){
+        const vr=await sb.from("story_views").select("user_id,viewed_at,profiles(first_name,last_name,username,avatar_url)").eq("story_id",s.id).order("viewed_at",{ascending:false}).limit(200);
+        if(!vr.error){
+          const viewers=vr.data||[];
+          viewersHtml=`<section class="story-viewers-panel"><div class="story-viewers-head"><b>Vues</b><span>${viewers.length} vue${viewers.length!==1?'s':''}</span></div><div class="story-viewers-list">${viewers.map(v=>`<div class="story-viewer-row">${avatarHTML(v.profiles||{},'avatar tiny-avatar')}<div><b>${esc(nameOf(v.profiles||{}))}</b><small>${timeAgo(v.viewed_at)}</small></div></div>`).join('')||'<div class="empty">Aucune vue pour le moment.</div>'}</div></section>`;
+        }
+      }
+      return openModal(`<div class="modal-box story-view-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • STORY</span><div class="story-view-content">${s.media_type==="video"?`<video src="${esc(s.media_url)}" controls autoplay playsinline></video>`:s.media_type==="text"?`<div class="story-view-text">${esc(s.text_overlay||"")}</div>`:`<img src="${esc(s.media_url)}" alt="Story">`}</div>${s.text_overlay&&s.media_type!=="text"?`<p class="story-view-caption">${esc(s.text_overlay)}</p>`:""}<small class="muted">Expire automatiquement après 24 heures.</small>${viewersHtml}</div>`);
     }
     if (action === "save-advanced-visibility") return saveUserSetting({profile_visibility:$("advancedVisibility")?.value||"public"});
 
