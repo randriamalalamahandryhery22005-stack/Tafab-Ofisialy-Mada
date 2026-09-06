@@ -3770,14 +3770,20 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if(dr.error) throw dr.error;
     const snap=dr.data||{}, st=snap.overview||{}, daily=snap.daily||[], locations=snap.locations||[];
     const users=ur.error?[]:(ur.data||[]), withdrawals=wr.error?[]:(wr.data||[]), payments=pr.error?[]:(pr.data||[]), reports=rr.error?[]:(rr.data||[]), verifications=vr.error?[]:(vr.data||[]), appeals=ar.error?[]:(ar.data||[]);
+    state.adminAppealsCache=appeals;
 
-    // Realtime admin dashboard: websocket when possible + short polling as a reliable fallback.
+    // Realtime admin dashboard: demandes de réactivation, comptes et contenu.
+    // Le websocket est la source principale ; le polling reste uniquement un
+    // filet de sécurité pour Android lorsque le navigateur suspend le socket.
     if(!state.adminDashboardChannel && navigator.onLine){
       const ch=sb.channel('tafass-admin-dashboard-live')
         .on('postgres_changes',{event:'*',schema:'public',table:'profiles'},()=>adminDashboardRefreshSoon())
+        .on('postgres_changes',{event:'*',schema:'public',table:'tafa_account_appeals'},()=>adminDashboardRefreshSoon())
         .on('postgres_changes',{event:'*',schema:'public',table:'posts'},()=>adminDashboardRefreshSoon())
         .on('postgres_changes',{event:'*',schema:'public',table:'stories'},()=>adminDashboardRefreshSoon())
-        .subscribe();
+        .subscribe(status=>{
+          if(status==='SUBSCRIBED') adminDashboardRefreshSoon();
+        });
       state.adminDashboardChannel=ch;
     }
     if(state.adminDashboardTimer) clearInterval(state.adminDashboardTimer);
@@ -3801,7 +3807,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     const withdrawalRows=withdrawals.map(x=>`<div class="admin-data-row"><div class="grow"><b>${esc(x.display_name||'Compte')}</b><small>${adminMoney(x.amount_mga)} · ${esc(x.method||'mobile_money')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${esc(x.status||'pending')}">${esc(x.status||'pending')}</span>${x.status==='pending'?`<button class="ghost-action" data-action="admin-withdrawal-status" data-id="${esc(x.id)}" data-status="approved">Approuver</button><button class="ghost-action danger-history-action" data-action="admin-withdrawal-status" data-id="${esc(x.id)}" data-status="rejected">Refuser</button>`:''}</div>`).join('')||'<div class="empty">Aucun retrait.</div>';
     const paymentRows=payments.map(x=>`<div class="admin-data-row"><div class="grow"><b>${esc(x.display_name||'Compte')}</b><small>${adminMoney(x.amount)} · ${esc(x.method||'')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${esc(x.status||'pending')}">${esc(x.status||'pending')}</span>${x.status==='pending'?`<button class="ghost-action" data-action="admin-payment-status" data-id="${esc(x.id)}" data-status="paid">Valider</button><button class="ghost-action danger-history-action" data-action="admin-payment-status" data-id="${esc(x.id)}" data-status="failed">Refuser</button>`:''}</div>`).join('')||'<div class="empty">Aucun paiement.</div>';
     const reportRows=reports.map(x=>`<div class="admin-data-row"><div class="grow"><b>${esc(x.reporter_name||'Compte')} → ${esc(x.reported_name||'Compte')}</b><small>${esc(x.reason||'Signalement')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${x.status==='resolved'?'paid':''}">${esc(x.status||'pending')}</span>${x.status==='pending'?`<button class="ghost-action" data-action="admin-report-status" data-id="${esc(x.id)}" data-status="resolved">Traiter</button>`:''}</div>`).join('')||'<div class="empty">Aucun signalement.</div>';
-    const appealRows=appeals.map(x=>`<div class="admin-data-row"><div class="grow"><b>${esc(x.display_name||'Compte')}</b><small>${esc(x.email||'')} · ${esc(x.reason||'Demande de réactivation')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${x.status==='approved'?'paid':x.status==='rejected'?'rejected':''}">${esc(x.status||'pending')}</span>${x.status==='pending'?`<button class="ghost-action" data-action="admin-appeal-status" data-id="${esc(x.id)}" data-status="approved">Approuver</button><button class="ghost-action danger-history-action" data-action="admin-appeal-status" data-id="${esc(x.id)}" data-status="rejected">Refuser</button>`:''}</div>`).join('')||'<div class="empty">Aucune demande de réactivation.</div>';
+    const appealRows=appeals.map(x=>`<article class="admin-appeal-card ${x.status==='pending'?'is-pending':''}" data-action="admin-open-appeal" data-id="${esc(x.id)}"><div class="admin-appeal-avatar">♻</div><div class="admin-appeal-main"><div class="admin-appeal-top"><div><b>${esc(x.display_name||'Compte')}</b><small>${esc(x.email||'')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${x.status==='approved'?'paid':x.status==='rejected'?'rejected':'pending'}">${x.status==='pending'?'En attente':x.status==='approved'?'Approuvée':'Refusée'}</span></div><p>${esc(x.reason||'Demande de réactivation')}</p><div class="admin-appeal-footer"><small>${x.status==='pending'?'Examen administratif requis':'Traitée par l’administration'}</small>${x.status==='pending'?'<span class="admin-appeal-review">Ouvrir l’examen →</span>':''}</div></div></article>`).join('')||'<div class="empty">Aucune demande de réactivation.</div>';
     const verificationRows=verifications.map(x=>`<div class="admin-data-row"><div class="grow"><b>${esc(x.display_name||'Compte')}</b><small>${esc(x.email||'')} · ${esc(x.reason||'Demande de vérification')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${x.status==='approved'?'paid':x.status==='rejected'?'rejected':''}">${esc(x.status||'pending')}</span>${x.status==='pending'?`<button class="ghost-action" data-action="admin-verification-status" data-id="${esc(x.id)}" data-status="approved">Approuver</button><button class="ghost-action danger-history-action" data-action="admin-verification-status" data-id="${esc(x.id)}" data-status="rejected">Refuser</button>`:''}</div>`).join('')||'<div class="empty">Aucune demande de vérification.</div>';
 
     const maxDaily=Math.max(1,...daily.map(x=>Number(x.new_accounts||0)));
@@ -3859,18 +3865,33 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   }
 
   async function submitVerificationRequest(){ const ref=$("verificationPaymentRef")?.value.trim()||"", reason=$("verificationReason")?.value.trim()||""; if(!ref)return toast("Ajoutez la référence du paiement."); const r=await sb.rpc('tafa_submit_verification_request',{p_payment_reference:ref,p_reason:reason}); if(r.error)return toast(r.error.message); closeModal(); toast('Demande de vérification envoyée.'); }
-  async function adminSetAppealStatus(id,status){ if(!confirm(status==='approved'?'Réactiver ce compte ?':'Refuser cette demande de réactivation ?'))return; const r=await sb.rpc('tafa_admin_set_appeal_status',{p_id:id,p_status:status}); if(r.error)return toast(r.error.message); toast(status==='approved'?'Compte réactivé.':'Demande refusée.'); return adminTotalPage(); }
+  async function adminOpenAppeal(id){
+    const x=(state.adminAppealsCache||[]).find(a=>String(a.id)===String(id));
+    if(!x) return adminTotalPage();
+    const pending=x.status==='pending';
+    openModal(`<div class="modal-box admin-appeal-review-modal"><div class="admin-review-head"><div class="admin-review-icon">♻</div><div><span class="eyebrow">TAFAß · SÉCURITÉ</span><h3>Examen de réactivation</h3><small>${esc(x.email||'')} · ${timeAgo(x.created_at)}</small></div><button class="modal-close" data-action="close-modal">×</button></div><div class="admin-review-account"><div class="admin-review-avatar">${esc((x.display_name||'C').slice(0,1).toUpperCase())}</div><div><b>${esc(x.display_name||'Compte')}</b><small>Demande de réactivation du compte</small></div><span class="admin-status ${pending?'pending':x.status==='approved'?'paid':'rejected'}">${pending?'En attente':x.status==='approved'?'Approuvée':'Refusée'}</span></div><div class="admin-review-reason"><span>EXPLICATION DU MEMBRE</span><p>${esc(x.reason||'Aucune explication fournie.')}</p></div>${pending?'<div class="admin-review-warning">⚠️ Vérifiez les éléments concernés avant de valider. L’approbation réactive immédiatement le compte.</div><div class="admin-review-actions"><button class="admin-review-reject" data-action="admin-appeal-status" data-id="'+esc(x.id)+'" data-status="rejected">Refuser</button><button class="admin-review-approve" data-action="admin-appeal-status" data-id="'+esc(x.id)+'" data-status="approved">✓ Approuver & réactiver</button></div>':'<div class="admin-review-closed">Cette demande a déjà été traitée.</div>'}</div>`);
+  }
+  async function adminSetAppealStatus(id,status){
+    const btns=document.querySelectorAll('[data-action="admin-appeal-status"]');
+    btns.forEach(b=>{b.disabled=true;b.classList.add('is-processing');});
+    const r=await sb.rpc('tafa_admin_set_appeal_status',{p_id:id,p_status:status});
+    if(r.error){btns.forEach(b=>{b.disabled=false;b.classList.remove('is-processing');});return toast(r.error.message);}
+    closeModal();
+    toast(status==='approved'?'Compte réactivé en temps réel.':'Demande refusée.');
+    return adminTotalPage();
+  }
   async function adminSetVerificationStatus(id,status){ if(!confirm(status==='approved'?'Approuver cette vérification ?':'Refuser cette demande ?'))return; const r=await sb.rpc('tafa_admin_set_verification_status',{p_id:id,p_status:status}); if(r.error)return toast(r.error.message); toast(status==='approved'?'Badge bleu activé.':'Demande refusée.'); return adminTotalPage(); }
   async function openRestrictionAppeal(){
     const r=await sb.from('tafa_account_appeals').select('status,created_at').eq('user_id',state.user.id).order('created_at',{ascending:false}).limit(3);
-    const rows=(r.data||[]).map(x=>`<div class="settings-info-card"><b>Demande ${esc(x.status||'pending')}</b><small>${timeAgo(x.created_at)}</small></div>`).join('');
-    openModal(`<div class="modal-box restriction-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • COMPTE RESTREINT</span><h3>Demander la réactivation</h3><p class="muted">Votre compte a été restreint après utilisation d’un contenu protégé. Vous pouvez envoyer plusieurs demandes ; seule l’administration peut réactiver le compte.</p>${rows}<textarea id="appealReason" class="premium-input" maxlength="1000" placeholder="Expliquez votre demande…"></textarea><button class="primary big" data-action="submit-appeal">Envoyer une demande</button></div>`);
+    const rows=(r.data||[]).map(x=>`<div class="restriction-history-card status-${esc(x.status||'pending')}"><span class="restriction-history-dot">●</span><div><b>Demande ${esc(x.status==='approved'?'approuvée':x.status==='rejected'?'refusée':'en attente')}</b><small>${timeAgo(x.created_at)}</small></div></div>`).join('');
+    openModal(`<div class="modal-box restriction-modal premium-restriction-modal"><div class="restriction-modal-head"><div class="restriction-modal-icon">♻</div><div><span class="eyebrow">TAFAß · SÉCURITÉ</span><h3>Demander la réactivation</h3></div><button class="modal-close" data-action="close-modal">×</button></div><p class="muted">Expliquez votre situation. Votre demande sera transmise directement à l’administration pour examen.</p>${rows}<label class="restriction-reason-label">Votre explication<textarea id="appealReason" class="premium-input" maxlength="1000" placeholder="Expliquez votre demande…"></textarea></label><button class="primary big restriction-submit" data-action="submit-appeal">Envoyer la demande</button></div>`);
   }
   async function submitAppeal(){ const reason=$("appealReason")?.value.trim()||""; if(!reason)return toast("Expliquez votre demande."); const r=await sb.rpc('tafa_submit_account_appeal',{p_reason:reason}); if(r.error)return toast(r.error.message); closeModal(); toast('Demande de réactivation envoyée à l’administration.'); }
   async function render() {
     if (!state.user) return;
-    if(state.profile?.account_status==='restricted'){
-      $("content").innerHTML=`<section class="restriction-screen"><div class="restriction-icon">⛔</div><span class="eyebrow">TAFAß • SÉCURITÉ</span><h2>Compte suspendu</h2><p>Une violation d’une identité ou d’un média protégé a été détectée. Les actions sensibles restent bloquées jusqu’à la fin de la procédure.</p><div class="restriction-steps"><div class="done"><b>01</b><span>Suspension immédiate</span><small>Protection du réseau</small></div><div><b>02</b><span>Vérification</span><small>Éléments concernés</small></div><div><b>03</b><span>Explication</span><small>Votre demande</small></div><div><b>04</b><span>Examen</span><small>Contrôle administratif</small></div><div><b>05</b><span>Approbation</span><small>Validation finale</small></div></div><button class="primary big" data-action="open-restriction-appeal">Commencer la procédure de réactivation</button><button class="ghost-action" data-action="new-logout">Quitter le compte</button></section>`;
+    if(state.profile?.account_status==='restricted' || state.profile?.account_status==='blocked'){
+      const blocked=state.profile?.account_status==='blocked';
+      $("content").innerHTML=`<section class="restriction-screen ${blocked?'is-blocked':''}"><div class="restriction-top-glow"></div><div class="restriction-icon">⛔</div><span class="eyebrow">TAFAß · SÉCURITÉ</span><h2>${blocked?'Compte bloqué':'Compte restreint'}</h2><p>Une violation d’une identité ou d’un média protégé a été détectée. Les actions sensibles restent bloquées pendant la procédure de sécurité.</p><div class="restriction-live-status"><span></span> STATUT SURVEILLÉ EN DIRECT</div><div class="restriction-steps"><div class="done"><b>01</b><span>${blocked?'Blocage':'Suspension'}</span><small>Protection du réseau</small></div><div class="active"><b>02</b><span>Vérification</span><small>Éléments concernés</small></div><div><b>03</b><span>Explication</span><small>Votre demande</small></div><div><b>04</b><span>Examen</span><small>Contrôle administratif</small></div><div><b>05</b><span>Approbation</span><small>Validation finale</small></div></div><button class="primary big" data-action="open-restriction-appeal">Commencer la procédure de réactivation</button><button class="ghost-action" data-action="new-logout">Quitter le compte</button></section>`;
       return;
     }
     /* V28.3.2 MENU SAFETY: never block the Menu on the admin RPC.
@@ -4032,7 +4053,32 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
 
     const channel = sb.channel(`tafa-live-ui:${state.user.id}`, { config:{ broadcast:{ self:false } } });
     const refresh = {
-      profiles: () => { loadProfile(); if (state.route==="search") searchPage($("searchInput")?.value||""); if (state.viewingProfileId && state.route==="profile") openUserProfile(state.viewingProfileId); },
+      profiles: async payload => {
+        const rec=payload?.new||payload?.record||payload;
+        const isMe=!rec?.id || rec.id===state.user.id;
+        if(isMe){
+          const before=state.profile?.account_status;
+          await loadProfile();
+          const after=state.profile?.account_status;
+          if(before!==after && (after==='active'||after==='restricted'||after==='blocked')) {
+            if(state.route!=='admin') await render();
+          }
+        }
+        if (state.route==="search") searchPage($("searchInput")?.value||"");
+        if (state.viewingProfileId && state.route==="profile") openUserProfile(state.viewingProfileId);
+      },
+      tafa_account_appeals: async payload => {
+        const rec=payload?.new||payload?.record||payload;
+        if(rec?.user_id===state.user.id && state.profile?.account_status!=='active' && state.route!=='admin') {
+          if(state.route!=='home' && state.route!=='profile') return;
+        }
+        if(state.route==='admin') adminDashboardRefreshSoon();
+        if(rec?.user_id===state.user.id && state.route!=='admin') {
+          const before=state.profile?.account_status;
+          await loadProfile();
+          if(before!==state.profile?.account_status) await render();
+        }
+      },
       posts: async () => { await loadPosts(); if (["home","profile","reels","saved"].includes(state.route)) render(); },
       comments: async () => { await loadPosts(); if (["home","profile"].includes(state.route)) render(); },
       comment_likes: () => { if (["home","profile"].includes(state.route)) render(); },
@@ -4992,6 +5038,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if (action === "submit-appeal") return submitAppeal();
     if (action === "submit-verification-request") return submitVerificationRequest();
     if (action === "admin-verification-status") return adminSetVerificationStatus(id, actionEl.dataset.status);
+    if (action === "admin-open-appeal") return adminOpenAppeal(id);
     if (action === "admin-appeal-status") return adminSetAppealStatus(id, actionEl.dataset.status);
     if (action === "admin-refresh") return adminTotalPage();
     if (action === "admin-toggle-user") return adminToggleUser(id,actionEl.dataset.status||'active');

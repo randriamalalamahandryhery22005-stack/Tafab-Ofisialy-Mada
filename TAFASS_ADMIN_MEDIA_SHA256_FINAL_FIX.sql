@@ -113,3 +113,40 @@ commit;
 select id, sha256, media_kind, media_url, created_at
 from public.tafa_admin_protected_media
 order by created_at desc;
+
+/* =========================================================
+   Tafaß — Réactivation premium + Realtime administratif
+   ========================================================= */
+
+/* Les demandes de réactivation doivent être diffusées par Supabase Realtime. */
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'tafa_account_appeals'
+  ) then
+    execute 'alter publication supabase_realtime add table public.tafa_account_appeals';
+  end if;
+exception when undefined_object then
+  null;
+end $$;
+
+/* Le profil de l'utilisateur doit également pouvoir recevoir son changement
+   de statut en direct après approbation/refus administratif. */
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'profiles'
+  ) then
+    execute 'alter publication supabase_realtime add table public.profiles';
+  end if;
+exception when undefined_object then
+  null;
+end $$;
