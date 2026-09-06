@@ -1,0 +1,14 @@
+TAFAß — PATCH 2026-09-07
+Ce patch contient uniquement les fichiers modifiés, pas le projet complet.
+
+Modifications :
+- Chargement/navigation : fin de transition visuelle raccourcie ; le verrouillage pendant le chargement reste actif.
+- Boost : identification visuelle claire « BOOST / SPONSORISÉ » pour distinguer une publicité boostée d’une publication normale.
+- Menu : descriptions forcées sur une ligne séparée sous chaque titre, avec une hiérarchie plus lisible.
+- Aide : centre d’aide étendu avec 12 rubriques, descriptions longues, fiches dédiées et accès directs aux sections.
+- À propos : présentation complète de Tafaß avec vision, identité, fonctionnalités, temps réel, sécurité, services sponsorisés et évolution.
+- Enregistrements : interface premium complète, statistiques, cartes de contenus, médias, accès à la publication et au profil, retrait réel des sauvegardes.
+- Style général : nouvelle couche visuelle premium distinctive sans modifier les fonctions Supabase existantes.
+
+Installation :
+Remplacer seulement app.js et style.css du projet actuel par ceux de ce patch.
