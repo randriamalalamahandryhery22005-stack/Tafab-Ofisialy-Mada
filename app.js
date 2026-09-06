@@ -298,9 +298,13 @@ document.documentElement.classList.add("app-boot");
 
   async function loadProfile() {
     if (!state.user) return;
-    const { data } = await sb.from("profiles").select("*").eq("id", state.user.id).maybeSingle();
+    const previousProfile=state.profile;
+    const profileResult=await sb.from("profiles").select("*").eq("id", state.user.id).maybeSingle();
+    const data=profileResult.data;
     const authEmail = state.user.email || "";
-    state.profile = data || {
+    // Pendant une réactivation, une réponse réseau temporairement vide ne doit
+    // jamais remplacer le profil existant par un profil incomplet.
+    state.profile = data || previousProfile || {
       id: state.user.id, first_name: state.user.user_metadata?.first_name || "",
       last_name: state.user.user_metadata?.last_name || "", email: authEmail
     };
@@ -3874,34 +3878,27 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   async function adminSetAppealStatus(id,status){
     const btns=document.querySelectorAll('[data-action="admin-appeal-status"]');
     btns.forEach(b=>{b.disabled=true;b.classList.add('is-processing');});
-    const r=await sb.rpc('tafa_admin_set_appeal_status',{p_id:id,p_status:status});
-    if(r.error){btns.forEach(b=>{b.disabled=false;b.classList.remove('is-processing');});return toast(r.error.message);}
-    closeModal();
-    toast(status==='approved'?'Compte réactivé en temps réel.':'Demande refusée.');
-    return adminTotalPage();
+    try{
+      if(!id) throw new Error('Demande de réactivation invalide.');
+      if(!['approved','rejected'].includes(String(status))) throw new Error('Statut de réactivation invalide.');
+      const r=await sb.rpc('tafa_admin_set_appeal_status',{p_id:id,p_status:status});
+      if(r.error) throw r.error;
+      closeModal();
+      toast(status==='approved'?'Compte réactivé. Le profil et les médias existants sont conservés.':'Demande refusée.');
+      return adminTotalPage();
+    }catch(e){
+      console.error('Tafaß réactivation:',e);
+      btns.forEach(b=>{b.disabled=false;b.classList.remove('is-processing');});
+      return toast(e?.message||'Impossible de traiter la demande de réactivation.');
+    }
   }
   async function adminSetVerificationStatus(id,status){ if(!confirm(status==='approved'?'Approuver cette vérification ?':'Refuser cette demande ?'))return; const r=await sb.rpc('tafa_admin_set_verification_status',{p_id:id,p_status:status}); if(r.error)return toast(r.error.message); toast(status==='approved'?'Badge bleu activé.':'Demande refusée.'); return adminTotalPage(); }
   async function openRestrictionAppeal(){
-    const r=await sb.from('tafa_account_appeals').select('status,created_at').eq('user_id',state.user.id).order('created_at',{ascending:false}).limit(5);
-    const history=r.data||[];
-    const pending=history.some(x=>x.status==='pending');
-    const rows=history.map(x=>`<div class="restriction-history-card status-${esc(x.status||'pending')}"><span class="restriction-history-dot">●</span><div><b>Demande ${esc(x.status==='approved'?'approuvée':x.status==='rejected'?'refusée':'en attente')}</b><small>${timeAgo(x.created_at)}</small></div></div>`).join('');
-    const action=pending
-      ? `<div class="restriction-pending-notice"><span>⏳</span><div><b>Une demande est déjà en cours</b><small>Vous ne pouvez envoyer qu’une seule demande à la fois. Attendez l’examen de l’administration.</small></div></div>`
-      : `<label class="restriction-reason-label">Votre explication<textarea id="appealReason" class="premium-input" maxlength="1000" placeholder="Expliquez votre demande…"></textarea></label><button class="primary big restriction-submit" data-action="submit-appeal">Envoyer la demande</button>`;
-    openModal(`<div class="modal-box restriction-modal premium-restriction-modal"><div class="restriction-modal-head"><div class="restriction-modal-icon">♻</div><div><span class="eyebrow">TAFAß · SÉCURITÉ</span><h3>Demander la réactivation</h3></div><button class="modal-close" data-action="close-modal">×</button></div><p class="muted">Votre demande sera transmise directement à l’administration pour examen sécurisé.</p>${rows}${action}</div>`);
+    const r=await sb.from('tafa_account_appeals').select('status,created_at').eq('user_id',state.user.id).order('created_at',{ascending:false}).limit(3);
+    const rows=(r.data||[]).map(x=>`<div class="restriction-history-card status-${esc(x.status||'pending')}"><span class="restriction-history-dot">●</span><div><b>Demande ${esc(x.status==='approved'?'approuvée':x.status==='rejected'?'refusée':'en attente')}</b><small>${timeAgo(x.created_at)}</small></div></div>`).join('');
+    openModal(`<div class="modal-box restriction-modal premium-restriction-modal"><div class="restriction-modal-head"><div class="restriction-modal-icon">♻</div><div><span class="eyebrow">TAFAß · SÉCURITÉ</span><h3>Demander la réactivation</h3></div><button class="modal-close" data-action="close-modal">×</button></div><p class="muted">Expliquez votre situation. Votre demande sera transmise directement à l’administration pour examen.</p>${rows}<label class="restriction-reason-label">Votre explication<textarea id="appealReason" class="premium-input" maxlength="1000" placeholder="Expliquez votre demande…"></textarea></label><button class="primary big restriction-submit" data-action="submit-appeal">Envoyer la demande</button></div>`);
   }
-  async function submitAppeal(){
-    const reason=$("appealReason")?.value.trim()||"";
-    if(!reason)return toast("Expliquez votre demande.");
-    const btn=document.querySelector('[data-action="submit-appeal"]');
-    if(btn){btn.disabled=true;btn.classList.add('is-processing');}
-    const r=await sb.rpc('tafa_submit_account_appeal',{p_reason:reason});
-    if(r.error){ if(btn){btn.disabled=false;btn.classList.remove('is-processing');} return toast(r.error.message); }
-    closeModal();
-    toast('Demande de réactivation envoyée à l’administration.');
-    await render();
-  }
+  async function submitAppeal(){ const reason=$("appealReason")?.value.trim()||""; if(!reason)return toast("Expliquez votre demande."); const r=await sb.rpc('tafa_submit_account_appeal',{p_reason:reason}); if(r.error)return toast(r.error.message); closeModal(); toast('Demande de réactivation envoyée à l’administration.'); }
   async function render() {
     if (!state.user) return;
     if(state.profile?.account_status==='restricted' || state.profile?.account_status==='blocked'){
