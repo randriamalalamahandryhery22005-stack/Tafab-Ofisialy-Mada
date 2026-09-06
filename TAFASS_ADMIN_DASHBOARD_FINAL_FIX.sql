@@ -99,7 +99,7 @@ begin
 
   select count(*) into total_posts from public.posts;
   select count(*) into total_stories from public.stories;
-  select count(*) into total_reels from public.posts where coalesce(is_reel,false)=true;
+  select count(*) into total_reels from public.posts where lower(coalesce(media_type,'')) = 'reel';
 
   if to_regclass('public.videos') is not null then
     execute 'select count(*) from public.videos' into total_videos;
