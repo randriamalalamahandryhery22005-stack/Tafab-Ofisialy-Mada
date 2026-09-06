@@ -3606,37 +3606,71 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
 
   async function creatorMonetisationPage(){
     const uid=state.user.id;
-    const [walletR,giftsR,subsR,withdrawR]=await Promise.all([
-      sb.from('tafab_wallets').select('coins,earnings_mga,updated_at').eq('user_id',uid).maybeSingle(),
-      sb.from('tafab_live_gifts').select('id,gift_type,coins,created_at,live_session_id').or(`sender_id.eq.${uid},receiver_id.eq.${uid}`).order('created_at',{ascending:false}).limit(30),
-      sb.from('tafab_creator_subscriptions').select('id,subscriber_id,status,monthly_price_mga,started_at,expires_at').eq('creator_id',uid).order('created_at',{ascending:false}).limit(30),
-      sb.from('tafab_withdrawal_requests').select('id,amount_mga,method,status,created_at').eq('user_id',uid).order('created_at',{ascending:false}).limit(20)
+    const [walletR,profileR,methodsR,withdrawR,ledgerR]=await Promise.all([
+      sb.from('tafab_wallets').select('coins,earnings_mga,pending_earnings_mga,lifetime_earnings_mga,total_withdrawn_mga,updated_at').eq('user_id',uid).maybeSingle(),
+      sb.from('tafab_creator_monetization').select('*').eq('user_id',uid).maybeSingle(),
+      sb.from('tafab_creator_payout_methods').select('id,provider,phone,account_name,is_default,status,created_at').eq('user_id',uid).order('is_default',{ascending:false}).order('created_at',{ascending:false}),
+      sb.from('tafab_withdrawal_requests').select('id,amount_mga,method,destination_hint,status,created_at,processed_at,admin_note').eq('user_id',uid).order('created_at',{ascending:false}).limit(30),
+      sb.from('tafab_creator_earnings').select('id,source_type,gross_mga,platform_fee_mga,net_mga,status,description,created_at').eq('creator_id',uid).order('created_at',{ascending:false}).limit(30)
     ]);
-    const w=walletR.data||{coins:0,earnings_mga:0};
-    const gifts=giftsR.data||[];
-    const subs=subsR.data||[];
-    const withdrawals=withdrawR.data||[];
-    simplePage('Monétisation',`<div class="v24-hero"><div><span class="eyebrow">TAFAß • CREATOR ECONOMY</span><h3>Transformez votre communauté en soutien réel.</h3><p>Gérez vos coins, vos cadeaux Live, vos abonnements créateur et vos revenus.</p></div><span class="v24-wallet-badge">🪙 ${Number(w.coins||0).toLocaleString('fr-FR')} coins</span></div>
-      <div class="v24-stats"><div><b>${Number(w.coins||0).toLocaleString('fr-FR')}</b><small>Coins disponibles</small></div><div><b>${Number(w.earnings_mga||0).toLocaleString('fr-FR')} Ar</b><small>Revenus créateur</small></div><div><b>${subs.length}</b><small>Abonnés créateur</small></div><div><b>${gifts.length}</b><small>Cadeaux récents</small></div></div>
-      <section class="v24-panel"><div class="section-title"><div><h3>Programme créateur</h3><small>Les cadeaux reçus pendant vos directs alimentent vos revenus.</small></div></div><div class="v24-action-grid"><button class="primary" data-action="request-withdrawal">💸 Demander un retrait</button><button class="secondary-action" data-action="creator-pricing">⭐ Abonnement créateur</button></div></section>
-      <section class="v24-panel"><div class="section-title"><div><h3>Derniers cadeaux</h3><small>Historique des cadeaux envoyés ou reçus.</small></div></div><div class="v24-list">${gifts.map(g=>`<div class="v24-row"><span class="v24-gift-icon">${g.gift_type==='rose'?'🌹':g.gift_type==='star'?'⭐':'❤️'}</span><div><b>${esc(g.gift_type||'heart')}</b><small>${Number(g.coins||0).toLocaleString('fr-FR')} coins · ${timeAgo(g.created_at)}</small></div><strong>${g.sender_id===uid?'−':'+'}${Number(g.coins||0).toLocaleString('fr-FR')}</strong></div>`).join('')||'<div class="empty">Aucun cadeau pour le moment.</div>'}</div></section>
-      <section class="v24-panel"><div class="section-title"><div><h3>Retraits</h3><small>Les demandes sont traitées par l’administration.</small></div></div><div class="v24-list">${withdrawals.map(x=>`<div class="v24-row"><span>💳</span><div><b>${Number(x.amount_mga||0).toLocaleString('fr-FR')} Ar</b><small>${esc(x.method||'mobile_money')} · ${timeAgo(x.created_at)}</small></div><strong class="v24-status">${esc(x.status||'pending')}</strong></div>`).join('')||'<div class="empty">Aucune demande de retrait.</div>'}</div></section>`);
+    const w=walletR.data||{coins:0,earnings_mga:0,pending_earnings_mga:0,lifetime_earnings_mga:0,total_withdrawn_mga:0};
+    const mp=profileR.data||{status:'not_requested',enabled:false,min_withdrawal_mga:1000,revenue_share_percent:70};
+    const methods=methodsR.data||[], withdrawals=withdrawR.data||[], ledger=ledgerR.data||[];
+    const statusLabel={not_requested:'Non activé',pending:'En cours de vérification',approved:'Monétisation active',suspended:'Suspendue'}[mp.status]||mp.status||'Non activé';
+    const providerLabel={mvola:'MVola',orange_money:'Orange Money',airtel_money:'Airtel Money'};
+    const available=Number(w.earnings_mga||0), pending=Number(w.pending_earnings_mga||0), lifetime=Number(w.lifetime_earnings_mga||0), withdrawn=Number(w.total_withdrawn_mga||0);
+    const methodRows=methods.map(m=>`<div class="monet-row"><div><b>${esc(providerLabel[m.provider]||m.provider)}</b><small>${esc(m.phone||'')} · ${esc(m.account_name||'')}</small></div><span class="monet-pill ${m.status==='active'?'ok':''}">${m.status==='active'?'Actif':'En attente'}</span></div>`).join('')||'<div class="empty">Aucun moyen de retrait enregistré.</div>';
+    const earningRows=ledger.map(x=>`<div class="monet-row"><div><b>${esc(x.description||x.source_type||'Revenu')}</b><small>${timeAgo(x.created_at)} · ${esc(x.status||'available')}</small></div><strong>+${Number(x.net_mga||0).toLocaleString('fr-FR')} Ar</strong></div>`).join('')||'<div class="empty">Aucun revenu enregistré pour le moment.</div>';
+    const withdrawalRows=withdrawals.map(x=>`<div class="monet-row"><div><b>${Number(x.amount_mga||0).toLocaleString('fr-FR')} Ar · ${esc(providerLabel[x.method]||x.method||'Mobile Money')}</b><small>${esc(x.destination_hint||'')} · ${timeAgo(x.created_at)}</small></div><span class="monet-pill">${esc(x.status||'pending')}</span></div>`).join('')||'<div class="empty">Aucune demande de retrait.</div>';
+    const actions=mp.status==='approved'
+      ? `<button class="primary" data-action="request-withdrawal">💸 Retirer mes revenus</button><button class="secondary-action" data-action="add-payout-method">＋ Moyen de retrait</button>`
+      : mp.status==='pending'
+        ? `<button class="secondary-action" disabled>⏳ Vérification en cours</button>`
+        : `<button class="primary" data-action="request-monetization">🚀 Demander l'activation</button>`;
+    simplePage('Monétisation',`<section class="monet-hero"><div><span class="eyebrow">TAFAß • CREATOR MONETIZATION</span><h2>Gagnez. Suivez. Retirez.</h2><p>Vos revenus sont enregistrés dans un portefeuille sécurisé et les retraits sont traités après contrôle.</p></div><span class="monet-status ${mp.status==='approved'?'active':''}">● ${esc(statusLabel)}</span></section>
+      <div class="monet-kpis"><div><span>Disponible</span><b>${available.toLocaleString('fr-FR')} Ar</b><small>Retirable</small></div><div><span>En attente</span><b>${pending.toLocaleString('fr-FR')} Ar</b><small>Validation</small></div><div><span>Total gagné</span><b>${lifetime.toLocaleString('fr-FR')} Ar</b><small>Historique</small></div><div><span>Total retiré</span><b>${withdrawn.toLocaleString('fr-FR')} Ar</b><small>Paiements effectués</small></div></div>
+      <section class="monet-panel"><div class="monet-panel-head"><div><span class="eyebrow">PROGRAMME CRÉATEUR</span><h3>${esc(statusLabel)}</h3><p>${mp.status==='approved'?'Vous pouvez générer des revenus éligibles et demander un retrait.':'Demandez l’accès au programme. L’administration vérifie votre compte avant activation.'}</p></div>${actions}</div><div class="monet-info-grid"><div><b>Part créateur</b><span>${Number(mp.revenue_share_percent||70)} %</span></div><div><b>Seuil de retrait</b><span>${Number(mp.min_withdrawal_mga||1000).toLocaleString('fr-FR')} Ar</span></div><div><b>Coins</b><span>🪙 ${Number(w.coins||0).toLocaleString('fr-FR')}</span></div></div></section>
+      <section class="monet-panel"><div class="monet-section-title"><div><h3>Moyens de retrait</h3><small>MVola, Orange Money ou Airtel Money.</small></div><button class="ghost-action" data-action="add-payout-method">Ajouter</button></div><div class="monet-list">${methodRows}</div></section>
+      <section class="monet-panel"><div class="monet-section-title"><div><h3>Revenus récents</h3><small>Chaque opération est inscrite dans le registre des revenus.</small></div></div><div class="monet-list">${earningRows}</div></section>
+      <section class="monet-panel"><div class="monet-section-title"><div><h3>Retraits</h3><small>Un retrait n'est payé qu'après traitement administratif.</small></div></div><div class="monet-list">${withdrawalRows}</div></section>`);
   }
 
-  function openWithdrawalRequest(){
-    openModal(`<div class="modal-box v24-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • RETRAIT</span><h3>Demander un retrait</h3><p class="muted">Minimum 1 000 Ar. La demande sera vérifiée par l’administration avant paiement.</p><label>Montant (Ar)<input id="withdrawAmount" type="number" min="1000" step="100" placeholder="Ex. 10000"></label><label>Destination<input id="withdrawDestination" maxlength="120" placeholder="Ex. numéro Mobile Money / indication de paiement"></label><button class="primary big" data-action="submit-withdrawal">Envoyer la demande</button></div>`);
+  function openMonetizationRequest(){
+    openModal(`<div class="modal-box monet-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • CREATOR PROGRAM</span><h3>Activer la monétisation</h3><p class="muted">Votre demande sera vérifiée par l’administration. L’activation ne garantit pas un revenu : les revenus dépendent des sources monétisées et des règles Tafaß.</p><label>Présentation du compte<textarea id="monetReason" class="premium-input" maxlength="800" placeholder="Décrivez votre activité de créateur…"></textarea></label><button class="primary big" data-action="submit-monetization-request">Envoyer la demande</button></div>`);
+  }
+  async function submitMonetizationRequest(){
+    const reason=$('monetReason')?.value.trim()||'';
+    const r=await sb.rpc('tafab_request_creator_monetization',{p_reason:reason});
+    if(r.error)return toast(r.error.message);
+    closeModal(); toast('Demande de monétisation envoyée.'); return creatorMonetisationPage();
+  }
+  function openPayoutMethod(){
+    openModal(`<div class="modal-box monet-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • RETRAIT</span><h3>Nouveau moyen de retrait</h3><label>Opérateur<select id="payoutProvider" class="premium-input"><option value="mvola">MVola</option><option value="orange_money">Orange Money</option><option value="airtel_money">Airtel Money</option></select></label><label>Numéro<input id="payoutPhone" class="premium-input" maxlength="30" inputmode="tel" placeholder="Ex. 034 00 000 00"></label><label>Nom du titulaire<input id="payoutName" class="premium-input" maxlength="120" placeholder="Nom associé au compte Mobile Money"></label><label class="check-row"><input id="payoutDefault" type="checkbox" checked> Utiliser comme moyen principal</label><button class="primary big" data-action="save-payout-method">Enregistrer</button></div>`);
+  }
+  async function savePayoutMethod(){
+    const provider=$('payoutProvider')?.value||'mvola', phone=$('payoutPhone')?.value.trim()||'', name=$('payoutName')?.value.trim()||'', def=!!$('payoutDefault')?.checked;
+    if(!phone||phone.replace(/\D/g,'').length<9)return toast('Numéro Mobile Money invalide.');
+    const r=await sb.rpc('tafab_save_payout_method',{p_provider:provider,p_phone:phone,p_account_name:name,p_is_default:def});
+    if(r.error)return toast(r.error.message); closeModal(); toast('Moyen de retrait enregistré.'); return creatorMonetisationPage();
+  }
+  async function openWithdrawalRequest(){
+    openModal(`<div class="modal-box monet-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • RETRAIT</span><h3>Retirer vos revenus</h3><p class="muted">Minimum 1 000 Ar. Le montant est réservé immédiatement puis payé après vérification.</p><label>Montant (Ar)<input id="withdrawAmount" type="number" min="1000" step="100" inputmode="numeric" placeholder="Ex. 10000"></label><label>Moyen<select id="withdrawMethod" class="premium-input"><option value="">Sélectionnez un moyen</option></select></label><div id="withdrawMethodHint" class="monet-method-hint"></div><button class="primary big" data-action="submit-withdrawal">Demander le retrait</button></div>`);
+    const r=await sb.from('tafab_creator_payout_methods').select('id,provider,phone,account_name,status').eq('user_id',state.user.id).eq('status','active').order('is_default',{ascending:false});
+    const sel=$('withdrawMethod'); if(!sel)return;
+    (r.data||[]).forEach(m=>{const o=document.createElement('option');o.value=m.id;o.textContent=`${({mvola:'MVola',orange_money:'Orange Money',airtel_money:'Airtel Money'})[m.provider]||m.provider} · ${m.phone}`;o.dataset.provider=m.provider;o.dataset.phone=m.phone;sel.appendChild(o);});
+    sel.addEventListener('change',()=>{const o=sel.options[sel.selectedIndex];$('withdrawMethodHint').textContent=o?.dataset?.phone?`Paiement vers ${o.textContent}`:'';});
   }
   async function submitWithdrawal(){
-    const amount=Math.floor(Number($('withdrawAmount')?.value||0)), dest=$('withdrawDestination')?.value.trim()||'';
+    const amount=Math.floor(Number($('withdrawAmount')?.value||0)), methodId=$('withdrawMethod')?.value||'';
     if(!Number.isFinite(amount)||amount<1000)return toast('Montant minimum : 1 000 Ar.');
-    const w=await sb.from('tafab_wallets').select('earnings_mga').eq('user_id',state.user.id).maybeSingle();
-    if((w.data?.earnings_mga||0)<amount)return toast('Revenus insuffisants pour ce retrait.');
-    const r=await sb.from('tafab_withdrawal_requests').insert({user_id:state.user.id,amount_mga:amount,method:'mobile_money',destination_hint:dest,status:'pending'});
-    if(r.error)return toast(r.error.message); closeModal(); toast('Demande de retrait envoyée.'); await creatorMonetisationPage();
+    if(!methodId)return toast('Sélectionnez un moyen de retrait.');
+    const r=await sb.rpc('tafab_request_creator_withdrawal',{p_amount_mga:amount,p_payout_method_id:methodId});
+    if(r.error)return toast(r.error.message); closeModal(); toast('Demande de retrait enregistrée.'); return creatorMonetisationPage();
   }
   function openCreatorPricing(){
-    openModal(`<div class="modal-box v24-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • ABONNEMENT</span><h3>Abonnement créateur</h3><p class="muted">Permettez à votre communauté de soutenir votre contenu chaque mois.</p><div class="v24-price-card"><span>⭐ Soutien créateur</span><b>2 500 Ar / mois</b><small>Le paiement réel peut être relié à votre système de transactions existant avant activation commerciale.</small></div><button class="primary big" data-action="close-modal">Compris</button></div>`);
+    openModal(`<div class="modal-box monet-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • SOUTIEN</span><h3>Abonnements & cadeaux</h3><p class="muted">Les abonnements et cadeaux sont des sources de revenus créateur. Leur règlement doit être financé par de vrais paiements enregistrés côté Tafaß.</p><div class="monet-info-card"><b>Important</b><span>Les vues seules ne créent pas automatiquement de l’argent. Les revenus publicitaires doivent provenir de campagnes réellement payées par les annonceurs.</span></div><button class="primary big" data-action="close-modal">Compris</button></div>`);
   }
+
   async function sendLiveGift(gift='heart',coins=10){
     if(!liveSessionId || liveRole!=='viewer') return toast('Le cadeau est disponible pendant un direct.');
     const r=await sb.from('live_sessions').select('user_id,status').eq('id',liveSessionId).maybeSingle();
@@ -3842,7 +3876,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   async function adminTotalPage(){
     if(!(await adminIsAllowed())){toast('Accès réservé à l’administration.');return navigate('home',{replaceStack:true});}
     state.__isAdmin=true;
-    const [dr,ur,wr,pr,rr,vr,ar,br,bc]=await Promise.all([
+    const [dr,ur,wr,pr,rr,vr,ar,br,bc,crp,crm]=await Promise.all([
       sb.rpc('tafa_admin_dashboard_snapshot',{p_days:30}),
       sb.rpc('tafa_admin_list_users',{p_limit:80,p_offset:0}),
       sb.rpc('tafa_admin_list_withdrawals',{p_limit:50}),
@@ -3851,11 +3885,13 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       sb.rpc('tafa_admin_list_verification_requests',{p_limit:50}),
       sb.rpc('tafa_admin_list_account_appeals',{p_limit:50}),
       sb.rpc('tafa_admin_list_boost_payments',{p_limit:100}),
-      sb.rpc('tafa_admin_list_boost_campaigns',{p_limit:200})
+      sb.rpc('tafa_admin_list_boost_campaigns',{p_limit:200}),
+      sb.rpc('tafa_admin_list_creator_payouts',{p_limit:100}),
+      sb.rpc('tafa_admin_list_creator_monetization',{p_limit:100})
     ]);
     if(dr.error) throw dr.error;
     const snap=dr.data||{}, st=snap.overview||{}, daily=snap.daily||[], locations=snap.locations||[];
-    const users=ur.error?[]:(ur.data||[]), withdrawals=wr.error?[]:(wr.data||[]), payments=pr.error?[]:(pr.data||[]), reports=rr.error?[]:(rr.data||[]), verifications=vr.error?[]:(vr.data||[]), appeals=ar.error?[]:(ar.data||[]), boostPayments=br.error?[]:(br.data||[]), boostCampaigns=bc.error?[]:(bc.data||[]);
+    const users=ur.error?[]:(ur.data||[]), withdrawals=wr.error?[]:(wr.data||[]), payments=pr.error?[]:(pr.data||[]), reports=rr.error?[]:(rr.data||[]), verifications=vr.error?[]:(vr.data||[]), appeals=ar.error?[]:(ar.data||[]), boostPayments=br.error?[]:(br.data||[]), boostCampaigns=bc.error?[]:(bc.data||[]), creatorPayouts=crp.error?[]:(crp.data||[]), creatorMonetization=crm.error?[]:(crm.data||[]);
     state.adminAppealsCache=appeals;
 
     // Realtime admin dashboard: demandes de réactivation, comptes et contenu.
@@ -3867,6 +3903,9 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
         .on('postgres_changes',{event:'*',schema:'public',table:'tafa_account_appeals'},()=>adminDashboardRefreshSoon())
         .on('postgres_changes',{event:'*',schema:'public',table:'tafab_ad_payments'},()=>adminDashboardRefreshSoon())
         .on('postgres_changes',{event:'*',schema:'public',table:'tafab_ad_campaigns'},()=>adminDashboardRefreshSoon())
+        .on('postgres_changes',{event:'*',schema:'public',table:'tafab_withdrawal_requests'},()=>adminDashboardRefreshSoon())
+        .on('postgres_changes',{event:'*',schema:'public',table:'tafab_creator_monetization'},()=>adminDashboardRefreshSoon())
+        .on('postgres_changes',{event:'*',schema:'public',table:'tafab_creator_earnings'},()=>adminDashboardRefreshSoon())
         .on('postgres_changes',{event:'*',schema:'public',table:'posts'},()=>adminDashboardRefreshSoon())
         .on('postgres_changes',{event:'*',schema:'public',table:'stories'},()=>adminDashboardRefreshSoon())
         .subscribe(status=>{
@@ -3893,6 +3932,8 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     ];
     const rows=users.map(u=>`<div class="admin-user-row"><div class="admin-user-main">${u.avatar_url?`<img src="${esc(u.avatar_url)}">`:'<div class="admin-user-avatar">👤</div>'}<div><b>${esc(([u.first_name,u.last_name].filter(Boolean).join(' ')||u.username||u.email||'Compte'))}</b><small>${esc(u.email||'')} · @${esc(u.username||'')}</small></div></div><span class="admin-status ${u.account_status==='blocked'?'blocked':''}">${u.account_status==='blocked'?'Bloqué':'Actif'}</span><button class="ghost-action" data-action="admin-toggle-user" data-id="${esc(u.id)}" data-status="${esc(u.account_status||'active')}">${u.account_status==='blocked'?'Réactiver':'Bloquer'}</button></div>`).join('')||'<div class="empty">Aucun compte.</div>';
     const withdrawalRows=withdrawals.map(x=>`<div class="admin-data-row"><div class="grow"><b>${esc(x.display_name||'Compte')}</b><small>${adminMoney(x.amount_mga)} · ${esc(x.method||'mobile_money')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${esc(x.status||'pending')}">${esc(x.status||'pending')}</span>${x.status==='pending'?`<button class="ghost-action" data-action="admin-withdrawal-status" data-id="${esc(x.id)}" data-status="approved">Approuver</button><button class="ghost-action danger-history-action" data-action="admin-withdrawal-status" data-id="${esc(x.id)}" data-status="rejected">Refuser</button>`:''}</div>`).join('')||'<div class="empty">Aucun retrait.</div>';
+    const creatorPayoutRows=creatorPayouts.map(x=>`<div class="admin-data-row monet-admin-row"><div class="grow"><b>💸 ${esc(x.display_name||'Compte')}</b><small>${adminMoney(x.amount_mga)} · ${esc(x.method||'mobile_money')} · ${esc(x.destination_hint||'')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${x.status==='paid'?'paid':x.status==='rejected'?'rejected':'pending'}">${esc(x.status||'pending')}</span>${x.status==='pending'?`<button class="ghost-action" data-action="admin-creator-payout" data-id="${esc(x.id)}" data-status="paid">✓ Payé</button><button class="ghost-action danger-history-action" data-action="admin-creator-payout" data-id="${esc(x.id)}" data-status="rejected">Refuser</button>`:''}</div>`).join('')||'<div class="empty">Aucun retrait créateur.</div>';
+    const creatorMonetRows=creatorMonetization.map(x=>`<div class="admin-data-row monet-admin-row"><div class="grow"><b>◎ ${esc(x.display_name||'Compte')}</b><small>${esc(x.status||'pending')} · ${Number(x.lifetime_earnings_mga||0).toLocaleString('fr-FR')} Ar gagnés · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${x.status==='approved'?'paid':x.status==='suspended'?'rejected':'pending'}">${esc(x.status||'pending')}</span>${x.status==='pending'?`<button class="ghost-action" data-action="admin-creator-monetization" data-id="${esc(x.user_id)}" data-status="approved">✓ Activer</button><button class="ghost-action danger-history-action" data-action="admin-creator-monetization" data-id="${esc(x.user_id)}" data-status="rejected">Refuser</button>`:x.status==='approved'?`<button class="ghost-action danger-history-action" data-action="admin-creator-monetization" data-id="${esc(x.user_id)}" data-status="suspended">Suspendre</button>`:''}</div>`).join('')||'<div class="empty">Aucune demande de monétisation.</div>';
     const paymentRows=payments.map(x=>`<div class="admin-data-row"><div class="grow"><b>${esc(x.display_name||'Compte')}</b><small>${adminMoney(x.amount)} · ${esc(x.method||'')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${esc(x.status||'pending')}">${esc(x.status||'pending')}</span>${x.status==='pending'?`<button class="ghost-action" data-action="admin-payment-status" data-id="${esc(x.id)}" data-status="paid">Valider</button><button class="ghost-action danger-history-action" data-action="admin-payment-status" data-id="${esc(x.id)}" data-status="failed">Refuser</button>`:''}</div>`).join('')||'<div class="empty">Aucun paiement.</div>';
     const boostPaymentRows=boostPayments.map(x=>`<div class="admin-data-row boost-admin-payment-row"><div class="grow"><b>✦ ${esc(x.campaign_name||'Campagne')}</b><small>${esc(x.display_name||'Compte')} · ${adminMoney(x.amount_mga)} · ${esc(x.method||'')} · Réf. ${esc(x.transaction_reference||'')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${x.status==='verified'?'paid':x.status==='rejected'?'rejected':'pending'}">${x.status==='pending'?'Paiement à vérifier':x.status==='verified'?'Vérifié':'Refusé'}</span>${x.status==='pending'?`<button class="ghost-action" data-action="admin-boost-payment-status" data-id="${esc(x.id)}" data-status="verified">✓ Vérifier</button><button class="ghost-action danger-history-action" data-action="admin-boost-payment-status" data-id="${esc(x.id)}" data-status="rejected">Refuser</button>`:x.status==='verified'?`<button class="ghost-action" data-action="admin-boost-campaign-status" data-id="${esc(x.campaign_id)}" data-status="active">✓ Sponsoriser</button>`:''}</div>`).join('')||'<div class="empty">Aucun paiement publicitaire en attente.</div>';
     const boostCampaignRows=boostCampaigns.map(x=>`<div class="admin-data-row boost-admin-campaign-row"><div class="grow"><b>✦ ${esc(x.name||'Campagne')}</b><small>${esc(x.owner_name||'Compte')} · ${esc(x.ad_type||x.objective||'BOOST')} · ${adminMoney(x.spent_amount_mga)} / ${adminMoney(x.total_budget_mga)} · ${esc(x.audience_location||'Madagascar')}</small></div><span class="admin-status ${x.status==='active'?'paid':x.status==='rejected'?'rejected':x.status==='paused'?'':'pending'}">${esc(adStatusLabel(x.status))}</span><button class="ghost-action" data-action="admin-boost-campaign-control" data-id="${esc(x.id)}" data-status="active">▶ Activer</button><button class="ghost-action" data-action="admin-boost-campaign-control" data-id="${esc(x.id)}" data-status="paused">⏸ Pause</button>${x.status!=='rejected'?`<button class="ghost-action danger-history-action" data-action="admin-boost-campaign-control" data-id="${esc(x.id)}" data-status="rejected">Refuser</button>`:''}</div>`).join('')||'<div class="empty">Aucune campagne publicitaire.</div>';
@@ -3919,7 +3960,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
         <section class="admin-total-section"><div class="admin-section-head"><div><h3>🛡️ Sécurité</h3><small>Éléments nécessitant une intervention.</small></div></div><div class="admin-health-grid admin-security-grid"><div><b>${Number(st.blocked_accounts||0).toLocaleString('fr-FR')}</b><span>Comptes bloqués</span></div><div><b>${Number(st.pending_reports||0).toLocaleString('fr-FR')}</b><span>Signalements</span></div><div><b>${Number(st.pending_verifications||0).toLocaleString('fr-FR')}</b><span>Vérifications</span></div><div><b>${Number(st.pending_appeals||0).toLocaleString('fr-FR')}</b><span>Réactivations</span></div></div></section>
       </div>
       <div class="admin-total-section"><div class="admin-section-head"><div><h3>👥 Comptes utilisateurs</h3><small>Gestion administrative contrôlée côté serveur.</small></div></div><div class="admin-users">${rows}</div></div>
-      <div class="admin-total-section"><div class="admin-section-head"><div><h3>💰 Monétisation</h3><small>${adminMoney(st.total_creator_earnings_mga)} de revenus créateurs · ${Number(st.total_coins||0).toLocaleString('fr-FR')} coins.</small></div></div><div class="admin-data-list">${withdrawalRows}</div></div>
+      <div class="admin-total-section monet-admin-section"><div class="admin-section-head"><div><h3>💰 Monétisation</h3><small>${adminMoney(st.total_creator_earnings_mga)} de revenus créateurs · ${Number(st.total_coins||0).toLocaleString('fr-FR')} coins.</small></div></div><div class="admin-subsection"><h4>Demandes d'activation</h4><div class="admin-data-list">${creatorMonetRows}</div></div><div class="admin-subsection"><h4>Retraits créateurs</h4><div class="admin-data-list">${creatorPayoutRows}</div></div></div>
       <div class="admin-total-section"><div class="admin-section-head"><div><h3>💳 Paiements</h3><small>Validation administrative des paiements.</small></div></div><div class="admin-data-list">${paymentRows}</div></div>
       <div class="admin-total-section"><div class="admin-section-head"><div><h3>✦ Publicités sponsorisées</h3><small>Paiements publicitaires à vérifier avant diffusion</small></div><span class="admin-live-indicator"><span></span> EN DIRECT</span></div><div class="admin-data-list">${boostPaymentRows}</div></div>
       <div class="admin-total-section"><div class="admin-section-head"><div><h3>✦ Gestion globale des campagnes</h3><small>L’administration contrôle toutes les campagnes, leurs statuts et leur diffusion.</small></div><span class="admin-live-indicator"><span></span> EN DIRECT</span></div><div class="admin-data-list">${boostCampaignRows}</div></div>
@@ -3940,6 +3981,17 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if(!confirm(status==='paid'?'Valider ce paiement ?':'Refuser ce paiement ?'))return;
     const r=await sb.rpc('tafa_admin_set_payment_status',{p_id:id,p_status:status}); if(r.error)return toast(r.error.message); toast('Paiement mis à jour.'); return adminTotalPage();
   }
+  async function adminSetCreatorPayout(id,status){
+    if(!confirm(status==='paid'?'Confirmer le paiement réel de ce retrait ?':'Refuser ce retrait et restituer le solde ?'))return;
+    const r=await sb.rpc('tafa_admin_process_creator_payout',{p_request_id:id,p_status:status,p_admin_note:''});
+    if(r.error)return toast(r.error.message); toast(status==='paid'?'Retrait marqué comme payé.':'Retrait refusé et solde restitué.'); return adminTotalPage();
+  }
+  async function adminSetCreatorMonetization(id,status){
+    if(!confirm(status==='approved'?'Activer la monétisation de ce créateur ?':status==='suspended'?'Suspendre cette monétisation ?':'Refuser cette demande ?'))return;
+    const r=await sb.rpc('tafa_admin_set_creator_monetization_status',{p_user_id:id,p_status:status});
+    if(r.error)return toast(r.error.message); toast('Statut de monétisation mis à jour.'); return adminTotalPage();
+  }
+
   async function adminSetReportStatus(id,status){
     const r=await sb.rpc('tafa_admin_set_report_status',{p_id:id,p_status:status}); if(r.error)return toast(r.error.message); toast('Signalement traité.'); return adminTotalPage();
   }
@@ -4334,6 +4386,9 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       tafab_creator_subscriptions: () => { if (state.route==="creator") creatorMonetisationPage(); },
       tafab_wallets: () => { if (state.route==="creator") creatorMonetisationPage(); },
       tafab_withdrawal_requests: () => { if (state.route==="creator") creatorMonetisationPage(); },
+      tafab_creator_monetization: () => { if (state.route==="creator") creatorMonetisationPage(); },
+      tafab_creator_earnings: () => { if (state.route==="creator") creatorMonetisationPage(); },
+      tafab_creator_payout_methods: () => { if (state.route==="creator") creatorMonetisationPage(); },
       tafab_music_tracks: () => { if (state.route==="music") musicHubPage(); },
       tafab_music_likes: () => { if (state.route==="music") musicHubPage(); },
       tafab_music_playlists: () => { if (state.route==="music") musicHubPage(); },
@@ -5211,6 +5266,8 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if (action === "admin-refresh") return adminTotalPage();
     if (action === "admin-toggle-user") return adminToggleUser(id,actionEl.dataset.status||'active');
     if (action === "admin-withdrawal-status") return adminSetWithdrawalStatus(id,actionEl.dataset.status||'rejected');
+    if (action === "admin-creator-payout") return adminSetCreatorPayout(id,actionEl.dataset.status||'rejected');
+    if (action === "admin-creator-monetization") return adminSetCreatorMonetization(id,actionEl.dataset.status||'rejected');
     if (action === "admin-payment-status") return adminSetPaymentStatus(id,actionEl.dataset.status||'failed');
     if (action === "admin-boost-payment-status") return adminSetBoostPaymentStatus(id,actionEl.dataset.status||'rejected');
     if (action === "admin-boost-campaign-status") return adminSetBoostCampaignStatus(id,actionEl.dataset.status||'rejected');
@@ -5541,6 +5598,10 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if (action === "music-like") return toggleMusicLike(id);
     if (action === "music-create-playlist") return openMusicPlaylist();
     if (action === "save-music-playlist") return saveMusicPlaylist();
+    if (action === "request-monetization") return openMonetizationRequest();
+    if (action === "submit-monetization-request") return submitMonetizationRequest();
+    if (action === "add-payout-method") return openPayoutMethod();
+    if (action === "save-payout-method") return savePayoutMethod();
     if (action === "request-withdrawal") return openWithdrawalRequest();
     if (action === "submit-withdrawal") return submitWithdrawal();
     if (action === "creator-pricing") return openCreatorPricing();
