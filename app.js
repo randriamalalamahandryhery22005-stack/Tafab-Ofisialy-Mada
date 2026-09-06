@@ -553,6 +553,7 @@ document.documentElement.classList.add("app-boot");
     if(recent.length>1) html+=`<div class="page-feed-bottom-note">✓ Votre fil Page est synchronisé avec les publications de ${esc(pg.name)}.</div>`;
     html+=`</section>`;
     $("content").innerHTML=html;
+    sponsoredAds.forEach(ad=>recordSponsoredEvent(ad.campaign_id,'impression'));
   }
 
   async function loadActiveStories() {
@@ -643,6 +644,8 @@ function openMoreComposer(){openModal(`<div class="modal-box composer-modal-prem
 async function renderFeed() {
     const token = state.renderToken;
     const stories=await loadActiveStories();
+    const sponsoredR=await sb.rpc('tafa_get_sponsored_ads',{p_limit:2});
+    const sponsoredAds=sponsoredR.error?[]:(sponsoredR.data||[]);
     const liveR=await sb.from("live_sessions").select("id,user_id,title,started_at,profiles(first_name,last_name,username,avatar_url)").eq("status","live").order("started_at",{ascending:false}).limit(12);
     const activeLives=liveR.error ? [] : (liveR.data||[]);
     if (token !== state.renderToken || state.route !== "home") return;
@@ -677,6 +680,7 @@ async function renderFeed() {
         </div>
         <input id="quickPostFile" class="quick-post-file" type="file" accept="image/*,video/*" hidden>
       </section>`;
+      if(sponsoredAds.length) html+=`<section class="sponsored-feed-section">${sponsoredAds.map(sponsoredAdHTML).join('')}</section>`;
 
     if(!state.posts.length) html+=`<div class="card empty">Aucune publication pour le moment.<br><span>Publiez la première sur Tafaß.</span></div>`;
     for(const p of state.posts){ if(token!==state.renderToken||state.route!=="home")return; html+=await postHTML(p); }
@@ -3703,6 +3707,51 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   function openMusicPlaylist(){openModal(`<div class="modal-box v25-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • PLAYLIST</span><h3>Créer une playlist</h3><input id="playlistName" class="premium-input" maxlength="80" placeholder="Nom de la playlist"><textarea id="playlistDesc" class="premium-input" maxlength="300" placeholder="Description (optionnel)"></textarea><button class="primary big" data-action="save-music-playlist">Créer</button></div>`)}
   async function saveMusicPlaylist(){const name=$("playlistName")?.value.trim();if(!name)return toast("Donnez un nom à la playlist.");const r=await sb.from("tafab_music_playlists").insert({user_id:state.user.id,name,description:$("playlistDesc")?.value.trim()||"",is_public:false});if(r.error)return toast(r.error.message);closeModal();toast("Playlist créée.");}
 
+  async function openBoostPost(postId){
+    const q=await sb.from('posts').select('id,user_id,content,media_url,media_type').eq('id',postId).maybeSingle();
+    const post=q.data;
+    if(q.error||!post)return toast('Publication introuvable.');
+    if(post.user_id!==state.user.id)return toast('Vous pouvez uniquement booster votre propre publication.');
+    const type=post.media_type==='reel'?'reel':String(post.media_type||'').startsWith('video')?'video':String(post.media_type||'').startsWith('image')?'photo':'post';
+    openModal(`<div class="modal-box boost-modal-premium"><button class="modal-close" data-action="close-modal">×</button><div class="boost-hero"><div class="boost-mark">✦</div><div><span class="eyebrow">TAFAß • BOOST</span><h3>Booster cette publication</h3><p>Transformez votre publication en contenu sponsorisé après paiement et validation administrative.</p></div></div><div class="boost-preview">${post.media_url?(type==='video'||type==='reel'?`<video src="${esc(post.media_url)}" controls playsinline></video>`:`<img src="${esc(post.media_url)}" alt="Publication">`):''}<div><b>${esc((post.content||'Publication Tafaß').slice(0,100))}</b><small>Type : ${esc(type.toUpperCase())}</small></div></div><div class="boost-section"><span class="boost-section-title">OBJECTIF</span><div class="boost-objective-grid"><button class="boost-choice active" data-boost-objective="awareness">👁️<b>Visibilité</b><small>Plus de portée</small></button><button class="boost-choice" data-boost-objective="engagement">❤️<b>Engagement</b><small>Réactions, commentaires</small></button><button class="boost-choice" data-boost-objective="traffic">🔗<b>Trafic</b><small>Plus de clics</small></button></div></div><div class="boost-section"><span class="boost-section-title">AUDIENCE</span><label>Zone ciblée<input id="boostLocation" class="premium-input" value="Madagascar" maxlength="120" placeholder="Madagascar ou une ville"></label><div class="grid2"><label>Âge minimum<input id="boostAgeMin" type="number" min="13" max="100" value="18"></label><label>Âge maximum<input id="boostAgeMax" type="number" min="13" max="100" value="65"></label></div><label>Genre<select id="boostGender" class="premium-input"><option value="all">Tout le monde</option><option value="male">Hommes</option><option value="female">Femmes</option></select></label><small class="boost-note">Le ciblage utilise uniquement les informations réellement disponibles dans les profils Tafaß. Aucun profil individuel n'est vendu.</small></div><div class="boost-section"><span class="boost-section-title">BUDGET & DURÉE</span><div class="grid2"><label>Budget / jour (Ar)<input id="boostDaily" type="number" min="0" step="1000" value="10000"></label><label>Budget total (Ar)<input id="boostTotal" type="number" min="1000" step="1000" value="70000"></label></div><div class="grid2"><label>Début<input id="boostStart" type="date" value="${new Date().toISOString().slice(0,10)}"></label><label>Fin<input id="boostEnd" type="date"></label></div></div><input type="hidden" id="boostPostId" value="${esc(post.id)}"><input type="hidden" id="boostAdType" value="${esc(type)}"><button class="primary big boost-submit" data-action="create-boost-post">Continuer vers le paiement →</button></div>`);
+    document.querySelectorAll('[data-boost-objective]').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('[data-boost-objective]').forEach(x=>x.classList.remove('active'));b.classList.add('active');},{once:false}));
+  }
+  async function createBoostPost(){
+    const postId=$('boostPostId')?.value, adType=$('boostAdType')?.value||'post', objective=document.querySelector('[data-boost-objective].active')?.dataset.boostObjective||'awareness';
+    const min=Number($('boostAgeMin')?.value||18), max=Number($('boostAgeMax')?.value||65), daily=Math.max(0,Number($('boostDaily')?.value||0)), total=Math.max(0,Number($('boostTotal')?.value||0));
+    if(!postId)return toast('Publication invalide.'); if(min>max)return toast("La tranche d'âge est invalide."); if(total<1000)return toast('Budget total minimum : 1 000 Ar.'); if(daily>0&&daily>total)return toast('Le budget quotidien ne peut pas dépasser le budget total.');
+    const start=$('boostStart')?.value?new Date($('boostStart').value+'T00:00:00').toISOString():new Date().toISOString(); const endRaw=$('boostEnd')?.value; const end=endRaw?new Date(endRaw+'T23:59:59').toISOString():null;
+    if(end&&new Date(end)<=new Date(start))return toast('La date de fin doit être postérieure au début.');
+    const r=await sb.rpc('tafa_create_boost_campaign',{p_post_id:postId,p_ad_type:adType,p_objective:objective,p_name:`Boost ${adType} · Tafaß`,p_daily_budget_mga:daily,p_total_budget_mga:total,p_audience_location:$('boostLocation')?.value.trim()||'Madagascar',p_age_min:min,p_age_max:max,p_gender:$('boostGender')?.value||'all',p_starts_at:start,p_ends_at:end});
+    if(r.error)return toast(r.error.message); const id=r.data; closeModal(); return openBoostPayment(id,total);
+  }
+  async function openBoostPayment(campaignId,total){
+    openModal(`<div class="modal-box boost-modal-premium"><button class="modal-close" data-action="close-modal">×</button><div class="boost-hero"><div class="boost-mark">₿</div><div><span class="eyebrow">TAFAß • PAIEMENT PUBLICITAIRE</span><h3>Finaliser le paiement</h3><p>Le budget sera vérifié par l'administration avant diffusion de la campagne.</p></div></div><div class="boost-total-card"><small>BUDGET TOTAL</small><strong>${Number(total).toLocaleString('fr-FR')} Ar</strong><span>Prépayé · diffusion après validation</span></div><div class="payment-choice-grid"><button class="payment-method active" data-action="select-boost-payment" data-method="Airtel Money">🔴 Airtel Money</button><button class="payment-method" data-action="select-boost-payment" data-method="Yas Money">🟡 Yas Money</button></div><input type="hidden" id="boostPaymentMethod" value="Airtel Money"><label>Référence de transaction<input id="boostPaymentRef" class="premium-input" maxlength="160" placeholder="Référence exacte de votre paiement"></label><small class="boost-note">Effectuez le paiement sur le moyen de paiement officiel indiqué par Tafaß, puis saisissez sa référence exacte. L'activation est impossible tant que le paiement n'est pas vérifié.</small><button class="primary big" data-action="submit-boost-payment" data-id="${esc(campaignId)}" data-amount="${esc(total)}">Envoyer le paiement à vérifier</button></div>`);
+  }
+  async function submitBoostPayment(id,amount){
+    const ref=$('boostPaymentRef')?.value.trim()||'', method=$('boostPaymentMethod')?.value||'Airtel Money';
+    if(!ref)return toast('Ajoutez la référence exacte de la transaction.');
+    const r=await sb.rpc('tafa_submit_boost_payment',{p_campaign_id:id,p_method:method,p_amount_mga:Number(amount),p_reference:ref});
+    if(r.error)return toast(r.error.message); closeModal(); toast('Paiement envoyé. Votre campagne est en attente de vérification.'); return businessAdsPage();
+  }
+  async function openBoostPage(){
+    const q=await sb.from('pages').select('id,name,username,logo_url').eq('owner_id',state.user.id).order('created_at',{ascending:false});
+    const pages=q.data||[]; if(q.error)return toast(q.error.message); if(!pages.length)return toast('Créez d’abord une Page.');
+    openModal(`<div class="modal-box boost-modal-premium"><button class="modal-close" data-action="close-modal">×</button><div class="boost-hero"><div class="boost-mark">👥</div><div><span class="eyebrow">TAFAß • PAGE</span><h3>Promouvoir une Page</h3><p>Votre Page sera présentée comme sponsorisée pour gagner de nouveaux abonnés.</p></div></div><label>Page<select id="boostPageId" class="premium-input">${pages.map(x=>`<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('')}</select></label><div class="boost-section"><span class="boost-section-title">OBJECTIF</span><div class="boost-objective-grid"><button class="boost-choice active"><span>👥</span><b>Plus d'abonnés</b><small>Développer la communauté</small></button></div></div><div class="boost-section"><span class="boost-section-title">AUDIENCE</span><label>Zone ciblée<input id="boostLocation" class="premium-input" value="Madagascar" maxlength="120"></label><div class="grid2"><label>Âge minimum<input id="boostAgeMin" type="number" min="13" max="100" value="18"></label><label>Âge maximum<input id="boostAgeMax" type="number" min="13" max="100" value="65"></label></div><label>Genre<select id="boostGender" class="premium-input"><option value="all">Tout le monde</option><option value="male">Hommes</option><option value="female">Femmes</option></select></label></div><div class="boost-section"><span class="boost-section-title">BUDGET</span><div class="grid2"><label>Budget / jour (Ar)<input id="boostDaily" type="number" min="0" step="1000" value="10000"></label><label>Budget total (Ar)<input id="boostTotal" type="number" min="1000" step="1000" value="70000"></label></div></div><button class="primary big" data-action="create-boost-page">Continuer vers le paiement →</button></div>`);
+  }
+  async function createBoostPage(){
+    const pageId=$('boostPageId')?.value, min=Number($('boostAgeMin')?.value||18),max=Number($('boostAgeMax')?.value||65),daily=Math.max(0,Number($('boostDaily')?.value||0)),total=Math.max(0,Number($('boostTotal')?.value||0));
+    if(!pageId)return toast('Page invalide.'); if(min>max)return toast("La tranche d'âge est invalide."); if(total<1000)return toast('Budget total minimum : 1 000 Ar.'); if(daily>total&&daily>0)return toast('Le budget quotidien ne peut pas dépasser le budget total.');
+    const r=await sb.rpc('tafa_create_boost_campaign',{p_page_id:pageId,p_ad_type:'page_followers',p_objective:'page_followers',p_name:'Promotion Page · Tafaß',p_daily_budget_mga:daily,p_total_budget_mga:total,p_audience_location:$('boostLocation')?.value.trim()||'Madagascar',p_age_min:min,p_age_max:max,p_gender:$('boostGender')?.value||'all',p_starts_at:new Date().toISOString()});
+    if(r.error)return toast(r.error.message); closeModal(); return openBoostPayment(r.data,total);
+  }
+  async function recordSponsoredEvent(id,type){ if(!id)return; try{await sb.rpc('tafab_register_ad_event',{p_campaign_id:id,p_event_type:type});}catch(_){} }
+  function sponsoredAdHTML(ad){
+    const media=ad.media_url?(String(ad.media_type||'').includes('video')?`<video class="sponsored-media" src="${esc(ad.media_url)}" muted playsinline controls preload="metadata"></video>`:`<img class="sponsored-media" src="${esc(ad.media_url)}" alt="Publicité sponsorisée" loading="lazy">`):ad.page_logo_url?`<img class="sponsored-media sponsored-page-logo" src="${esc(ad.page_logo_url)}" alt="${esc(ad.page_name||'Page')}">`:'';
+    const cta=ad.ad_type==='page_followers'?'S’abonner':ad.objective==='traffic'?'En savoir plus':ad.ad_type==='reel'?'Voir le Reel':'Voir';
+    return `<article class="sponsored-card" data-sponsored-id="${esc(ad.campaign_id)}"><div class="sponsored-head"><div class="sponsored-brand"><span class="sponsored-dot">✦</span><div><b>${esc(ad.page_name||'Sponsor Tafaß')}</b><small>Publicité · Sponsorisé</small></div></div><span class="sponsored-label">SPONSORISÉ</span></div>${media}<div class="sponsored-copy"><h3>${esc(ad.title||'Publicité Tafaß')}</h3><p>${esc(ad.description||'')}</p><button class="primary sponsored-cta" data-action="sponsored-click" data-id="${esc(ad.campaign_id)}" data-page-id="${esc(ad.page_id||'')}" data-target="${esc(ad.target_url||'')}">${cta}</button></div></article>`;
+  }
+
   async function businessAdsPage(){
     const uid=state.user.id, token=state.renderToken;
     const [b,c]=await Promise.all([
@@ -3716,7 +3765,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     const totalImp=Object.values(stats).reduce((n,x)=>n+Number(x.impressions||0),0), totalClicks=Object.values(stats).reduce((n,x)=>n+Number(x.clicks||0),0);
     const rows=campaigns.map(x=>{const st=stats[x.id]||{};return `<article class="v26-campaign"><div class="v26-campaign-top"><div><span class="eyebrow">${esc(x.objective||'awareness').toUpperCase()}</span><h3>${esc(x.name)}</h3><small>${esc(x.audience_location||'Madagascar')} · ${Number(x.daily_budget_mga||0).toLocaleString('fr-FR')} Ar/jour</small></div><span class="v26-status ${esc(x.status)}">${esc(x.status)}</span></div><div class="v26-metrics"><div><b>${Number(st.impressions||0).toLocaleString('fr-FR')}</b><small>Impressions</small></div><div><b>${Number(st.clicks||0).toLocaleString('fr-FR')}</b><small>Clics</small></div><div><b>${Number(st.ctr||0).toFixed(2)}%</b><small>CTR</small></div></div><div class="v26-actions"><button class="ghost-action" data-action="toggle-ad-campaign" data-id="${esc(x.id)}" data-status="${x.status}">${x.status==='active'?'⏸ Pause':'▶ Activer'}</button><button class="danger-action" data-action="delete-ad-campaign" data-id="${esc(x.id)}">Supprimer</button></div></article>`}).join('')||'<div class="empty">Aucune campagne. Créez votre première campagne.</div>';
     const biz=b.data;
-    simplePage('Business & Publicité',`<div class="v26-hero"><div><span class="eyebrow">TAFAß • BUSINESS</span><h3>Développez votre activité.</h3><p>Créez des campagnes, définissez votre audience et suivez les résultats. Les statistiques sont enregistrées côté serveur.</p></div><button class="primary big" data-action="new-ad-campaign">＋ Nouvelle campagne</button></div><div class="v26-kpis"><div><b>${active}</b><small>Campagnes actives</small></div><div><b>${totalImp.toLocaleString('fr-FR')}</b><small>Impressions</small></div><div><b>${totalClicks.toLocaleString('fr-FR')}</b><small>Clics</small></div><div><b>${totalImp?((100*totalClicks/totalImp).toFixed(2)): '0.00'}%</b><small>CTR global</small></div></div><section class="v26-panel"><div class="section-title"><div><h3>Profil Business</h3><small>${biz?'Votre identité professionnelle':'Présentez votre activité sur Tafaß'}</small></div><button class="secondary-action" data-action="edit-business-profile">${biz?'Modifier':'Créer'}</button></div>${biz?`<div class="v26-business-card"><div class="v26-business-logo">🏢</div><div class="grow"><b>${esc(biz.business_name)}</b><small>${esc(biz.category||'Entreprise')} · ${esc(biz.location||'Madagascar')}</small><p>${esc(biz.description||'')}</p></div>${biz.verified?'<span class="verified-mini">✓ Vérifié</span>':''}</div>`:'<div class="empty">Créez un profil Business pour centraliser votre activité.</div>'}</section><section class="v26-panel"><div class="section-title"><div><h3>Campagnes publicitaires</h3><small>${campaigns.length} campagne(s)</small></div></div><div class="v26-campaign-grid">${rows}</div></section>`);
+    simplePage('Business & Publicité',`<div class="v26-hero"><div><span class="eyebrow">TAFAß • BUSINESS</span><h3>Développez votre activité.</h3><p>Créez des campagnes, définissez votre audience et suivez les résultats. Les statistiques sont enregistrées côté serveur.</p></div><div class="v26-hero-actions"><button class="secondary-action" data-action="boost-page">👥 Promouvoir une Page</button><button class="primary big" data-action="new-ad-campaign">＋ Nouvelle campagne</button></div></div><div class="v26-kpis"><div><b>${active}</b><small>Campagnes actives</small></div><div><b>${totalImp.toLocaleString('fr-FR')}</b><small>Impressions</small></div><div><b>${totalClicks.toLocaleString('fr-FR')}</b><small>Clics</small></div><div><b>${totalImp?((100*totalClicks/totalImp).toFixed(2)): '0.00'}%</b><small>CTR global</small></div></div><section class="v26-panel"><div class="section-title"><div><h3>Profil Business</h3><small>${biz?'Votre identité professionnelle':'Présentez votre activité sur Tafaß'}</small></div><button class="secondary-action" data-action="edit-business-profile">${biz?'Modifier':'Créer'}</button></div>${biz?`<div class="v26-business-card"><div class="v26-business-logo">🏢</div><div class="grow"><b>${esc(biz.business_name)}</b><small>${esc(biz.category||'Entreprise')} · ${esc(biz.location||'Madagascar')}</small><p>${esc(biz.description||'')}</p></div>${biz.verified?'<span class="verified-mini">✓ Vérifié</span>':''}</div>`:'<div class="empty">Créez un profil Business pour centraliser votre activité.</div>'}</section><section class="v26-panel"><div class="section-title"><div><h3>Campagnes publicitaires</h3><small>${campaigns.length} campagne(s)</small></div></div><div class="v26-campaign-grid">${rows}</div></section>`);
   }
   function openBusinessProfile(){const b=window.__tafassBusiness||{};openModal(`<div class="modal-box v26-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • BUSINESS</span><h3>Profil professionnel</h3><label>Nom de l'entreprise<input id="bizName" class="premium-input" maxlength="120" value="${esc(b.business_name||'')}" placeholder="Ex. Tafaß Studio"></label><label>Catégorie<input id="bizCat" class="premium-input" maxlength="80" value="${esc(b.category||'Entreprise')}"></label><label>Localisation<input id="bizLoc" class="premium-input" maxlength="120" value="${esc(b.location||'Madagascar')}"></label><label>Description<textarea id="bizDesc" class="premium-input" maxlength="1000">${esc(b.description||'')}</textarea></label><label>Site web<input id="bizWeb" class="premium-input" maxlength="300" value="${esc(b.website||'')}"></label><button class="primary big" data-action="save-business-profile">Enregistrer</button></div>`)}
   async function saveBusinessProfile(){const name=$('bizName')?.value.trim();if(!name)return toast("Nom de l'entreprise requis.");const payload={owner_id:state.user.id,business_name:name,category:$('bizCat')?.value.trim()||'Entreprise',location:$('bizLoc')?.value.trim()||'',description:$('bizDesc')?.value.trim()||'',website:$('bizWeb')?.value.trim()||''};const r=await sb.from('tafab_business_profiles').upsert(payload,{onConflict:'owner_id'});if(r.error)return toast(r.error.message);closeModal();toast('Profil Business enregistré.');return businessAdsPage();}
@@ -3762,18 +3811,19 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   async function adminTotalPage(){
     if(!(await adminIsAllowed())){toast('Accès réservé à l’administration.');return navigate('home',{replaceStack:true});}
     state.__isAdmin=true;
-    const [dr,ur,wr,pr,rr,vr,ar]=await Promise.all([
+    const [dr,ur,wr,pr,rr,vr,ar,br]=await Promise.all([
       sb.rpc('tafa_admin_dashboard_snapshot',{p_days:30}),
       sb.rpc('tafa_admin_list_users',{p_limit:80,p_offset:0}),
       sb.rpc('tafa_admin_list_withdrawals',{p_limit:50}),
       sb.rpc('tafa_admin_list_payments',{p_limit:50}),
       sb.rpc('tafa_admin_list_reports',{p_limit:50}),
       sb.rpc('tafa_admin_list_verification_requests',{p_limit:50}),
-      sb.rpc('tafa_admin_list_account_appeals',{p_limit:50})
+      sb.rpc('tafa_admin_list_account_appeals',{p_limit:50}),
+      sb.rpc('tafa_admin_list_boost_payments',{p_limit:100})
     ]);
     if(dr.error) throw dr.error;
     const snap=dr.data||{}, st=snap.overview||{}, daily=snap.daily||[], locations=snap.locations||[];
-    const users=ur.error?[]:(ur.data||[]), withdrawals=wr.error?[]:(wr.data||[]), payments=pr.error?[]:(pr.data||[]), reports=rr.error?[]:(rr.data||[]), verifications=vr.error?[]:(vr.data||[]), appeals=ar.error?[]:(ar.data||[]);
+    const users=ur.error?[]:(ur.data||[]), withdrawals=wr.error?[]:(wr.data||[]), payments=pr.error?[]:(pr.data||[]), reports=rr.error?[]:(rr.data||[]), verifications=vr.error?[]:(vr.data||[]), appeals=ar.error?[]:(ar.data||[]), boostPayments=br.error?[]:(br.data||[]);
     state.adminAppealsCache=appeals;
 
     // Realtime admin dashboard: demandes de réactivation, comptes et contenu.
@@ -3783,6 +3833,8 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       const ch=sb.channel('tafass-admin-dashboard-live')
         .on('postgres_changes',{event:'*',schema:'public',table:'profiles'},()=>adminDashboardRefreshSoon())
         .on('postgres_changes',{event:'*',schema:'public',table:'tafa_account_appeals'},()=>adminDashboardRefreshSoon())
+        .on('postgres_changes',{event:'*',schema:'public',table:'tafab_ad_payments'},()=>adminDashboardRefreshSoon())
+        .on('postgres_changes',{event:'*',schema:'public',table:'tafab_ad_campaigns'},()=>adminDashboardRefreshSoon())
         .on('postgres_changes',{event:'*',schema:'public',table:'posts'},()=>adminDashboardRefreshSoon())
         .on('postgres_changes',{event:'*',schema:'public',table:'stories'},()=>adminDashboardRefreshSoon())
         .subscribe(status=>{
@@ -3810,6 +3862,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     const rows=users.map(u=>`<div class="admin-user-row"><div class="admin-user-main">${u.avatar_url?`<img src="${esc(u.avatar_url)}">`:'<div class="admin-user-avatar">👤</div>'}<div><b>${esc(([u.first_name,u.last_name].filter(Boolean).join(' ')||u.username||u.email||'Compte'))}</b><small>${esc(u.email||'')} · @${esc(u.username||'')}</small></div></div><span class="admin-status ${u.account_status==='blocked'?'blocked':''}">${u.account_status==='blocked'?'Bloqué':'Actif'}</span><button class="ghost-action" data-action="admin-toggle-user" data-id="${esc(u.id)}" data-status="${esc(u.account_status||'active')}">${u.account_status==='blocked'?'Réactiver':'Bloquer'}</button></div>`).join('')||'<div class="empty">Aucun compte.</div>';
     const withdrawalRows=withdrawals.map(x=>`<div class="admin-data-row"><div class="grow"><b>${esc(x.display_name||'Compte')}</b><small>${adminMoney(x.amount_mga)} · ${esc(x.method||'mobile_money')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${esc(x.status||'pending')}">${esc(x.status||'pending')}</span>${x.status==='pending'?`<button class="ghost-action" data-action="admin-withdrawal-status" data-id="${esc(x.id)}" data-status="approved">Approuver</button><button class="ghost-action danger-history-action" data-action="admin-withdrawal-status" data-id="${esc(x.id)}" data-status="rejected">Refuser</button>`:''}</div>`).join('')||'<div class="empty">Aucun retrait.</div>';
     const paymentRows=payments.map(x=>`<div class="admin-data-row"><div class="grow"><b>${esc(x.display_name||'Compte')}</b><small>${adminMoney(x.amount)} · ${esc(x.method||'')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${esc(x.status||'pending')}">${esc(x.status||'pending')}</span>${x.status==='pending'?`<button class="ghost-action" data-action="admin-payment-status" data-id="${esc(x.id)}" data-status="paid">Valider</button><button class="ghost-action danger-history-action" data-action="admin-payment-status" data-id="${esc(x.id)}" data-status="failed">Refuser</button>`:''}</div>`).join('')||'<div class="empty">Aucun paiement.</div>';
+    const boostPaymentRows=boostPayments.map(x=>`<div class="admin-data-row boost-admin-payment-row"><div class="grow"><b>✦ ${esc(x.campaign_name||'Campagne')}</b><small>${esc(x.display_name||'Compte')} · ${adminMoney(x.amount_mga)} · ${esc(x.method||'')} · Réf. ${esc(x.transaction_reference||'')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${x.status==='verified'?'paid':x.status==='rejected'?'rejected':'pending'}">${x.status==='pending'?'Paiement à vérifier':x.status==='verified'?'Vérifié':'Refusé'}</span>${x.status==='pending'?`<button class="ghost-action" data-action="admin-boost-payment-status" data-id="${esc(x.id)}" data-status="verified">✓ Vérifier</button><button class="ghost-action danger-history-action" data-action="admin-boost-payment-status" data-id="${esc(x.id)}" data-status="rejected">Refuser</button>`:x.status==='verified'?`<button class="ghost-action" data-action="admin-boost-campaign-status" data-id="${esc(x.campaign_id)}" data-status="active">✓ Sponsoriser</button>`:''}</div>`).join('')||'<div class="empty">Aucun paiement publicitaire en attente.</div>';
     const reportRows=reports.map(x=>`<div class="admin-data-row"><div class="grow"><b>${esc(x.reporter_name||'Compte')} → ${esc(x.reported_name||'Compte')}</b><small>${esc(x.reason||'Signalement')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${x.status==='resolved'?'paid':''}">${esc(x.status||'pending')}</span>${x.status==='pending'?`<button class="ghost-action" data-action="admin-report-status" data-id="${esc(x.id)}" data-status="resolved">Traiter</button>`:''}</div>`).join('')||'<div class="empty">Aucun signalement.</div>';
     const appealRows=appeals.map(x=>`<article class="admin-appeal-card ${x.status==='pending'?'is-pending':''}" data-action="admin-open-appeal" data-id="${esc(x.id)}"><div class="admin-appeal-avatar">♻</div><div class="admin-appeal-main"><div class="admin-appeal-top"><div><b>${esc(x.display_name||'Compte')}</b><small>${esc(x.email||'')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${x.status==='approved'?'paid':x.status==='rejected'?'rejected':'pending'}">${x.status==='pending'?'En attente':x.status==='approved'?'Approuvée':'Refusée'}</span></div><p>${esc(x.reason||'Demande de réactivation')}</p><div class="admin-appeal-footer"><small>${x.status==='pending'?'Examen administratif requis':'Traitée par l’administration'}</small>${x.status==='pending'?'<span class="admin-appeal-review">Ouvrir l’examen →</span>':''}</div></div></article>`).join('')||'<div class="empty">Aucune demande de réactivation.</div>';
     const verificationRows=verifications.map(x=>`<div class="admin-data-row"><div class="grow"><b>${esc(x.display_name||'Compte')}</b><small>${esc(x.email||'')} · ${esc(x.reason||'Demande de vérification')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${x.status==='approved'?'paid':x.status==='rejected'?'rejected':''}">${esc(x.status||'pending')}</span>${x.status==='pending'?`<button class="ghost-action" data-action="admin-verification-status" data-id="${esc(x.id)}" data-status="approved">Approuver</button><button class="ghost-action danger-history-action" data-action="admin-verification-status" data-id="${esc(x.id)}" data-status="rejected">Refuser</button>`:''}</div>`).join('')||'<div class="empty">Aucune demande de vérification.</div>';
@@ -3835,6 +3888,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       <div class="admin-total-section"><div class="admin-section-head"><div><h3>👥 Comptes utilisateurs</h3><small>Gestion administrative contrôlée côté serveur.</small></div></div><div class="admin-users">${rows}</div></div>
       <div class="admin-total-section"><div class="admin-section-head"><div><h3>💰 Monétisation</h3><small>${adminMoney(st.total_creator_earnings_mga)} de revenus créateurs · ${Number(st.total_coins||0).toLocaleString('fr-FR')} coins.</small></div></div><div class="admin-data-list">${withdrawalRows}</div></div>
       <div class="admin-total-section"><div class="admin-section-head"><div><h3>💳 Paiements</h3><small>Validation administrative des paiements.</small></div></div><div class="admin-data-list">${paymentRows}</div></div>
+      <div class="admin-total-section"><div class="admin-section-head"><div><h3>✦ Publicités sponsorisées</h3><small>Paiements publicitaires à vérifier avant diffusion</small></div><span class="admin-live-indicator"><span></span> EN DIRECT</span></div><div class="admin-data-list">${boostPaymentRows}</div></div>
       <div class="admin-total-section"><div class="admin-section-head"><div><h3>🚨 Signalements</h3><small>Modération et suivi des signalements.</small></div></div><div class="admin-data-list">${reportRows}</div></div>
       <div class="admin-total-section"><div class="admin-section-head"><div><h3>🔵 Vérifications</h3><small>Demandes de badge bleu.</small></div></div><div class="admin-data-list">${verificationRows}</div></div>
       <div class="admin-total-section"><div class="admin-section-head"><div><h3>♻️ Réactivations</h3><small>Demandes après suspension.</small></div></div><div class="admin-data-list">${appealRows}</div></div>
@@ -3891,6 +3945,22 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       btns.forEach(b=>{b.disabled=false;b.classList.remove('is-processing');});
       return toast(e?.message||'Impossible de traiter la demande de réactivation.');
     }
+  }
+  async function adminSetBoostPaymentStatus(id,status){
+    if(!id)return toast('Paiement publicitaire invalide.');
+    if(!confirm(status==='verified'?'Vérifier ce paiement et envoyer la campagne en examen ?':'Refuser ce paiement publicitaire ?'))return;
+    const r=await sb.rpc('tafa_admin_review_boost_payment',{p_payment_id:id,p_status:status});
+    if(r.error)return toast(r.error.message);
+    toast(status==='verified'?'Paiement vérifié. La campagne est prête pour validation de diffusion.':'Paiement publicitaire refusé.');
+    return adminTotalPage();
+  }
+  async function adminSetBoostCampaignStatus(id,status){
+    if(!id)return;
+    if(!confirm(status==='active'?'Activer et sponsoriser cette campagne ?':'Refuser cette campagne ?'))return;
+    const r=await sb.rpc('tafa_admin_review_boost_campaign',{p_campaign_id:id,p_status:status});
+    if(r.error)return toast(r.error.message);
+    toast(status==='active'?'Campagne sponsorisée activée.':'Campagne refusée.');
+    return adminTotalPage();
   }
   async function adminSetVerificationStatus(id,status){ if(!confirm(status==='approved'?'Approuver cette vérification ?':'Refuser cette demande ?'))return; const r=await sb.rpc('tafa_admin_set_verification_status',{p_id:id,p_status:status}); if(r.error)return toast(r.error.message); toast(status==='approved'?'Badge bleu activé.':'Demande refusée.'); return adminTotalPage(); }
   async function openRestrictionAppeal(){
@@ -5089,6 +5159,8 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if (action === "admin-toggle-user") return adminToggleUser(id,actionEl.dataset.status||'active');
     if (action === "admin-withdrawal-status") return adminSetWithdrawalStatus(id,actionEl.dataset.status||'rejected');
     if (action === "admin-payment-status") return adminSetPaymentStatus(id,actionEl.dataset.status||'failed');
+    if (action === "admin-boost-payment-status") return adminSetBoostPaymentStatus(id,actionEl.dataset.status||'rejected');
+    if (action === "admin-boost-campaign-status") return adminSetBoostCampaignStatus(id,actionEl.dataset.status||'rejected');
     if (action === "admin-report-status") return adminSetReportStatus(id,actionEl.dataset.status||'resolved');
     if (action === "search-category") { searchCategory = actionEl.dataset.category || "accounts"; return searchPage($("searchInput")?.value || "", searchCategory); }
     if (action === "select-mood") { document.querySelectorAll(".mood-choice").forEach(x=>x.classList.remove("selected")); actionEl.classList.add("selected"); return; }
@@ -5120,7 +5192,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       let post = state.posts.find(x => x.id === id);
       if (!post) post = (await sb.from("posts").select("*").eq("id", id).maybeSingle()).data;
       const owner = post?.user_id === state.user.id;
-      return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">PUBLICATION</span><h3>Actions</h3><div class="menu-grid"><button class="menu-card" data-action="save-post" data-id="${esc(id)}"><span class="menu-icon">♡</span><span><b>Enregistrer</b><small>Disponible pour tous</small></span></button>${owner ? `<button class="menu-card" data-action="edit-post" data-id="${esc(id)}"><span class="menu-icon">✎</span><span><b>Modifier</b><small>Uniquement votre publication</small></span></button><button class="menu-card danger-card" data-action="delete-post" data-id="${esc(id)}"><span class="menu-icon">⌫</span><span><b>Supprimer</b><small>Vous êtes le propriétaire</small></span></button>` : `<button class="menu-card" data-action="report-post" data-id="${esc(id)}"><span class="menu-icon">⚑</span><span><b>Signaler</b><small>Signaler cette publication</small></span></button>`}</div></div>`);
+      return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">PUBLICATION</span><h3>Actions</h3><div class="menu-grid"><button class="menu-card" data-action="save-post" data-id="${esc(id)}"><span class="menu-icon">♡</span><span><b>Enregistrer</b><small>Disponible pour tous</small></span></button>${owner ? `<button class="menu-card premium-boost-menu-card" data-action="boost-post" data-id="${esc(id)}"><span class="menu-icon">✦</span><span><b>Booster / Sponsoriser</b><small>Audience, budget et ciblage</small></span></button><button class="menu-card" data-action="edit-post" data-id="${esc(id)}"><span class="menu-icon">✎</span><span><b>Modifier</b><small>Uniquement votre publication</small></span></button><button class="menu-card danger-card" data-action="delete-post" data-id="${esc(id)}"><span class="menu-icon">⌫</span><span><b>Supprimer</b><small>Vous êtes le propriétaire</small></span></button>` : `<button class="menu-card" data-action="report-post" data-id="${esc(id)}"><span class="menu-icon">⚑</span><span><b>Signaler</b><small>Signaler cette publication</small></span></button>`}</div></div>`);
     }
     if (action === "delete-search-history") {
       const r=await sb.from("search_history").delete().eq("id",id).eq("user_id",state.user.id);
@@ -5229,6 +5301,13 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     }
 
     if (action === "auth-onboarding-back") { state.entering=false; state.user=null; sb.auth.signOut().catch(()=>{}); return showLogin(); }
+    if (action === "boost-post") { closeModal(); return openBoostPost(id); }
+    if (action === "create-boost-post") return createBoostPost();
+    if (action === "boost-page") return openBoostPage();
+    if (action === "create-boost-page") return createBoostPage();
+    if (action === "select-boost-payment") { document.querySelectorAll('[data-action="select-boost-payment"]').forEach(x=>x.classList.remove('active')); actionEl.classList.add('active'); const i=$("boostPaymentMethod"); if(i)i.value=actionEl.dataset.method||'Airtel Money'; return; }
+    if (action === "submit-boost-payment") return submitBoostPayment(id,Number(actionEl.dataset.amount||0));
+    if (action === "sponsored-click") { await recordSponsoredEvent(id,'click'); const target=actionEl.dataset.target||''; if(target){try{window.open(target,'_blank','noopener,noreferrer')}catch(_){}} else if(actionEl.dataset.pageId) return openPageDetail(actionEl.dataset.pageId); return; }
     if (action === "new-ad-campaign") return openAdCampaign();
     if (action === "save-ad-campaign") return saveAdCampaign();
     if (action === "toggle-ad-campaign") return toggleAdCampaign(id, actionEl.dataset.status||"draft");
