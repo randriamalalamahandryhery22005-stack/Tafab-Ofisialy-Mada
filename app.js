@@ -135,19 +135,18 @@ document.documentElement.classList.add("app-boot");
     }
   }
   async function registerAdminMediaHash(hash,kind,url){
-    if(!hash) return;
-    let isAdmin = state.__isAdmin===true;
-    if(!isAdmin){
-      try{ isAdmin = await adminIsAllowed(); }catch(_){ isAdmin = false; }
-      if(isAdmin) state.__isAdmin = true;
+    if(!hash || !/^[a-f0-9]{64}$/i.test(String(hash).trim())) {
+      throw new Error("Hash SHA-256 invalide : le média protégé n’a pas été enregistré.");
     }
-    if(!isAdmin) return;
-    const cleanHash=String(hash||"").trim().toLowerCase();
-    if(!/^[0-9a-f]{64}$/.test(cleanHash)){
-      throw new Error("Hash média invalide : le média protégé n’a pas été enregistré.");
+    if(state.__isAdmin!==true){
+      try{
+        const adminCheck=await sb.rpc("tafa_is_admin",{p_user_id:state.user?.id});
+        if(!adminCheck.error) state.__isAdmin=adminCheck.data===true;
+      }catch(_){}
     }
+    if(state.__isAdmin!==true) return;
     const r=await sb.rpc("tafa_admin_register_media_hash",{
-      p_sha256:cleanHash,
+      p_sha256:String(hash).trim().toLowerCase(),
       p_kind:kind,
       p_url:url||null
     });
