@@ -1,11 +1,14 @@
-Tafaß — Admin Dashboard final SQL fix
+TAFAß — FIX DEMANDE DE RÉACTIVATION
 
-Utiliser uniquement les deux fichiers SQL de cette archive pour le Dashboard Admin.
-Cette version :
-- ne référence plus la colonne is_reel ;
-- utilise posts.media_type = 'reel' pour compter les Reels ;
-- ne supprime pas tafa_is_admin(uuid) ;
-- n'utilise pas DROP FUNCTION ... CASCADE ;
-- conserve les policies RLS existantes.
+Le message « duplicate key ... tafa_account_appeals_one_pending_per_user_idx » ne vient pas de l'approbation admin. Il vient d'une nouvelle insertion de demande alors qu'une demande pending existe déjà.
 
-Exécuter TAFASS_ADMIN_DASHBOARD_REALTIME.sql puis TAFASS_ADMIN_DASHBOARD_FINAL_FIX.sql.
+Ce patch app.js :
+- bloque les doubles clics sur « Envoyer la demande » ;
+- vérifie directement dans Supabase s'il existe déjà une demande pending ;
+- masque le formulaire lorsqu'une demande pending existe ;
+- transforme aussi l'erreur unique en message utilisateur propre ;
+- ne supprime pas la contrainte « une seule demande pending par compte » ;
+- ne modifie pas avatar_url/cover_url.
+
+Installation : remplacer uniquement app.js.
+Ne pas supprimer l'index unique.
