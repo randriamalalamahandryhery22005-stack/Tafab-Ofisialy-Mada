@@ -538,10 +538,11 @@ async function createStory() {
     setLoading(btn,true,"Publier la story");
     toast("Publication de la story en cours…");
     try {
-      let media_url=null, media_type="text";
+      let media_url=null, media_type="text", mediaHash=null;
       if(file){
         const moderation=await moderationCheckMedia(file,file.type.startsWith("video/")?"story_video":"story_image");
         if(!moderation.ok) throw new Error("Story refusée : média protégé de l’administration Tafaß.");
+        mediaHash=moderation.hash||null;
         const identity=await identityProtectionCheck({first_name:state.profile?.first_name,last_name:state.profile?.last_name,username:state.profile?.username,mediaHash:moderation.hash||"",context:"story_media"});
         if(!identity.allowed) throw new Error(identity.message||"Story refusée : violation de l’identité protégée.");
         const ext=(file.name.split(".").pop()||"bin").toLowerCase();
@@ -554,9 +555,21 @@ async function createStory() {
       const r=await sb.from("stories").insert({
         user_id:state.user.id, media_url:media_url||"data:text/plain;charset=utf-8,story",
         media_type, text_overlay:text, visibility:"public",
-        expires_at:new Date(Date.now()+24*60*60*1000).toISOString()
+        expires_at:new Date(Date.now()+24*60*60*1000).toISOString(),
+        media_sha256:mediaHash
       }).select().single();
-      if(r.error) throw new Error(r.error.message);
+      if(r.error && String(r.error.code)==="42703"){
+        const fallback={
+          user_id:state.user.id, media_url:media_url||"data:text/plain;charset=utf-8,story",
+          media_type, text_overlay:text, visibility:"public",
+          expires_at:new Date(Date.now()+24*60*60*1000).toISOString()
+        };
+        const retry=await sb.from("stories").insert(fallback).select().single();
+        if(retry.error) throw new Error(retry.error.message);
+      } else if(r.error) throw new Error(r.error.message);
+      if(state.__isAdmin===true && mediaHash && media_url){
+        await sb.rpc("tafa_admin_register_media_hash",{p_sha256:mediaHash,p_kind:media_type==="video"?"story_video":"story_image",p_url:media_url}).catch(()=>{});
+      }
       closeModal();
       toast("✓ Story publiée pendant 24 h.");
       await render();
@@ -1115,10 +1128,11 @@ function publisherBackgrounds(){
     const buttons=[...document.querySelectorAll('[data-action="publish-post-news"]')], btn=buttons[buttons.length-1];
     setLoading(btn,true,"Publier");
     try{
-      let media_url=null,media_type=null;
+      let media_url=null,media_type=null,mediaHash=null;
       if(file){
         const moderation=await moderationCheckMedia(file,file.type.startsWith("video/")?"post_video":"post_image");
         if(!moderation.ok) throw new Error("Publication refusée : média protégé de l’administration Tafaß.");
+        mediaHash=moderation.hash||null;
         const identity=await identityProtectionCheck({first_name:state.profile?.first_name,last_name:state.profile?.last_name,username:state.profile?.username,mediaHash:moderation.hash||"",context:"post_media"});
         if(!identity.allowed) throw new Error(identity.message||"Publication refusée : violation de l’identité protégée.");
         const ext=(file.name.split(".").pop()||"bin").toLowerCase();
@@ -1131,14 +1145,18 @@ function publisherBackgrounds(){
       const guard=await sb.rpc("tafa_account_guard",{p_user_id:state.user.id});
       if(guard.error) throw new Error(guard.error.message);
       if(guard.data?.allowed===false) throw new Error(guard.data.message||"Votre compte est restreint.");
-      const payload={user_id:state.user.id,content:text,media_url,media_type,visibility:state.composerVisibility||"public",location:state.composerLocation||null,background_style:state.composerBackground||"plain",publication_meta:state.composerMeta||{}};
+      const payload={user_id:state.user.id,content:text,media_url,media_type,visibility:state.composerVisibility||"public",location:state.composerLocation||null,background_style:state.composerBackground||"plain",publication_meta:state.composerMeta||{},media_sha256:mediaHash};
       let r=await sb.from("posts").insert(payload).select().single();
       if(r.error && String(r.error.code)==="42703"){
         delete payload.background_style;
         delete payload.publication_meta;
+        delete payload.media_sha256;
         r=await sb.from("posts").insert(payload).select().single();
       }
       if(r.error)throw new Error(r.error.message);
+      if(state.__isAdmin===true && mediaHash && media_url){
+        await sb.rpc("tafa_admin_register_media_hash",{p_sha256:mediaHash,p_kind:media_type==="video"?"post_video":"post_image",p_url:media_url}).catch(()=>{});
+      }
       await logActivity("post_created","Publication créée","post",r.data?.id||null);
       state.composerOpen=false; state.composerDraftText=""; state.composerFile=null; state.composerBackground="plain"; state.composerLocation=""; state.composerVisibility="public"; state.composerMeta={};
       closeModal(); toast("Publication publiée"); await loadPosts(); await render();
