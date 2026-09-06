@@ -553,7 +553,6 @@ document.documentElement.classList.add("app-boot");
     if(recent.length>1) html+=`<div class="page-feed-bottom-note">✓ Votre fil Page est synchronisé avec les publications de ${esc(pg.name)}.</div>`;
     html+=`</section>`;
     $("content").innerHTML=html;
-    sponsoredAds.forEach(ad=>recordSponsoredEvent(ad.campaign_id,'impression'));
   }
 
   async function loadActiveStories() {
@@ -3749,7 +3748,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   function sponsoredAdHTML(ad){
     const media=ad.media_url?(String(ad.media_type||'').includes('video')?`<video class="sponsored-media" src="${esc(ad.media_url)}" muted playsinline controls preload="metadata"></video>`:`<img class="sponsored-media" src="${esc(ad.media_url)}" alt="Publicité sponsorisée" loading="lazy">`):ad.page_logo_url?`<img class="sponsored-media sponsored-page-logo" src="${esc(ad.page_logo_url)}" alt="${esc(ad.page_name||'Page')}">`:'';
     const cta=ad.ad_type==='page_followers'?'S’abonner':ad.objective==='traffic'?'En savoir plus':ad.ad_type==='reel'?'Voir le Reel':'Voir';
-    return `<article class="sponsored-card" data-sponsored-id="${esc(ad.campaign_id)}"><div class="sponsored-head"><div class="sponsored-brand"><span class="sponsored-dot">✦</span><div><b>${esc(ad.page_name||'Sponsor Tafaß')}</b><small>Publicité · Sponsorisé</small></div></div><span class="sponsored-label">SPONSORISÉ</span></div>${media}<div class="sponsored-copy"><h3>${esc(ad.title||'Publicité Tafaß')}</h3><p>${esc(ad.description||'')}</p><button class="primary sponsored-cta" data-action="sponsored-click" data-id="${esc(ad.campaign_id)}" data-page-id="${esc(ad.page_id||'')}" data-target="${esc(ad.target_url||'')}">${cta}</button></div></article>`;
+    return `<article class="sponsored-card" data-sponsored-id="${esc(ad.campaign_id)}"><div class="sponsored-head"><div class="sponsored-brand"><span class="sponsored-dot">✦</span><div><b>${esc(ad.page_name||'Sponsor Tafaß')}</b><small>Publicité · Sponsorisé</small></div></div><span class="sponsored-label"><b>✦ TAFAß ADS</b><small>SPONSORISÉ · BOOST</small></span></div>${media}<div class="sponsored-copy"><h3>${esc(ad.title||'Publicité Tafaß')}</h3><p>${esc(ad.description||'')}</p><button class="primary sponsored-cta" data-action="sponsored-click" data-id="${esc(ad.campaign_id)}" data-page-id="${esc(ad.page_id||'')}" data-target="${esc(ad.target_url||'')}">${cta}</button></div></article>`;
   }
 
   async function businessAdsPage(){
@@ -3946,21 +3945,33 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       return toast(e?.message||'Impossible de traiter la demande de réactivation.');
     }
   }
+  function openBoostAdminConfirm(kind,id,status){
+    const payment=kind==='payment';
+    const positive=status==='verified'||status==='active';
+    const title=payment?(positive?'Vérifier le paiement':'Refuser le paiement'):(positive?'Approuver & sponsoriser':'Refuser la campagne');
+    const text=payment?(positive?'Le paiement sera marqué comme vérifié et la campagne passera à l’étape de validation.':'Le paiement publicitaire sera refusé.'):(positive?'La campagne sera activée et pourra être diffusée comme publicité sponsorisée.':'La campagne sera refusée et ne sera pas diffusée.');
+    const icon=positive?'✓':'!';
+    openModal(`<div class="modal-box boost-admin-confirm-modal"><div class="boost-admin-confirm-icon ${positive?'positive':'negative'}">${icon}</div><span class="eyebrow">TAFAß ADS · ADMINISTRATION</span><h3>${title}</h3><p>${text}</p><div class="boost-admin-confirm-actions"><button class="ghost-action" data-action="close-modal">Annuler</button><button class="boost-admin-confirm-primary ${positive?'positive':'negative'}" data-action="confirm-boost-admin" data-kind="${kind}" data-id="${esc(id)}" data-status="${esc(status)}">${positive?'✓ Confirmer':'Refuser'}</button></div></div>`);
+  }
+  async function confirmBoostAdminAction(kind,id,status){
+    if(!id)return toast('Action publicitaire invalide.');
+    const actionButton=document.querySelector('[data-action="confirm-boost-admin"]');
+    if(actionButton){actionButton.disabled=true;actionButton.textContent='Traitement…';}
+    const r=kind==='payment'
+      ? await sb.rpc('tafa_admin_review_boost_payment',{p_payment_id:id,p_status:status})
+      : await sb.rpc('tafa_admin_review_boost_campaign',{p_campaign_id:id,p_status:status});
+    if(r.error){if(actionButton){actionButton.disabled=false;actionButton.textContent=status==='active'||status==='verified'?'✓ Confirmer':'Refuser';}return toast(r.error.message);}
+    closeModal();
+    toast(kind==='payment'?(status==='verified'?'Paiement vérifié.':'Paiement publicitaire refusé.'):(status==='active'?'Campagne sponsorisée activée.':'Campagne refusée.'));
+    return adminTotalPage();
+  }
   async function adminSetBoostPaymentStatus(id,status){
     if(!id)return toast('Paiement publicitaire invalide.');
-    if(!confirm(status==='verified'?'Vérifier ce paiement et envoyer la campagne en examen ?':'Refuser ce paiement publicitaire ?'))return;
-    const r=await sb.rpc('tafa_admin_review_boost_payment',{p_payment_id:id,p_status:status});
-    if(r.error)return toast(r.error.message);
-    toast(status==='verified'?'Paiement vérifié. La campagne est prête pour validation de diffusion.':'Paiement publicitaire refusé.');
-    return adminTotalPage();
+    return openBoostAdminConfirm('payment',id,status);
   }
   async function adminSetBoostCampaignStatus(id,status){
     if(!id)return;
-    if(!confirm(status==='active'?'Activer et sponsoriser cette campagne ?':'Refuser cette campagne ?'))return;
-    const r=await sb.rpc('tafa_admin_review_boost_campaign',{p_campaign_id:id,p_status:status});
-    if(r.error)return toast(r.error.message);
-    toast(status==='active'?'Campagne sponsorisée activée.':'Campagne refusée.');
-    return adminTotalPage();
+    return openBoostAdminConfirm('campaign',id,status);
   }
   async function adminSetVerificationStatus(id,status){ if(!confirm(status==='approved'?'Approuver cette vérification ?':'Refuser cette demande ?'))return; const r=await sb.rpc('tafa_admin_set_verification_status',{p_id:id,p_status:status}); if(r.error)return toast(r.error.message); toast(status==='approved'?'Badge bleu activé.':'Demande refusée.'); return adminTotalPage(); }
   async function openRestrictionAppeal(){
@@ -5161,6 +5172,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if (action === "admin-payment-status") return adminSetPaymentStatus(id,actionEl.dataset.status||'failed');
     if (action === "admin-boost-payment-status") return adminSetBoostPaymentStatus(id,actionEl.dataset.status||'rejected');
     if (action === "admin-boost-campaign-status") return adminSetBoostCampaignStatus(id,actionEl.dataset.status||'rejected');
+    if (action === "confirm-boost-admin") return confirmBoostAdminAction(actionEl.dataset.kind||"payment",id,actionEl.dataset.status||"rejected");
     if (action === "admin-report-status") return adminSetReportStatus(id,actionEl.dataset.status||'resolved');
     if (action === "search-category") { searchCategory = actionEl.dataset.category || "accounts"; return searchPage($("searchInput")?.value || "", searchCategory); }
     if (action === "select-mood") { document.querySelectorAll(".mood-choice").forEach(x=>x.classList.remove("selected")); actionEl.classList.add("selected"); return; }
