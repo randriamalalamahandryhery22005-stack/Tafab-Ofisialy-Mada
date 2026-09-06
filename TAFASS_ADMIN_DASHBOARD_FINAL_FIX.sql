@@ -4,15 +4,13 @@
 -- lors de son exécution et recrée les fonctions d'accès.
 -- ============================================================
 
-drop function if exists public.tafa_is_admin_actor(uuid);
-drop function if exists public.tafa_is_admin(uuid);
 
 -- ============================================================
 -- Tafaß — ADMIN ACCESS REPAIR
 -- Fix: function public.tafa_is_admin_actor(uuid) does not exist
 -- ============================================================
 
-create or replace function public.tafa_is_admin_actor(p_user_id uuid)
+create or replace function public.tafa_is_admin_actor(p_user_id uuid default NULL)
 returns boolean
 language sql
 security definer
@@ -22,9 +20,11 @@ as $$
     select 1
     from public.profiles p
     where p.id = p_user_id
-      and (coalesce(p.is_admin,false) = true or coalesce(p.admin_badge,false) = true)
+      and coalesce(p.is_admin, false) = true
   );
 $$;
+
+grant execute on function public.tafa_is_admin_actor(uuid) to authenticated;
 
 create or replace function public.tafa_is_admin(p_user_id uuid default auth.uid())
 returns boolean
@@ -35,7 +35,6 @@ as $$
   select public.tafa_is_admin_actor(p_user_id);
 $$;
 
-grant execute on function public.tafa_is_admin_actor(uuid) to authenticated;
 grant execute on function public.tafa_is_admin(uuid) to authenticated;
 
 -- ============================================================
@@ -85,7 +84,7 @@ begin
   if not exists (
     select 1 from public.profiles p
     where p.id = uid
-      and (coalesce(p.is_admin,false) = true or coalesce(p.admin_badge,false) = true)
+      and coalesce(p.is_admin,false) = true
   ) then
     raise exception 'Accès réservé à l’administration';
   end if;
