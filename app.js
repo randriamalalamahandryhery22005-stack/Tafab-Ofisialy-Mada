@@ -4788,6 +4788,10 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if (action === "confirm-live-start") { state.composerMeta={...(state.composerMeta||{}),live_title:$("liveTitleInput")?.value?.trim()||"Direct Tafaß"}; closeModal(); return startLiveFromPublisher(); }
     if (action === "watch-live") return watchLive(id);
     if (action === "end-live") return endLive();
+    if (action === "end-live-session") {
+      const id = actionEl.dataset.id || null;
+      return endLive(id);
+    }
     if (action === "live-flip-camera") return flipLiveCamera();
     if (action === "live-toggle-mic") return toggleLiveMic();
     if (action === "close-live-viewer") { if(liveChannel){try{await sb.removeChannel(liveChannel);}catch(_){}} if(liveCommentsChannel){try{await sb.removeChannel(liveCommentsChannel);}catch(_){} liveCommentsChannel=null;} liveChannel=null; liveViewerPc?.close(); liveViewerPc=null; liveSessionId=null; liveRole=null; liveViewerId=null; liveCommentRows=[]; closeModal(); return; }
