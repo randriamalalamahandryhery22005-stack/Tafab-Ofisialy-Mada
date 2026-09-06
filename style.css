@@ -4816,3 +4816,40 @@ button[data-action="create-story"].loading{opacity:.72;pointer-events:none}
 @media(max-width:720px){.premium-confirm-modal-v2{padding:22px 17px}.premium-confirm-actions-v2{grid-template-columns:1fr}.monet-coin-callout-v2{align-items:flex-start;flex-direction:column}.monet-coin-callout-v2 strong{font-size:22px}.monet-longtext-v2 p{font-size:11px;line-height:1.7}}
 
 .premium-prompt-v2 textarea{width:100%;min-height:120px;resize:vertical;margin:0 0 14px;padding:13px 14px;border-radius:14px;border:1px solid var(--line);background:rgba(255,255,255,.035);color:var(--text);outline:none}.premium-prompt-v2 textarea:focus{border-color:rgba(83,143,255,.55);box-shadow:0 0 0 3px rgba(83,143,255,.08)}
+
+/* ================================================================
+   TAFAß PREMIUM · PUBLICITÉS SPONSORISÉES · LECTURE
+   ================================================================ */
+.sponsored-media-button{position:relative;display:block;width:100%;padding:0;border:0;background:transparent;cursor:pointer;overflow:hidden;border-radius:18px;text-align:inherit}
+.sponsored-media-button .sponsored-media{display:block;width:100%;max-height:560px;object-fit:cover}
+.sponsored-media-overlay{position:absolute;left:14px;bottom:14px;padding:9px 13px;border-radius:999px;background:rgba(0,0,0,.72);backdrop-filter:blur(10px);color:#fff;font-size:11px;font-weight:850;box-shadow:0 8px 25px rgba(0,0,0,.22)}
+.sponsored-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:13px}
+.sponsored-actions button{flex:1 1 140px}
+.sponsored-viewer-modal{width:min(760px,calc(100vw - 28px));max-width:760px}
+.sponsored-viewer-brand{display:flex;align-items:flex-end;gap:9px;flex-wrap:wrap;margin-bottom:9px}
+.sponsored-viewer-brand span{font-weight:950;letter-spacing:.08em}
+.sponsored-viewer-brand small{font-size:10px;color:var(--muted);letter-spacing:.08em}
+.sponsored-viewer-modal h3{margin:0 0 12px;font-size:22px}
+.sponsored-viewer-media{display:block;width:100%;max-height:62vh;object-fit:contain;border-radius:18px;background:#07090d}
+.sponsored-viewer-modal p{margin:13px 0;color:var(--muted);line-height:1.65;white-space:pre-wrap}
+.sponsored-viewer-actions{display:flex;gap:9px;flex-wrap:wrap}
+
+/* ================================================================
+   TAFAß ADMIN · SECTIONS NETTES ET TITRES INDÉPENDANTS
+   ================================================================ */
+.admin-total-page{display:grid;gap:18px}
+.admin-total-page>.admin-total-section{margin-top:0!important}
+.admin-section-head{display:block!important;margin-bottom:13px!important;padding-bottom:11px;border-bottom:1px solid var(--border)}
+.admin-section-title{display:block!important}
+.admin-section-title h3{display:block!important;margin:0!important;font-size:17px!important;line-height:1.25}
+.admin-section-note{display:block!important;margin-top:7px!important;color:var(--muted)!important;font-size:10px!important;line-height:1.5}
+.admin-total-page .monet-admin-section{background:transparent!important;border:0!important;padding:0!important}
+.monet-admin-section .admin-subsection{padding:16px;border:1px solid var(--border);border-radius:18px;background:var(--surface);margin-top:12px}
+.monet-admin-section .admin-subsection h4{margin:0 0 11px;padding-bottom:8px;border-bottom:1px solid var(--border);font-size:12px}
+
+/* ================================================================
+   TAFAß MONÉTISATION · VRAIS SOLDES / RETRAIT
+   ================================================================ */
+.monet-explainer-v2 .monet-section-title{display:block;padding-bottom:11px;border-bottom:1px solid var(--border)}
+.monet-explainer-v2 .monet-section-title h3{margin-top:6px}
+.monet-longtext-v2 p{line-height:1.72}

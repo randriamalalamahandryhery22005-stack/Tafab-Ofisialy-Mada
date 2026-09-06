@@ -218,3 +218,37 @@ do $$ begin
 end $$;
 
 select 'TAFAß MONÉTISATION V2 — COINS → MGA + RETRAITS PREMIUM READY' as status;
+
+/* ================================================================
+   BONUS DE BIENVENUE : 100 COINS POUR CHAQUE NOUVEAU COMPTE
+   ================================================================
+   Le crédit est effectué côté serveur à la création de auth.users.
+   Il fonctionne pour l'inscription e-mail et pour un premier compte OAuth.
+   ON CONFLICT évite tout doublon si le portefeuille existe déjà.
+*/
+create or replace function public.tafab_grant_new_account_bonus()
+returns trigger
+language plpgsql
+security definer
+set search_path=public
+as $$
+begin
+  insert into public.tafab_wallets(user_id,coins,earnings_mga,pending_earnings_mga,lifetime_earnings_mga,total_withdrawn_mga)
+  values(new.id,100,0,0,0,0)
+  on conflict(user_id) do nothing;
+  return new;
+end
+$$;
+
+revoke all on function public.tafab_grant_new_account_bonus() from public;
+
+drop trigger if exists tafab_new_account_bonus on auth.users;
+create trigger tafab_new_account_bonus
+after insert on auth.users
+for each row execute function public.tafab_grant_new_account_bonus();
+
+/* Le seuil monétaire officiel reste 1 000 Ar.
+   Avec le barème 10 coins = 1 Ar brut, cela correspond à 10 000 coins bruts. */
+update public.tafab_creator_monetization
+   set min_withdrawal_mga=1000
+ where min_withdrawal_mga is null or min_withdrawal_mga<1000;
