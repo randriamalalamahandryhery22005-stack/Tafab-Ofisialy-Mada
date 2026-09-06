@@ -4077,20 +4077,84 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   async function adminSetReportStatus(id,status){
     const r=await sb.rpc('tafa_admin_set_report_status',{p_id:id,p_status:status}); if(r.error)return toast(r.error.message); toast('Signalement traité.'); return adminTotalPage();
   }
+  // ============================================================
+  // TAFAß — VÉRIFICATION PREMIUM V2
+  // Parcours complet en 5 étapes + suivi temps réel.
+  // Utilise le schéma stable badge_requests / badge-proofs existant.
+  // ============================================================
+  async function loadVerificationRequests(){
+    if(!state.user) return [];
+    try{
+      const {data,error}=await sb.from('badge_requests').select('*').eq('user_id',state.user.id).order('created_at',{ascending:false}).limit(20);
+      if(error) throw error;
+      state.verificationRequests=data||[];
+      return state.verificationRequests;
+    }catch(e){ console.warn('Tafaß vérification:',e?.message||e); return state.verificationRequests||[]; }
+  }
+  function verificationStatusLabel(status){ return ({pending:'En attente de validation',approved:'Badge bleu actif',rejected:'Demande refusée'}[String(status||'').toLowerCase()]||'Statut inconnu'); }
+  function verificationStatusClass(status){ return ({pending:'pending',approved:'approved',rejected:'rejected'}[String(status||'').toLowerCase()]||'pending'); }
+  function verificationTimeline(status){
+    const st=String(status||'pending').toLowerCase();
+    const active=st==='approved'?5:st==='rejected'?4:4;
+    const steps=[['01','Identité','Informations de base'],['02','Catégorie','Type de vérification'],['03','Justificatif','Document de preuve'],['04','Paiement','Référence de transaction'],['05','Validation','Contrôle administratif']];
+    return `<div class="verification-timeline-v2">${steps.map((x,i)=>{const n=i+1,done=st==='approved'||(st==='pending'&&n<5)||(st==='rejected'&&n<5);return `<div class="verification-timeline-step ${done?'done':''} ${n===active?'current':''}"><span>${done?'✓':x[0]}</span><b>${x[1]}</b><small>${x[2]}</small></div>`}).join('')}</div>`;
+  }
   async function openVerificationRequest(){
     if(isAdminProfile(state.profile)) return toast("L’administrateur possède automatiquement son badge rouge.");
-    const q=(await sb.from('tafa_verification_requests').select('status,fee_mga,created_at').eq('user_id',state.user.id).order('created_at',{ascending:false}).limit(1).maybeSingle()).data;
-    openModal(`<div class="modal-box verification-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • VÉRIFICATION</span><h3>Demander le badge bleu</h3><p class="muted">La demande est payante et doit ensuite être approuvée par l’administration.</p>${q?`<div class="settings-info-card"><b>Dernière demande</b><small>Statut : ${esc(q.status||'pending')} · ${Number(q.fee_mga||25000).toLocaleString('fr-FR')} Ar</small></div>`:''}<label>Référence du paiement<input id="verificationPaymentRef" class="premium-input" maxlength="120" placeholder="Référence de paiement"></label><label>Motif<textarea id="verificationReason" class="premium-input" maxlength="500" placeholder="Motif de la demande…"></textarea></label><button class="primary big" data-action="submit-verification-request">Envoyer · 25 000 Ar</button></div>`);
+    await loadVerificationRequests();
+    const latest=(state.verificationRequests||[])[0];
+    if(latest?.status==='pending') return verificationPage(true);
+    if(latest?.status==='approved') return verificationPage(false);
+    let step=1, data={identity:displayName(state.profile||state.user)||'',category:'',method:'',ref:''}, proofFile=null;
+    const titles=['Identité','Catégorie','Justificatif','Paiement','Confirmation'];
+    const categories=['Personnalité publique','Créateur de contenu','Artiste','Entreprise','Marque','Média','Journaliste','Sportif','Institution','Organisation','Professionnel','Autre'];
+    const show=()=>{
+      let body='';
+      if(step===1) body=`<div class="verification-step-v2"><div class="verification-step-icon-v2">◎</div><h3>Vérifiez votre identité</h3><p>Utilisez votre nom légal. Cette information sert uniquement à l’examen de votre demande.</p><label>Nom légal<input id="vIdentity" class="premium-input" maxlength="160" value="${esc(data.identity)}" placeholder="Nom complet"></label><label>Nom d’utilisateur<input class="premium-input" value="@${esc(state.profile?.username||'')}" readonly></label></div>`;
+      if(step===2) body=`<div class="verification-step-v2"><div class="verification-step-icon-v2">✓</div><h3>Choisissez votre catégorie</h3><p>Sélectionnez la catégorie qui correspond le mieux à votre présence publique.</p><label>Catégorie<select id="vCategory" class="premium-input">${categories.map(x=>`<option ${x===data.category?'selected':''}>${x}</option>`).join('')}</select></label></div>`;
+      if(step===3) body=`<div class="verification-step-v2"><div class="verification-step-icon-v2">▣</div><h3>Ajoutez votre justificatif</h3><p>Importez une pièce pertinente. Le fichier est envoyé dans le stockage privé réservé aux vérifications.</p><label>Document<input id="vProof" type="file" accept="image/*,.pdf"></label><div class="verification-file-v2">${proofFile?`✓ ${esc(proofFile.name)}`:'Image ou PDF accepté'}</div></div>`;
+      if(step===4) body=`<div class="verification-step-v2"><div class="verification-step-icon-v2">◇</div><h3>Confirmez votre paiement</h3><p>Frais de vérification : <b>25 000 Ar / mois</b>. Effectuez le paiement puis saisissez la référence exacte.</p><div class="verification-payments-v2"><span><b>Yas Money</b><small>+261 383 955 105</small></span><span><b>Airtel Money</b><small>+261 336 756 185</small></span><span><b>Orange Money</b><small>+261 379 594 257</small></span></div><label>Méthode<select id="vMethod" class="premium-input"><option>Yas Money</option><option>Airtel Money</option><option>Orange Money</option></select></label><label>Référence<input id="vRef" class="premium-input" maxlength="120" value="${esc(data.ref)}" placeholder="Référence exacte du paiement"></label></div>`;
+      if(step===5) body=`<div class="verification-step-v2"><div class="verification-success-v2">✓</div><h3>Tout est prêt</h3><p>Relisez votre dossier avant l’envoi. L’administration vérifiera l’identité, le justificatif et le paiement avant toute activation.</p><div class="verification-summary-v2"><span>Identité<strong>${esc(data.identity||'—')}</strong></span><span>Catégorie<strong>${esc(data.category||'—')}</strong></span><span>Justificatif<strong>${esc(proofFile?.name||'—')}</strong></span><span>Paiement<strong>${esc(data.method||'—')}</strong></span><span>Référence<strong>${esc(data.ref||'—')}</strong></span></div></div>`;
+      openModal(`<div class="modal-box verification-wizard-v2"><div class="verification-wizard-head"><div><span class="eyebrow">TAFAß · VÉRIFICATION</span><h3>Badge bleu officiel</h3><small>Étape ${step} sur 5 · ${titles[step-1]}</small></div><button class="modal-close" data-action="close-modal">×</button></div><div class="verification-progress-v2">${titles.map((t,i)=>`<span class="${i+1<=step?'active':''}"><b>${i+1}</b><small>${t}</small></span>`).join('')}</div>${body}<div class="verification-wizard-actions-v2"><button type="button" class="ghost-action" id="verificationBack">${step===1?'Annuler':'Retour'}</button><button type="button" class="primary big" id="verificationNext">${step===5?'Envoyer la demande':'Continuer'}</button></div></div>`);
+      const back=$('verificationBack'), next=$('verificationNext');
+      if(back) back.onclick=()=>{if(step===1)closeModal();else{step--;show();}};
+      if(next) next.onclick=async()=>{
+        if(next.disabled)return;
+        if(step===1){data.identity=$('vIdentity')?.value.trim()||'';if(data.identity.length<2)return toast('Indiquez votre nom légal.');}
+        if(step===2){data.category=$('vCategory')?.value||'';if(!data.category)return toast('Choisissez une catégorie.');}
+        if(step===3){const f=$('vProof')?.files?.[0];if(f)proofFile=f;if(!proofFile)return toast('Ajoutez votre justificatif.');if(proofFile.size>15*1024*1024)return toast('Le justificatif dépasse 15 Mo.');}
+        if(step===4){data.method=$('vMethod')?.value||'';data.ref=$('vRef')?.value.trim()||'';if(!data.ref)return toast('Ajoutez la référence exacte du paiement.');}
+        if(step<5){step++;show();return;}
+        next.disabled=true; next.textContent='Envoi en cours…';
+        try{await submitVerificationRequest(data,proofFile);closeModal();await loadVerificationRequests();render();toast('Demande envoyée ✓ · En attente de validation');}
+        catch(e){next.disabled=false;next.textContent='Envoyer la demande';toast(e?.message||'Impossible d’envoyer la demande.');}
+      };
+    };
+    show();
+  }
+  async function submitVerificationRequest(data,proofFile){
+    if(!state.user) throw new Error('Connexion requise.');
+    const {data:pending,error:checkError}=await sb.from('badge_requests').select('id,status').eq('user_id',state.user.id).eq('status','pending').limit(1).maybeSingle();
+    if(checkError) throw checkError;
+    if(pending) throw new Error('Une demande de vérification est déjà en attente.');
+    let proofPath='';
+    if(proofFile){const ext=(proofFile.name.split('.').pop()||'bin').toLowerCase().replace(/[^a-z0-9]/g,'')||'bin';proofPath=`${state.user.id}/${crypto.randomUUID()}.${ext}`;const up=await sb.storage.from('badge-proofs').upload(proofPath,proofFile,{upsert:false,contentType:proofFile.type||undefined});if(up.error)throw new Error('Justificatif : '+up.error.message);}
+    const ins=await sb.from('badge_requests').insert({user_id:state.user.id,identity_name:String(data.identity||''),category:String(data.category||'Autre'),proof_path:proofPath,payment_method:String(data.method||''),payment_reference:String(data.ref||''),status:'pending'}).select('*').single();
+    if(ins.error){if(proofPath)try{await sb.storage.from('badge-proofs').remove([proofPath]);}catch(_){}throw ins.error;}
+    try{await sb.from('payments').insert({user_id:state.user.id,payment_type:'badge',amount:25000,currency:'MGA',method:String(data.method||''),reference:String(data.ref||''),status:'pending',metadata:{badge_request_id:ins.data?.id||null,category:String(data.category||'Autre')}});}catch(_){ }
+    try{if(typeof notify==='function' && String(state.user.id)!==String(OFFICIAL_SUPER_ADMIN_ID))await notify(OFFICIAL_SUPER_ADMIN_ID,'badge_request',`Nouvelle demande de badge bleu de ${displayName(state.profile||state.user)}.`);}catch(_){ }
   }
   async function verificationPage(){
-    const token=state.renderToken;
-    const q=(await sb.from('tafa_verification_requests').select('status,fee_mga,payment_reference,reason,created_at').eq('user_id',state.user.id).order('created_at',{ascending:false}).limit(1).maybeSingle()).data;
-    if(token!==state.renderToken || state.route!=='verification') return;
-    const statusLabel={pending:'En attente',approved:'Approuvée',rejected:'Refusée'}[q?.status]||'';
-    simplePage('Vérification',`<section class="verification-page-premium"><div class="verification-hero"><div><span class="eyebrow">TAFAß • VÉRIFICATION OFFICIELLE</span><h3>Obtenez le badge bleu Tafaß</h3><p>Une demande vérifiable, un traitement administratif et un badge affiché automatiquement sur votre profil et vos publications après approbation.</p></div><span class="verification-mark">✓</span></div><div class="verification-steps"><div><b>01</b><span>Paiement</span><small>25 000 Ar</small></div><div><b>02</b><span>Demande</span><small>Référence + motif</small></div><div><b>03</b><span>Validation</span><small>Administration</small></div></div>${q?`<section class="verification-status-card"><div><span class="eyebrow">DERNIÈRE DEMANDE</span><h4>${esc(statusLabel)}</h4><p>${esc(q.reason||'Demande de badge bleu')}</p><small>${Number(q.fee_mga||25000).toLocaleString('fr-FR')} Ar · ${timeAgo(q.created_at)}</small></div><span class="verification-status-dot status-${esc(q.status||'pending')}">●</span></section>`:''}<section class="verification-form-card"><div class="section-title"><div><h3>Nouvelle demande</h3><small class="admin-section-note">Ajoutez la référence exacte de votre paiement.</small></div></div><label>Référence du paiement<input id="verificationPaymentRef" class="premium-input" maxlength="120" placeholder="Référence de paiement"></label><label>Motif de la demande<textarea id="verificationReason" class="premium-input" maxlength="500" placeholder="Pourquoi souhaitez-vous le badge bleu ?"></textarea></label><button class="primary big" data-action="submit-verification-request">Envoyer la demande · 25 000 Ar</button></section></section>`);
+    const token=++state.verificationRenderToken;
+    await loadVerificationRequests();
+    if(token!==state.verificationRenderToken || state.route!=='verification')return;
+    const latest=(state.verificationRequests||[])[0];
+    const status=String(latest?.status||'none');
+    const statusLabel=latest?verificationStatusLabel(status):'Aucune demande';
+    const cls=latest?verificationStatusClass(status):'empty';
+    const action=latest?.status==='pending'?'Voir le suivi':latest?.status==='approved'?'Voir mon statut':'Commencer la vérification';
+    simplePage('Vérification',`<section class="verification-page-premium verification-page-v2"><div class="verification-hero verification-hero-v2"><div><span class="eyebrow">TAFAß · VÉRIFICATION OFFICIELLE</span><h3>Obtenez le badge bleu</h3><p>Un parcours sécurisé en 5 étapes : identité, catégorie, justificatif, paiement et validation administrative.</p></div><span class="verification-mark">✓</span></div>${latest?`<section class="verification-status-card verification-status-v2"><div><span class="eyebrow">SUIVI EN TEMPS RÉEL</span><h4>${esc(statusLabel)}</h4><p>${esc(latest.status==='approved'?'Votre badge est actif.':latest.status==='rejected'?'Votre demande n’a pas été approuvée. Vous pouvez soumettre une nouvelle demande.':'Votre dossier est complet et attend le contrôle de l’administration.')}</p><small>${latest.created_at?new Date(latest.created_at).toLocaleString('fr-FR'):'—'} · ${Number(latest.payment_reference?'25000':'25000').toLocaleString('fr-FR')} Ar</small></div><span class="verification-live-dot ${cls}">●</span></section>`:''}${verificationTimeline(status)}<section class="verification-form-card verification-action-card"><div class="section-title"><div><h3>${latest?.status==='pending'?'Dossier en cours':'Demander la vérification'}</h3><small class="admin-section-note">${latest?.status==='pending'?'Le statut se met à jour automatiquement dès qu’une décision est prise.':'La validation finale appartient exclusivement à l’administration.'}</small></div></div>${latest?.status==='pending'?`<div class="verification-lock-v2">🔒 <span>Une seule demande en attente est autorisée. Vous recevrez la décision directement dans Tafaß.</span></div>`:''}<button class="primary big wide" data-action="verification-start">${esc(action)}</button></section></section>`);
   }
-
-  async function submitVerificationRequest(){ const ref=$("verificationPaymentRef")?.value.trim()||"", reason=$("verificationReason")?.value.trim()||""; if(!ref)return toast("Ajoutez la référence du paiement."); const r=await sb.rpc('tafa_submit_verification_request',{p_payment_reference:ref,p_reason:reason}); if(r.error)return toast(r.error.message); closeModal(); toast('Demande de vérification envoyée.'); }
   async function adminOpenAppeal(id){
     const x=(state.adminAppealsCache||[]).find(a=>String(a.id)===String(id));
     if(!x) return adminTotalPage();
@@ -4368,6 +4432,14 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
         }
         if (state.route==="search") searchPage($("searchInput")?.value||"");
         if (state.viewingProfileId && state.route==="profile") openUserProfile(state.viewingProfileId);
+      },
+      badge_requests: async payload => {
+        const rec=payload?.new||payload?.record||payload;
+        if(!rec?.user_id || String(rec.user_id)!==String(state.user.id)) return;
+        await loadVerificationRequests();
+        if(state.route==='verification') await verificationPage();
+        if(rec.status==='approved') toast('✓ Votre badge bleu est maintenant actif.');
+        if(rec.status==='rejected') toast('La demande de vérification a été refusée.');
       },
       tafa_account_appeals: async payload => {
         const rec=payload?.new||payload?.record||payload;
@@ -5343,6 +5415,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     }
     if (notificationId && action !== "mark-read") { await sb.from("notifications").update({is_read:true}).eq("id",notificationId).eq("user_id",state.user.id); updateBadges(); }
     if (action === "verification") return navigate("verification");
+    if (action === "verification-start") return openVerificationRequest();
     if (action === "open-restriction-appeal") return openRestrictionAppeal();
     if (action === "submit-appeal") return submitAppeal();
     if (action === "submit-verification-request") return submitVerificationRequest();
