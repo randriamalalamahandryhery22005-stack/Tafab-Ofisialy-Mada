@@ -1,4 +1,35 @@
 -- ============================================================
+-- Tafaß — ADMIN ACCESS REPAIR
+-- Fix: function public.tafa_is_admin_actor(uuid) does not exist
+-- ============================================================
+
+create or replace function public.tafa_is_admin_actor(p_user_id uuid)
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.profiles p
+    where p.id = p_user_id
+      and (coalesce(p.is_admin,false) = true or coalesce(p.admin_badge,false) = true)
+  );
+$$;
+
+create or replace function public.tafa_is_admin(p_user_id uuid default auth.uid())
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select public.tafa_is_admin_actor(p_user_id);
+$$;
+
+grant execute on function public.tafa_is_admin_actor(uuid) to authenticated;
+grant execute on function public.tafa_is_admin(uuid) to authenticated;
+
+-- ============================================================
 -- Tafaß — ADMIN DASHBOARD PREMIUM + REALTIME
 -- Statistiques, évolution, activité et localisation agrégée
 -- ============================================================
