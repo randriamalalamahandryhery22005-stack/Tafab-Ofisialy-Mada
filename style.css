@@ -3682,7 +3682,7 @@ button,.menu-card,.list-row,.page-menu-card{max-width:100%}
 .live-card b,.live-card small{display:block;min-width:0;overflow-wrap:normal;word-break:normal}
 .live-card b{font-size:12px}
 .live-card small{font-size:10px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.live-card strong{font-size:10px;color:#72a7ff;white-space:nowrap}
+.live-card strong{font-size:10px;color:#72a7ff;white-space:nowrap}\n.live-card-own strong{color:#ff6b7f}\n.live-card:disabled{opacity:.6;cursor:not-allowed}
 .live-modal{width:min(760px,calc(100vw - 24px));padding:18px;border-radius:22px;background:linear-gradient(180deg,#0d1627,#070d18);border:1px solid rgba(104,147,225,.2)}
 .live-modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:12px}
 .live-modal-head h3{margin:4px 0 2px;overflow-wrap:normal;word-break:normal}

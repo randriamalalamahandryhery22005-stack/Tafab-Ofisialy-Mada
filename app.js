@@ -566,7 +566,7 @@ async function renderFeed() {
       </section>
       ${activeLives.length ? `<section class="live-strip">
         <div class="live-strip-head"><div><b>En direct maintenant</b><small>Regardez les directs des membres Tafaß</small></div><span class="live-pulse">● LIVE</span></div>
-        <div class="live-strip-list">${activeLives.map(l=>`<button class="live-card" data-action="watch-live" data-id="${esc(l.id)}"><span class="live-card-avatar">${avatarHTML(l.profiles||{})}</span><span><b>${esc(l.profiles ? nameOf(l.profiles) : "Membre Tafaß")}</b><small>${esc(l.title||"Direct Tafaß")}</small></span><strong>Regarder</strong></button>`).join("")}</div>
+        <div class="live-strip-list">${activeLives.map(l=>{const mine=String(l.user_id)===String(state.user.id);return `<button class="live-card ${mine?"live-card-own":""}" data-action="${mine?"end-live-session":"watch-live"}" data-id="${esc(l.id)}"><span class="live-card-avatar">${avatarHTML(l.profiles||{})}</span><span><b>${esc(l.profiles ? nameOf(l.profiles) : "Membre Tafaß")}</b><small>${esc(l.title||"Direct Tafaß")}</small></span><strong>${mine?"Terminer":"Regarder"}</strong></button>`;}).join("")}</div>
       </section>` : ""}
 
       <section class="composer composer-news composer-launcher">
@@ -934,39 +934,79 @@ function publisherBackgrounds(){
   }
 
   async function watchLive(id){
+    // Open the viewer immediately so a slow/failed WebRTC negotiation can never
+    // leave the user stuck on the feed without a way to cancel.
     const {data:session,error}=await sb.from("live_sessions").select("id,user_id,title,status,started_at,profiles(first_name,last_name,username,avatar_url)").eq("id",id).maybeSingle();
     if(error || !session || session.status!=="live") return toast("Ce direct est terminé.");
     if(session.user_id===state.user.id) return toast("Vous êtes déjà le diffuseur de ce direct.");
+
     liveRole="viewer"; liveSessionId=id; liveViewerId=crypto.randomUUID();
     liveChannel=sb.channel(liveChannelName(id),{config:{broadcast:{self:false}}});
     liveViewerPc=createLivePeer();
-    liveViewerPc.ontrack=e=>{const v=$("liveRemoteVideo");if(v)v.srcObject=e.streams[0];};
-    liveViewerPc.onicecandidate=e=>{if(e.candidate) liveChannel?.send({type:"broadcast",event:"viewer-ice",payload:{viewerId:liveViewerId,candidate:e.candidate}});};
+
+    // A viewer has no local media tracks, so explicitly request receive-only
+    // audio/video transceivers. Without them, some browsers create an empty SDP.
+    try{
+      liveViewerPc.addTransceiver("video",{direction:"recvonly"});
+      liveViewerPc.addTransceiver("audio",{direction:"recvonly"});
+    }catch(err){ console.warn("Tafaß live recv transceiver:",err); }
+
+    liveViewerPc.ontrack=e=>{
+      const v=$("liveRemoteVideo");
+      if(v && e.streams?.[0]){
+        v.srcObject=e.streams[0];
+        v.play?.().catch(()=>{});
+      }
+    };
+    liveViewerPc.onicecandidate=e=>{
+      if(e.candidate && liveRole==="viewer" && liveSessionId===id)
+        liveChannel?.send({type:"broadcast",event:"viewer-ice",payload:{viewerId:liveViewerId,candidate:e.candidate}});
+    };
     liveChannel.on("broadcast",{event:"viewer-count"},({payload})=>{
       if(payload?.count!=null){ liveViewerCount=Number(payload.count)||0; renderLiveViewerCount(); }
     });
     liveChannel.on("broadcast",{event:"broadcaster-answer"},async ({payload})=>{
-      if(payload?.viewerId!==liveViewerId || !payload.answer)return;
-      try{await liveViewerPc.setRemoteDescription(new RTCSessionDescription(payload.answer));}catch(_){}
+      if(payload?.viewerId!==liveViewerId || !payload.answer || !liveViewerPc)return;
+      try{await liveViewerPc.setRemoteDescription(new RTCSessionDescription(payload.answer));}catch(err){console.warn("Tafaß live answer:",err);}
     });
     liveChannel.on("broadcast",{event:"broadcaster-ice"},async ({payload})=>{
-      if(payload?.viewerId!==liveViewerId || !payload.candidate)return;
+      if(payload?.viewerId!==liveViewerId || !payload.candidate || !liveViewerPc)return;
       try{await liveViewerPc.addIceCandidate(payload.candidate);}catch(_){}
     });
-    await liveChannel.subscribe();
-    await liveChannel.send({type:"broadcast",event:"viewer-join",payload:{viewerId:liveViewerId}});
-    const offer=await liveViewerPc.createOffer(); await liveViewerPc.setLocalDescription(offer);
-    await liveChannel.send({type:"broadcast",event:"viewer-offer",payload:{viewerId:liveViewerId,offer:liveViewerPc.localDescription}});
+
     openModal(`<div class="modal-box live-modal live-viewer-modal">
-      <button class="modal-close" data-action="close-live-viewer">×</button>
+      <button class="modal-close" data-action="close-live-viewer" aria-label="Fermer le direct">×</button>
       <div class="live-modal-head"><div><span class="eyebrow">TAFAß • EN DIRECT</span><h3>${esc(session.title||"Direct Tafaß")}</h3><small>${esc(nameOf(session.profiles||{}))}</small></div><span class="live-pulse">● LIVE</span></div>
       <video id="liveRemoteVideo" class="live-video" autoplay playsinline controls></video>
-      <div class="live-status"><span>●</span><b>Direct en temps réel</b><small>Vous entendez l’audio du diffuseur. Vos commentaires sont transmis en temps réel.</small><strong id="liveViewerCount">1 spectateur</strong></div>
+      <div class="live-status"><span>●</span><b id="liveConnectionStatus">Connexion au direct…</b><small>Vous entendez l'audio du diffuseur. Vos commentaires sont transmis en temps réel.</small><strong id="liveViewerCount">1 spectateur</strong></div>
       <div class="live-controls"><button class="secondary-action" data-action="live-toggle-mic">🔊 Audio</button><button class="secondary-action" data-action="live-gift" data-gift="heart" data-coins="10">❤️ 10</button><button class="secondary-action" data-action="live-gift" data-gift="rose" data-coins="50">🌹 50</button><button class="secondary-action" data-action="live-gift" data-gift="star" data-coins="100">⭐ 100</button></div>
       ${liveCommentsMarkup()}
     </div>`);
-    await setupLiveComments(id);
-    $("liveCommentForm")?.addEventListener("submit",e=>{e.preventDefault();sendLiveComment();});
+
+    try{
+      const sub=await liveChannel.subscribe();
+      if(liveRole!=="viewer" || liveSessionId!==id)return;
+      if(sub && sub!=="SUBSCRIBED") console.warn("Tafaß live channel status:",sub);
+
+      await liveChannel.send({type:"broadcast",event:"viewer-join",payload:{viewerId:liveViewerId}});
+      if(liveRole!=="viewer" || liveSessionId!==id)return;
+
+      const offer=await liveViewerPc.createOffer();
+      await liveViewerPc.setLocalDescription(offer);
+      await liveChannel.send({type:"broadcast",event:"viewer-offer",payload:{viewerId:liveViewerId,offer:liveViewerPc.localDescription}});
+      const status=$("liveConnectionStatus");
+      if(status)status.textContent="Direct en temps réel";
+    }catch(err){
+      console.error("Tafaß watch live:",err);
+      const status=$("liveConnectionStatus");
+      if(status)status.textContent="Connexion impossible";
+      toast("Impossible de regarder ce direct pour le moment.");
+    }
+
+    if(liveRole==="viewer" && liveSessionId===id){
+      await setupLiveComments(id);
+      $("liveCommentForm")?.addEventListener("submit",e=>{e.preventDefault();sendLiveComment();});
+    }
   }
 
   function renderLiveViewerCount(){
@@ -993,18 +1033,28 @@ function publisherBackgrounds(){
       const v=$("liveRemoteVideo"); if(v){v.muted=!v.muted; toast(v.muted?"Audio coupé":"Audio activé");}
     }
   }
-  async function endLive(){
-    if(!liveSessionId)return;
-    const id=liveSessionId;
-    try{await sb.from("live_sessions").update({status:"ended",ended_at:new Date().toISOString()}).eq("id",id).eq("user_id",state.user.id);}catch(_){}
-    livePeers.forEach(pc=>pc.close()); livePeers.clear();
-    if(liveStream) liveStream.getTracks().forEach(t=>t.stop());
-    liveViewerPc?.close();
-    if(liveChannel){try{await sb.removeChannel(liveChannel);}catch(_){}}
-    if(liveCommentsChannel){try{await sb.removeChannel(liveCommentsChannel);}catch(_){} liveCommentsChannel=null;}
-    stopPublisherMusic();
-    liveStream=null;liveViewerPc=null;liveChannel=null;liveSessionId=null;liveRole=null;liveViewerId=null;liveCommentRows=[];liveViewerCount=0;state.activeLive=null;
-    closeModal(); if(state.route==="home") await renderFeed();
+  async function endLive(sessionIdOverride=null){
+    const id=sessionIdOverride || liveSessionId;
+    if(!id)return;
+    const isCurrent=String(liveSessionId)===String(id);
+    try{
+      const {error}=await sb.from("live_sessions").update({status:"ended",ended_at:new Date().toISOString()}).eq("id",id).eq("user_id",state.user.id);
+      if(error) return toast("Impossible de terminer ce direct : "+error.message);
+    }catch(err){
+      return toast("Impossible de terminer ce direct.");
+    }
+    if(isCurrent){
+      livePeers.forEach(pc=>pc.close()); livePeers.clear();
+      if(liveStream) liveStream.getTracks().forEach(t=>t.stop());
+      liveViewerPc?.close();
+      if(liveChannel){try{await sb.removeChannel(liveChannel);}catch(_){}}
+      if(liveCommentsChannel){try{await sb.removeChannel(liveCommentsChannel);}catch(_){} liveCommentsChannel=null;}
+      stopPublisherMusic();
+      liveStream=null;liveViewerPc=null;liveChannel=null;liveSessionId=null;liveRole=null;liveViewerId=null;liveCommentRows=[];liveViewerCount=0;state.activeLive=null;
+      closeModal();
+    }
+    if(state.route==="home") await renderFeed();
+    toast("Direct terminé.");
   }
 
   async function publishPostNews(){
