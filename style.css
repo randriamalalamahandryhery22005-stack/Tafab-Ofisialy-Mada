@@ -4464,10 +4464,14 @@ body.light body.light
   .conversation-page-clean .message-reaction-picker button{width:28px;height:28px;font-size:16px}
   .conversation-page-clean .message-react-trigger{width:24px;height:24px;font-size:13px}
 }
+
+
 /* =========================================================
-   TAFAß — GLOBAL AVATAR / PDP CIRCLE FIX
-   Tous les avatars et photos de profil restent parfaitement ronds.
+   TAFAß — FINAL CIRCLE FIX (AVATARS / PDP / STORIES)
+   Aucun avatar ne doit être étiré ou devenir ovale.
    ========================================================= */
+
+/* Base: tous les avatars utilisateur */
 .avatar,
 .avatar img,
 .default-avatar-image,
@@ -4476,40 +4480,231 @@ body.light body.light
 .entity-default-avatar-image img,
 .profile-avatar,
 .profile-avatar img,
+.profile-avatar-wrap-v5,
+.profile-avatar-wrap-v5 > .avatar,
+.profile-avatar-wrap-v5 > .avatar img,
+.editor-avatar-image-v3,
+.editor-avatar-image-v3 img,
 .menu-profile-avatar,
 .menu-profile-avatar .avatar,
-.menu-profile-avatar img,
+.menu-profile-avatar .avatar img,
+.admin-user-avatar,
+.admin-user-avatar img,
+.composer-launcher-avatar,
+.composer-launcher-avatar img,
+.conversation-avatar,
+.conversation-avatar img,
+.live-card-avatar .avatar,
+.live-card-avatar .avatar img,
 .page-context-avatar,
 .page-context-avatar img,
 .page-feed-avatar,
 .page-feed-avatar img,
-.conversation-avatar,
-.conversation-avatar img {
-  border-radius:50% !important;
+.page-post-avatar,
+.page-post-avatar img,
+.page-comment-avatar,
+.page-comment-avatar img,
+.page-team-avatar,
+.page-team-avatar img,
+.page-msg-avatar,
+.page-msg-avatar img {
+  border-radius: 50% !important;
 }
 
 .avatar,
 .default-avatar-image,
-.entity-default-avatar-image {
-  overflow:hidden !important;
-  aspect-ratio:1 / 1 !important;
-  flex-shrink:0;
+.entity-default-avatar-image,
+.profile-avatar,
+.admin-user-avatar,
+.composer-launcher-avatar,
+.conversation-avatar,
+.live-card-avatar .avatar,
+.page-context-avatar,
+.page-feed-avatar,
+.page-post-avatar,
+.page-comment-avatar,
+.page-team-avatar,
+.page-msg-avatar {
+  overflow: hidden !important;
+  aspect-ratio: 1 / 1 !important;
+  flex-shrink: 0 !important;
 }
 
 .avatar img,
 .default-avatar-image img,
-.entity-default-avatar-image img {
-  display:block !important;
-  width:100% !important;
-  height:100% !important;
-  max-width:none !important;
-  object-fit:cover !important;
-  object-position:center !important;
-  border-radius:50% !important;
+.entity-default-avatar-image img,
+.profile-avatar img,
+.profile-avatar-wrap-v5 > .avatar img,
+.editor-avatar-image-v3 img,
+.menu-profile-avatar .avatar img,
+.admin-user-avatar img,
+.composer-launcher-avatar img,
+.conversation-avatar img,
+.live-card-avatar .avatar img,
+.page-context-avatar img,
+.page-feed-avatar img,
+.page-post-avatar img,
+.page-comment-avatar img,
+.page-team-avatar img,
+.page-msg-avatar img {
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-width: none !important;
+  max-height: none !important;
+  object-fit: cover !important;
+  object-position: center center !important;
+  border-radius: 50% !important;
 }
 
-/* Le menu ne contient plus de bloc Profil redondant. */
-.menu-shortcuts-title {
-  margin-top:2px !important;
+/* Stories: conserver le cercle extérieur et le média parfaitement rond. */
+.stories .story {
+  flex: 0 0 auto !important;
 }
 
+.stories .story-ring,
+.story-ring {
+  width: 66px !important;
+  height: 66px !important;
+  min-width: 66px !important;
+  min-height: 66px !important;
+  max-width: 66px !important;
+  max-height: 66px !important;
+  aspect-ratio: 1 / 1 !important;
+  border-radius: 50% !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+  flex: 0 0 66px !important;
+}
+
+.stories .story-ring .avatar,
+.stories .story-ring > img,
+.stories .story-ring > video,
+.story-ring .avatar,
+.story-ring > img,
+.story-ring > video {
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-width: none !important;
+  max-height: none !important;
+  aspect-ratio: 1 / 1 !important;
+  object-fit: cover !important;
+  object-position: center center !important;
+  border-radius: 50% !important;
+  overflow: hidden !important;
+  display: block !important;
+}
+
+@media (max-width: 620px) {
+  .stories .story-ring,
+  .story-ring {
+    width: 62px !important;
+    height: 62px !important;
+    min-width: 62px !important;
+    min-height: 62px !important;
+    max-width: 62px !important;
+    max-height: 62px !important;
+    flex-basis: 62px !important;
+  }
+}
+
+/* PDP du profil public: cercle réel, sans déformation. */
+.profile-page-premium .profile-identity-row .profile-avatar,
+.profile-page-premium .profile-identity-row > .avatar {
+  width: 108px !important;
+  height: 108px !important;
+  min-width: 108px !important;
+  min-height: 108px !important;
+  max-width: 108px !important;
+  max-height: 108px !important;
+  aspect-ratio: 1 / 1 !important;
+  border-radius: 50% !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+.profile-page-premium .profile-identity-row .profile-avatar img,
+.profile-page-premium .profile-identity-row > .avatar img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  border-radius: 50% !important;
+}
+
+@media (max-width: 620px) {
+  .profile-page-premium .profile-identity-row .profile-avatar,
+  .profile-page-premium .profile-identity-row > .avatar {
+    width: 88px !important;
+    height: 88px !important;
+    min-width: 88px !important;
+    min-height: 88px !important;
+    max-width: 88px !important;
+    max-height: 88px !important;
+  }
+}
+
+/* Éditeur de profil: cercle fixe également. */
+.profile-redesign-v5 .profile-avatar-wrap-v5 {
+  width: 106px !important;
+  height: 106px !important;
+  min-width: 106px !important;
+  min-height: 106px !important;
+  aspect-ratio: 1 / 1 !important;
+  border-radius: 50% !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+.profile-redesign-v5 .profile-avatar-wrap-v5 > .avatar,
+.profile-redesign-v5 .profile-avatar-wrap-v5 > .avatar img {
+  width: 100% !important;
+  height: 100% !important;
+  aspect-ratio: 1 / 1 !important;
+  border-radius: 50% !important;
+  object-fit: cover !important;
+}
+
+@media (max-width: 620px) {
+  .profile-redesign-v5 .profile-avatar-wrap-v5 {
+    width: 82px !important;
+    height: 82px !important;
+    min-width: 82px !important;
+    min-height: 82px !important;
+    max-width: 82px !important;
+    max-height: 82px !important;
+  }
+}
+
+/* Logos de Pages/Groupes: cercle pour les photos d'identité uniquement. */
+.page-avatar-wrap,
+.page-avatar-wrap img,
+.detail-logo,
+.detail-logo img,
+.page-menu-avatar,
+.page-menu-avatar img,
+.page-mode-avatar,
+.page-mode-avatar img {
+  border-radius: 50% !important;
+}
+
+.page-avatar-wrap,
+.detail-logo,
+.page-menu-avatar,
+.page-mode-avatar {
+  aspect-ratio: 1 / 1 !important;
+  overflow: hidden !important;
+}
+
+.page-avatar-wrap img,
+.detail-logo img,
+.page-menu-avatar img,
+.page-mode-avatar img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  border-radius: 50% !important;
+}
