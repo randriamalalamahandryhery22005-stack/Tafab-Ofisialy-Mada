@@ -3685,7 +3685,10 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if(!state.user || !sb) return false;
     try{
       const r=await sb.rpc('tafa_is_admin',{p_user_id:state.user.id});
-      return !r.error && (r.data === true || r.data === 'true');
+      if(!r.error && (r.data === true || r.data === 'true')) return true;
+      // Fallback for databases where the admin helper RPC has not yet reached the schema cache.
+      const q=await sb.from('profiles').select('is_admin,admin_badge').eq('id',state.user.id).maybeSingle();
+      return !q.error && !!q.data && (q.data.is_admin===true || q.data.admin_badge===true);
     }catch(_){
       return false;
     }
