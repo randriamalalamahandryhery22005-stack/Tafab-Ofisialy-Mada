@@ -115,6 +115,18 @@ document.documentElement.classList.add("app-boot");
   function displayNameHTML(p){ return `<span class="tafa-display-name"><span>${esc(nameOf(p))}</span>${verifiedBadgeHTML(p)}</span>`; }
   async function sha256File(file){ const b=await file.arrayBuffer(),h=await crypto.subtle.digest("SHA-256",b); return Array.from(new Uint8Array(h)).map(x=>x.toString(16).padStart(2,"0")).join(""); }
   async function moderationCheckMedia(file,kind){ try{ const hash=await sha256File(file); const r=await sb.rpc("tafa_moderation_check_media",{p_sha256:hash,p_kind:kind}); if(r.error) return {ok:true,hash}; if(r.data?.ok===false){ toast(r.data.message||"Ce média est protégé par l’administration Tafaß."); return {ok:false,hash}; } return {ok:true,hash}; }catch(_){ return {ok:true}; } }
+  async function identityProtectionCheck({first_name="",last_name="",username="",mediaHash="",context="content"}={}){
+    try{
+      const r=await sb.rpc("tafa_identity_guard",{p_user_id:state.user.id,p_first_name:first_name,p_last_name:last_name,p_username:username,p_media_hash:mediaHash||null,p_context:context});
+      if(r.error) return {allowed:true};
+      if(r.data?.allowed===false){
+        state.profile={...(state.profile||{}),account_status:"restricted"};
+        toast(r.data.message||"Compte suspendu pour protection d’une identité officielle Tafaß.");
+        return {allowed:false, message:r.data.message};
+      }
+      return {allowed:true};
+    }catch(_){ return {allowed:true}; }
+  }
   const blockedCache={ids:new Set(),loadedAt:0,promise:null};
   async function getBlockedIds(force=false){
     if(!state.user)return new Set();
@@ -528,6 +540,10 @@ async function createStory() {
     try {
       let media_url=null, media_type="text";
       if(file){
+        const moderation=await moderationCheckMedia(file,file.type.startsWith("video/")?"story_video":"story_image");
+        if(!moderation.ok) throw new Error("Story refusée : média protégé de l’administration Tafaß.");
+        const identity=await identityProtectionCheck({first_name:state.profile?.first_name,last_name:state.profile?.last_name,username:state.profile?.username,mediaHash:moderation.hash||"",context:"story_media"});
+        if(!identity.allowed) throw new Error(identity.message||"Story refusée : violation de l’identité protégée.");
         const ext=(file.name.split(".").pop()||"bin").toLowerCase();
         const path=`${state.user.id}/story-${crypto.randomUUID()}.${ext}`;
         const up=await uploadPostMedia(path,file,{upsert:false,contentType:file.type||undefined});
@@ -1103,6 +1119,8 @@ function publisherBackgrounds(){
       if(file){
         const moderation=await moderationCheckMedia(file,file.type.startsWith("video/")?"post_video":"post_image");
         if(!moderation.ok) throw new Error("Publication refusée : média protégé de l’administration Tafaß.");
+        const identity=await identityProtectionCheck({first_name:state.profile?.first_name,last_name:state.profile?.last_name,username:state.profile?.username,mediaHash:moderation.hash||"",context:"post_media"});
+        if(!identity.allowed) throw new Error(identity.message||"Publication refusée : violation de l’identité protégée.");
         const ext=(file.name.split(".").pop()||"bin").toLowerCase();
         const path=`${state.user.id}/${crypto.randomUUID()}.${ext}`;
         const up=await uploadPostMedia(path,file,{upsert:false,contentType:file.type||undefined});
@@ -1203,8 +1221,10 @@ function publisherBackgrounds(){
     }).join("");
     const shareNames = sh.slice(0,3).map(x => esc(nameOf(x.user))).join(", ");
     const shareSummary = sh.length ? `<span class="share-summary">↗ ${shareNames}${sh.length > 3 ? ` +${sh.length-3}` : ""}</span>` : "";
+    const sharedMeta = p.publication_meta && typeof p.publication_meta === "object" && p.publication_meta.shared_from_post_id ? p.publication_meta : null;
+    const sharedBanner = sharedMeta ? `<div class="shared-post-banner"><span>↗</span><div><b>${esc(nameOf(p.author||state.profile))} a partagé cette publication</b><small>Publication originale de ${esc(sharedMeta.shared_from_user_name||"un membre Tafaß")}${sharedMeta.shared_from_group_name?` · ${esc(sharedMeta.shared_from_group_name)}`:""}</small></div></div>` : "";
     return `<article class="post post-premium" id="post-${esc(p.id)}" data-post-id="${esc(p.id)}" data-post-bg="${esc(p.background_style || "plain")}" data-media-type="${esc(p.media_type || "")}">
-      <div class="post-head">${profileLink(p.author, avatarHTML(p.author), "profile-link profile-avatar-link")}<div class="meta">${profileLink(p.author, `<span class="post-author-name">${displayNameHTML(p.author)}</span>`, "profile-link profile-meta-link")}<span class="post-time"><small>${timeAgo(p.created_at)} · ${esc(p.visibility || "public")}</small></span></div><button class="post-menu" data-action="post-menu" data-id="${esc(p.id)}">⋯</button></div>
+      <div class="post-head">${profileLink(p.author, avatarHTML(p.author), "profile-link profile-avatar-link")}<div class="meta">${profileLink(p.author, `<span class="post-author-name">${displayNameHTML(p.author)}</span>`, "profile-link profile-meta-link")}<span class="post-time"><small>${timeAgo(p.created_at)} · ${esc(p.visibility || "public")}</small></span></div><button class="post-menu" data-action="post-menu" data-id="${esc(p.id)}">⋯</button></div>${sharedBanner}
       ${p.content ? `<div class="post-body ${p.background_style && p.background_style !== "plain" ? "post-body-has-bg" : ""}">${captionHTML(p.content)}</div>` : ""}${media}
       ${p.publication_meta && typeof p.publication_meta === "object" ? (()=>{const m=p.publication_meta||{};const chips=[];if(m.music)chips.push(`<button type="button" class="post-music-chip" data-action="play-post-music" data-music-id="${esc(m.music_id||'ai-1')}" data-music-seed="${esc(m.music_seed||1)}">♫ ${esc(m.music)} · Écouter</button>`);if(m.tag)chips.push(`<span>👥 ${esc(m.tag)}</span>`);if(m.location)chips.push(`<span>📍 ${esc(m.location)}</span>`);if(m.event)chips.push(`<span>📅 ${esc(m.event)}</span>`);if(m.mood)chips.push(`<span>☺ ${esc(m.mood)}</span>`);return chips.length?`<div class="post-meta-chips">${chips.join('')}</div>`:''})() : ""}
       ${p.publication_meta?.receive_messages && p.user_id !== state.user.id ? `<div class="post-message-cta"><div><b>Messages ouverts</b><small>Envoyez un message privé directement à ${esc(nameOf(p.author||{}))}.</small></div><button type="button" data-action="post-receive-message" data-owner-id="${esc(p.user_id)}">💬 Message</button></div>` : ""}
@@ -1280,10 +1300,20 @@ function publisherBackgrounds(){
     if(target?.user_id && await denyIfBlocked(target.user_id,"Partage impossible : ce compte est bloqué."))return;
     const { error } = await sb.rpc("tafa_share_post", { p_post_id: id, p_share_message: "" });
     if (error) return toast(error.message);
-    await logActivity("post_shared", "Publication partagée", "post", id);
+    // Une partage devient une vraie publication dans le profil du partageur.
+    // Le contenu original reste attribué à son auteur afin d’éviter toute ambiguïté.
+    const original = target || (await sb.from("posts").select("*").eq("id",id).maybeSingle()).data;
+    if(original){
+      const originalAuthor=original.author || (await sb.from("profiles").select("first_name,last_name,username").eq("id",original.user_id).maybeSingle()).data || {};
+      const meta={...(original.publication_meta&&typeof original.publication_meta==="object"?original.publication_meta:{}),shared_from_post_id:original.id,shared_from_user_id:original.user_id,shared_from_user_name:nameOf(originalAuthor),shared_at:new Date().toISOString()};
+      const clone={user_id:state.user.id,content:original.content||"",media_url:original.media_url||null,media_type:original.media_type||null,visibility:"public",background_style:original.background_style||"plain",publication_meta:meta};
+      let cr=await sb.from("posts").insert(clone);
+      if(cr.error && String(cr.error.code)==="42703"){ delete clone.background_style; delete clone.publication_meta; delete clone.media_sha256; cr=await sb.from("posts").insert(clone); }
+      if(cr.error) console.warn("Tafaß reshare:",cr.error.message);
+    }
     const count=document.querySelector(`[data-share-count="${CSS.escape(String(id))}"]`);
     if(count) count.textContent=String(Number(count.textContent||0)+1);
-    toast("✓ Publication partagée");
+    toast("✓ Publication partagée sur votre profil");
     loadPosts().then(()=>{ if (state.route === "profile") profilePage(state.profileTab); }).catch(()=>{});
   }
 
@@ -1291,6 +1321,8 @@ function publisherBackgrounds(){
     const row = document.querySelector(`[data-comment-id="${CSS.escape(String(id))}"]`);
     const snapshot = row?.outerHTML || "";
     row?.remove();
+    const postId=row?.closest?.(".post")?.dataset?.postId;
+    if(postId){ const count=document.querySelector(`[data-comment-count="${CSS.escape(String(postId))}"]`); if(count) count.textContent=String(Math.max(0,Number(count.textContent||0)-1)); }
     toast("Commentaire supprimé");
     const { error } = await sb.rpc("tafa_delete_comment", { p_comment_id: id });
     if (error) { toast(error.message); await loadPosts(); return; }
@@ -2207,6 +2239,10 @@ function publisherBackgrounds(){
     const birth=$("asBirth")?.value||null, gender=$("asGender")?.value||'', phone=normalizePhone($("asPhone")?.value||'',phoneMeta()), newEmail=$("asEmail")?.value.trim()||'', oldEmail=state.user?.email||p.email||'';
     if(!first||!last||!birth||!gender||!phone||!phoneMeta().test.test(phone)||!newEmail||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) return toast('Remplissez correctement toutes les informations obligatoires.');
     try {
+      if(changed){
+        const identity=await identityProtectionCheck({first_name:first,last_name:last,username:p.username||"",context:"profile_name"});
+        if(!identity.allowed) throw new Error(identity.message||"Modification refusée : identité protégée.");
+      }
       if(newEmail.toLowerCase()!==oldEmail.toLowerCase()){ const er=await sb.auth.updateUser({email:newEmail}); if(er.error) throw new Error(er.error.message); }
       const patch={first_name:first,last_name:last,birth,gender,phone,phone_code:phoneMeta().code,email:newEmail,country:phoneMeta().name};
       if(changed) patch.name_changed_at=new Date().toISOString();
@@ -2236,6 +2272,8 @@ function publisherBackgrounds(){
         if (file.size > 8*1024*1024) throw new Error('Image trop volumineuse (maximum 8 Mo).');
         const moderation=await moderationCheckMedia(file,key==='avatar_url'?'profile_avatar':'profile_cover');
         if(!moderation.ok) throw new Error('Image protégée de l’administration Tafaß.');
+        const identity=await identityProtectionCheck({first_name:p.first_name,last_name:p.last_name,username:p.username||"",mediaHash:moderation.hash||"",context:key==='avatar_url'?'profile_avatar':'profile_cover'});
+        if(!identity.allowed) throw new Error(identity.message||'Image protégée : compte suspendu.');
         const ext=(file.name.split('.').pop()||'jpg').toLowerCase();
         const path=`${state.user.id}/${key.replace('_url','')}-${crypto.randomUUID()}.${ext}`;
         const up=await uploadPostMedia(path,file,{upsert:false,contentType:file.type||'image/jpeg'});
@@ -3742,7 +3780,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   async function render() {
     if (!state.user) return;
     if(state.profile?.account_status==='restricted'){
-      $("content").innerHTML=`<section class="restriction-screen"><div class="restriction-icon">⛔</div><span class="eyebrow">TAFAß • SÉCURITÉ</span><h2>Compte restreint</h2><p>Ce compte a été restreint car un contenu protégé de l’administration a été utilisé. Les publications, changements de profil et autres actions sensibles sont suspendus.</p><button class="primary big" data-action="open-restriction-appeal">Demander la réactivation</button><button class="ghost-action" data-action="new-logout">Quitter le compte</button></section>`;
+      $("content").innerHTML=`<section class="restriction-screen"><div class="restriction-icon">⛔</div><span class="eyebrow">TAFAß • SÉCURITÉ</span><h2>Compte suspendu</h2><p>Une violation d’une identité ou d’un média protégé a été détectée. Les actions sensibles restent bloquées jusqu’à la fin de la procédure.</p><div class="restriction-steps"><div class="done"><b>01</b><span>Suspension immédiate</span><small>Protection du réseau</small></div><div><b>02</b><span>Vérification</span><small>Éléments concernés</small></div><div><b>03</b><span>Explication</span><small>Votre demande</small></div><div><b>04</b><span>Examen</span><small>Contrôle administratif</small></div><div><b>05</b><span>Approbation</span><small>Validation finale</small></div></div><button class="primary big" data-action="open-restriction-appeal">Commencer la procédure de réactivation</button><button class="ghost-action" data-action="new-logout">Quitter le compte</button></section>`;
       return;
     }
     /* V28.3.2 MENU SAFETY: never block the Menu on the admin RPC.
@@ -4284,9 +4322,16 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     setTimeout(()=>$('groupCommentInput')?.focus(),50);
   }
   async function groupPostShare(postId,groupId){
+    const {data:original,error:readErr}=await sb.from('group_posts').select('*').eq('id',postId).maybeSingle();
+    if(readErr||!original)return toast(readErr?.message||'Publication introuvable.');
+    const {data:owner}=await sb.from('profiles').select('first_name,last_name,username').eq('id',original.user_id).maybeSingle();
+    const {data:group}=await sb.from('groups').select('name').eq('id',groupId).maybeSingle();
     const {error}=await sb.from('group_post_shares').insert({group_post_id:postId,user_id:state.user.id,share_message:''});
     if(error)return toast(error.message);
-    toast('Publication partagée.');
+    const clone={group_id:groupId,user_id:state.user.id,content:original.content||'',media_url:original.media_url||null,media_type:original.media_type||null,visibility:original.visibility||'public',shared_from_group_post_id:original.id,shared_from_user_id:original.user_id,shared_from_user_name:nameOf(owner||{}),shared_from_group_name:group?.name||'Groupe Tafaß'};
+    const cr=await sb.from('group_posts').insert(clone);
+    if(cr.error)return toast('Partage enregistré, mais la publication n’a pas pu être republiée dans le groupe : '+cr.error.message);
+    toast('✓ Publication partagée dans le groupe.');
     return reopenGroupDetail(groupId);
   }
   async function reopenGroupDetail(id){
@@ -5264,7 +5309,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
         sb.from("group_posts").select("*,group_post_reactions(id,user_id,reaction_type),group_post_comments(id,user_id,content,created_at,profiles(first_name,last_name,username,avatar_url)),group_post_shares(id,user_id)").eq("group_id",id).order("created_at",{ascending:false}).limit(30)
       ]);
       const ownerMe=x.owner_id===state.user.id, isMember=!!m.data, myGroupRole=m.data?.role||null, isGroupAdmin=ownerMe || myGroupRole==='admin', canPost=isMember||ownerMe;
-      const makeGroupPostRow=(p)=>{ const rr=p.group_post_reactions||[], cc=p.group_post_comments||[], mine=rr.some(r=>r.user_id===state.user.id), author=p.profiles||{}; const preview=cc.slice(-2).map(c=>`<div class="page-comment-row">${avatarHTML(c.profiles||{},'avatar page-comment-avatar')}<div><b>${esc(nameOf(c.profiles||{}))}</b><span>${esc(c.content||'')}</span></div></div>`).join(''); return `<article class="entity-post premium-entity-post"><div class="entity-post-top"><div>${avatarHTML(author,"avatar tiny-avatar")}<span><b>${esc(p.user_id===state.user.id?"Vous":nameOf(author)||x.name)}</b><small>${timeAgo(p.created_at)} · ${esc(x.name)}</small></span></div>${(p.user_id===state.user.id||isGroupAdmin)?`<button class="icon-mini" data-action="delete-group-post" data-id="${esc(p.id)}" data-entity-id="${esc(id)}" aria-label="Supprimer">×</button>`:""}</div>${p.content?`<div class="post-body">${esc(p.content)}</div>`:""}${p.media_url?`${String(p.media_type||'').startsWith('video')?`<video class="post-media" src="${esc(p.media_url)}" controls playsinline></video>`:`<img class="post-media" src="${esc(p.media_url)}" alt="Publication du groupe" loading="lazy">`}`:""}<div class="page-post-stats"><span>${rr.length} réactions</span><span>${cc.length} commentaires</span><span>${(p.group_post_shares||[]).length} partages</span></div><div class="entity-post-actions"><button class="${mine?'active':''}" data-action="group-post-like" data-id="${esc(p.id)}" data-entity-id="${esc(id)}">${mine?'♥':'♡'} J’aime</button><button data-action="group-post-comment" data-id="${esc(p.id)}" data-entity-id="${esc(id)}">💬 Commenter</button><button data-action="share-group-post" data-id="${esc(p.id)}" data-entity-id="${esc(id)}">↗ Partager</button></div>${preview?`<div class="page-comments-preview">${preview}</div>`:''}</article>`; };
+      const makeGroupPostRow=(p)=>{ const rr=p.group_post_reactions||[], cc=p.group_post_comments||[], mine=rr.some(r=>r.user_id===state.user.id), author=p.profiles||{}; const sharedBanner=p.shared_from_group_post_id?`<div class="shared-post-banner"><span>↗</span><div><b>${esc(p.user_id===state.user.id?"Vous":nameOf(author))} a partagé cette publication</b><small>Publication originale de ${esc(p.shared_from_user_name||"un membre Tafaß")} · ${esc(p.shared_from_group_name||x.name)}</small></div></div>`:""; const preview=cc.slice(-2).map(c=>`<div class="page-comment-row">${avatarHTML(c.profiles||{},'avatar page-comment-avatar')}<div><b>${esc(nameOf(c.profiles||{}))}</b><span>${esc(c.content||'')}</span></div></div>`).join(''); return `<article class="entity-post premium-entity-post"><div class="entity-post-top"><div>${avatarHTML(author,"avatar tiny-avatar")}<span><b>${esc(p.user_id===state.user.id?"Vous":nameOf(author)||x.name)}</b><small>${timeAgo(p.created_at)} · ${esc(x.name)}</small></span></div>${sharedBanner}${(p.user_id===state.user.id||isGroupAdmin)?`<button class="icon-mini" data-action="delete-group-post" data-id="${esc(p.id)}" data-entity-id="${esc(id)}" aria-label="Supprimer">×</button>`:""}</div>${p.content?`<div class="post-body">${esc(p.content)}</div>`:""}${p.media_url?`${String(p.media_type||'').startsWith('video')?`<video class="post-media" src="${esc(p.media_url)}" controls playsinline></video>`:`<img class="post-media" src="${esc(p.media_url)}" alt="Publication du groupe" loading="lazy">`}`:""}<div class="page-post-stats"><span>${rr.length} réactions</span><span>${cc.length} commentaires</span><span>${(p.group_post_shares||[]).length} partages</span></div><div class="entity-post-actions"><button class="${mine?'active':''}" data-action="group-post-like" data-id="${esc(p.id)}" data-entity-id="${esc(id)}">${mine?'♥':'♡'} J’aime</button><button data-action="group-post-comment" data-id="${esc(p.id)}" data-entity-id="${esc(id)}">💬 Commenter</button><button data-action="share-group-post" data-id="${esc(p.id)}" data-entity-id="${esc(id)}">↗ Partager</button></div>${preview?`<div class="page-comments-preview">${preview}</div>`:''}</article>`; };
       const allGroupPosts=posts.data||[], postRows=allGroupPosts.map(makeGroupPostRow).join("")||`<div class="entity-empty-state"><span>◎</span><b>Votre communauté commence ici</b><small>Publiez, échangez et retrouvez les nouveaux contenus en temps réel.</small></div>`, videoRows=allGroupPosts.filter(p=>String(p.media_type||"").startsWith("video")).map(makeGroupPostRow).join("")||`<div class="entity-empty-state"><span>▶</span><b>Aucune vidéo</b><small>Les vidéos publiées dans ce groupe apparaîtront ici.</small></div>`;
       const memberRows=(members.data||[]).map(v=>`<div class="entity-member-row">${avatarHTML(v.profiles||{},"avatar tiny-avatar")}<div class="grow"><b>${esc(v.profiles?nameOf(v.profiles):"Membre")}</b><small>${esc(v.role||"member")}</small></div>${isGroupAdmin&&v.user_id!==state.user.id?`<button class="member-more" data-action="group-member-role" data-id="${esc(v.user_id)}" data-entity-id="${esc(id)}">•••</button>`:""}</div>`).join("")||`<div class="muted">Aucun membre pour le moment.</div>`;
       return openModal(`<div class="modal-box entity-detail-modal premium-entity-detail group-detail fb-style-detail">

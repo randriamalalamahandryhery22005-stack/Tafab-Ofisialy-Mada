@@ -4729,3 +4729,16 @@ body.light body.light
 /* Make the status of media publication obvious while it is being sent. */
 button[data-action="publish-post-news"].loading,
 button[data-action="create-story"].loading{opacity:.72;pointer-events:none}
+
+
+/* Tafaß — partages authentiques et attribution */
+.shared-post-banner{display:flex;align-items:center;gap:10px;margin:10px 0 12px;padding:10px 12px;border:1px solid rgba(100,130,190,.22);border-radius:14px;background:rgba(18,30,54,.55)}
+.shared-post-banner>span{width:32px;height:32px;display:grid;place-items:center;border-radius:50%;background:rgba(60,110,255,.16);font-size:18px}
+.shared-post-banner b{display:block;font-size:13px}
+.shared-post-banner small{display:block;margin-top:2px;color:#8d9ab2;font-size:11px}
+.restriction-screen{max-width:760px;margin:40px auto;padding:32px;text-align:center;border:1px solid rgba(255,90,90,.25);border-radius:24px;background:rgba(18,24,40,.9)}
+
+.restriction-steps{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:22px 0;text-align:left}
+.restriction-steps>div{padding:12px;border:1px solid rgba(100,130,190,.18);border-radius:14px;background:rgba(12,20,36,.65)}
+.restriction-steps b{display:block;font-size:11px;opacity:.7}.restriction-steps span{display:block;font-weight:700;font-size:12px;margin-top:5px}.restriction-steps small{display:block;color:#8d9ab2;font-size:10px;margin-top:3px}.restriction-steps .done{border-color:rgba(50,200,130,.35)}
+@media(max-width:700px){.restriction-steps{grid-template-columns:1fr 1fr}.restriction-steps>div:last-child{grid-column:1/-1}}
