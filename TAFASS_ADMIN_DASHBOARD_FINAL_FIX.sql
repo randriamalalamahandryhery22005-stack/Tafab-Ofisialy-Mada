@@ -26,5 +26,5 @@ TO authenticated;
 -- Vérification : aucune suppression de fonction ni de policy.
 -- ============================================================
 
--- Reels : utiliser media_type et non is_reel.
+-- Reels : utiliser media_type.
 -- ============================================================

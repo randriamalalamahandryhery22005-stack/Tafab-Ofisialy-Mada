@@ -1,38 +1,21 @@
 -- ============================================================
--- Tafaß — ADMIN ACCESS REPAIR
--- Fix: function public.tafa_is_admin_actor(uuid) does not exist
--- ============================================================
-
-create or replace function public.tafa_is_admin_actor(p_user_id uuid)
-returns boolean
-language sql
-security definer
-set search_path = public
-as $$
-  select exists (
-    select 1
-    from public.profiles p
-    where p.id = p_user_id
-      and (coalesce(p.is_admin,false) = true or coalesce(p.admin_badge,false) = true)
-  );
-$$;
-
-create or replace function public.tafa_is_admin(p_user_id uuid default auth.uid())
-returns boolean
-language sql
-security definer
-set search_path = public
-as $$
-  select public.tafa_is_admin_actor(p_user_id);
-$$;
-
-grant execute on function public.tafa_is_admin_actor(uuid) to authenticated;
-grant execute on function public.tafa_is_admin(uuid) to authenticated;
-
--- ============================================================
 -- Tafaß — ADMIN DASHBOARD PREMIUM + REALTIME
--- Statistiques, évolution, activité et localisation agrégée
+-- Version sûre : ne supprime ni ne remplace tafa_is_admin(uuid)
 -- ============================================================
+
+CREATE OR REPLACE FUNCTION public.tafa_is_admin_actor(
+    p_user_id uuid DEFAULT NULL
+)
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+    SELECT public.tafa_is_admin(p_user_id);
+$$;
+
+GRANT EXECUTE ON FUNCTION public.tafa_is_admin_actor(uuid) TO authenticated;
+
 
 create or replace function public.tafa_admin_dashboard_snapshot(p_days integer default 30)
 returns jsonb
@@ -81,7 +64,7 @@ begin
 
   select count(*) into total_posts from public.posts;
   select count(*) into total_stories from public.stories;
-  select count(*) into total_reels from public.posts where coalesce(is_reel,false)=true;
+  select count(*) into total_reels from public.posts where lower(coalesce(media_type,'')) = 'reel';
 
   if to_regclass('public.videos') is not null then
     execute 'select count(*) from public.videos' into total_videos;
