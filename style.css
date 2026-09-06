@@ -1091,7 +1091,7 @@ body.light .profile-edit-modal{background:linear-gradient(155deg,#fff,#f3f7fd)!i
 @media(max-width:480px){.signup-step-heading{padding:12px}.signup-step-actions{grid-template-columns:1fr 1.35fr}.terms-card-premium{padding:14px}.auth-step-indicator{margin-bottom:15px}}
 
 /* V13.1 — navigation Pages/Groupes + OAuth réel */
-.entity-card-main{display:block;width:100%;padding:0;border:0;background:transparent;color:inherit;text-align:left;cursor:pointer}.entity-card-main:focus-visible{outline:2px solid var(--accent,#4c7dff);outline-offset:3px;border-radius:18px}.premium-entity-card{overflow:hidden}.premium-entity-card .entity-body{min-height:150px}.premium-entity-card .entity-actions{position:relative;z-index:2}.entity-hub{width:100%}.social-auth-real{display:grid;grid-template-columns:1fr 1fr;gap:10px}.social-auth-real .oauth-button{width:100%;height:48px;border-radius:14px;display:flex;align-items:center;justify-content:center;gap:9px;background:#0c1425;border:1px solid var(--line);color:#eef3fb;font-size:14px;font-weight:750;transition:transform .18s ease,border-color .18s ease,background .18s ease}.social-auth-real .oauth-button:hover{transform:translateY(-1px);border-color:#4c7dff}.social-auth-real .oauth-button:disabled{opacity:.65;cursor:wait}.oauth-google-mark,.oauth-apple-mark{width:22px;height:22px;display:grid;place-items:center;font-weight:900}.oauth-google-mark{font-size:19px;background:conic-gradient(from -45deg,#4285f4 0 25%,#34a853 0 50%,#fbbc05 0 75%,#ea4335 0);-webkit-background-clip:text;background-clip:text;color:transparent}.oauth-apple-mark{font-size:20px;color:#fff}.social-auth-real .oauth-button.loading{animation:pulseOauth 1s ease-in-out infinite}@keyframes pulseOauth{50%{opacity:.55}}@media(max-width:560px){.social-auth-real{grid-template-columns:1fr}.entity-card-main{min-width:0}.entity-card-main .entity-body h3,.entity-card-main .entity-body p{overflow-wrap:anywhere}.entity-actions{padding-top:10px}}
+.entity-card-main{display:block;width:100%;padding:0;border:0;background:transparent;color:inherit;text-align:left;cursor:pointer}.entity-card-main:focus-visible{outline:2px solid var(--accent,#4c7dff);outline-offset:3px;border-radius:18px}.premium-entity-card{overflow:hidden}.premium-entity-card .entity-body{min-height:150px}.premium-entity-card .entity-actions{position:relative;z-index:2}.entity-hub{width:100%}.social-auth-real{display:grid;grid-template-columns:1fr 1fr;gap:10px}.social-auth-real .oauth-button{width:100%;height:48px;border-radius:14px;display:flex;align-items:center;justify-content:center;gap:9px;background:#0c1425;border:1px solid var(--line);color:#eef3fb;font-size:14px;font-weight:750;transition:transform .18s ease,border-color .18s ease,background .18s ease}.social-auth-real .oauth-button:hover{transform:translateY(-1px);border-color:#4c7dff}.social-auth-real .oauth-button:disabled{opacity:.65;cursor:wait}.oauth-google-mark{width:22px;height:22px;display:grid;place-items:center;font-weight:900}.oauth-google-mark{font-size:19px;background:conic-gradient(from -45deg,#4285f4 0 25%,#34a853 0 50%,#fbbc05 0 75%,#ea4335 0);-webkit-background-clip:text;background-clip:text;color:transparent}.social-auth-real .oauth-button.loading{animation:pulseOauth 1s ease-in-out infinite}@keyframes pulseOauth{50%{opacity:.55}}@media(max-width:560px){.social-auth-real{grid-template-columns:1fr}.entity-card-main{min-width:0}.entity-card-main .entity-body h3,.entity-card-main .entity-body p{overflow-wrap:anywhere}.entity-actions{padding-top:10px}}
 
 /* Tafaß V22 — profil et navigation mobile */
 .profile-cover-wrap{
@@ -3774,8 +3774,6 @@ button,.menu-card,.list-row,.page-menu-card{max-width:100%}
 .auth-side-back span:first-child{font-size:24px;line-height:1;margin-top:-2px}
 .auth-side-connect{border:1px solid rgba(78,145,255,.28);background:rgba(36,107,255,.10);color:#79aaff}
 .auth-side-button:hover{transform:translateY(-1px);border-color:var(--line-strong)}
-.oauth-apple-mark{width:19px;height:19px;display:grid;place-items:center}
-.oauth-apple-mark svg{width:18px;height:18px;fill:currentColor}
 @media(max-width:720px){
   .auth-screen{padding:calc(14px + env(safe-area-inset-top)) 12px calc(14px + env(safe-area-inset-bottom))}
   .auth-shell{padding:24px 18px;border-radius:22px}
@@ -4742,3 +4740,34 @@ button[data-action="create-story"].loading{opacity:.72;pointer-events:none}
 .restriction-steps>div{padding:12px;border:1px solid rgba(100,130,190,.18);border-radius:14px;background:rgba(12,20,36,.65)}
 .restriction-steps b{display:block;font-size:11px;opacity:.7}.restriction-steps span{display:block;font-weight:700;font-size:12px;margin-top:5px}.restriction-steps small{display:block;color:#8d9ab2;font-size:10px;margin-top:3px}.restriction-steps .done{border-color:rgba(50,200,130,.35)}
 @media(max-width:700px){.restriction-steps{grid-template-columns:1fr 1fr}.restriction-steps>div:last-child{grid-column:1/-1}}
+
+/* =========================================================
+   TAFAß ADMIN DASHBOARD PREMIUM — REALTIME
+   ========================================================= */
+.admin-dashboard-premium{display:grid;gap:14px;padding-bottom:40px}
+.admin-dashboard-hero{position:relative;overflow:hidden}
+.admin-dashboard-hero:after{content:"";position:absolute;right:-90px;top:-120px;width:280px;height:280px;border-radius:50%;background:radial-gradient(circle,rgba(76,125,255,.22),transparent 68%);pointer-events:none}
+.admin-live-indicator{display:inline-flex;align-items:center;gap:8px;padding:10px 13px;border-radius:999px;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.28);color:#27c98a;font-size:11px;font-weight:900;letter-spacing:.08em;white-space:nowrap}
+.admin-live-indicator span{width:8px;height:8px;border-radius:50%;background:#27c98a;box-shadow:0 0 0 5px rgba(39,201,138,.12);animation:adminLivePulse 1.7s ease-in-out infinite}
+@keyframes adminLivePulse{50%{opacity:.45;transform:scale(.75)}}
+.admin-dashboard-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:2px 3px;color:var(--muted);font-size:10px}
+.admin-dashboard-toolbar b{color:var(--text)}
+.admin-dashboard-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}
+.admin-dashboard-columns{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,.75fr);gap:14px}
+.admin-trend-chart{display:grid;gap:7px;padding-top:5px}
+.admin-trend-row{display:grid;grid-template-columns:38px 1fr 30px;align-items:center;gap:8px;font-size:9px;color:var(--muted)}
+.admin-trend-row b{text-align:right;color:var(--text);font-size:10px}
+.admin-trend-track{height:10px;border-radius:999px;background:rgba(127,127,127,.10);overflow:hidden}
+.admin-trend-track i{display:block;height:100%;min-width:3px;border-radius:999px;background:linear-gradient(90deg,#2d7cff,#765cff);box-shadow:0 3px 10px rgba(45,124,255,.22)}
+.admin-location-list{display:grid;gap:8px;max-height:360px;overflow:auto;padding-right:2px}
+.admin-location-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 12px;border:1px solid var(--border);border-radius:14px;background:rgba(127,127,127,.035)}
+.admin-location-row>div{min-width:0;display:grid;gap:2px}.admin-location-row b{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.admin-location-row small{font-size:9px;color:var(--muted)}
+.admin-location-row strong{font-size:13px;flex:none}
+.admin-health-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+.admin-health-grid>div{display:grid;gap:3px;padding:13px;border:1px solid var(--border);border-radius:15px;background:rgba(127,127,127,.035)}
+.admin-health-grid b{font-size:18px}.admin-health-grid span{font-size:9px;color:var(--muted)}
+.admin-security-grid{grid-template-columns:repeat(2,1fr)}
+@media(max-width:850px){.admin-dashboard-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.admin-dashboard-columns{grid-template-columns:1fr}}
+@media(max-width:560px){.admin-dashboard-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.admin-dashboard-hero{display:grid}.admin-dashboard-toolbar{align-items:flex-start;flex-direction:column}.admin-health-grid{grid-template-columns:repeat(2,1fr)}.admin-security-grid{grid-template-columns:repeat(2,1fr)}}
+
+.social-auth-real.single-provider{grid-template-columns:1fr}.social-auth-real.single-provider .oauth-button{max-width:none}
