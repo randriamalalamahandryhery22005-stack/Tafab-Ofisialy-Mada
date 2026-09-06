@@ -4464,152 +4464,52 @@ body.light body.light
   .conversation-page-clean .message-reaction-picker button{width:28px;height:28px;font-size:16px}
   .conversation-page-clean .message-react-trigger{width:24px;height:24px;font-size:13px}
 }
-
-
 /* =========================================================
-   Tafaß — GLOBAL AVATAR / PROFILE IMAGE ROUND FIX
-   All identity/profile/page/group/story avatars are true circles.
-   Covers and publication media are intentionally left unchanged.
+   TAFAß — GLOBAL AVATAR / PDP CIRCLE FIX
+   Tous les avatars et photos de profil restent parfaitement ronds.
    ========================================================= */
+.avatar,
+.avatar img,
+.default-avatar-image,
+.default-avatar-image img,
+.entity-default-avatar-image,
+.entity-default-avatar-image img,
+.profile-avatar,
+.profile-avatar img,
+.menu-profile-avatar,
+.menu-profile-avatar .avatar,
+.menu-profile-avatar img,
+.page-context-avatar,
+.page-context-avatar img,
+.page-feed-avatar,
+.page-feed-avatar img,
+.conversation-avatar,
+.conversation-avatar img {
+  border-radius:50% !important;
+}
 
 .avatar,
-.avatar-sm,
-.default-avatar,
 .default-avatar-image,
-.entity-default-avatar,
-.entity-default-avatar-image,
-.profile-avatar,
-.profile-avatar-wrap-v5,
-.profile-avatar-link,
-.menu-profile-avatar,
-.premium-menu-profile,
-.composer-launcher-avatar,
-.blocked-avatar,
-.admin-user-avatar,
-.live-card-avatar .avatar,
-.conversation-avatar,
-.fb-entity-avatar,
-.fb-business-avatar,
-.tbs-page-avatar,
-.page-avatar-wrap,
-.page-detail-avatar,
-.page-feed-avatar,
-.page-settings-avatar,
-.detail-logo,
-.editor-avatar-v2,
-.editor-avatar-v2 .avatar,
-.editor-avatar-v2 > img,
-.editor-avatar-preview .avatar,
-.editor-avatar-preview > img,
-.profile-page-premium .profile-avatar,
-.profile-main-premium .profile-avatar,
-.profile-redesign-v5 .profile-avatar-wrap-v5,
-.page-profile-head-v2 .page-avatar-wrap,
-.page-profile-head-v2 .page-detail-avatar,
-.page-premium-modal .page-avatar-wrap,
-.page-premium-modal .page-detail-avatar {
-  border-radius: 50% !important;
-  aspect-ratio: 1 / 1 !important;
-  overflow: hidden !important;
+.entity-default-avatar-image {
+  overflow:hidden !important;
+  aspect-ratio:1 / 1 !important;
+  flex-shrink:0;
 }
 
-/* Ensure the actual avatar image itself is also perfectly round. */
 .avatar img,
-.avatar-sm img,
 .default-avatar-image img,
-.entity-default-avatar-image img,
-.profile-avatar img,
-.profile-avatar-wrap-v5 img,
-.menu-profile-avatar img,
-.premium-menu-profile img,
-.composer-launcher-avatar img,
-.blocked-avatar img,
-.admin-user-avatar img,
-.live-card-avatar .avatar img,
-.conversation-avatar img,
-.fb-entity-avatar img,
-.fb-business-avatar img,
-.tbs-page-avatar img,
-.page-avatar-wrap img,
-.page-detail-avatar img,
-.page-feed-avatar img,
-.page-settings-avatar img,
-.detail-logo img,
-.editor-avatar-v2 img,
-.editor-avatar-preview img,
-.profile-page-premium .profile-avatar img,
-.profile-main-premium .profile-avatar img {
-  width: 100% !important;
-  height: 100% !important;
-  max-width: none !important;
-  object-fit: cover !important;
-  border-radius: 50% !important;
+.entity-default-avatar-image img {
+  display:block !important;
+  width:100% !important;
+  height:100% !important;
+  max-width:none !important;
+  object-fit:cover !important;
+  object-position:center !important;
+  border-radius:50% !important;
 }
 
-/* Keep circular identity blocks centered even when source dimensions differ. */
-.profile-avatar-wrap-v5,
-.page-avatar-wrap,
-.page-feed-avatar,
-.page-settings-avatar,
-.detail-logo,
-.fb-entity-avatar,
-.fb-business-avatar,
-.tbs-page-avatar,
-.conversation-avatar,
-.blocked-avatar,
-.admin-user-avatar,
-.composer-launcher-avatar {
-  flex: 0 0 auto !important;
+/* Le menu ne contient plus de bloc Profil redondant. */
+.menu-shortcuts-title {
+  margin-top:2px !important;
 }
 
-/* Stories: ring + inner media must remain perfectly circular. */
-.story-ring,
-.story-ring > img,
-.story-ring > video,
-.story-ring .avatar,
-.story-ring .avatar img,
-.story-add,
-.story-text-preview {
-  border-radius: 50% !important;
-  aspect-ratio: 1 / 1 !important;
-}
-
-/* Page/entity identity images: replace rounded-square corners with a true circle. */
-.page-profile-head .page-avatar-wrap,
-.page-profile-head .page-detail-avatar,
-.page-profile-head-v2 .page-avatar-wrap,
-.page-profile-head-v2 .page-detail-avatar,
-.page-premium-modal .page-avatar-wrap,
-.page-premium-modal .page-detail-avatar,
-.entity-card .entity-logo,
-.entity-card .entity-logo img {
-  border-radius: 50% !important;
-  aspect-ratio: 1 / 1 !important;
-  overflow: hidden !important;
-}
-
-.entity-card .entity-logo img {
-  width: 100% !important;
-  height: 100% !important;
-  object-fit: cover !important;
-}
-
-/* Mobile: keep all identity avatars circular after responsive resizing. */
-@media (max-width: 620px) {
-  .page-avatar-wrap,
-  .page-detail-avatar,
-  .page-feed-avatar,
-  .page-settings-avatar,
-  .profile-avatar-wrap-v5,
-  .profile-main-premium .profile-avatar,
-  .profile-page-premium .profile-avatar,
-  .fb-entity-avatar,
-  .fb-business-avatar,
-  .tbs-page-avatar,
-  .conversation-avatar,
-  .blocked-avatar,
-  .admin-user-avatar {
-    border-radius: 50% !important;
-    aspect-ratio: 1 / 1 !important;
-  }
-}
