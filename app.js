@@ -115,18 +115,30 @@ document.documentElement.classList.add("app-boot");
   function displayNameHTML(p){ return `<span class="tafa-display-name"><span>${esc(nameOf(p))}</span>${verifiedBadgeHTML(p)}</span>`; }
   async function sha256File(file){ const b=await file.arrayBuffer(),h=await crypto.subtle.digest("SHA-256",b); return Array.from(new Uint8Array(h)).map(x=>x.toString(16).padStart(2,"0")).join(""); }
   async function moderationCheckMedia(file,kind){
-    const hash=await sha256File(file);
+    if(!file) return {ok:true,hash:null};
     try{
+      const hash=await sha256File(file);
       const r=await sb.rpc("tafa_moderation_check_media",{p_sha256:hash,p_kind:kind});
-      if(r.error) throw new Error(r.error.message||"Service de protection indisponible.");
+      if(r.error){
+        console.error("Tafaß media moderation:",r.error);
+        return {ok:false,hash,message:"Vérification de sécurité impossible. Le média n’a pas été envoyé."};
+      }
       if(r.data?.ok===false){
-        toast(r.data.message||"Ce média est protégé par l’administration Tafaß.");
-        return {ok:false,hash};
+        const message=r.data.message||"Ce média est protégé par l’administration Tafaß.";
+        toast(message);
+        return {ok:false,hash,message};
       }
       return {ok:true,hash};
-    }catch(e){
-      toast("Vérification de sécurité impossible : "+(e?.message||"réessayez."));
-      return {ok:false,hash,error:e};
+    }catch(err){
+      console.error("Tafaß media moderation:",err);
+      return {ok:false,hash:null,message:"Vérification de sécurité impossible. Le média n’a pas été envoyé."};
+    }
+  }
+  async function registerAdminMediaHash(hash,kind,url){
+    if(state.__isAdmin!==true || !hash) return;
+    const r=await sb.rpc("tafa_admin_register_media_hash",{p_sha256:hash,p_kind:kind,p_url:url||null});
+    if(r.error || r.data!==true){
+      throw new Error(r.error?.message||"Impossible d’enregistrer le média protégé de l’administration.");
     }
   }
   async function identityProtectionCheck({first_name="",last_name="",username="",mediaHash="",context="content"}={}){
@@ -552,11 +564,10 @@ async function createStory() {
     setLoading(btn,true,"Publier la story");
     toast("Publication de la story en cours…");
     try {
-      let media_url=null, media_type="text", mediaHash=null;
+      let media_url=null, media_type="text";
       if(file){
         const moderation=await moderationCheckMedia(file,file.type.startsWith("video/")?"story_video":"story_image");
         if(!moderation.ok) throw new Error("Story refusée : média protégé de l’administration Tafaß.");
-        mediaHash=moderation.hash||null;
         const identity=await identityProtectionCheck({first_name:state.profile?.first_name,last_name:state.profile?.last_name,username:state.profile?.username,mediaHash:moderation.hash||"",context:"story_media"});
         if(!identity.allowed) throw new Error(identity.message||"Story refusée : violation de l’identité protégée.");
         const ext=(file.name.split(".").pop()||"bin").toLowerCase();
@@ -565,25 +576,14 @@ async function createStory() {
         if(up.error) throw new Error("Upload : "+up.error.message);
         media_url=sb.storage.from("posts").getPublicUrl(path).data.publicUrl;
         media_type=file.type.startsWith("video/")?"video":"image";
+        await registerAdminMediaHash(moderation.hash,media_type.startsWith("video")?"story_video":"story_image",media_url);
       }
       const r=await sb.from("stories").insert({
         user_id:state.user.id, media_url:media_url||"data:text/plain;charset=utf-8,story",
         media_type, text_overlay:text, visibility:"public",
-        expires_at:new Date(Date.now()+24*60*60*1000).toISOString(),
-        media_sha256:mediaHash
+        expires_at:new Date(Date.now()+24*60*60*1000).toISOString()
       }).select().single();
-      if(r.error && String(r.error.code)==="42703"){
-        const fallback={
-          user_id:state.user.id, media_url:media_url||"data:text/plain;charset=utf-8,story",
-          media_type, text_overlay:text, visibility:"public",
-          expires_at:new Date(Date.now()+24*60*60*1000).toISOString()
-        };
-        const retry=await sb.from("stories").insert(fallback).select().single();
-        if(retry.error) throw new Error(retry.error.message);
-      } else if(r.error) throw new Error(r.error.message);
-      if(state.__isAdmin===true && mediaHash && media_url){
-        await sb.rpc("tafa_admin_register_media_hash",{p_sha256:mediaHash,p_kind:media_type==="video"?"story_video":"story_image",p_url:media_url}).catch(()=>{});
-      }
+      if(r.error) throw new Error(r.error.message);
       closeModal();
       toast("✓ Story publiée pendant 24 h.");
       await render();
@@ -1142,11 +1142,10 @@ function publisherBackgrounds(){
     const buttons=[...document.querySelectorAll('[data-action="publish-post-news"]')], btn=buttons[buttons.length-1];
     setLoading(btn,true,"Publier");
     try{
-      let media_url=null,media_type=null,mediaHash=null;
+      let media_url=null,media_type=null;
       if(file){
         const moderation=await moderationCheckMedia(file,file.type.startsWith("video/")?"post_video":"post_image");
         if(!moderation.ok) throw new Error("Publication refusée : média protégé de l’administration Tafaß.");
-        mediaHash=moderation.hash||null;
         const identity=await identityProtectionCheck({first_name:state.profile?.first_name,last_name:state.profile?.last_name,username:state.profile?.username,mediaHash:moderation.hash||"",context:"post_media"});
         if(!identity.allowed) throw new Error(identity.message||"Publication refusée : violation de l’identité protégée.");
         const ext=(file.name.split(".").pop()||"bin").toLowerCase();
@@ -1155,22 +1154,19 @@ function publisherBackgrounds(){
         if(up.error)throw new Error("Upload : "+up.error.message);
         media_url=sb.storage.from("posts").getPublicUrl(path).data.publicUrl;
         media_type=file.type.startsWith("video/")?"video":"image";
+        await registerAdminMediaHash(moderation.hash,media_type.startsWith("video")?"post_video":"post_image",media_url);
       }
       const guard=await sb.rpc("tafa_account_guard",{p_user_id:state.user.id});
       if(guard.error) throw new Error(guard.error.message);
       if(guard.data?.allowed===false) throw new Error(guard.data.message||"Votre compte est restreint.");
-      const payload={user_id:state.user.id,content:text,media_url,media_type,visibility:state.composerVisibility||"public",location:state.composerLocation||null,background_style:state.composerBackground||"plain",publication_meta:state.composerMeta||{},media_sha256:mediaHash};
+      const payload={user_id:state.user.id,content:text,media_url,media_type,visibility:state.composerVisibility||"public",location:state.composerLocation||null,background_style:state.composerBackground||"plain",publication_meta:state.composerMeta||{}};
       let r=await sb.from("posts").insert(payload).select().single();
       if(r.error && String(r.error.code)==="42703"){
         delete payload.background_style;
         delete payload.publication_meta;
-        delete payload.media_sha256;
         r=await sb.from("posts").insert(payload).select().single();
       }
       if(r.error)throw new Error(r.error.message);
-      if(state.__isAdmin===true && mediaHash && media_url){
-        await sb.rpc("tafa_admin_register_media_hash",{p_sha256:mediaHash,p_kind:media_type==="video"?"post_video":"post_image",p_url:media_url}).catch(()=>{});
-      }
       await logActivity("post_created","Publication créée","post",r.data?.id||null);
       state.composerOpen=false; state.composerDraftText=""; state.composerFile=null; state.composerBackground="plain"; state.composerLocation=""; state.composerVisibility="public"; state.composerMeta={};
       closeModal(); toast("Publication publiée"); await loadPosts(); await render();
@@ -1394,11 +1390,14 @@ function publisherBackgrounds(){
     try {
       let media_url = null, media_type = null;
       if (file) {
+        const moderation=await moderationCheckMedia(file,file.type.startsWith("video/")?"post_video":"post_image");
+        if(!moderation.ok) throw new Error(moderation.message||"Publication refusée : média protégé de l’administration Tafaß.");
         const ext = file.name.split(".").pop().toLowerCase(), path = `${state.user.id}/${crypto.randomUUID()}.${ext}`;
         const up = await uploadPostMedia(path, file, { upsert: false });
         if (up.error) throw new Error("Upload : " + up.error.message);
         media_url = sb.storage.from("posts").getPublicUrl(path).data.publicUrl;
         media_type = file.type.startsWith("video/") ? "reel" : "image";
+        await registerAdminMediaHash(moderation.hash,media_type==="reel"?"post_video":"post_image",media_url);
       }
       const { error } = await sb.from("posts").insert({ user_id: state.user.id, content: text, media_url, media_type, visibility: "public" });
       if (error) throw new Error(error.message);
@@ -2311,7 +2310,7 @@ function publisherBackgrounds(){
         const up=await uploadPostMedia(path,file,{upsert:false,contentType:file.type||'image/jpeg'});
         if(up.error) throw new Error('Upload : '+up.error.message);
         patch[key]=sb.storage.from('posts').getPublicUrl(path).data.publicUrl;
-        if(state.__isAdmin===true && moderation?.hash){ await sb.rpc('tafa_admin_register_media_hash',{p_sha256:moderation.hash,p_kind:key==='avatar_url'?'profile_avatar':'profile_cover',p_url:patch[key]}).catch(()=>{}); }
+        if(state.__isAdmin===true && moderation?.hash){ await registerAdminMediaHash(moderation.hash,key==='avatar_url'?'profile_avatar':'profile_cover',patch[key]); }
       }
       const r=await sb.from('profiles').update(patch).eq('id',state.user.id);
       if(r.error) throw new Error(r.error.message);
