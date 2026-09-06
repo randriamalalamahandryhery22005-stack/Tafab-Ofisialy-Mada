@@ -3964,7 +3964,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       sb.rpc('tafa_admin_list_withdrawals',{p_limit:50}),
       sb.rpc('tafa_admin_list_payments',{p_limit:50}),
       sb.rpc('tafa_admin_list_reports',{p_limit:50}),
-      sb.from('badge_requests').select('*').order('created_at',{ascending:false}).limit(50),
+      sb.rpc('tafa_admin_list_badge_requests',{p_limit:50}),
       sb.rpc('tafa_admin_list_account_appeals',{p_limit:50}),
       sb.rpc('tafa_admin_list_boost_payments',{p_limit:100}),
       sb.rpc('tafa_admin_list_boost_campaigns',{p_limit:200}),
@@ -3982,7 +3982,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if(!state.adminDashboardChannel && navigator.onLine){
       const ch=sb.channel('tafass-admin-dashboard-live')
         .on('postgres_changes',{event:'*',schema:'public',table:'profiles'},()=>adminDashboardRefreshSoon())
-        .on('postgres_changes',{event:'*',schema:'public',table:'tafa_account_appeals'},()=>adminDashboardRefreshSoon())
+        .on('postgres_changes',{event:'*',schema:'public',table:'tafa_account_appeals'},()=>adminDashboardRefreshSoon()).on('postgres_changes',{event:'*',schema:'public',table:'badge_requests'},()=>adminDashboardRefreshSoon())
         .on('postgres_changes',{event:'*',schema:'public',table:'tafab_ad_payments'},()=>adminDashboardRefreshSoon())
         .on('postgres_changes',{event:'*',schema:'public',table:'tafab_ad_campaigns'},()=>adminDashboardRefreshSoon())
         .on('postgres_changes',{event:'*',schema:'public',table:'tafab_withdrawal_requests'},()=>adminDashboardRefreshSoon())
@@ -4113,7 +4113,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       if(step===1) body=`<div class="verification-step-v2"><div class="verification-step-icon-v2">◎</div><h3>Vérifiez votre identité</h3><p>Utilisez votre nom légal. Cette information sert uniquement à l’examen de votre demande.</p><label>Nom légal<input id="vIdentity" class="premium-input" maxlength="160" value="${esc(data.identity)}" placeholder="Nom complet"></label><label>Nom d’utilisateur<input class="premium-input" value="@${esc(state.profile?.username||'')}" readonly></label></div>`;
       if(step===2) body=`<div class="verification-step-v2"><div class="verification-step-icon-v2">✓</div><h3>Choisissez votre catégorie</h3><p>Sélectionnez la catégorie qui correspond le mieux à votre présence publique.</p><label>Catégorie<select id="vCategory" class="premium-input">${categories.map(x=>`<option ${x===data.category?'selected':''}>${x}</option>`).join('')}</select></label></div>`;
       if(step===3) body=`<div class="verification-step-v2"><div class="verification-step-icon-v2">▣</div><h3>Ajoutez votre justificatif</h3><p>Importez une pièce pertinente. Le fichier est envoyé dans le stockage privé réservé aux vérifications.</p><label>Document<input id="vProof" type="file" accept="image/*,.pdf"></label><div class="verification-file-v2">${proofFile?`✓ ${esc(proofFile.name)}`:'Image ou PDF accepté'}</div></div>`;
-      if(step===4) body=`<div class="verification-step-v2"><div class="verification-step-icon-v2">◇</div><h3>Confirmez votre paiement</h3><p>Frais de vérification : <b>25 000 Ar / mois</b>. Effectuez le paiement puis saisissez la référence exacte.</p><div class="verification-payments-v2"><span><b>Yas Money</b><small>+261 383 955 105</small></span><span><b>Airtel Money</b><small>+261 336 756 185</small></span><span><b>Orange Money</b><small>+261 379 594 257</small></span></div><label>Méthode<select id="vMethod" class="premium-input"><option>Yas Money</option><option>Airtel Money</option><option>Orange Money</option></select></label><label>Référence<input id="vRef" class="premium-input" maxlength="120" value="${esc(data.ref)}" placeholder="Référence exacte du paiement"></label></div>`;
+      if(step===4) body=`<div class="verification-step-v2"><div class="verification-step-icon-v2">◇</div><h3>Confirmez votre paiement</h3><p>Frais de vérification : <b>25 000 Ar / mois</b>. Effectuez le paiement puis saisissez la référence exacte.</p><div class="verification-payments-v2"><span><b>Yas Money</b><small>Canal officiel configuré par Tafaß</small></span><span><b>Airtel Money</b><small>Canal officiel configuré par Tafaß</small></span></div><label>Méthode<select id="vMethod" class="premium-input"><option>Yas Money</option><option>Airtel Money</option></select></label><label>Référence<input id="vRef" class="premium-input" maxlength="120" value="${esc(data.ref)}" placeholder="Référence exacte du paiement"></label></div>`;
       if(step===5) body=`<div class="verification-step-v2"><div class="verification-success-v2">✓</div><h3>Tout est prêt</h3><p>Relisez votre dossier avant l’envoi. L’administration vérifiera l’identité, le justificatif et le paiement avant toute activation.</p><div class="verification-summary-v2"><span>Identité<strong>${esc(data.identity||'—')}</strong></span><span>Catégorie<strong>${esc(data.category||'—')}</strong></span><span>Justificatif<strong>${esc(proofFile?.name||'—')}</strong></span><span>Paiement<strong>${esc(data.method||'—')}</strong></span><span>Référence<strong>${esc(data.ref||'—')}</strong></span></div></div>`;
       openModal(`<div class="modal-box verification-wizard-v2"><div class="verification-wizard-head"><div><span class="eyebrow">TAFAß · VÉRIFICATION</span><h3>Badge bleu officiel</h3><small>Étape ${step} sur 5 · ${titles[step-1]}</small></div><button class="modal-close" data-action="close-modal">×</button></div><div class="verification-progress-v2">${titles.map((t,i)=>`<span class="${i+1<=step?'active':''}"><b>${i+1}</b><small>${t}</small></span>`).join('')}</div>${body}<div class="verification-wizard-actions-v2"><button type="button" class="ghost-action" id="verificationBack">${step===1?'Annuler':'Retour'}</button><button type="button" class="primary big" id="verificationNext">${step===5?'Envoyer la demande':'Continuer'}</button></div></div>`);
       const back=$('verificationBack'), next=$('verificationNext');
@@ -4139,9 +4139,14 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if(pending) throw new Error('Une demande de vérification est déjà en attente.');
     let proofPath='';
     if(proofFile){const ext=(proofFile.name.split('.').pop()||'bin').toLowerCase().replace(/[^a-z0-9]/g,'')||'bin';proofPath=`${state.user.id}/${crypto.randomUUID()}.${ext}`;const up=await sb.storage.from('badge-proofs').upload(proofPath,proofFile,{upsert:false,contentType:proofFile.type||undefined});if(up.error)throw new Error('Justificatif : '+up.error.message);}
-    const ins=await sb.from('badge_requests').insert({user_id:state.user.id,badge_type:String(data.category||'Autre'),reason:String(data.identity||''),document_url:proofPath||'',status:'pending'}).select('*').single();
+    const ins=await sb.rpc('tafa_create_badge_request',{
+      p_category:String(data.category||'Autre'),
+      p_identity:String(data.identity||''),
+      p_document_path:proofPath||'',
+      p_payment_method:String(data.method||''),
+      p_payment_reference:String(data.ref||'')
+    });
     if(ins.error){if(proofPath)try{await sb.storage.from('badge-proofs').remove([proofPath]);}catch(_){}throw ins.error;}
-    try{await sb.from('payments').insert({user_id:state.user.id,payment_type:'badge',amount:25000,currency:'MGA',method:String(data.method||''),reference:String(data.ref||''),status:'pending',metadata:{badge_request_id:ins.data?.id||null,category:String(data.category||'Autre')}});}catch(_){ }
     try{if(typeof notify==='function' && String(state.user.id)!==String(OFFICIAL_SUPER_ADMIN_ID))await notify(OFFICIAL_SUPER_ADMIN_ID,'badge_request',`Nouvelle demande de badge bleu de ${displayName(state.profile||state.user)}.`);}catch(_){ }
   }
   async function verificationPage(){

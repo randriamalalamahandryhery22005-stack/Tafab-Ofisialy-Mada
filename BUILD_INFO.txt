@@ -1,1 +1,5 @@
-Tafaß V28 — Messages shared theme + aliases + first-contact greetings
+Tafaß — Premium Production Clean V37
+Frontend audit + Verification Badge Premium V2 alignment
+Date: 2026-09-06
+JavaScript syntax: node --check OK
+Verification: badge_requests + payment_transactions + private badge-proofs + admin RPC
