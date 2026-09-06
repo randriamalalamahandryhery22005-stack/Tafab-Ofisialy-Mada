@@ -285,3 +285,15 @@ from information_schema.columns
 where table_schema='public'
   and table_name in ('posts','stories')
 order by table_name,ordinal_position;
+
+/*
+  Vérification après déploiement :
+  SELECT id, sha256, media_kind, media_url, created_at
+  FROM public.tafa_admin_protected_media
+  ORDER BY created_at DESC;
+
+  IMPORTANT :
+  Les anciennes lignes dont sha256 est NULL ne peuvent pas être recalculées
+  côté SQL à partir de la seule URL. Le fichier original doit être re-téléversé
+  par l'administrateur afin que l'application calcule son SHA-256 exact.
+*/

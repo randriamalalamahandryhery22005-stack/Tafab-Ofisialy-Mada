@@ -135,8 +135,22 @@ document.documentElement.classList.add("app-boot");
     }
   }
   async function registerAdminMediaHash(hash,kind,url){
-    if(state.__isAdmin!==true || !hash) return;
-    const r=await sb.rpc("tafa_admin_register_media_hash",{p_sha256:hash,p_kind:kind,p_url:url||null});
+    if(!hash) return;
+    let isAdmin = state.__isAdmin===true;
+    if(!isAdmin){
+      try{ isAdmin = await adminIsAllowed(); }catch(_){ isAdmin = false; }
+      if(isAdmin) state.__isAdmin = true;
+    }
+    if(!isAdmin) return;
+    const cleanHash=String(hash||"").trim().toLowerCase();
+    if(!/^[0-9a-f]{64}$/.test(cleanHash)){
+      throw new Error("Hash média invalide : le média protégé n’a pas été enregistré.");
+    }
+    const r=await sb.rpc("tafa_admin_register_media_hash",{
+      p_sha256:cleanHash,
+      p_kind:kind,
+      p_url:url||null
+    });
     if(r.error || r.data!==true){
       throw new Error(r.error?.message||"Impossible d’enregistrer le média protégé de l’administration.");
     }
@@ -2310,7 +2324,7 @@ function publisherBackgrounds(){
         const up=await uploadPostMedia(path,file,{upsert:false,contentType:file.type||'image/jpeg'});
         if(up.error) throw new Error('Upload : '+up.error.message);
         patch[key]=sb.storage.from('posts').getPublicUrl(path).data.publicUrl;
-        if(state.__isAdmin===true && moderation?.hash){ await registerAdminMediaHash(moderation.hash,key==='avatar_url'?'profile_avatar':'profile_cover',patch[key]); }
+        if(moderation?.hash){ await registerAdminMediaHash(moderation.hash,key==='avatar_url'?'profile_avatar':'profile_cover',patch[key]); }
       }
       const r=await sb.from('profiles').update(patch).eq('id',state.user.id);
       if(r.error) throw new Error(r.error.message);
