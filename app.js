@@ -114,7 +114,21 @@ document.documentElement.classList.add("app-boot");
   function verifiedBadgeHTML(p){ if(!p || (!p.is_verified && !isAdminProfile(p))) return ""; const admin=isAdminProfile(p); return `<span class="tafa-verified-badge ${admin?"tafa-admin-badge":""}" title="${admin?"Administrateur officiel Tafaß":"Compte vérifié"}">✓</span>`; }
   function displayNameHTML(p){ return `<span class="tafa-display-name"><span>${esc(nameOf(p))}</span>${verifiedBadgeHTML(p)}</span>`; }
   async function sha256File(file){ const b=await file.arrayBuffer(),h=await crypto.subtle.digest("SHA-256",b); return Array.from(new Uint8Array(h)).map(x=>x.toString(16).padStart(2,"0")).join(""); }
-  async function moderationCheckMedia(file,kind){ try{ const hash=await sha256File(file); const r=await sb.rpc("tafa_moderation_check_media",{p_sha256:hash,p_kind:kind}); if(r.error) return {ok:true,hash}; if(r.data?.ok===false){ toast(r.data.message||"Ce média est protégé par l’administration Tafaß."); return {ok:false,hash}; } return {ok:true,hash}; }catch(_){ return {ok:true}; } }
+  async function moderationCheckMedia(file,kind){
+    const hash=await sha256File(file);
+    try{
+      const r=await sb.rpc("tafa_moderation_check_media",{p_sha256:hash,p_kind:kind});
+      if(r.error) throw new Error(r.error.message||"Service de protection indisponible.");
+      if(r.data?.ok===false){
+        toast(r.data.message||"Ce média est protégé par l’administration Tafaß.");
+        return {ok:false,hash};
+      }
+      return {ok:true,hash};
+    }catch(e){
+      toast("Vérification de sécurité impossible : "+(e?.message||"réessayez."));
+      return {ok:false,hash,error:e};
+    }
+  }
   async function identityProtectionCheck({first_name="",last_name="",username="",mediaHash="",context="content"}={}){
     try{
       const r=await sb.rpc("tafa_identity_guard",{p_user_id:state.user.id,p_first_name:first_name,p_last_name:last_name,p_username:username,p_media_hash:mediaHash||null,p_context:context});
