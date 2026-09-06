@@ -3964,7 +3964,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       sb.rpc('tafa_admin_list_withdrawals',{p_limit:50}),
       sb.rpc('tafa_admin_list_payments',{p_limit:50}),
       sb.rpc('tafa_admin_list_reports',{p_limit:50}),
-      sb.rpc('tafa_admin_list_verification_requests',{p_limit:50}),
+      sb.rpc('tafa_admin_list_badge_requests',{p_limit:50}),
       sb.rpc('tafa_admin_list_account_appeals',{p_limit:50}),
       sb.rpc('tafa_admin_list_boost_payments',{p_limit:100}),
       sb.rpc('tafa_admin_list_boost_campaigns',{p_limit:200}),
@@ -3982,9 +3982,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if(!state.adminDashboardChannel && navigator.onLine){
       const ch=sb.channel('tafass-admin-dashboard-live')
         .on('postgres_changes',{event:'*',schema:'public',table:'profiles'},()=>adminDashboardRefreshSoon())
-        .on('postgres_changes',{event:'*',schema:'public',table:'tafa_account_appeals'},()=>adminDashboardRefreshSoon())
-        .on('postgres_changes',{event:'*',schema:'public',table:'tafa_verification_requests'},()=>adminDashboardRefreshSoon())
-        .on('postgres_changes',{event:'*',schema:'public',table:'payment_transactions'},()=>adminDashboardRefreshSoon())
+        .on('postgres_changes',{event:'*',schema:'public',table:'tafa_account_appeals'},()=>adminDashboardRefreshSoon()).on('postgres_changes',{event:'*',schema:'public',table:'badge_requests'},()=>adminDashboardRefreshSoon())
         .on('postgres_changes',{event:'*',schema:'public',table:'tafab_ad_payments'},()=>adminDashboardRefreshSoon())
         .on('postgres_changes',{event:'*',schema:'public',table:'tafab_ad_campaigns'},()=>adminDashboardRefreshSoon())
         .on('postgres_changes',{event:'*',schema:'public',table:'tafab_withdrawal_requests'},()=>adminDashboardRefreshSoon())
@@ -4023,7 +4021,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     const boostCampaignRows=boostCampaigns.map(x=>`<div class="admin-data-row boost-admin-campaign-row"><div class="grow"><b>✦ ${esc(x.name||'Campagne')}</b><small>${esc(x.owner_name||'Compte')} · ${esc(x.ad_type||x.objective||'BOOST')} · ${adminMoney(x.spent_amount_mga)} / ${adminMoney(x.total_budget_mga)} · ${esc(x.audience_location||'Madagascar')}</small></div><span class="admin-status ${x.status==='active'?'paid':x.status==='rejected'?'rejected':x.status==='paused'?'':'pending'}">${esc(adStatusLabel(x.status))}</span><button class="ghost-action" data-action="admin-boost-campaign-control" data-id="${esc(x.id)}" data-status="active">▶ Activer</button><button class="ghost-action" data-action="admin-boost-campaign-control" data-id="${esc(x.id)}" data-status="paused">⏸ Pause</button>${x.status!=='rejected'?`<button class="ghost-action danger-history-action" data-action="admin-boost-campaign-control" data-id="${esc(x.id)}" data-status="rejected">Refuser</button>`:''}</div>`).join('')||'<div class="empty">Aucune campagne publicitaire.</div>';
     const reportRows=reports.map(x=>`<div class="admin-data-row"><div class="grow"><b>${esc(x.reporter_name||'Compte')} → ${esc(x.reported_name||'Compte')}</b><small>${esc(x.reason||'Signalement')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${x.status==='resolved'?'paid':''}">${esc(x.status||'pending')}</span>${x.status==='pending'?`<button class="ghost-action" data-action="admin-report-status" data-id="${esc(x.id)}" data-status="resolved">Traiter</button>`:''}</div>`).join('')||'<div class="empty">Aucun signalement.</div>';
     const appealRows=appeals.map(x=>`<article class="admin-appeal-card ${x.status==='pending'?'is-pending':''}" data-action="admin-open-appeal" data-id="${esc(x.id)}"><div class="admin-appeal-avatar">♻</div><div class="admin-appeal-main"><div class="admin-appeal-top"><div><b>${esc(x.display_name||x.identity_name||x.reason||'Compte')}</b><small>${esc(x.email||'')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${x.status==='approved'?'paid':x.status==='rejected'?'rejected':'pending'}">${x.status==='pending'?'En attente':x.status==='approved'?'Approuvée':'Refusée'}</span></div><p>${esc(x.reason||'Demande de réactivation')}</p><div class="admin-appeal-footer"><small>${x.status==='pending'?'Examen administratif requis':'Traitée par l’administration'}</small>${x.status==='pending'?'<span class="admin-appeal-review">Ouvrir l’examen →</span>':''}</div></div></article>`).join('')||'<div class="empty">Aucune demande de réactivation.</div>';
-    const verificationRows=verifications.map(x=>{const paid=x.payment_status==='paid';return `<div class="admin-data-row verification-admin-row"><div class="grow"><b>${esc(x.display_name||x.identity_name||x.reason||'Compte')}</b><small>${esc(x.email||'')} · ${esc(x.category||'Autre')} · ${esc(x.payment_method||'')} · Réf. ${esc(x.payment_reference||'—')} · Paiement: ${esc(x.payment_status||'inconnu')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${x.status==='approved'?'paid':x.status==='rejected'?'rejected':''}">${esc(x.status||'pending')}</span>${x.status==='pending'?`<button class="ghost-action" ${paid?'':'disabled title="Le paiement doit être marqué payé avant l’approbation"'} data-action="admin-verification-status" data-id="${esc(x.id)}" data-status="approved">${paid?'Approuver':'Paiement requis'}</button><button class="ghost-action danger-history-action" data-action="admin-verification-status" data-id="${esc(x.id)}" data-status="rejected">Refuser</button>`:''}</div>`}).join('')||'<div class="empty">Aucune demande de vérification.</div>';
+    const verificationRows=verifications.map(x=>`<div class="admin-data-row"><div class="grow"><b>${esc(x.display_name||x.identity_name||x.reason||'Compte')}</b><small>${esc(x.email||'')} · ${esc(x.reason||'Demande de vérification')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${x.status==='approved'?'paid':x.status==='rejected'?'rejected':''}">${esc(x.status||'pending')}</span>${x.status==='pending'?`<button class="ghost-action" data-action="admin-verification-status" data-id="${esc(x.id)}" data-status="approved">Approuver</button><button class="ghost-action danger-history-action" data-action="admin-verification-status" data-id="${esc(x.id)}" data-status="rejected">Refuser</button>`:''}</div>`).join('')||'<div class="empty">Aucune demande de vérification.</div>';
 
     const maxDaily=Math.max(1,...daily.map(x=>Number(x.new_accounts||0)));
     const trendRows=daily.map(x=>{const n=Number(x.new_accounts||0),w=Math.max(3,Math.round((n/maxDaily)*100));return `<div class="admin-trend-row"><span>${esc(x.day_label||x.day||'')}</span><div class="admin-trend-track"><i style="width:${w}%"></i></div><b>${n}</b></div>`}).join('');
@@ -4080,15 +4078,16 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     const r=await sb.rpc('tafa_admin_set_report_status',{p_id:id,p_status:status}); if(r.error)return toast(r.error.message); toast('Signalement traité.'); return adminTotalPage();
   }
   // ============================================================
-  // TAFAß — VÉRIFICATION PREMIUM V3
-  // Uses the production schema: tafa_verification_requests + payment_transactions.
+  // TAFAß — VÉRIFICATION PREMIUM V2
+  // Parcours complet en 5 étapes + suivi temps réel.
+  // Utilise le schéma stable badge_requests / badge-proofs existant.
   // ============================================================
   async function loadVerificationRequests(){
     if(!state.user) return [];
     try{
-      const {data,error}=await sb.from('tafa_verification_requests').select('*').eq('user_id',state.user.id).order('created_at',{ascending:false}).limit(20);
+      const {data,error}=await sb.from('badge_requests').select('*').eq('user_id',state.user.id).order('created_at',{ascending:false}).limit(20);
       if(error) throw error;
-      state.verificationRequests=(data||[]).map(r=>({...r,identity_name:r.identity_name||r.reason||'',category:r.category||'Autre',proof_path:r.proof_path||'',payment_method:r.payment_method||'',payment_reference:r.payment_reference||''}));
+      state.verificationRequests=(data||[]).map(r=>({...r,identity_name:r.identity_name||r.reason||'',category:r.category||r.badge_type||'Autre',proof_path:r.proof_path||r.document_url||'',payment_method:r.payment_method||'',payment_reference:r.payment_reference||''}));
       return state.verificationRequests;
     }catch(e){ console.warn('Tafaß vérification:',e?.message||e); return state.verificationRequests||[]; }
   }
@@ -4113,8 +4112,8 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       let body='';
       if(step===1) body=`<div class="verification-step-v2"><div class="verification-step-icon-v2">◎</div><h3>Vérifiez votre identité</h3><p>Utilisez votre nom légal. Cette information sert uniquement à l’examen de votre demande.</p><label>Nom légal<input id="vIdentity" class="premium-input" maxlength="160" value="${esc(data.identity)}" placeholder="Nom complet"></label><label>Nom d’utilisateur<input class="premium-input" value="@${esc(state.profile?.username||'')}" readonly></label></div>`;
       if(step===2) body=`<div class="verification-step-v2"><div class="verification-step-icon-v2">✓</div><h3>Choisissez votre catégorie</h3><p>Sélectionnez la catégorie qui correspond le mieux à votre présence publique.</p><label>Catégorie<select id="vCategory" class="premium-input">${categories.map(x=>`<option ${x===data.category?'selected':''}>${x}</option>`).join('')}</select></label></div>`;
-      if(step===3) body=`<div class="verification-step-v2"><div class="verification-step-icon-v2">▣</div><h3>Ajoutez votre justificatif</h3><p>Importez une pièce pertinente. Le fichier est envoyé dans le stockage privé réservé aux vérifications.</p><label>Document<input id="vProof" type="file" accept="image/*,.pdf"></label><div class="verification-file-v2">${proofFile?`✓ ${esc(proofFile.name)}`:'Image ou PDF accepté · 15 Mo maximum'}</div></div>`;
-      if(step===4) body=`<div class="verification-step-v2"><div class="verification-step-icon-v2">◇</div><h3>Confirmez votre paiement</h3><p>Frais de vérification : <b>25 000 Ar</b>. Effectuez le paiement puis saisissez la référence exacte.</p><div class="verification-payments-v2"><span><b>Yas Money</b><small>+261 383 955 105</small></span><span><b>Airtel Money</b><small>+261 336 756 185</small></span></div><label>Méthode<select id="vMethod" class="premium-input"><option value="Yas Money" ${data.method==='Yas Money'?'selected':''}>Yas Money</option><option value="Airtel Money" ${data.method==='Airtel Money'?'selected':''}>Airtel Money</option></select></label><label>Référence<input id="vRef" class="premium-input" maxlength="120" value="${esc(data.ref)}" placeholder="Référence exacte du paiement"></label></div>`;
+      if(step===3) body=`<div class="verification-step-v2"><div class="verification-step-icon-v2">▣</div><h3>Ajoutez votre justificatif</h3><p>Importez une pièce pertinente. Le fichier est envoyé dans le stockage privé réservé aux vérifications.</p><label>Document<input id="vProof" type="file" accept="image/*,.pdf"></label><div class="verification-file-v2">${proofFile?`✓ ${esc(proofFile.name)}`:'Image ou PDF accepté'}</div></div>`;
+      if(step===4) body=`<div class="verification-step-v2"><div class="verification-step-icon-v2">◇</div><h3>Confirmez votre paiement</h3><p>Frais de vérification : <b>25 000 Ar / mois</b>. Effectuez le paiement puis saisissez la référence exacte.</p><div class="verification-payments-v2"><span><b>Yas Money</b><small>Canal officiel configuré par Tafaß</small></span><span><b>Airtel Money</b><small>Canal officiel configuré par Tafaß</small></span></div><label>Méthode<select id="vMethod" class="premium-input"><option>Yas Money</option><option>Airtel Money</option></select></label><label>Référence<input id="vRef" class="premium-input" maxlength="120" value="${esc(data.ref)}" placeholder="Référence exacte du paiement"></label></div>`;
       if(step===5) body=`<div class="verification-step-v2"><div class="verification-success-v2">✓</div><h3>Tout est prêt</h3><p>Relisez votre dossier avant l’envoi. L’administration vérifiera l’identité, le justificatif et le paiement avant toute activation.</p><div class="verification-summary-v2"><span>Identité<strong>${esc(data.identity||'—')}</strong></span><span>Catégorie<strong>${esc(data.category||'—')}</strong></span><span>Justificatif<strong>${esc(proofFile?.name||'—')}</strong></span><span>Paiement<strong>${esc(data.method||'—')}</strong></span><span>Référence<strong>${esc(data.ref||'—')}</strong></span></div></div>`;
       openModal(`<div class="modal-box verification-wizard-v2"><div class="verification-wizard-head"><div><span class="eyebrow">TAFAß · VÉRIFICATION</span><h3>Badge bleu officiel</h3><small>Étape ${step} sur 5 · ${titles[step-1]}</small></div><button class="modal-close" data-action="close-modal">×</button></div><div class="verification-progress-v2">${titles.map((t,i)=>`<span class="${i+1<=step?'active':''}"><b>${i+1}</b><small>${t}</small></span>`).join('')}</div>${body}<div class="verification-wizard-actions-v2"><button type="button" class="ghost-action" id="verificationBack">${step===1?'Annuler':'Retour'}</button><button type="button" class="primary big" id="verificationNext">${step===5?'Envoyer la demande':'Continuer'}</button></div></div>`);
       const back=$('verificationBack'), next=$('verificationNext');
@@ -4127,7 +4126,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
         if(step===4){data.method=$('vMethod')?.value||'';data.ref=$('vRef')?.value.trim()||'';if(!data.ref)return toast('Ajoutez la référence exacte du paiement.');}
         if(step<5){step++;show();return;}
         next.disabled=true; next.textContent='Envoi en cours…';
-        try{await submitVerificationRequest(data,proofFile);closeModal();await loadVerificationRequests();render();toast('Demande envoyée ✓ · Paiement en attente de vérification');}
+        try{await submitVerificationRequest(data,proofFile);closeModal();await loadVerificationRequests();render();toast('Demande envoyée ✓ · En attente de validation');}
         catch(e){next.disabled=false;next.textContent='Envoyer la demande';toast(e?.message||'Impossible d’envoyer la demande.');}
       };
     };
@@ -4135,14 +4134,20 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   }
   async function submitVerificationRequest(data,proofFile){
     if(!state.user) throw new Error('Connexion requise.');
-    const {data:pending,error:checkError}=await sb.from('tafa_verification_requests').select('id,status').eq('user_id',state.user.id).eq('status','pending').limit(1).maybeSingle();
+    const {data:pending,error:checkError}=await sb.from('badge_requests').select('id,status').eq('user_id',state.user.id).eq('status','pending').limit(1).maybeSingle();
     if(checkError) throw checkError;
     if(pending) throw new Error('Une demande de vérification est déjà en attente.');
     let proofPath='';
     if(proofFile){const ext=(proofFile.name.split('.').pop()||'bin').toLowerCase().replace(/[^a-z0-9]/g,'')||'bin';proofPath=`${state.user.id}/${crypto.randomUUID()}.${ext}`;const up=await sb.storage.from('badge-proofs').upload(proofPath,proofFile,{upsert:false,contentType:proofFile.type||undefined});if(up.error)throw new Error('Justificatif : '+up.error.message);}
-    const r=await sb.rpc('tafa_create_badge_request',{p_category:String(data.category||'Autre'),p_identity_name:String(data.identity||''),p_proof_path:proofPath||null,p_payment_method:String(data.method||''),p_payment_reference:String(data.ref||'')});
-    if(r.error){if(proofPath)try{await sb.storage.from('badge-proofs').remove([proofPath]);}catch(_){}throw r.error;}
-    try{if(typeof notify==='function' && String(state.user.id)!==String(OFFICIAL_SUPER_ADMIN_ID))await notify(OFFICIAL_SUPER_ADMIN_ID,'badge_request',`Nouvelle demande de badge bleu de ${displayName(state.profile||state.user)}.`);}catch(_){}
+    const ins=await sb.rpc('tafa_create_badge_request',{
+      p_category:String(data.category||'Autre'),
+      p_identity:String(data.identity||''),
+      p_document_path:proofPath||'',
+      p_payment_method:String(data.method||''),
+      p_payment_reference:String(data.ref||'')
+    });
+    if(ins.error){if(proofPath)try{await sb.storage.from('badge-proofs').remove([proofPath]);}catch(_){}throw ins.error;}
+    try{if(typeof notify==='function' && String(state.user.id)!==String(OFFICIAL_SUPER_ADMIN_ID))await notify(OFFICIAL_SUPER_ADMIN_ID,'badge_request',`Nouvelle demande de badge bleu de ${displayName(state.profile||state.user)}.`);}catch(_){ }
   }
   async function verificationPage(){
     const token=++state.verificationRenderToken;
@@ -4213,7 +4218,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if(!id)return;
     return openBoostAdminConfirm('campaign',id,status);
   }
-  async function adminSetVerificationStatus(id,status){ if(!['approved','rejected'].includes(String(status)))return toast('Statut de vérification invalide.'); if(!(await premiumConfirm(status==='approved'?'Approuver la vérification':'Refuser la vérification',status==='approved'?'Le badge bleu sera activé après validation administrative.':'La demande sera refusée.',status==='approved'?'Approuver':'Refuser',status!=='approved')))return; const r=await sb.rpc('tafa_admin_set_verification_status',{p_id:id,p_status:status}); if(r.error)return toast(r.error.message); await loadVerificationRequests(); toast(status==='approved'?'Badge bleu activé.':'Demande refusée.'); if(state.route==='verification') await verificationPage(); return adminTotalPage(); }
+  async function adminSetVerificationStatus(id,status){ if(!['approved','rejected'].includes(String(status)))return toast('Statut de vérification invalide.'); if(!(await premiumConfirm(status==='approved'?'Approuver la vérification':'Refuser la vérification',status==='approved'?'Le badge bleu sera activé après validation administrative.':'La demande sera refusée.',status==='approved'?'Approuver':'Refuser',status!=='approved')))return; const r=await sb.rpc('tafa_admin_review_badge',{p_request_id:id,p_status:status}); if(r.error)return toast(r.error.message); await loadVerificationRequests(); toast(status==='approved'?'Badge bleu activé.':'Demande refusée.'); if(state.route==='verification') await verificationPage(); return adminTotalPage(); }
   async function openRestrictionAppeal(){
     const r=await sb.from('tafa_account_appeals').select('status,created_at').eq('user_id',state.user.id).order('created_at',{ascending:false}).limit(3);
     const history=r.data||[];
@@ -4675,7 +4680,10 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     syncThemeButton();
     try{
       await loadProfile();
-      if (!(await profileIsComplete())) {
+      // A valid Supabase session must be enough to open the app.
+      // Do not lock existing password accounts behind optional profile fields.
+      // OAuth users with no profile at all still receive the onboarding screen.
+      if (!state.profile?.id) {
         showOAuthOnboarding();
         return;
       }
