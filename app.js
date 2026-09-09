@@ -1680,7 +1680,7 @@ function publisherBackgrounds(){
     const aliasRows=(await sb.from("tafab_conversation_aliases").select("target_user_id,nickname").eq("conversation_id",id)).data||[];
     const aliasMap=new Map(aliasRows.map(x=>[String(x.target_user_id),x.nickname]));
     const displayOtherName=otherProfile ? (aliasMap.get(String(otherProfile.id))||nameOf(otherProfile)) : "Discussion";
-    $("content").innerHTML = `<section class="clean-page messages-page conversation-page conversation-page-clean"><header class="conversation-clean-topbar"><button class="conversation-back" data-action="page-back" type="button" aria-label="Retour">‹</button><button class="conversation-person" data-action="view-profile" data-id="${esc(otherId||"")}" type="button">${avatarHTML(otherProfile || state.profile,"avatar conversation-avatar")}<span><b>${esc(displayOtherName)}</b><small id="conversationPresence" class="conversation-presence">Actif</small></span></button><div class="conversation-head-actions"><button type="button" aria-label="Appel Premium" title="Appel Premium" data-action="conversation-call"><span>⌕</span></button><button type="button" aria-label="Vidéo Premium" title="Vidéo Premium" data-action="conversation-video"><span>▣</span></button><button type="button" aria-label="Options" title="Options" data-action="conversation-menu" data-id="${esc(id)}">⚙</button></div></header><div id="typingIndicator" class="typing-indicator" hidden>écrit…</div><div class="message-list clean-message-list">${(msgs||[]).map(m=>conversationMessageHTML(m,map,reactionMap)).join("")||renderFirstContactGreetings(otherProfile||{})}</div><form id="messageForm" class="comment-form clean-message-form"><button type="button" class="message-tool" data-action="message-attachment" title="Photo ou fichier" aria-label="Photo ou fichier">▧</button><button type="button" class="message-tool" data-action="message-voice" title="Message vocal" aria-label="Message vocal">●</button><input id="messageAttachment" type="file" hidden accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip,.apk"><div class="message-input-shell"><input id="messageText" autocomplete="off" placeholder="Message"><button type="button" class="message-emoji-button" data-action="message-emoji" title="Emoji" aria-label="Emoji">☺</button></div><button type="submit" class="message-send-button" aria-label="Envoyer">➤</button></form></section>`;
+    $("content").innerHTML = `<section class="clean-page messages-page conversation-page conversation-page-clean"><header class="conversation-clean-topbar"><button class="conversation-back" data-action="page-back" type="button" aria-label="Retour">‹</button><button class="conversation-person" data-action="view-profile" data-id="${esc(otherId||"")}" type="button">${avatarHTML(otherProfile || state.profile,"avatar conversation-avatar")}<span><b>${esc(displayOtherName)}</b><small id="conversationPresence" class="conversation-presence">Actif</small></span></button><div class="conversation-head-actions"><button type="button" aria-label="Rechercher dans la conversation" title="Rechercher" data-action="conversation-search"><span>⌕</span></button><button type="button" aria-label="Appel Premium" title="Appel Premium" data-action="conversation-call"><span>⌕</span></button><button type="button" aria-label="Vidéo Premium" title="Vidéo Premium" data-action="conversation-video"><span>▣</span></button><button type="button" aria-label="Options" title="Options" data-action="conversation-menu" data-id="${esc(id)}">⚙</button></div></header><div id="conversationSearchBar" class="conversation-search-bar" hidden><span>⌕</span><input id="conversationSearchInput" type="search" placeholder="Rechercher dans les messages…" autocomplete="off"><b id="conversationSearchCount">0</b><button type="button" data-action="conversation-search-close" aria-label="Fermer">×</button></div><div id="typingIndicator" class="typing-indicator" hidden>écrit…</div><div class="message-list clean-message-list">${(msgs||[]).map(m=>conversationMessageHTML(m,map,reactionMap)).join("")||renderFirstContactGreetings(otherProfile||{})}</div><form id="messageForm" class="comment-form clean-message-form"><button type="button" class="message-tool" data-action="message-attachment" title="Photo ou fichier" aria-label="Photo ou fichier">▧</button><button type="button" class="message-tool" data-action="message-voice" title="Message vocal" aria-label="Message vocal">●</button><input id="messageAttachment" type="file" hidden accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip,.apk"><div class="message-input-shell"><input id="messageText" autocomplete="off" placeholder="Message"><button type="button" class="message-emoji-button" data-action="message-emoji" title="Emoji" aria-label="Emoji">☺</button></div><button type="submit" class="message-send-button" aria-label="Envoyer">➤</button></form></section>`;
 
     // Conversation-level Realtime: typing + online presence without storing ephemeral state in SQL.
     if(state.conversationChannel){ try{ await sb.removeChannel(state.conversationChannel); }catch(_){} state.conversationChannel=null; }
@@ -1713,6 +1713,7 @@ function publisherBackgrounds(){
     input?.addEventListener("input",()=>{
       setTyping(true); clearTimeout(typingTimer); typingTimer=setTimeout(()=>setTyping(false),1200);
     });
+    $("conversationSearchInput")?.addEventListener("input",e=>filterConversationMessages(e.target.value));
     $("messageAttachment")?.addEventListener("change", sendMessageAttachment);
     $("messageForm").addEventListener("submit", async e => {
       e.preventDefault(); const text=$("messageText").value.trim(); if(!text)return;
@@ -1895,6 +1896,33 @@ function publisherBackgrounds(){
     const r=await sb.from('tafab_message_reactions').upsert({message_id:id,user_id:state.user.id,reaction},{onConflict:'message_id,user_id'});
     if(r.error)return toast(r.error.message); closeModal(); toast('Réaction ajoutée'); return refreshConversation(state.selectedConversation);
   }
+  function openConversationSearch(){
+    const bar=$("conversationSearchBar"), input=$("conversationSearchInput");
+    if(!bar || !input) return;
+    bar.hidden=false; input.value=""; input.focus(); filterConversationMessages("");
+  }
+  function closeConversationSearch(){
+    const bar=$("conversationSearchBar"), input=$("conversationSearchInput");
+    if(bar) bar.hidden=true;
+    if(input) input.value="";
+    filterConversationMessages("");
+  }
+  function filterConversationMessages(term){
+    const q=String(term||"").trim().toLocaleLowerCase();
+    const list=document.querySelector(".clean-message-list");
+    if(!list)return;
+    let count=0;
+    list.querySelectorAll("[data-message-id]").forEach(node=>{
+      const text=(node.querySelector(".message-body")?.textContent||node.textContent||"").toLocaleLowerCase();
+      const hit=!q || text.includes(q);
+      node.classList.toggle("message-search-hidden",!hit);
+      node.classList.toggle("message-search-hit",!!q && hit);
+      if(hit && q) count++;
+    });
+    const counter=$("conversationSearchCount"); if(counter) counter.textContent=q?String(count):"0";
+    if(q && count===1){ const hit=list.querySelector(".message-search-hit"); hit?.scrollIntoView({behavior:"smooth",block:"center"}); }
+  }
+
   function messageActionMenu(id){
     const node=document.querySelector(`[data-message-id="${CSS.escape(String(id))}"]`); if(!node)return;
     const mine=node.classList.contains('mine');
@@ -5877,6 +5905,8 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if (action === "reply-message") { closeModal(); return replyConversationMessage(id); }
     if (action === "cancel-message-reply") return cancelMessageReply();
     if (action === "message-menu") return messageActionMenu(id);
+    if (action === "conversation-search") return openConversationSearch();
+    if (action === "conversation-search-close") return closeConversationSearch();
     if (action === "toggle-message-reactions") return toggleMessageReactionPicker(id);
     if (action === "edit-message") return editConversationMessage(id);
     if (action === "save-message-edit") return saveConversationMessageEdit(id);

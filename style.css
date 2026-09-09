@@ -5227,3 +5227,12 @@ body.light .tafa-premium-sidebar>button.active:not(.profile-shortcut),body.light
 @keyframes v44Shimmer{to{background-position:-200% 0}}@keyframes v44Pulse{0%,70%,100%{opacity:.25;transform:translateY(0) scale(.82)}35%{opacity:1;transform:translateY(-3px) scale(1)}}
 @media(max-width:720px){.v44-page-skeleton{min-height:300px;padding:16px;border-radius:19px}.v44-skel-grid{grid-template-columns:1fr 1fr}.v44-skel-grid span:last-child{display:none}}
 body.light .v44-page-skeleton{background:linear-gradient(145deg,#fff,#f5faf7,#fff8ee);border-color:rgba(20,120,70,.12)}
+
+
+/* TAFAß V45 — Advanced Messages */
+.conversation-search-bar{display:flex;align-items:center;gap:10px;margin:0 14px 10px;padding:10px 12px;border:1px solid rgba(255,255,255,.10);border-radius:16px;background:rgba(10,14,13,.92);box-shadow:0 10px 30px rgba(0,0,0,.18);backdrop-filter:blur(18px)}
+.conversation-search-bar>span{font-size:18px;opacity:.8}.conversation-search-bar input{min-width:0;flex:1;border:0;outline:0;background:transparent;color:inherit;font:inherit}.conversation-search-bar b{min-width:22px;text-align:center;font-size:12px;opacity:.72}.conversation-search-bar button{border:0;background:transparent;color:inherit;font-size:22px;cursor:pointer;padding:2px 5px}
+.message-search-hidden{display:none!important}.message-search-hit{outline:2px solid rgba(255,168,58,.45);outline-offset:3px;border-radius:18px;animation:v45MessageHit .7s ease}
+@keyframes v45MessageHit{0%{transform:scale(.985)}100%{transform:scale(1)}}
+.conversation-head-actions button[data-action="conversation-search"]{position:relative}.conversation-head-actions button[data-action="conversation-search"]::after{content:"";position:absolute;inset:-3px;border-radius:14px;border:1px solid rgba(111,255,174,.16);pointer-events:none}
+@media (max-width:600px){.conversation-search-bar{margin:0 9px 8px;border-radius:14px;padding:9px 10px}.conversation-search-bar input{font-size:14px}}
