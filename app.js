@@ -5015,16 +5015,18 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   }
 
   async function togglePageFollow(id){
-    const exists=(await sb.from('page_followers').select('id').eq('page_id',id).eq('user_id',state.user.id).maybeSingle()).data;
-    const r=exists?await sb.from('page_followers').delete().eq('id',exists.id):await sb.from('page_followers').insert({page_id:id,user_id:state.user.id});
-    if(r.error) return toast(r.error.message);
-    if(!exists){
+    if(!state.user?.id) return toast('Connectez-vous pour suivre une Page.');
+    const {data:r,error}=await sb.rpc('tafa_toggle_page_follow',{p_page_id:id});
+    if(error) return toast(error.message||'Impossible de modifier le suivi de la Page.');
+    if(r?.success===false) return toast(r.message||'Action impossible.');
+    const followed=!!r?.followed;
+    if(followed){
       const pg=(await fetchPageById(id)).data;
       if(pg?.owner_id && pg.owner_id!==state.user.id){
         await sb.from('notifications').insert({user_id:pg.owner_id,actor_id:state.user.id,type:'page_follow',title:'Nouvel abonné',message:`Un membre suit maintenant ${pg.name}.`,entity_type:'page',entity_id:id});
       }
     }
-    toast(exists?'Vous ne suivez plus cette Page.':'Vous suivez maintenant cette Page.');
+    toast(followed?'Vous suivez maintenant cette Page.':'Vous ne suivez plus cette Page.');
     return openPageDetail(id);
   }
 
@@ -5094,17 +5096,12 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
 
 
   async function toggleGroupMember(id){
-    const {data:me}=await sb.from('group_members').select('id,role').eq('group_id',id).eq('user_id',state.user.id).maybeSingle();
-    if(me){
-      if(me.role==='admin') return toast('Le propriétaire ne peut pas quitter avec ce rôle.');
-      const r=await sb.from('group_members').delete().eq('id',me.id);
-      if(r.error)return toast(r.error.message);
-      toast('Vous avez quitté le groupe.');
-    }else{
-      const r=await sb.from('group_members').insert({group_id:id,user_id:state.user.id,role:'member'});
-      if(r.error)return toast(r.error.message);
-      toast('Vous avez rejoint le groupe.');
-    }
+    if(!state.user?.id) return toast('Connectez-vous pour rejoindre un groupe.');
+    const {data:r,error}=await sb.rpc('tafa_toggle_group_membership',{p_group_id:id});
+    if(error) return toast(error.message||'Impossible de modifier votre adhésion au groupe.');
+    if(r?.success===false) return toast(r.message||'Action impossible.');
+    const joined=!!r?.joined;
+    toast(joined?'Vous avez rejoint le groupe.':'Vous avez quitté le groupe.');
     return openGroupDetail(id);
   }
 
