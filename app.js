@@ -7335,4 +7335,35 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   })();
 
 
+  /* ============================================================
+     TAFAß V63 — ADMIN TOTAL / PREMIUM DASHBOARD SINGLE VERSION
+     Final presentation layer: one authoritative dashboard UI.
+     Legacy V50/V51 command bars are hidden; existing server actions
+     and realtime data remain authoritative.
+  ============================================================ */
+  (() => {
+    const applyAdminV63 = () => {
+      const root = document.querySelector('.admin-dashboard-premium');
+      if (!root) return;
+      root.classList.add('tafa-v63-dashboard');
+      root.querySelectorAll('.tafa-v50-command,.tafa-v51-command,.tafa-v51-command-bar').forEach(el => el.remove());
+      root.querySelectorAll('.admin-dashboard-columns').forEach(el => el.classList.add('tafa-v63-flatten'));
+      [...root.querySelectorAll('.admin-total-section')].forEach(section => {
+        const title = (section.querySelector('h3')?.textContent || '').trim();
+        section.classList.add('tafa-v63-panel');
+        if (/Comptes utilisateurs/i.test(title) || /Journal administratif/i.test(title)) section.classList.add('tafa-v63-wide');
+        if (/Évolution des comptes|Où se trouvent les comptes|Santé de l’application|Sécurité/i.test(title)) section.classList.add('tafa-v63-overview-panel');
+      });
+      root.dataset.v63Ready = '1';
+    };
+    const originalV63AdminTotalPage = adminTotalPage;
+    adminTotalPage = async function(...args) {
+      const result = await originalV63AdminTotalPage.apply(this, args);
+      requestAnimationFrame(applyAdminV63);
+      setTimeout(applyAdminV63, 80);
+      return result;
+    };
+    applyAdminV63();
+  })();
+
 })();
