@@ -5172,7 +5172,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if(error||!p) return toast(error?.message||'Page introuvable.');
     const {data:m}=await sb.from('page_members').select('role').eq('page_id',id).eq('user_id',state.user.id).maybeSingle();
     const isAdmin=p.owner_id===state.user.id || m?.role==='admin';
-    openModal(`<div class="modal-box page-more-menu-modal"><button class="modal-close" data-action="close-modal">×</button><div class="more-menu-hero"><span class="eyebrow">TAFAß • ${esc(p.name)}</span><h3>Plus d’options</h3><p>Gérez ou partagez cette Page selon vos droits.</p></div><div class="more-menu-grid"><button class="more-menu-item" data-action="page-invite-friends" data-id="${esc(id)}"><span>👥</span><div><b>Inviter des amis</b><small>Envoyer une invitation à suivre la Page</small></div></button><button class="more-menu-item" data-action="page-share" data-id="${esc(id)}"><span>↗</span><div><b>Partager la Page</b><small>Partager avec vos contacts</small></div></button><button class="more-menu-item" data-action="page-copy-link" data-id="${esc(id)}"><span>🔗</span><div><b>Copier le lien</b><small>Copier l’adresse de la Page</small></div></button>${isAdmin?`<button class="more-menu-item" data-action="edit-page" data-id="${esc(id)}"><span>⚙</span><div><b>Gérer la Page</b><small>Informations, équipe et paramètres</small></div></button>`:''}<button class="more-menu-item" data-action="page-report" data-id="${esc(id)}"><span>⚑</span><div><b>Signaler la Page</b><small>Signaler un problème</small></div></button></div></div>`);
+    openModal(`<div class="modal-box page-more-menu-modal"><button class="modal-close" data-action="close-modal">×</button><div class="more-menu-hero"><span class="eyebrow">TAFAß • ${esc(p.name)}</span><h3>Plus d’options</h3><p>Gérez ou partagez cette Page selon vos droits.</p></div><div class="more-menu-grid"><button class="more-menu-item" data-action="page-invite-friends" data-id="${esc(id)}"><span>👥</span><div><b>Inviter des amis</b><small>Envoyer une invitation à suivre la Page</small></div></button><button class="more-menu-item" data-action="page-share" data-id="${esc(id)}"><span>↗</span><div><b>Partager la Page</b><small>Partager avec vos contacts</small></div></button><button class="more-menu-item" data-action="page-copy-link" data-id="${esc(id)}"><span>🔗</span><div><b>Copier le lien</b><small>Copier l’adresse de la Page</small></div></button>${isAdmin?`<button class="more-menu-item" data-action="page-team" data-id="${esc(id)}"><span>♛</span><div><b>Équipe & rôles</b><small>Administrateurs et éditeurs</small></div></button>`:""}${isAdmin?`<button class="more-menu-item" data-action="edit-page" data-id="${esc(id)}"><span>⚙</span><div><b>Gérer la Page</b><small>Informations, équipe et paramètres</small></div></button>`:''}<button class="more-menu-item" data-action="page-report" data-id="${esc(id)}"><span>⚑</span><div><b>Signaler la Page</b><small>Signaler un problème</small></div></button></div></div>`);
   }
 
   async function pageInviteFriends(id){
@@ -5214,6 +5214,36 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     const reason=await premiumPrompt('Signaler cette Page','Expliquez brièvement pourquoi cette Page doit être examinée par la modération.','','Envoyer le signalement'); if(!reason)return;
     const r=await sb.from('page_reports').insert({reporter_id:state.user.id,page_id:id,reason});
     if(r.error)return toast(r.error.message); closeModal(); toast('Signalement envoyé.');
+  }
+
+  async function entityTeamManager(kind,id){
+    if(!state.user?.id)return toast('Connectez-vous pour continuer.');
+    const isPage=kind==='page', table=isPage?'page_members':'group_members', key=isPage?'page_id':'group_id', ownerTable=isPage?'pages':'groups';
+    const {data:entity,error}=await sb.from(ownerTable).select('id,name,owner_id').eq('id',id).maybeSingle();
+    if(error||!entity)return toast('Élément introuvable.');
+    const {data:me}=await sb.from(table).select('role').eq(key,id).eq('user_id',state.user.id).maybeSingle();
+    if(entity.owner_id!==state.user.id && me?.role!=='admin')return toast('Vous n’avez pas les droits de gestion.');
+    const {data:members,error:membersError}=await sb.from(table).select('user_id,role,profiles(first_name,last_name,username,avatar_url)').eq(key,id).limit(100);
+    if(membersError)return toast(membersError.message);
+    const rows=(members||[]).map(m=>{const role=String(m.role||'member'),locked=m.user_id===entity.owner_id;const label=role==='owner'?'Propriétaire':role==='admin'?'Administrateur':role==='editor'?'Éditeur':'Membre';return `<div class="team-member-row"><div class="team-member-person">${avatarHTML(m.profiles||{},'avatar team-member-avatar')}<span><b>${esc(nameOf(m.profiles||{}))}</b><small>@${esc(m.profiles?.username||'membre')} · ${label}</small></span></div><div class="team-member-actions">${locked?'<span class="team-owner-lock">PROPRIÉTAIRE</span>':`<select class="team-role-select" data-team-role data-kind="${kind}" data-entity-id="${esc(id)}" data-user-id="${esc(m.user_id)}"><option value="member" ${role==='member'?'selected':''}>Membre</option><option value="editor" ${role==='editor'?'selected':''}>Éditeur</option><option value="admin" ${role==='admin'?'selected':''}>Administrateur</option></select><button class="team-remove-btn" data-action="team-remove" data-kind="${kind}" data-id="${esc(m.user_id)}" data-entity-id="${esc(id)}">Retirer</button>`}</div></div>`}).join('')||'<div class="team-empty"><b>Aucun membre</b><span>Aucun gestionnaire supplémentaire.</span></div>';
+    openModal(`<div class="modal-box team-manager-modal"><button class="modal-close" data-action="close-modal">×</button><div class="team-manager-hero"><div class="team-manager-icon">♛</div><div><span class="eyebrow">TAFAß • ÉQUIPE & RÔLES</span><h2>${esc(entity.name)}</h2><p>Gérez les accès professionnels de votre ${isPage?'Page':'Groupe'}.</p></div></div><div class="team-permission-cards"><div><b>Administrateur</b><small>Gestion complète</small></div><div><b>Éditeur</b><small>Contenu & publications</small></div><div><b>Membre</b><small>Accès standard</small></div></div><div class="team-manager-list">${rows}</div><div class="team-manager-note">Les changements sont enregistrés immédiatement.</div></div>`);
+  }
+  async function teamSetRole(kind,entityId,userId,role){
+    if(!['member','editor','admin'].includes(role))return;
+    const isPage=kind==='page', table=isPage?'page_members':'group_members', key=isPage?'page_id':'group_id', ownerTable=isPage?'pages':'groups';
+    const owner=(await sb.from(ownerTable).select('owner_id').eq('id',entityId).maybeSingle()).data;
+    if(!owner||owner.owner_id===userId)return toast('Le propriétaire ne peut pas être modifié.');
+    const me=(await sb.from(table).select('role').eq(key,entityId).eq('user_id',state.user.id).maybeSingle()).data;
+    if(owner.owner_id!==state.user.id && me?.role!=='admin')return toast('Accès refusé.');
+    const r=await sb.from(table).update({role}).eq(key,entityId).eq('user_id',userId);if(r.error)return toast(r.error.message);toast('Rôle mis à jour.');
+  }
+  async function teamRemove(kind,entityId,userId){
+    const isPage=kind==='page', table=isPage?'page_members':'group_members', key=isPage?'page_id':'group_id', ownerTable=isPage?'pages':'groups';
+    const owner=(await sb.from(ownerTable).select('owner_id').eq('id',entityId).maybeSingle()).data;
+    if(!owner||owner.owner_id===userId)return toast('Le propriétaire ne peut pas être retiré.');
+    const me=(await sb.from(table).select('role').eq(key,entityId).eq('user_id',state.user.id).maybeSingle()).data;
+    if(owner.owner_id!==state.user.id && me?.role!=='admin')return toast('Accès refusé.');
+    const r=await sb.from(table).delete().eq(key,entityId).eq('user_id',userId);if(r.error)return toast(r.error.message);toast('Membre retiré.');return entityTeamManager(kind,entityId);
   }
 
   async function togglePageFollow(id){
@@ -5382,7 +5412,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if(error||!g)return toast(error?.message||"Groupe introuvable.");
     const me=(await sb.from("group_members").select("role").eq("group_id",id).eq("user_id",state.user.id).maybeSingle()).data;
     const admin=g.owner_id===state.user.id||me?.role==="admin";
-    openModal(`<div class="modal-box fb-more-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • GROUPE</span><h3>${esc(g.name)}</h3><div class="fb-more-list"><button data-action="group-share" data-id="${esc(id)}">↗ <span>Partager le groupe</span></button><button data-action="group-copy-link" data-id="${esc(id)}">🔗 <span>Copier le lien</span></button>${admin?`<button data-action="edit-group" data-id="${esc(id)}">⚙ <span>Gérer le groupe</span></button>`:""}${me?`<button data-action="toggle-group-member" data-id="${esc(id)}">↪ <span>Quitter le groupe</span></button>`:""}</div></div>`);
+    openModal(`<div class="modal-box fb-more-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • GROUPE</span><h3>${esc(g.name)}</h3><div class="fb-more-list"><button data-action="group-share" data-id="${esc(id)}">↗ <span>Partager le groupe</span></button><button data-action="group-copy-link" data-id="${esc(id)}">🔗 <span>Copier le lien</span></button>${admin?`<button data-action="edit-group" data-id="${esc(id)}">⚙ <span>Gérer le groupe</span></button>`:""}${admin?`<button data-action="group-team" data-id="${esc(id)}">♛ <span>Équipe & rôles</span></button>`:""}${me?`<button data-action="toggle-group-member" data-id="${esc(id)}">↪ <span>Quitter le groupe</span></button>`:""}</div></div>`);
   }
   async function groupShare(id) {
     const url=`${location.origin}${location.pathname}#/groups/${id}`;
@@ -5591,6 +5621,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     }
   }, true);
 
+  document.addEventListener('change', async e => { const el=e.target.closest('[data-team-role]'); if(!el)return; await teamSetRole(el.dataset.kind,el.dataset.entityId,el.dataset.userId,el.value); });
   document.addEventListener("click", async e => {
     const gameTab = e.target.closest("[data-game]");
     if (gameTab && $("gameStage")) { e.preventDefault(); return startGame(gameTab.dataset.game); }
@@ -6132,6 +6163,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if (action === "page-profile") { state.entityBackRoute = state.route || "pages"; return openPageDetail(id); }
     if (action === "page-open") { state.entityBackRoute = pageModeActive() && state.activePage?.id===id ? "home" : (state.route || "pages"); return openPageDetail(id); }
     if (action === "page-more") return pageMore(id);
+    if (action === "page-team") return entityTeamManager("page",id);
     if (action === "page-invite-friends") return pageInviteFriends(id);
     if (action === "page-role-request") return sendPageRoleRequest(id, actionEl.dataset.entityId);
     if (action === "role-request-accept") return respondRoleRequest(id, true);
@@ -6141,6 +6173,8 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if (action === "page-copy-link") return pageCopyLink(id);
     if (action === "page-report") return pageReport(id);
     if (action === "group-more") return groupMore(id);
+    if (action === "group-team") return entityTeamManager("group",id);
+    if (action === "team-remove") return teamRemove(actionEl.dataset.kind,actionEl.dataset.entityId,id);
     if (action === "group-share") { closeModal(); return groupShare(id); }
     if (action === "group-copy-link") return groupCopyLink(id);
     if (action === "group-open") {
