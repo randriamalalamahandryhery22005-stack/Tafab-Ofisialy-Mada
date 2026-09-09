@@ -1,13 +1,15 @@
-Tafaß V64 — Loading Rule
+Tafaß V64 — Navigation Stable & Scroll Fix
 
 Modifications :
-- La seule barre horizontale de progression est celle située tout en haut de la page (page-loader).
-- Tous les autres indicateurs de chargement sont circulaires : splash, transition, chargements inline et skeleton loader.
-- Suppression des anciennes barres horizontales pour les loaders secondaires.
-- Interface premium Green + Orange + Gold + Black conservée.
-- Cache applicatif v165.
-- Service Worker V64 et nettoyage des anciens caches.
+- Navigation mobile stable : une seule structure, conservée après l’ouverture d’une Page et au retour au compte normal.
+- Reels reste toujours présent dans la barre de navigation.
+- Le mode Page ne remplace plus le DOM de navigation ; il change uniquement l’identité affichée.
+- Suppression visuelle des anciennes couches de navigation V50/V51.
+- Correction du scroll global : la page principale redevient normalement défilable de haut en bas et de bas en haut.
+- Seuls les composants qui doivent réellement défiler gardent leur scroll interne (messages, modales, listes dédiées).
+- Correction du cache stylesheet/app : v165.
+- Service Worker V64 supprime les anciens caches et conserve uniquement le shell actif.
 - Aucun SQL nouveau.
 
 Patch-only : uniquement les fichiers modifiés/ajoutés sont inclus.
-Validation : index.html, style.css et sw.js mis à jour.
+Validation : app.js vérifié avec Node.js --check.

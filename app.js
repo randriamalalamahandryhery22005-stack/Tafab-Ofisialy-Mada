@@ -541,14 +541,20 @@ document.documentElement.classList.add("app-boot");
     if(avatarEl) avatarEl.outerHTML = entityAvatarHTML(p, "page", "avatar").replace("<div ", '<span id="sideAvatar" ').replace("</div>", "</span>");
     const logo = document.querySelector(".logo-button strong"); if(logo) logo.textContent = pageModeActive() ? p.name : "Tafaß";
     const logoMark = document.querySelector(".logo-button .mini-logo"); if(logoMark) logoMark.textContent = pageModeActive() ? "▣" : "T";
+    // V64: navigation structure is immutable. Page mode may change the identity/logo,
+    // but it must never replace the account navigation DOM. This prevents the old
+    // Page-mode navigation from removing Reels or switching back unexpectedly.
     const left=document.querySelector(".left-sidebar"), bottom=document.querySelector(".bottom-nav");
-    if(left && pageModeActive()) left.innerHTML=`<button data-route="home" class="profile-shortcut page-nav-identity">${entityAvatarHTML(p,"page","avatar")}<span><b>${esc(p.name)}</b><small>Mode Page actif</small></span></button>${navButton("home","home","Actualités")}${navButton("messages","messages","Messages")}${navButton("search","search","Rechercher")}${navButton("notifications","history","Alertes")}${navButton("groups","groups","Groupes")}${navButton("pages","pages","Pages")}${navButton("menu","settings","Menu")}`;
-    if(bottom && pageModeActive()) bottom.innerHTML=`${navButton("home","home","Actualités",true)}${navButton("messages","messages","Messages",true)}${navButton("notifications","history","Alertes",true)}${navButton("menu","settings","Menu",true)}`;
+    if(left) left.dataset.navOwner = pageModeActive() ? "page-identity" : "account";
+    if(bottom) bottom.dataset.navOwner = pageModeActive() ? "page-identity" : "account";
+    document.querySelectorAll("[data-route]").forEach(el => {
+      el.classList.toggle("page-mode-identity", pageModeActive());
+    });
   }
   function restoreAccountNavigation(){
     const left=document.querySelector(".left-sidebar"), bottom=document.querySelector(".bottom-nav");
     if(left) left.innerHTML=`<button data-route="profile" class="profile-shortcut"><span id="sideAvatar" class="avatar">T</span><span><b id="sideName">Mon profil</b><small>Voir mon profil</small></span></button>${navButton("home","home","Actualités")}${navButton("friends","friends","Amis")}${navButton("messages","messages","Messages")}${navButton("notifications","notifications","Notifications")}${navButton("pages","pages","Pages")}${navButton("groups","groups","Groupes")}${navButton("reels","reels","Reels")}${navButton("events","history","Évènements")}${navButton("studio","videos","Studio")}${navButton("tafab","tafab","Tafaß")}${navButton("saved","saved","Enregistrements")}${navButton("menu","settings","Menu")}`;
-    if(bottom) bottom.innerHTML=`${navButton("home","home","Actualités",true)}${navButton("friends","friends","Amis",true)}${navButton("messages","messages","Messages",true)}${navButton("pages","pages","Pages",true)}${navButton("groups","groups","Groupes",true)}${navButton("tafab","tafab","Tafaß",true)}`;
+    if(bottom) bottom.innerHTML=`${navButton("home","home","Actualités",true)}${navButton("friends","friends","Amis",true)}${navButton("messages","messages","Messages",true)}${navButton("pages","pages","Pages",true)}${navButton("groups","groups","Groupes",true)}${navButton("reels","reels","Reels",true)}`;
     const nameEl=$("sideName"), avatarEl=$("sideAvatar"); if(nameEl) nameEl.textContent=nameOf(state.profile); if(avatarEl) avatarEl.outerHTML=avatarHTML(state.profile,"avatar").replace("<span ", '<span id="sideAvatar" ');
   }
   function pageContextBanner(){
@@ -7336,7 +7342,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
 
 
   /* ============================================================
-     TAFAß V63 — ADMIN TOTAL / PREMIUM DASHBOARD SINGLE VERSION
+     TAFAß V64 — STABLE NAVIGATION & PAGE SCROLL SINGLE VERSION
      Final presentation layer: one authoritative dashboard UI.
      Legacy V50/V51 command bars are hidden; existing server actions
      and realtime data remain authoritative.
