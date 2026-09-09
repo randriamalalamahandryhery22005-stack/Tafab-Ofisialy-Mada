@@ -6582,4 +6582,58 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     navigate=function(...args){ const r=nav0.apply(this,args); setTimeout(()=>{if(state.route==='search')tafaV49Search.show(document.getElementById('searchInput')?.value||'');},0); return r; };
   }
 
+  /* TAFAß V50 — Admin Pro Command Center */
+  const tafaV50Admin = (() => {
+    let activeFilter='all';
+    let query='';
+    function root(){ return document.querySelector('.admin-dashboard-premium'); }
+    function apply(){
+      const r=root(); if(!r)return;
+      const sections=[...r.querySelectorAll('.admin-total-section')];
+      const q=query.toLowerCase();
+      sections.forEach(sec=>{
+        const text=(sec.textContent||'').toLowerCase();
+        const title=(sec.querySelector('h3')?.textContent||'').toLowerCase();
+        let show=activeFilter==='all';
+        if(activeFilter==='security') show=/sécurité|signalements|vérifications|réactivations/.test(title);
+        if(activeFilter==='finance') show=/monétisation|paiements|publicités sponsorisées|campagnes/.test(title);
+        if(activeFilter==='users') show=/comptes utilisateurs/.test(title);
+        if(activeFilter==='content') show=/santé de l’application|publications|contenu/.test(title);
+        if(q) show=show && text.includes(q);
+        sec.style.display=show?'':'none';
+      });
+      r.querySelectorAll('[data-v50-filter]').forEach(b=>b.classList.toggle('active',b.dataset.v50Filter===activeFilter));
+      const count=r.querySelector('[data-v50-result-count]');
+      if(count) count.textContent=`${sections.filter(x=>x.style.display!=='none').length} sections visibles`;
+    }
+    function mount(){
+      const r=root(); if(!r || r.querySelector('.tafa-v50-command')) return;
+      const hero=r.querySelector('.admin-dashboard-hero');
+      if(!hero)return;
+      const bar=document.createElement('div');
+      bar.className='tafa-v50-command';
+      bar.innerHTML=`<div class="tafa-v50-command-top"><div><span class="eyebrow">TAFAß · ADMIN PRO V50</span><b>Centre de contrôle</b><small>Modération, activité, finances et sécurité depuis un seul espace.</small></div><div class="tafa-v50-live"><i></i> SURVEILLANCE ACTIVE</div></div><div class="tafa-v50-command-tools"><label class="tafa-v50-search">⌕<input data-v50-search placeholder="Rechercher dans le tableau de bord…" autocomplete="off"><button type="button" data-v50-clear>×</button></label><div class="tafa-v50-filters"><button type="button" data-v50-filter="all" class="active">Tout</button><button type="button" data-v50-filter="security">Sécurité</button><button type="button" data-v50-filter="users">Comptes</button><button type="button" data-v50-filter="finance">Finances</button><button type="button" data-v50-filter="content">Contenu</button></div><span data-v50-result-count>—</span></div><div class="tafa-v50-shortcuts"><button data-v50-jump="🚨 Signalements">🚨 Signalements</button><button data-v50-jump="🔵 Vérifications">🔵 Vérifications</button><button data-v50-jump="♻️ Réactivations">♻️ Réactivations</button><button data-v50-jump="💳 Paiements">💳 Paiements</button><button data-v50-jump="👥 Comptes utilisateurs">👥 Utilisateurs</button></div>`;
+      hero.insertAdjacentElement('afterend',bar);
+      bar.addEventListener('click',e=>{
+        const f=e.target.closest('[data-v50-filter]');
+        if(f){activeFilter=f.dataset.v50Filter;apply();return;}
+        const c=e.target.closest('[data-v50-clear]');
+        if(c){const i=bar.querySelector('[data-v50-search]');i.value='';query='';apply();i.focus();return;}
+        const j=e.target.closest('[data-v50-jump]');
+        if(j){activeFilter='all';query='';const target=[...r.querySelectorAll('.admin-total-section')].find(x=>(x.querySelector('h3')?.textContent||'').includes(j.dataset.v50Jump));if(target){target.scrollIntoView({behavior:'smooth',block:'start'});target.classList.add('tafa-v50-focus');setTimeout(()=>target.classList.remove('tafa-v50-focus'),1200)}apply();}
+      });
+      bar.querySelector('[data-v50-search]').addEventListener('input',e=>{query=e.target.value.trim();apply()});
+      apply();
+    }
+    function refresh(){setTimeout(mount,0);}
+    return {mount,refresh};
+  })();
+  const tafaV50OriginalAdminTotalPage = adminTotalPage;
+  adminTotalPage = async function(...args){
+    const result = await tafaV50OriginalAdminTotalPage.apply(this,args);
+    tafaV50Admin.refresh();
+    return result;
+  };
+  tafaV50Admin.mount();
+
 })();
