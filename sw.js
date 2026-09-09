@@ -1,9 +1,49 @@
-const CACHE='tafass-v40-shell-2026-09-09';
-const ASSETS=['./','./index.html','./style.css?v=140','./app.js?v=140','./manifest.webmanifest','./assets/tafass-logo-premium.svg'];
-self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)).then(()=>self.skipWaiting()));});
-self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});
-self.addEventListener('fetch',e=>{
-  const u=new URL(e.request.url);
-  if(u.origin!==location.origin || e.request.method!=='GET') return;
-  e.respondWith(fetch(e.request).then(r=>{const copy=r.clone();caches.open(CACHE).then(c=>c.put(e.request,copy)).catch(()=>{});return r;}).catch(()=>caches.match(e.request).then(r=>r||caches.match('./index.html'))));
+/* Tafaß V53.1 — single active shell.
+   Old Tafaß caches are deleted on activation; assets are network-first
+   and only the current build is kept as offline fallback. */
+const CACHE = 'tafass-v53-1-shell';
+const ASSETS = [
+  './',
+  './index.html',
+  './style.css?v=154',
+  './app.js?v=154',
+  './manifest.webmanifest',
+  './assets/tafass-logo-premium.svg'
+];
+
+self.addEventListener('install', event => {
+  event.waitUntil(
+    caches.open(CACHE)
+      .then(cache => cache.addAll(ASSETS))
+      .then(() => self.skipWaiting())
+  );
+});
+
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys()
+      .then(keys => Promise.all(
+        keys.filter(key => key !== CACHE).map(key => caches.delete(key))
+      ))
+      .then(() => self.clients.claim())
+  );
+});
+
+self.addEventListener('fetch', event => {
+  const request = event.request;
+  const url = new URL(request.url);
+  if (url.origin !== location.origin || request.method !== 'GET') return;
+
+  event.respondWith(
+    fetch(request, { cache: 'no-store' })
+      .then(response => {
+        const copy = response.clone();
+        caches.open(CACHE).then(cache => cache.put(request, copy)).catch(() => {});
+        return response;
+      })
+      .catch(() => caches.match(request).then(cached => {
+        if (cached) return cached;
+        return caches.match('./index.html');
+      }))
+  );
 });

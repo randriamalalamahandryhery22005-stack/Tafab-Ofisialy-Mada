@@ -1,3 +1,36 @@
+
+/* ============================================================
+   TAFAß V53.1 — SINGLE VERSION / DUPLICATE GUARD
+   Keep one active frontend build and prevent repeated patch mounts.
+   This is client-side cache/build hygiene only; Supabase remains
+   the authority for data and RLS.
+============================================================ */
+(() => {
+  "use strict";
+  const BUILD_ID = "TAFAß-V53.1";
+  const BUILD_KEY = "tafa_active_build";
+  const previous = String(localStorage.getItem(BUILD_KEY) || "");
+  if (previous !== BUILD_ID) {
+    localStorage.setItem(BUILD_KEY, BUILD_ID);
+    // Remove legacy app caches left by older service-worker builds.
+    if (window.caches?.keys) {
+      caches.keys().then(keys => Promise.all(
+        keys.filter(k => /^tafass-v/i.test(k) && k !== "tafass-v53-1-shell").map(k => caches.delete(k))
+      )).catch(() => {});
+    }
+  }
+  // One-time DOM de-duplication for accidentally duplicated static assets.
+  const dedupe = (selector, keep = "first") => {
+    const nodes = [...document.querySelectorAll(selector)];
+    if (nodes.length <= 1) return;
+    const ordered = keep === "last" ? nodes.reverse() : nodes;
+    ordered.slice(1).forEach(n => n.remove());
+  };
+  dedupe('link[rel="stylesheet"][href*="style.css"]', "last");
+  dedupe('script[src*="app.js"]', "last");
+  window.__TAFA_SINGLE_BUILD__ = BUILD_ID;
+})();
+
 document.documentElement.classList.add("app-boot");
 (() => {
   "use strict";
