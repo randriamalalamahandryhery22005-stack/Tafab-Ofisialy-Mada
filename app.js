@@ -4364,7 +4364,9 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       else if (route === "settings") await settingsPage();
       if (token !== state.renderToken || route !== state.route) return;
       decoratePageHeader(route);
-      const pageRoot = $("content")?.firstElementChild;
+      const contentRoot = $("content");
+      if (contentRoot) { contentRoot.classList.remove("v44-route-switching"); contentRoot.classList.add("v44-route-ready"); }
+      const pageRoot = contentRoot?.firstElementChild;
       if (pageRoot) pageRoot.dataset.pageRoute = route;
       document.querySelectorAll("[data-route]").forEach(el => el.classList.toggle("active", el.dataset.route === state.route));
       updateBadges();
@@ -4376,6 +4378,20 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     } finally {
       endPageLoading(token);
     }
+  }
+
+  const V44_ROUTE_META = {
+    home:["Actualités","Votre espace, vos contenus, votre communauté."], friends:["Amis","Retrouvez et gérez vos relations."], messages:["Messages","Vos conversations en temps réel."], notifications:["Notifications","Vos alertes importantes."], profile:["Profil","Votre espace personnel Tafaß."], pages:["Pages","Découvrez et gérez vos Pages."], groups:["Groupes","Communautés et discussions."], reels:["Réels","Découvrez les contenus courts."], menu:["Menu","Tous vos outils Tafaß au même endroit."], settings:["Paramètres","Personnalisez votre expérience."], search:["Recherche","Trouvez rapidement ce que vous cherchez."], saved:["Enregistrements","Vos contenus sauvegardés."], tafab:["Tafaß","Services et fonctionnalités Tafaß."], events:["Évènements","Découvrez les évènements."], studio:["Studio","Créez et gérez vos contenus."], creator:["Créateur","Outils de création et de monétisation."], music:["Musique","Votre espace musical."], business:["Professionnel","Outils professionnels."], verification:["Badge officiel","Vérification du compte."], ai:["Assistant","Espace intelligent Tafaß."], admin:["Administration","Centre de gestion Tafaß."] };
+  function routeSkeleton(route){
+    const meta=V44_ROUTE_META[route]||["Tafaß","Chargement de votre espace…"];
+    return `<section class="v44-page-skeleton" aria-label="Chargement de ${esc(meta[0])}"><div class="v44-skel-head"><span class="v44-skel-icon"></span><div><i></i><b></b></div></div><div class="v44-skel-grid"><span></span><span></span><span></span></div><div class="v44-skel-line"></div><div class="v44-skel-line short"></div><small>${esc(meta[1])}</small><div class="v44-loading-points"><i></i><i></i><i></i></div></section>`;
+  }
+  function showRouteSkeleton(route){
+    const content=$("content");
+    if(!content) return;
+    content.classList.add("v44-route-switching");
+    content.innerHTML=routeSkeleton(route);
+    requestAnimationFrame(()=>content.classList.add("v44-route-ready"));
   }
 
   function navigate(route, options = {}) {
@@ -4393,6 +4409,8 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if (options.replaceStack) state.navStack = [route];
     state.renderToken++;
     state.route = route;
+    // V44: afficher immédiatement un skeleton premium; le rendu réseau peut continuer sans bloquer la navigation.
+    showRouteSkeleton(route);
     // Entering a section consumes its NEW/unseen badge. Do this immediately
     // so the counter disappears as soon as the section is opened.
     markRouteBadgeSeen(route);
@@ -5527,7 +5545,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       if (pageLoading && !["close-modal","new-logout"].includes(actionEl.dataset.action)) return;
     } else {
       const routeEl = e.target.closest("[data-route]");
-      if (routeEl) { e.preventDefault(); if (pageLoading) return; navigate(routeEl.dataset.route); return; }
+      if (routeEl) { e.preventDefault(); navigate(routeEl.dataset.route); return; }
       return;
     }
     const action = actionEl.dataset.action, id = actionEl.dataset.id;
