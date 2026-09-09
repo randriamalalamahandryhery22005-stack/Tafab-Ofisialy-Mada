@@ -405,7 +405,7 @@ document.documentElement.classList.add("app-boot");
   function pageModeLabel(){ return pageModeActive() ? (state.activePage.name || "Page Tafaß") : "Mon compte"; }
   function navBadge(route){ return `<span class="nav-badge hidden" data-badge-route="${esc(route)}" aria-label="Notifications ${esc(route)}"></span>`; }
   function navButton(route, icon, label, mobile=false){
-    return `<button data-route="${esc(route)}"><span class="${mobile?'nav-svg':'nav-ico'}">${menuIcon(icon)}</span>${mobile?`<small>${esc(label)}</small>`:esc(label)}${navBadge(route)}</button>`;
+    return `<button class="tafa-premium-nav-item" data-route="${esc(route)}" aria-label="${esc(label)}"><span class="${mobile?'nav-svg':'nav-ico'} tafa-premium-nav-icon">${menuIcon(icon)}</span>${mobile?`<small>${esc(label)}</small>`:`<span class="tafa-premium-nav-label">${esc(label)}</span>`}${navBadge(route)}</button>`;
   }
   function formatBadgeCount(value){ const n=Number(value||0); return n>10 ? "10+" : String(n); }
   function setNavBadge(route, value){

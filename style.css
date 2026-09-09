@@ -5115,3 +5115,102 @@ input:focus,textarea:focus,select:focus{border-color:rgba(25,229,111,.65);box-sh
 .badge,.nav-badge{background:linear-gradient(135deg,#ff9f16,#ff5c21);color:#130900}
 .verified-chip,.page-live-badge{border-color:rgba(25,229,111,.24)!important;background:linear-gradient(135deg,rgba(25,229,111,.12),rgba(255,159,22,.09))!important}
 @media(max-width:700px){.auth-shell{padding:25px 20px;border-radius:24px}.topbar{height:64px}.main-layout{padding-top:10px}.primary{min-height:46px}}
+
+
+/* =========================================================
+   TAFAß V43 — GLOBAL PREMIUM NAVIGATION / ALL-PAGES SKIN
+   Green Premium + Orange Premium + Gold, without changing routes.
+   ========================================================= */
+:root{
+  --tafa-green:#19f58a;
+  --tafa-green-2:#08c96d;
+  --tafa-orange:#ff9f1c;
+  --tafa-orange-2:#ff6b00;
+  --tafa-gold:#ffd45a;
+  --tafa-gold-2:#f3a900;
+  --tafa-dark:#04110b;
+}
+body:not(.light){
+  background:
+    radial-gradient(700px 420px at 4% -10%,rgba(25,245,138,.13),transparent 65%),
+    radial-gradient(650px 420px at 100% 8%,rgba(255,159,28,.12),transparent 66%),
+    radial-gradient(900px 560px at 50% 100%,rgba(0,204,112,.06),transparent 72%),
+    linear-gradient(180deg,#030807 0%,#050b09 46%,#030706 100%);
+}
+body:not(.light) .topbar{
+  background:linear-gradient(180deg,rgba(3,12,8,.96),rgba(4,10,8,.88));
+  border-bottom:1px solid rgba(255,194,55,.20);
+  box-shadow:0 8px 34px rgba(0,0,0,.28),0 1px 0 rgba(25,245,138,.06);
+}
+.logo-button .mini-logo{
+  background:linear-gradient(145deg,var(--tafa-green),var(--tafa-gold) 54%,var(--tafa-orange));
+  color:#07120b; box-shadow:0 8px 28px rgba(25,245,138,.22),0 0 0 1px rgba(255,212,90,.35);
+}
+.logo-button strong{background:linear-gradient(90deg,#fff,var(--tafa-gold),var(--tafa-green));-webkit-background-clip:text;background-clip:text;color:transparent}
+.searchbox{border-color:rgba(25,245,138,.18);background:rgba(4,18,12,.84);box-shadow:inset 0 0 0 1px rgba(255,159,28,.04)}
+.searchbox:focus-within{border-color:rgba(25,245,138,.55);box-shadow:0 0 0 4px rgba(25,245,138,.08),0 8px 28px rgba(25,245,138,.07)}
+.tafa-premium-top-nav{gap:5px;padding:6px 0}
+.tafa-premium-top-nav button{min-width:82px;border-radius:14px;border:1px solid transparent;border-bottom:0!important;color:#8ea397;transition:.18s ease}
+.tafa-premium-top-nav button:hover{color:#fff;background:linear-gradient(180deg,rgba(25,245,138,.10),rgba(255,159,28,.05));border-color:rgba(25,245,138,.16)}
+.tafa-premium-top-nav button.active{color:var(--tafa-green);border-color:rgba(25,245,138,.30);background:linear-gradient(180deg,rgba(25,245,138,.12),rgba(255,159,28,.055));box-shadow:0 0 20px rgba(25,245,138,.07),inset 0 -2px 0 var(--tafa-gold)}
+.tafa-premium-top-nav button.active span{color:var(--tafa-gold);filter:drop-shadow(0 0 7px rgba(255,212,90,.32))}
+.tafa-premium-sidebar .profile-shortcut{background:linear-gradient(145deg,rgba(10,30,19,.98),rgba(12,22,17,.98))!important;border-color:rgba(255,212,90,.18)!important}
+.tafa-premium-sidebar .profile-shortcut b{color:#fff}
+.tafa-premium-sidebar>button:not(.profile-shortcut),.left-sidebar>button:not(.profile-shortcut){border:1px solid transparent;margin:3px 0;position:relative;overflow:hidden}
+.tafa-premium-sidebar>button:not(.profile-shortcut):before,.left-sidebar>button:not(.profile-shortcut):before{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(25,245,138,.10),rgba(255,159,28,.035),transparent);opacity:0;transition:.18s ease;pointer-events:none}
+.tafa-premium-sidebar>button:hover:not(.profile-shortcut),.left-sidebar>button:hover:not(.profile-shortcut){border-color:rgba(25,245,138,.16);background:linear-gradient(90deg,rgba(25,245,138,.11),rgba(255,159,28,.045))!important;color:#fff!important;transform:translateX(2px)}
+.tafa-premium-sidebar>button:hover:not(.profile-shortcut):before,.left-sidebar>button:hover:not(.profile-shortcut):before{opacity:1}
+.tafa-premium-sidebar>button.active:not(.profile-shortcut),.left-sidebar>button.active:not(.profile-shortcut){border-color:rgba(25,245,138,.28);background:linear-gradient(90deg,rgba(25,245,138,.16),rgba(255,159,28,.07))!important;color:#fff!important;box-shadow:0 8px 24px rgba(0,0,0,.15),inset 3px 0 0 var(--tafa-green)}
+.tafa-premium-sidebar .nav-ico,.left-sidebar .nav-ico{color:#7e9889}
+.tafa-premium-sidebar button.active .nav-ico,.left-sidebar button.active .nav-ico{color:var(--tafa-gold);filter:drop-shadow(0 0 8px rgba(255,212,90,.35))}
+.tafa-premium-nav-label{min-width:0;flex:1}
+.nav-badge{background:linear-gradient(135deg,var(--tafa-orange),#ff4d4d);border-color:#07120d!important;box-shadow:0 0 14px rgba(255,107,0,.25)}
+.tafa-premium-bottom-nav{background:linear-gradient(180deg,rgba(3,12,8,.90),rgba(2,8,6,.98))!important;border-top:1px solid rgba(255,212,90,.18)!important;box-shadow:0 -10px 36px rgba(0,0,0,.32),0 -1px 0 rgba(25,245,138,.06);padding:7px 8px calc(7px + env(safe-area-inset-bottom))!important}
+.tafa-premium-bottom-nav button{border:1px solid transparent!important;border-radius:15px;padding:7px 4px!important;color:#82968b!important;transition:.18s ease;overflow:visible}
+.tafa-premium-bottom-nav button:active{transform:scale(.96)}
+.tafa-premium-bottom-nav button.active{color:var(--tafa-green)!important;background:linear-gradient(180deg,rgba(25,245,138,.13),rgba(255,159,28,.05))!important;border-color:rgba(25,245,138,.18)!important;box-shadow:inset 0 -2px 0 var(--tafa-gold),0 0 22px rgba(25,245,138,.06)}
+.tafa-premium-bottom-nav button.active .nav-svg{color:var(--tafa-gold);filter:drop-shadow(0 0 8px rgba(255,212,90,.38))}
+.tafa-premium-bottom-nav button small{font-weight:800!important;letter-spacing:.1px}
+.tafa-premium-nav-icon svg{stroke:currentColor}
+/* Universal premium page frame: applies to every route and all Menu sub-pages. */
+.clean-page,.card,.panel,.fb-hub,.menu-card,.setting-card,.profile-page-premium,.profile-publication,.tafab-card,.tafab-hero,.restriction-screen,.search-page,.news-topbar,.publisher,.composer,.modal-box{
+  border-color:rgba(255,212,90,.13)!important;
+}
+.clean-page,.card,.panel,.fb-hub,.profile-page-premium,.restriction-screen,.search-page{
+  position:relative;
+}
+.clean-page:before,.profile-page-premium:before,.fb-hub:before,.card:before,.panel:before,.restriction-screen:before{
+  content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;background:linear-gradient(135deg,rgba(25,245,138,.035),transparent 38%,rgba(255,159,28,.035));z-index:0;
+}
+.clean-page>*,.profile-page-premium>* ,.fb-hub>*{position:relative;z-index:1}
+.clean-page-header{padding:15px 16px!important;margin-bottom:14px!important;border-radius:20px!important;border:1px solid rgba(25,245,138,.13)!important;background:linear-gradient(135deg,rgba(9,28,18,.78),rgba(15,18,15,.68),rgba(34,22,8,.38))!important;box-shadow:0 14px 36px rgba(0,0,0,.16),inset 0 1px 0 rgba(255,255,255,.035)}
+.clean-page-header h2{background:linear-gradient(90deg,#fff,var(--tafa-gold) 52%,var(--tafa-green));-webkit-background-clip:text;background-clip:text;color:transparent!important;letter-spacing:-.5px}
+.page-kicker,.eyebrow{color:#91c9a9!important}
+.primary{background:linear-gradient(135deg,var(--tafa-green-2),var(--tafa-green) 48%,var(--tafa-gold))!important;color:#031009!important;box-shadow:0 10px 28px rgba(25,245,138,.16),0 2px 0 rgba(255,255,255,.10) inset!important}
+.primary:hover{filter:brightness(1.06);box-shadow:0 12px 32px rgba(25,245,138,.22)!important}
+.small-action{background:linear-gradient(135deg,var(--tafa-green-2),var(--tafa-green))!important;color:#031009!important}
+.ghost-action,.secondary-action{border-color:rgba(255,159,28,.20)!important;background:linear-gradient(135deg,rgba(25,245,138,.06),rgba(255,159,28,.06))!important}
+.menu-card,.setting-card{background:linear-gradient(145deg,rgba(10,29,19,.94),rgba(8,17,13,.96),rgba(25,18,8,.74))!important;border-color:rgba(25,245,138,.12)!important;box-shadow:0 12px 30px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.025)!important}
+.menu-card:hover,.setting-card:hover{border-color:rgba(255,212,90,.28)!important;transform:translateY(-2px)!important;box-shadow:0 18px 38px rgba(0,0,0,.22),0 0 22px rgba(25,245,138,.06)!important}
+.menu-card .menu-icon,.setting-card .menu-icon{background:linear-gradient(145deg,rgba(25,245,138,.17),rgba(255,159,28,.13))!important;color:var(--tafa-gold)!important;border:1px solid rgba(255,212,90,.13)}
+.menu-section-title{color:#dff7e8!important}
+.profile-tabs button.active{color:var(--tafa-green)!important;border-bottom-color:var(--tafa-gold)!important}
+.profile-stat b{color:var(--tafa-gold)!important}
+input,textarea,select{border-color:rgba(25,245,138,.13)!important}
+input:focus,textarea:focus,select:focus{border-color:rgba(25,245,138,.55)!important;box-shadow:0 0 0 4px rgba(25,245,138,.08)!important}
+.auth-screen{background:radial-gradient(650px 440px at 50% 20%,rgba(25,245,138,.10),transparent 70%),radial-gradient(500px 360px at 80% 80%,rgba(255,159,28,.08),transparent 70%),#030907!important}
+.auth-shell{border-color:rgba(255,212,90,.18)!important;background:linear-gradient(145deg,rgba(5,20,13,.97),rgba(9,16,13,.96))!important;box-shadow:0 25px 80px rgba(0,0,0,.40),0 0 55px rgba(25,245,138,.07)!important}
+.auth-title{background:linear-gradient(90deg,#fff,var(--tafa-gold),var(--tafa-green));-webkit-background-clip:text;background-clip:text;color:transparent}
+.auth-shell .primary{background:linear-gradient(135deg,var(--tafa-green-2),var(--tafa-green),var(--tafa-orange))!important}
+.splash-screen{background:radial-gradient(circle at 50% 45%,rgba(25,245,138,.13),transparent 32%),radial-gradient(circle at 30% 80%,rgba(255,159,28,.12),transparent 35%),#020705!important}
+.splash-ring{border-color:rgba(25,245,138,.22)!important;border-top-color:var(--tafa-green)!important;border-right-color:var(--tafa-orange)!important}
+.splash-dots i{background:#294a39!important}.splash-dots i:first-child{background:var(--tafa-green)!important;box-shadow:0 0 13px rgba(25,245,138,.55)}
+@media(max-width:1000px){.tafa-premium-top-nav{display:none}.top-left{min-width:0}}
+@media(max-width:720px){
+  .tafa-premium-bottom-nav{gap:2px}
+  .tafa-premium-bottom-nav button{min-height:54px}
+  .tafa-premium-bottom-nav button.active{transform:translateY(-2px)}
+  .clean-page-header{border-radius:17px!important;padding:13px!important}
+}
+body.light .tafa-premium-bottom-nav{background:rgba(255,255,255,.97)!important;border-top-color:rgba(255,159,28,.20)!important}
+body.light .tafa-premium-sidebar>button.active:not(.profile-shortcut),body.light .left-sidebar>button.active:not(.profile-shortcut){background:linear-gradient(90deg,rgba(25,180,95,.10),rgba(255,159,28,.06))!important;color:#153525!important}
