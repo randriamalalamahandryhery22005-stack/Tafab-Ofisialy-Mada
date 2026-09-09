@@ -5639,3 +5639,53 @@ body .tafa-v51-command-bar{
   .main-layout{padding-bottom:calc(70px + env(safe-area-inset-bottom))!important;}
   .bottom-nav{height:64px!important;}
 }
+
+/* ============================================================
+   TAFAß V65 — PAGE NEW EXPERIENCE / SINGLE VERSION
+============================================================ */
+.tafa-v65-page-shell{
+  width:min(1120px,calc(100% - 24px));
+  margin:0 auto;
+  padding:8px 0 34px;
+  display:grid;
+  gap:14px;
+}
+.tafa-v65-page-hero,.tafa-v65-page-section,.tafa-v65-page-footer{
+  border:1px solid rgba(255,255,255,.075);
+  border-radius:24px;
+  background:
+    radial-gradient(circle at 100% 0,rgba(255,170,30,.08),transparent 32%),
+    radial-gradient(circle at 0 100%,rgba(0,230,118,.07),transparent 36%),
+    linear-gradient(145deg,rgba(12,22,18,.98),rgba(10,14,19,.98));
+  box-shadow:0 20px 55px rgba(0,0,0,.22),inset 0 1px rgba(255,255,255,.035);
+}
+.tafa-v65-page-hero{padding:18px;display:grid;gap:14px}
+.tafa-v65-page-brand{display:flex;align-items:center;gap:13px;min-width:0}
+.tafa-v65-page-avatar{width:66px!important;height:66px!important;flex:0 0 66px;border-radius:19px!important;border:2px solid rgba(0,230,118,.3)!important;box-shadow:0 10px 30px rgba(0,230,118,.09)!important}
+.tafa-v65-page-brand-copy{min-width:0;flex:1}
+.tafa-v65-eyebrow,.tafa-v65-section-heading>div>span{font-size:9px;font-weight:800;letter-spacing:.13em;color:#62e99b}
+.tafa-v65-page-brand-copy h2{margin:3px 0 3px;font-size:24px;line-height:1.1;color:#f4faf7}
+.tafa-v65-page-brand-copy p{margin:0;color:#8d9e95;font-size:12px;line-height:1.45}
+.tafa-v65-live{font-size:9px;font-weight:800;white-space:nowrap;color:#65e99c;padding:7px 9px;border:1px solid rgba(0,230,118,.18);border-radius:999px;background:rgba(0,230,118,.055)}
+.tafa-v65-page-summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 14px;border-radius:17px;background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.055)}
+.tafa-v65-page-summary span{min-width:0;display:grid;gap:3px}.tafa-v65-page-summary b{font-size:11px;color:#e8f1ec}.tafa-v65-page-summary small{font-size:9px;color:#7f9087;line-height:1.4}
+.tafa-v65-profile-btn,.tafa-v65-exit{border:1px solid rgba(0,230,118,.18);background:linear-gradient(135deg,rgba(0,230,118,.14),rgba(255,170,30,.08));color:#dff8e9;border-radius:13px;padding:10px 13px;font-weight:700;white-space:nowrap;cursor:pointer}
+.tafa-v65-page-section{padding:15px}
+.tafa-v65-section-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:10px}.tafa-v65-section-heading h3{margin:3px 0 0;font-size:17px;color:#eef6f1}.tafa-v65-section-heading>small{font-size:9px;color:#718179;white-space:nowrap}
+.tafa-v65-page-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+.tafa-v65-page-menu-item{min-width:0;min-height:76px;display:grid;grid-template-columns:34px minmax(0,1fr) 16px;align-items:center;gap:9px;padding:11px;border-radius:17px;border:1px solid rgba(255,255,255,.06);background:linear-gradient(145deg,rgba(255,255,255,.035),rgba(255,255,255,.018));color:inherit;text-align:left;cursor:pointer;transition:transform .15s ease,border-color .15s ease,background .15s ease}
+.tafa-v65-page-menu-item:hover{transform:translateY(-2px);border-color:rgba(0,230,118,.2);background:linear-gradient(145deg,rgba(0,230,118,.055),rgba(255,170,30,.035))}
+.tafa-v65-page-menu-icon{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;font-size:16px;color:#7ef0aa;background:rgba(0,230,118,.07);border:1px solid rgba(0,230,118,.12)}
+.tafa-v65-page-menu-copy{min-width:0;display:grid;gap:3px}.tafa-v65-page-menu-copy b{font-size:11px;color:#edf5f0;line-height:1.2}.tafa-v65-page-menu-copy small{font-size:8px;color:#788981;line-height:1.35;overflow-wrap:anywhere}.tafa-v65-page-menu-arrow{font-size:20px;color:#65766d;text-align:center}
+.tafa-v65-page-footer{padding:13px 15px;display:flex;align-items:center;justify-content:space-between;gap:12px}.tafa-v65-page-footer>div{display:flex;align-items:center;gap:10px;min-width:0}.tafa-v65-footer-icon{width:30px;height:30px;border-radius:10px;display:grid;place-items:center;color:#07130d;background:linear-gradient(135deg,#00e676,#ffd34f);font-weight:900}.tafa-v65-page-footer b{display:block;color:#e9f2ed;font-size:10px}.tafa-v65-page-footer small{display:block;color:#778880;font-size:8px;line-height:1.35;margin-top:2px}
+/* Old Page-menu presentations cannot visually compete with V65. */
+.page-menu-hero,.page-menu-dashboard,.premium-menu-grid .page-menu-card{isolation:isolate}
+.tafa-v65-page-shell [class*="v52"],[class*="page-menu-legacy"]{display:none!important}
+@media(max-width:760px){
+  .tafa-v65-page-shell{width:min(100% - 16px,680px);padding-bottom:24px;gap:10px}
+  .tafa-v65-page-hero{padding:14px;border-radius:20px}.tafa-v65-page-section{padding:12px;border-radius:20px}
+  .tafa-v65-page-brand-copy h2{font-size:21px}.tafa-v65-page-avatar{width:56px!important;height:56px!important;flex-basis:56px}
+  .tafa-v65-page-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.tafa-v65-page-menu-item{min-height:72px;padding:9px;grid-template-columns:30px minmax(0,1fr) 12px}.tafa-v65-page-menu-icon{width:30px;height:30px;border-radius:9px;font-size:14px}.tafa-v65-page-menu-copy b{font-size:10px}.tafa-v65-page-menu-copy small{font-size:7.5px}
+  .tafa-v65-page-summary{align-items:stretch;flex-direction:column}.tafa-v65-profile-btn{width:100%}.tafa-v65-section-heading{align-items:flex-start;flex-direction:column;gap:3px}.tafa-v65-section-heading>small{white-space:normal}.tafa-v65-page-footer{align-items:stretch;flex-direction:column}.tafa-v65-exit{width:100%}
+}
+@media(max-width:370px){.tafa-v65-page-grid{grid-template-columns:1fr}.tafa-v65-page-brand{align-items:flex-start}.tafa-v65-live{display:none}}

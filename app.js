@@ -6270,8 +6270,14 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if (action === "group-sort") { state.groupSort=actionEl.dataset.sort||"recent"; closeModal(); return groupsHub(); }
     if (action === "group-sort-menu") return groupSortMenu();
     if (action === "page-switch") {
+      if (typeof window.__tafassV65PageSwitch === "function") {
+        const result = await window.__tafassV65PageSwitch(actionEl, id);
+        const pg = state.activePage;
+        if (pg) toast(`Mode ${pg.name} activé.`);
+        return result;
+      }
       const pg=(await fetchPageById(id)).data; if(!pg)return toast("Page introuvable.");
-      closeModal(); state.activePage={...pg}; state.navStack=["home"]; state.route="home"; syncIdentityUI(); history.replaceState(null,"","#home"); toast(`Mode ${pg.name} activé.`); return render();
+      closeModal(); state.activePage={...pg}; state.navStack=["home"]; state.route="home"; syncIdentityUI(); history.replaceState(null,"","#home"); return render();
     }
     if (action === "page-business") return pageBusinessSuite();
     if (action === "create-page") { state.businessSuiteOpen=false; return openModal(`<div class="modal-box entity-create-modal-v2"><button class="modal-close" data-action="close-modal">×</button><div class="create-hero-v2 page"><span class="create-icon-v2 page-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 7h6M9 11h6M9 15h4"/></svg></span><div><span class="eyebrow">TAFAß • PAGES</span><h3>Créer une Page</h3><p>Donnez à votre Page une identité professionnelle et claire.</p></div></div><div class="create-grid-v2"><label class="create-field-v2 wide"><span>Nom de la Page</span><input id="newPageName" maxlength="80" placeholder="Nom de la Page"></label><label class="create-field-v2"><span>Catégorie</span><select id="newPageCategory" aria-label="Catégorie de la Page"><option value="" selected disabled>Choisir une catégorie</option>${pageCategoryOptions()}</select><small class="create-select-hint">Plus de 50 catégories disponibles • choisissez une catégorie.</small></label><label class="create-upload-v2"><span>Avatar de la Page</span><input id="newPageAvatar" type="file" accept="image/jpeg,image/png,image/webp"><small>Optionnel • avatar par défaut automatique</small></label><label class="create-field-v2 wide"><span>Présentation</span><textarea id="newPageBio" maxlength="500" placeholder="Présentez votre Page…"></textarea></label><label class="create-upload-v2 wide"><span>Photo de couverture</span><input id="newPageCover" type="file" accept="image/jpeg,image/png,image/webp"><small>Optionnel</small></label></div><button class="primary big create-submit-v2" data-action="save-page"><span>＋</span> Créer la Page</button></div>`); }
@@ -7371,5 +7377,116 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     };
     applyAdminV63();
   })();
+
+
+/* ============================================================
+   TAFAß V65 — PAGE EXPERIENCE / SINGLE AUTHORITATIVE VERSION
+   The Page mode owns one stable UI. Legacy Page-menu presentation
+   layers are superseded here without touching existing data/RPCs.
+============================================================ */
+(() => {
+  const pageMenuV65 = () => {
+    const pg = state.activePage;
+    if (!pg) return menuPage();
+    const id = esc(pg.id);
+    const item = (action, title, sub, icon, extra='') =>
+      `<button type="button" class="tafa-v65-page-menu-item" data-action="${esc(action)}" data-id="${id}" ${extra}>
+        <span class="tafa-v65-page-menu-icon">${icon}</span>
+        <span class="tafa-v65-page-menu-copy"><b>${title}</b><small>${sub}</small></span>
+        <span class="tafa-v65-page-menu-arrow">›</span>
+      </button>`;
+    const routeItem = (route,title,sub,icon) =>
+      `<button type="button" class="tafa-v65-page-menu-item" data-route="${esc(route)}">
+        <span class="tafa-v65-page-menu-icon">${icon}</span>
+        <span class="tafa-v65-page-menu-copy"><b>${title}</b><small>${sub}</small></span>
+        <span class="tafa-v65-page-menu-arrow">›</span>
+      </button>`;
+
+    simplePage("Menu", `
+      <section class="tafa-v65-page-shell" data-page-route="menu">
+        <div class="tafa-v65-page-hero">
+          <div class="tafa-v65-page-brand">
+            ${entityAvatarHTML(pg,'page','tafa-v65-page-avatar')}
+            <div class="tafa-v65-page-brand-copy">
+              <span class="tafa-v65-eyebrow">TAFAß • MODE PAGE</span>
+              <h2>${esc(pg.name || 'Votre Page')}</h2>
+              <p>Centre de contrôle officiel de votre Page.</p>
+            </div>
+            <span class="tafa-v65-live">● ACTIF</span>
+          </div>
+          <div class="tafa-v65-page-summary">
+            <span><b>Identité Page</b><small>Publications, communauté et messages sont séparés de votre compte personnel.</small></span>
+            <button type="button" class="tafa-v65-profile-btn" data-action="page-open" data-id="${id}">Voir la Page</button>
+          </div>
+        </div>
+
+        <div class="tafa-v65-page-section">
+          <div class="tafa-v65-section-heading"><div><span>ACCÈS RAPIDE</span><h3>Navigation</h3></div><small>Une seule interface Page</small></div>
+          <div class="tafa-v65-page-grid">
+            ${routeItem('home','Actualités','Publier et consulter le fil de la Page','⌂')}
+            ${routeItem('messages','Messages','Répondre aux messages reçus par la Page','▤')}
+            ${routeItem('notifications','Alertes','Activité, abonnements et actions importantes','♢')}
+            ${routeItem('search','Rechercher','Trouver des comptes et contenus','⌕')}
+            ${routeItem('groups','Groupes','Accéder aux communautés','◎')}
+            ${item('page-open','Profil de la Page','Voir la Page comme un visiteur','◉')}
+          </div>
+        </div>
+
+        <div class="tafa-v65-page-section">
+          <div class="tafa-v65-section-heading"><div><span>GESTION</span><h3>Outils professionnels</h3></div><small>Réservé aux gestionnaires</small></div>
+          <div class="tafa-v65-page-grid">
+            ${item('page-settings','Paramètres de la Page','Confidentialité, messages, visibilité et préférences','⚙')}
+            ${item('edit-page','Informations de la Page','Nom, @username, catégorie, bio et visuels','✎')}
+            ${item('page-team','Équipe & rôles','Administrateurs, éditeurs et membres','♛')}
+            ${item('page-invite-friends','Inviter des amis','Inviter votre réseau à suivre la Page','♙')}
+            ${item('page-business','Outils de gestion','Gestion professionnelle et activité de la Page','◒')}
+            ${item('page-name-history','Historique des noms','Consulter les changements de nom','◷')}
+          </div>
+        </div>
+
+        <div class="tafa-v65-page-footer">
+          <div><span class="tafa-v65-footer-icon">✓</span><div><b>Mode Page sécurisé</b><small>Le contenu et les actions de la Page restent séparés de votre compte personnel.</small></div></div>
+          <button type="button" class="tafa-v65-exit" data-action="page-exit-mode">↩ Retour au compte</button>
+        </div>
+      </section>`);
+
+    requestAnimationFrame(() => {
+      const root=document.querySelector('.tafa-v65-page-shell');
+      if(root) root.dataset.pageVersion='v65';
+    });
+  };
+
+  // One final authoritative Page Menu implementation.
+  pageMenu = pageMenuV65;
+
+  // Prevent Page mode from rebuilding a different navigation structure.
+  const oldSyncIdentityUI = syncIdentityUI;
+  syncIdentityUI = function(...args){
+    oldSyncIdentityUI.apply(this,args);
+    const left=document.querySelector('.left-sidebar');
+    const bottom=document.querySelector('.bottom-nav');
+    // Navigation remains the account navigation; only identity is Page-aware.
+    if(left) left.dataset.navigationVersion='v65-single';
+    if(bottom) bottom.dataset.navigationVersion='v65-single';
+    document.querySelectorAll('.tafa-premium-nav-item[data-route="reels"]').forEach(el=>el.hidden=false);
+  };
+
+  // Stable Page switch: preserve the same navigation DOM and render only content.
+  const oldPageSwitchHandler = async (actionEl, id) => {
+    const pg=(await fetchPageById(id)).data;
+    if(!pg) return toast('Page introuvable.');
+    closeModal();
+    state.activePage={...pg};
+    state.navStack=['home'];
+    state.route='home';
+    syncIdentityUI();
+    history.replaceState(null,'','#home');
+    return render();
+  };
+
+  // Expose a stable helper for the delegated action handler without replacing
+  // the whole handler (which contains all other application actions).
+  window.__tafassV65PageSwitch = oldPageSwitchHandler;
+})();
 
 })();
