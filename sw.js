@@ -1,12 +1,12 @@
-/* Tafaß V56 — single active shell.
+/* Tafaß V57 — single active shell.
    Old Tafaß caches are deleted on activation; assets are network-first
    and only the current build is kept as offline fallback. */
-const CACHE = 'tafass-v56-shell';
+const CACHE = 'tafass-v57-shell';
 const ASSETS = [
   './',
   './index.html',
-  './style.css?v=157',
-  './app.js?v=157',
+  './style.css?v=158',
+  './app.js?v=158',
   './manifest.webmanifest',
   './assets/tafass-logo-premium.svg'
 ];
