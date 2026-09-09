@@ -1209,15 +1209,42 @@ function publisherBackgrounds(){
     return visible;
   }
 
+  function socialTextHTML(text) {
+    const value = String(text || "");
+    const parts = value.split(/(#[\p{L}\p{N}_-]+|@[\p{L}\p{N}_.-]+)/gu);
+    return parts.map(part => {
+      if (/^#[\p{L}\p{N}_-]+$/u.test(part)) return `<button type="button" class="social-tag-link" data-action="social-hashtag" data-tag="${esc(part.slice(1))}">${esc(part)}</button>`;
+      if (/^@[\p{L}\p{N}_.-]+$/u.test(part)) return `<button type="button" class="social-mention-link" data-action="social-mention" data-username="${esc(part.slice(1))}">${esc(part)}</button>`;
+      return esc(part);
+    }).join('');
+  }
   function captionHTML(text, limit = 280) {
     const value = String(text || "");
-    if (value.length <= limit) return `<div class="post-caption">${esc(value)}</div>`;
+    if (value.length <= limit) return `<div class="post-caption">${socialTextHTML(value)}</div>`;
     const short = value.slice(0, limit).replace(/\s+\S*$/, "").trimEnd();
     return `<div class="post-caption post-caption-collapsed" data-caption-state="collapsed">
-      <span class="caption-short">${esc(short)}…</span>
-      <span class="caption-full" hidden>${esc(value)}</span>
+      <span class="caption-short">${socialTextHTML(short)}…</span>
+      <span class="caption-full" hidden>${socialTextHTML(value)}</span>
       <button type="button" class="caption-toggle" data-action="toggle-caption">Voir plus</button>
     </div>`;
+  }
+  async function openSocialHashtag(tag) {
+    const q=String(tag||'').trim().replace(/^#/,'');
+    if(!q) return;
+    state.searchQuery = `#${q}`;
+    return searchPage(`#${q}`);
+  }
+  async function openSocialMention(username) {
+    const u=String(username||'').trim().replace(/^@/,'');
+    if(!u) return;
+    const r=await sb.from('profiles').select('*').ilike('username',u).limit(1).maybeSingle();
+    if(r.error || !r.data) return toast(`Compte @${u} introuvable.`);
+    return openUserProfile(r.data.id);
+  }
+  async function copyPostLink(id) {
+    const url = `${location.origin}${location.pathname}#post-${encodeURIComponent(id)}`;
+    try { await navigator.clipboard.writeText(url); toast('✓ Lien de la publication copié'); }
+    catch { openModal(`<div class="modal-box social-share-link-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">PARTAGE</span><h3>Lien de la publication</h3><input class="premium-input" readonly value="${esc(url)}"><button class="primary big" data-action="close-modal">Fermer</button></div>`); }
   }
   function toggleCaption(btn) {
     const box = btn?.closest(".post-caption");
@@ -1278,7 +1305,7 @@ function publisherBackgrounds(){
       ${p.publication_meta?.receive_messages && p.user_id !== state.user.id ? `<div class="post-message-cta"><div><b>Messages ouverts</b><small>Envoyez un message privé directement à ${esc(nameOf(p.author||{}))}.</small></div><button type="button" data-action="post-receive-message" data-owner-id="${esc(p.user_id)}">💬 Message</button></div>` : ""}
       <div class="post-stats" data-post-stats="${esc(p.id)}"><span class="reaction-summary" data-reaction-total="${totalReactions}">${reactionVisual || "<span class='muted-inline'>Aucune réaction</span>"}${showReactionCounts && totalReactions ? `<span class="reaction-people"><b data-reaction-total-number="${esc(p.id)}">${totalReactions}</b> réaction${totalReactions>1?'s':''}${reactionNames ? ` · ${reactionNames}${totalReactions>8?'…':''}` : ''}</span>` : ""}</span><span class="post-counts-inline"><span data-comment-count="${esc(p.id)}">${cs.length}</span> commentaire${cs.length!==1?'s':''} · <span data-share-count="${esc(p.id)}">${Number(p.shares || sh.length || 0)}</span> partage${Number(p.shares || sh.length || 0)!==1?'s':''}${(p.media_type === 'video' || p.media_type === 'reel') ? ` · <span class="post-view-count" data-post-views="${esc(p.id)}">${views} vue${views!==1?'s':''}</span>` : ''}</span></div>
       ${shareSummary}
-      <div class="post-actions"><button class="react-btn" data-action="react" data-id="${esc(p.id)}" data-current-reaction="${esc(mine||"")}">${reactionMeta[mine]?.[1] || "👍"} ${esc(reactionMeta[mine]?.[0] || "J’aime")}</button><button data-action="comment" data-id="${esc(p.id)}">💬 Commenter</button><button data-action="share" data-id="${esc(p.id)}">↗ Partager</button></div>
+      <div class="post-actions"><button class="react-btn" data-action="react" data-id="${esc(p.id)}" data-current-reaction="${esc(mine||"")}">${reactionMeta[mine]?.[1] || "👍"} ${esc(reactionMeta[mine]?.[0] || "J’aime")}</button><button data-action="comment" data-id="${esc(p.id)}">💬 Commenter</button><button data-action="share" data-id="${esc(p.id)}">↗ Reposter</button><button data-action="copy-post-link" data-id="${esc(p.id)}" title="Copier le lien">🔗</button></div>
       <div id="reaction-${esc(p.id)}"></div>
       <div class="comments">${commentHTML()}<div class="comment-form"><input id="comment-${esc(p.id)}" placeholder="Écrire un commentaire..."><button data-action="send-comment" data-id="${esc(p.id)}">Envoyer</button></div></div>
     </article>`;
@@ -5864,6 +5891,9 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if (action === "menu-service") return servicePage(actionEl.dataset.service);
     if (action === "help-item") return openHelpTopic(actionEl.dataset.helpTopic || "technical", actionEl.dataset.name || "Aide");
     if (action === "payment-request") return createPaymentRequest(actionEl.dataset.method);
+    if (action === "social-hashtag") return openSocialHashtag(actionEl.dataset.tag || "");
+    if (action === "social-mention") return openSocialMention(actionEl.dataset.username || "");
+    if (action === "copy-post-link") return copyPostLink(id);
     if (action === "save-post") { const r=await sb.from("saved_posts").upsert({user_id:state.user.id,post_id:id},{onConflict:"user_id,post_id"}); toast(r.error?r.error.message:"Publication enregistrée"); closeModal(); return; }
     if (action === "unsave-post") { const r=await sb.from("saved_posts").delete().eq("user_id",state.user.id).eq("post_id",id); if(r.error)return toast(r.error.message); toast("Retiré des Enregistrements"); if(state.route==="saved") return genericListPage("saved"); return; }
     if (action === "edit-post") return editPost(id);

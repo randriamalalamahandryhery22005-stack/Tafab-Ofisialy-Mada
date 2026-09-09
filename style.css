@@ -5236,3 +5236,7 @@ body.light .v44-page-skeleton{background:linear-gradient(145deg,#fff,#f5faf7,#ff
 @keyframes v45MessageHit{0%{transform:scale(.985)}100%{transform:scale(1)}}
 .conversation-head-actions button[data-action="conversation-search"]{position:relative}.conversation-head-actions button[data-action="conversation-search"]::after{content:"";position:absolute;inset:-3px;border-radius:14px;border:1px solid rgba(111,255,174,.16);pointer-events:none}
 @media (max-width:600px){.conversation-search-bar{margin:0 9px 8px;border-radius:14px;padding:9px 10px}.conversation-search-bar input{font-size:14px}}
+
+
+/* Tafaß V46 — Social Advanced */
+.social-tag-link,.social-mention-link{appearance:none;border:0;background:none;padding:0;margin:0 1px;font:inherit;font-weight:800;cursor:pointer;text-decoration:none;border-radius:7px;transition:all .18s ease}.social-tag-link{color:#75e6a4}.social-mention-link{color:#ffad62}.social-tag-link:hover,.social-mention-link:hover{filter:brightness(1.18);text-decoration:underline;text-underline-offset:3px}.post-actions [data-action="copy-post-link"]{min-width:42px;padding-inline:10px;border-radius:14px}.social-share-link-modal .premium-input{margin:12px 0}.post-caption .social-tag-link,.post-caption .social-mention-link{display:inline}
