@@ -6878,28 +6878,9 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       }catch(e){console.warn('Tafaß V52 recherche:',e);}
     };
 
-    // PARA & CONF — adds a true control-center summary above the existing detailed settings.
-    settingsPage = async function(){
-      await originalSettingsPage();
-      if(state.route!=='settings')return;
-      try{
-        const root=document.querySelector('.fb-settings-page'); if(!root || root.querySelector('.tafa-v52-settings-dashboard'))return;
-        const cfg=(await sb.from('user_settings').select('profile_visibility,allow_friend_requests,allow_messages,allow_search_by_phone,allow_search_by_email,notifications_enabled').eq('user_id',state.user.id).maybeSingle()).data||{};
-        const privacy=(await sb.from('profile_identification_settings').select('allow_tagging,review_tags,search_engine_index').eq('user_id',state.user.id).maybeSingle()).data||{};
-        const dash=document.createElement('section'); dash.className='tafa-v52-settings-dashboard';
-        const status=v=>v===false?'Désactivé':'Activé';
-        dash.innerHTML=`<div class="tafa-v52-settings-top"><div><span class="eyebrow">TAFAß • CONTROL CENTER</span><h3>Votre compte, vos règles.</h3><p>Un centre unique pour la confidentialité, la sécurité, les notifications et la personnalisation.</p></div><span class="tafa-v52-settings-secure">🛡️ PROTÉGÉ</span></div>
-          <div class="tafa-v52-settings-cards">
-            <button data-action="privacy-settings"><span>🔒</span><b>Confidentialité</b><small>${cfg.profile_visibility==='private'?'Profil verrouillé':'Profil public'} · Messages ${status(cfg.allow_messages)}</small></button>
-            <button data-action="security-settings"><span>🛡️</span><b>Sécurité</b><small>Connexion, sessions et authentification renforcée</small></button>
-            <button data-action="notifications-settings"><span>🔔</span><b>Notifications</b><small>${status(cfg.notifications_enabled)} · Alertes en temps réel</small></button>
-            <button data-action="profile-identification"><span>👤</span><b>Profil & identification</b><small>Tags ${status(privacy.allow_tagging)} · Indexation ${status(privacy.search_engine_index)}</small></button>
-          </div>
-          <div class="tafa-v52-settings-quick"><b>Accès rapides</b><button data-action="account-settings">Informations du compte</button><button data-action="find-contact-settings">Qui peut me trouver</button><button data-action="blocking">Blocage</button><button data-action="online-status">Statut en ligne</button><button data-action="accessibility-settings">Accessibilité</button></div>`;
-        const mobile=root.querySelector('.fb-settings-mobile-head');
-        mobile?.insertAdjacentElement('afterend',dash) || root.prepend(dash);
-      }catch(e){console.warn('Tafaß V52 paramètres:',e);}
-    };
+    // V61 cleanup: the legacy V52 Para & Conf dashboard is removed.
+    // The V60 Command Center below is now the single authoritative settings UI.
+    settingsPage = originalSettingsPage;
 
   /* ============================================================
      TAFAß V55 — PROFIL MEDIA • MESSAGERIE • RECHERCHE EXPERT
@@ -7199,6 +7180,19 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     }
   };
 
+
+  /* ============================================================
+     TAFAß V61 — SINGLE PARA & CONF / NO LEGACY DUPLICATE
+     ============================================================ */
+  (() => {
+    // Keep only the V60 Command Center layer for Paramètres & confidentialité.
+    // Remove any legacy V52 dashboard if an older cached DOM survives a hot reload.
+    function removeLegacySettings(){
+      document.querySelectorAll('.tafa-v52-settings-dashboard').forEach(el=>el.remove());
+    }
+    removeLegacySettings();
+    window.addEventListener('pageshow', removeLegacySettings);
+  })();
 
   /* ============================================================
      TAFAß V60 — PARA & CONF / PREMIUM SETTINGS COMMAND CENTER

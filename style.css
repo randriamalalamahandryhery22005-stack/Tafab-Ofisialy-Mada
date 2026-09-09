@@ -5548,3 +5548,10 @@ body.tafa-conversation-active .content{
 .tafa-v60-save{min-height:48px!important;border-radius:16px!important;background:linear-gradient(90deg,#00d084,#8ee84d,#ffd166)!important;color:#07110b!important;box-shadow:0 12px 30px rgba(0,208,132,.16)!important;font-weight:800!important}
 @media(max-width:600px){.fb-settings-page{padding-bottom:86px!important}.tafa-v60-setting-row{border-radius:17px!important;padding:11px 8px!important}.tafa-v60-row-meta i{font-size:7px!important}.tafa-v60-dashboard-strip{gap:6px!important}.tafa-v60-dashboard-strip span{padding:9px 8px!important}.tafa-v60-dashboard-strip b{font-size:13px!important}.tafa-v60-dashboard-strip small{font-size:7px!important}.tafa-v60-detail-hero{padding:14px!important;border-radius:19px!important}.tafa-v60-detail-hero h2{font-size:20px!important}.tafa-v60-hero-badge{font-size:7px!important;padding:7px 8px!important}.tafa-v60-settings-block{padding:10px!important;border-radius:17px!important}}
 @media(max-width:390px){.tafa-v60-detail-hero{display:block!important}.tafa-v60-hero-badge{display:inline-block!important;margin-top:9px!important}.tafa-v60-dashboard-strip{grid-template-columns:1fr 1fr 1fr!important}.tafa-v60-dashboard-strip small{line-height:1.15!important}}
+
+
+/* ============================================================
+   TAFAß V61 — PARA & CONF SINGLE ACTIVE UI
+   Legacy V52 dashboard is intentionally hidden/removed.
+   ============================================================ */
+.tafa-v52-settings-dashboard{display:none!important}
