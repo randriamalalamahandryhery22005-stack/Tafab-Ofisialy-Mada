@@ -4907,7 +4907,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   // ============================================================
   const TIME_LIMIT_KEY = "tafass_usage_limit_v40";
   function accountAgeYears(){
-    const b=state.profile?.birth;
+    const b=state.profile?.birth || state.profile?.birth_date || state.user?.user_metadata?.birth || state.user?.user_metadata?.birth_date;
     if(!b)return null;
     const d=new Date(String(b).slice(0,10)+"T00:00:00");
     if(Number.isNaN(d.getTime()))return null;
@@ -4919,7 +4919,10 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   function timeLimitPolicy(){
     const age=accountAgeYears();
     const minor=age!==null && age<18;
-    return {minor,age,warningMinutes:minor?15:30,logoutMinutes:minor?45:90};
+    const first=minor?15:30;
+    const second=minor?30:60;
+    const final=minor?45:90;
+    return {minor,age,warningMinutes:first,secondWarningMinutes:second,logoutMinutes:final,policyId:minor?'under18':'adult'};
   }
   function isOfficialAdmin(){ return isAdminProfile(state.profile)||state.profile?.is_admin===true||state.profile?.admin_badge===true; }
   function readUsageRuntime(){
@@ -4938,16 +4941,16 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   }
   function showTimeLimitOverlay(mode='warning',minutesUsed=0){
     closeTimeLimitOverlay();
-    const policy=timeLimitPolicy(), limit=policy.logoutMinutes, next=policy.warningMinutes;
+    const policy=timeLimitPolicy(), limit=policy.logoutMinutes, next=policy.warningMinutes, second=policy.secondWarningMinutes;
     const used=Math.floor(minutesUsed);
     const remaining=Math.max(0,limit-used);
     const final=mode==='final';
     const title=final?'Temps maximal atteint':'Petit rappel Tafaß';
     const copy=mode==='intro'
-      ? `Tafaß intègre une gestion du temps pour encourager des pauses régulières. Le suivi compte le temps réellement passé au premier plan : il ne continue pas lorsque l’application est en arrière-plan. À ${policy.warningMinutes} minutes, un premier rappel apparaît. Si vous choisissez de continuer, un second rappel arrive à ${policy.warningMinutes*2} minutes. À ${limit} minutes, la session est automatiquement déconnectée.`
+      ? `${policy.minor?'Votre compte est identifié comme ayant moins de 18 ans.':'Votre compte est identifié comme ayant 18 ans ou plus.'} Tafaß adapte automatiquement la gestion du temps à cette tranche d’âge. Le compteur mesure uniquement le temps réellement passé au premier plan : il s’arrête lorsque l’application passe en arrière-plan. Premier rappel à ${policy.warningMinutes} min, deuxième avertissement à ${second} min, puis déconnexion automatique à ${limit} min.`
       : final
       ? `Votre temps d’utilisation autorisé pour cette session est arrivé à ${limit} minutes. Pour préserver un usage équilibré, Tafaß va fermer cette session et vous déconnecter.`
-      : `Vous utilisez Tafaß depuis ${used} minute${used>1?'s':''}. Prenez une pause et évitez de rester trop longtemps connecté. Le prochain rappel arrivera à ${policy.warningMinutes*2} minutes.`;
+      : `${policy.minor?'Votre compte a moins de 18 ans.':'Votre compte a 18 ans ou plus.'} Vous utilisez Tafaß depuis ${used} minute${used>1?'s':''}. ${used < second ? `Le prochain palier est ${second} minutes.` : `La limite finale est ${limit} minutes.`} Prenez une pause si vous êtes resté longtemps connecté.`;
     const o=document.createElement('div'); o.className='time-limit-overlay'; o.innerHTML=`<div class="time-limit-card" role="dialog" aria-modal="true" aria-labelledby="timeLimitTitle">
       <div class="time-limit-brand"><span class="time-limit-logo">T</span><div><b>Tafaß</b><small>Gestion du temps</small></div><span class="time-limit-status">${final?'FIN DE SESSION':mode==='intro'?'INFORMATION':'RAPPEL'}</span></div>
       <div class="time-limit-icon">${final?'⏱':'◷'}</div>
@@ -4956,7 +4959,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       <p>${copy}</p>
       <div class="time-limit-progress"><span style="width:${Math.min(100,Math.round((used/limit)*100))}%"></span></div>
       <div class="time-limit-stats"><div><b>${used} min</b><small>Utilisées</small></div><div><b>${limit} min</b><small>Limite</small></div><div><b>${remaining} min</b><small>Restantes</small></div></div>
-      <div class="time-limit-rules"><div><b>${policy.minor?'15 min':'30 min'}</b><span>Premier rappel</span></div><div><b>${policy.minor?'30 min':'60 min'}</b><span>Deuxième rappel</span></div><div><b>${limit} min</b><span>Déconnexion automatique</span></div></div>
+      <div class="time-limit-rules"><div><b>${policy.minor?'15 min':'30 min'}</b><span>Premier rappel</span></div><div><b>${second} min</b><span>Deuxième rappel</span></div><div><b>${limit} min</b><span>Déconnexion automatique</span></div></div>
       <div class="time-limit-actions">${final?`<button class="primary big" data-time-limit-logout>Se déconnecter</button>`:mode==='intro'?`<button class="primary big" data-time-limit-continue>J’ai compris, entrer dans Tafaß</button>`:`<button class="ghost-action big" data-time-limit-logout>Se déconnecter maintenant</button><button class="primary big" data-time-limit-continue>Annuler et continuer</button>`}</div>
       <small class="time-limit-footnote">Vous pouvez quitter Tafaß à tout moment. La déconnexion arrête le compteur de cette session.</small>
     </div>`;
@@ -4968,8 +4971,18 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   async function startTimeLimitGuard(){
     if(!state.user || isOfficialAdmin())return;
     if(state.timeLimitTimer)clearInterval(state.timeLimitTimer);
-    const policy=timeLimitPolicy(), saved=readUsageRuntime();
-    state.timeLimitRuntime={activeSeconds:saved.activeSeconds||0,lastWarning:(saved.activeSeconds||0)>=policy.logoutMinutes*60?3:(saved.activeSeconds||0)>=policy.warningMinutes*120?2:(saved.activeSeconds||0)>=policy.warningMinutes*60?1:0,policy};
+    const policy=timeLimitPolicy();
+    let saved=readUsageRuntime();
+    try{
+      const raw=sessionStorage.getItem(TIME_LIMIT_KEY+'_policy');
+      if(raw!==policy.policyId){
+        sessionStorage.setItem(TIME_LIMIT_KEY+'_policy',policy.policyId);
+        saved={activeSeconds:0};
+        sessionStorage.removeItem(TIME_LIMIT_KEY);
+      }
+    }catch{}
+    const firstSec=policy.warningMinutes*60, secondSec=policy.secondWarningMinutes*60, endSec=policy.logoutMinutes*60;
+    state.timeLimitRuntime={activeSeconds:saved.activeSeconds||0,lastWarning:(saved.activeSeconds||0)>=endSec?3:(saved.activeSeconds||0)>=secondSec?2:(saved.activeSeconds||0)>=firstSec?1:0,policy};
     const usedMin=state.timeLimitRuntime.activeSeconds/60;
     // Explain the rules before the first usable screen, once per session.
     if(!sessionStorage.getItem(TIME_LIMIT_KEY+'_intro')){
@@ -4981,7 +4994,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       if(document.visibilityState!=='visible')return;
       state.timeLimitRuntime.activeSeconds+=1;
       const sec=state.timeLimitRuntime.activeSeconds, mins=sec/60;
-      const first=policy.warningMinutes*60, second=policy.warningMinutes*2*60, end=policy.logoutMinutes*60;
+      const first=policy.warningMinutes*60, second=policy.secondWarningMinutes*60, end=policy.logoutMinutes*60;
       if(sec>=end){clearInterval(state.timeLimitTimer);state.timeLimitTimer=null;writeUsageRuntime();showTimeLimitOverlay('final',mins);return;}
       if(sec>=second && state.timeLimitRuntime.lastWarning<2){state.timeLimitRuntime.lastWarning=2;writeUsageRuntime();showTimeLimitOverlay('warning',mins);return;}
       if(sec>=first && state.timeLimitRuntime.lastWarning<1){state.timeLimitRuntime.lastWarning=1;writeUsageRuntime();showTimeLimitOverlay('warning',mins);return;}
@@ -7018,7 +7031,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     const originalTimeLimitSettingsHTMLV56=timeLimitSettingsHTML;
     timeLimitSettingsHTML=function(){
       const p=timeLimitPolicy();
-      const first=p.minor?15:30, second=p.minor?30:60, final=p.logoutMinutes;
+      const first=p.warningMinutes, second=p.secondWarningMinutes, final=p.logoutMinutes;
       return `<section class="tafa-v56-limits-card">
         <div class="tafa-v56-limits-hero">
           <div class="tafa-v56-hero-icon"><span>◷</span></div>
@@ -7056,7 +7069,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
           <article><div class="tafa-v56-info-icon gold">⛔</div><div><b>À la limite finale</b><small>La session est fermée automatiquement et une nouvelle connexion sera nécessaire.</small></div></article>
           <article><div class="tafa-v56-info-icon admin">★</div><div><b>Administrateur officiel</b><small>Le compte administrateur officiel n’est pas soumis à cette limite.</small></div></article>
         </div>
-        <div class="tafa-v56-bottom"><div><b>Votre équilibre numérique</b><small>Vous pouvez quitter Tafaß à tout moment. La déconnexion arrête le compteur de cette session.</small></div><button class="ghost-action big" data-action="time-limit-intro">Voir l’explication complète <span>→</span></button></div>
+        <div class="tafa-v56-bottom"><div><b>${p.minor?'Protection -18 ans':'Gestion 18+ active'}</b><small>${p.minor?'Rappel à 15 min, nouvel avertissement à 30 min, déconnexion automatique à 45 min.':'Rappel à 30 min, nouvel avertissement à 60 min (1 h), déconnexion automatique à 90 min (1 h 30).'} Vous pouvez quitter Tafaß à tout moment.</small></div><button class="ghost-action big" data-action="time-limit-intro">Voir l’explication complète <span>→</span></button></div>
       </section>`;
     };
 
