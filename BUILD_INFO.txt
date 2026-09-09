@@ -1,5 +1,9 @@
-Tafaß — Production Stability & UI Audit V38
-Frontend audit, navigation stability, splash refresh, PWA cache refresh
-Date: 2026-09-08
-JavaScript syntax: node --check OK
-Changes: render-lock token, stale-render protection, responsive cleanup, modern splash, signup country/phone consistency, service-worker cache version refresh
+Tafaß V42 — PREMIUM VISUAL REFRESH
+Base: latest working Tafaß build + V41 fixes
+Theme: Black + Premium Green + Premium Orange + Gold
+Age policy: 18+
+Pages/Groups: premium redesign + follow/join reliability
+Badge officiel: new verification wizard
+Splash: logo + loading points only
+Auth: connection/disconnection loading
+owner_id: ambiguity hotfix included
