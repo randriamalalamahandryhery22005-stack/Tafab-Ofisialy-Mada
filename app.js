@@ -4168,7 +4168,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     const paymentRows=payments.map(x=>`<div class="admin-data-row"><div class="grow"><b>${esc(x.display_name||x.identity_name||x.reason||'Compte')}</b><small>${adminMoney(x.amount)} · ${esc(x.method||'')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${esc(x.status||'pending')}">${esc(x.status||'pending')}</span>${x.status==='pending'?`<button class="ghost-action" data-action="admin-payment-status" data-id="${esc(x.id)}" data-status="paid">Valider</button><button class="ghost-action danger-history-action" data-action="admin-payment-status" data-id="${esc(x.id)}" data-status="failed">Refuser</button>`:''}</div>`).join('')||'<div class="empty">Aucun paiement.</div>';
     const boostPaymentRows=boostPayments.map(x=>`<div class="admin-data-row boost-admin-payment-row"><div class="grow"><b>✦ ${esc(x.campaign_name||'Campagne')}</b><small>${esc(x.display_name||x.identity_name||x.reason||'Compte')} · ${adminMoney(x.amount_mga)} · ${esc(x.method||'')} · Réf. ${esc(x.transaction_reference||'')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${x.status==='verified'?'paid':x.status==='rejected'?'rejected':'pending'}">${x.status==='pending'?'Paiement à vérifier':x.status==='verified'?'Vérifié':'Refusé'}</span>${x.status==='pending'?`<button class="ghost-action" data-action="admin-boost-payment-status" data-id="${esc(x.id)}" data-status="verified">✓ Vérifier</button><button class="ghost-action danger-history-action" data-action="admin-boost-payment-status" data-id="${esc(x.id)}" data-status="rejected">Refuser</button>`:x.status==='verified'?`<button class="ghost-action" data-action="admin-boost-campaign-status" data-id="${esc(x.campaign_id)}" data-status="active">✓ Sponsoriser</button>`:''}</div>`).join('')||'<div class="empty">Aucun paiement publicitaire en attente.</div>';
     const boostCampaignRows=boostCampaigns.map(x=>`<div class="admin-data-row boost-admin-campaign-row"><div class="grow"><b>✦ ${esc(x.name||'Campagne')}</b><small>${esc(x.owner_name||'Compte')} · ${esc(x.ad_type||x.objective||'BOOST')} · ${adminMoney(x.spent_amount_mga)} / ${adminMoney(x.total_budget_mga)} · ${esc(x.audience_location||'Madagascar')}</small></div><span class="admin-status ${x.status==='active'?'paid':x.status==='rejected'?'rejected':x.status==='paused'?'':'pending'}">${esc(adStatusLabel(x.status))}</span><button class="ghost-action" data-action="admin-boost-campaign-control" data-id="${esc(x.id)}" data-status="active">▶ Activer</button><button class="ghost-action" data-action="admin-boost-campaign-control" data-id="${esc(x.id)}" data-status="paused">⏸ Pause</button>${x.status!=='rejected'?`<button class="ghost-action danger-history-action" data-action="admin-boost-campaign-control" data-id="${esc(x.id)}" data-status="rejected">Refuser</button>`:''}</div>`).join('')||'<div class="empty">Aucune campagne publicitaire.</div>';
-    const reportRows=reports.map(x=>`<div class="admin-data-row"><div class="grow"><b>${esc(x.reporter_name||'Compte')} → ${esc(x.reported_name||'Compte')}</b><small>${esc(x.reason||'Signalement')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${x.status==='resolved'?'paid':''}">${esc(x.status||'pending')}</span>${x.status==='pending'?`<button class="ghost-action" data-action="admin-report-status" data-id="${esc(x.id)}" data-status="resolved">Traiter</button>`:''}</div>`).join('')||'<div class="empty">Aucun signalement.</div>';
+    const reportRows=reports.map(x=>`<div class="admin-data-row tafa-v51-report-row" data-v51-report-id="${esc(x.id)}" data-v51-reason="${esc(x.reason||'Signalement')}" data-v51-status="${esc(x.status||'pending')}" data-v51-created="${esc(x.created_at||'')}"><div class="grow"><b>${esc(x.reporter_name||'Compte')} → ${esc(x.reported_name||'Compte')}</b><small>${esc(x.reason||'Signalement')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${x.status==='resolved'?'paid':''}">${esc(x.status||'pending')}</span><button class="ghost-action" data-v51-report-open="1">Détails</button>${x.status==='pending'?`<button class="ghost-action" data-action="admin-report-status" data-id="${esc(x.id)}" data-status="resolved">Traiter</button>`:''}</div>`).join('')||'<div class="empty">Aucun signalement.</div>';
     const appealRows=appeals.map(x=>`<article class="admin-appeal-card ${x.status==='pending'?'is-pending':''}" data-action="admin-open-appeal" data-id="${esc(x.id)}"><div class="admin-appeal-avatar">♻</div><div class="admin-appeal-main"><div class="admin-appeal-top"><div><b>${esc(x.display_name||x.identity_name||x.reason||'Compte')}</b><small>${esc(x.email||'')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${x.status==='approved'?'paid':x.status==='rejected'?'rejected':'pending'}">${x.status==='pending'?'En attente':x.status==='approved'?'Approuvée':'Refusée'}</span></div><p>${esc(x.reason||'Demande de réactivation')}</p><div class="admin-appeal-footer"><small>${x.status==='pending'?'Examen administratif requis':'Traitée par l’administration'}</small>${x.status==='pending'?'<span class="admin-appeal-review">Ouvrir l’examen →</span>':''}</div></div></article>`).join('')||'<div class="empty">Aucune demande de réactivation.</div>';
     const verificationRows=verifications.map(x=>`<div class="admin-data-row"><div class="grow"><b>${esc(x.display_name||x.identity_name||x.reason||'Compte')}</b><small>${esc(x.email||'')} · ${esc(x.reason||'Demande de vérification')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${x.status==='approved'?'paid':x.status==='rejected'?'rejected':''}">${esc(x.status||'pending')}</span>${x.status==='pending'?`<button class="ghost-action" data-action="admin-verification-status" data-id="${esc(x.id)}" data-status="approved">Approuver</button><button class="ghost-action danger-history-action" data-action="admin-verification-status" data-id="${esc(x.id)}" data-status="rejected">Refuser</button>`:''}</div>`).join('')||'<div class="empty">Aucune demande de vérification.</div>';
 
@@ -6581,6 +6581,71 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     const nav0=oldNavigate;
     navigate=function(...args){ const r=nav0.apply(this,args); setTimeout(()=>{if(state.route==='search')tafaV49Search.show(document.getElementById('searchInput')?.value||'');},0); return r; };
   }
+
+  /* TAFAß V51 — Admin Pro Moderation & Analytics */
+  const tafaV51Admin = (() => {
+    let mounted=false, auditLoaded=false;
+    const escSafe=v=>esc(String(v??''));
+    function root(){return document.querySelector('.admin-dashboard-premium');}
+    function section(title){return [...(root()?.querySelectorAll('.admin-total-section')||[])].find(s=>(s.querySelector('h3')?.textContent||'').includes(title));}
+    function openReport(row){
+      if(!row)return;
+      const reason=row.dataset.v51Reason||'Signalement';
+      const status=row.dataset.v51Status||'pending';
+      const created=row.dataset.v51Created ? new Date(row.dataset.v51Created).toLocaleString('fr-FR') : '—';
+      const people=row.querySelector('.grow b')?.textContent||'Compte';
+      openModal(`<div class="modal-box tafa-v51-report-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß · MODÉRATION V51</span><h3>Détail du signalement</h3><div class="tafa-v51-detail-grid"><div><span>Signalement</span><b>${escSafe(reason)}</b></div><div><span>Statut</span><b>${escSafe(status)}</b></div><div><span>Comptes concernés</span><b>${escSafe(people)}</b></div><div><span>Date</span><b>${escSafe(created)}</b></div></div><div class="tafa-v51-detail-note">Analysez le contexte avant toute action. Les actions administratives existantes restent utilisées pour traiter le dossier.</div>${status==='pending'?`<button class="primary big" data-action="admin-report-status" data-id="${escSafe(row.dataset.v51ReportId)}" data-status="resolved">✓ Marquer comme traité</button>`:''}</div>`);
+    }
+    async function loadAudit(){
+      if(auditLoaded||!state.user||!state.__isAdmin||!supabaseReady())return;
+      auditLoaded=true;
+      const sec=section('Comptes utilisateurs')||section('Sécurité');
+      if(!sec)return;
+      try{
+        const r=await sb.from('tafa_admin_audit_logs').select('*').order('created_at',{ascending:false}).limit(20);
+        if(r.error)throw r.error;
+        const logs=r.data||[];
+        const html=logs.map(x=>{const action=x.action||x.event||x.type||'Action administrative';const target=x.target_user_id||x.target_id||x.user_id||'';const detail=x.details||x.note||x.description||'';return `<div class="tafa-v51-audit-row"><span class="tafa-v51-audit-icon">✓</span><div><b>${escSafe(action)}</b><small>${escSafe(target?`Cible : ${target} · `:'')}${escSafe(detail||'Action enregistrée')} · ${x.created_at?escSafe(new Date(x.created_at).toLocaleString('fr-FR')):'—'}</small></div></div>`}).join('')||'<div class="empty">Aucune action administrative récente.</div>';
+        const wrap=document.createElement('section'); wrap.className='admin-total-section tafa-v51-audit-section';
+        wrap.innerHTML=`<div class="admin-section-head"><div class="admin-section-title"><h3>🧾 Journal administratif</h3><small class="admin-section-note">20 dernières actions enregistrées.</small></div><button class="ghost-action" data-v51-export>Exporter</button></div><div class="tafa-v51-audit-list">${html}</div>`;
+        sec.parentNode?.insertBefore(wrap,sec.nextSibling);
+        wrap.querySelector('[data-v51-export]')?.addEventListener('click',()=>exportAudit(logs));
+      }catch(e){auditLoaded=false;console.warn('Tafaß V51 audit:',e?.message||e);}
+    }
+    function exportAudit(logs){
+      const rows=[['Date','Action','Cible','Détail'],...(logs||[]).map(x=>[x.created_at||'',x.action||x.event||x.type||'',x.target_user_id||x.target_id||x.user_id||'',x.details||x.note||x.description||''])];
+      const csv=rows.map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n');
+      const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download=`tafass-admin-audit-${new Date().toISOString().slice(0,10)}.csv`;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500);
+    }
+    function mount(){
+      const r=root(); if(!r)return;
+      if(!mounted){
+        mounted=true;
+        const hero=r.querySelector('.admin-dashboard-hero');
+        if(hero&&!r.querySelector('.tafa-v51-command')){
+          const reports=section('Signalements');
+          const verifs=section('Vérifications');
+          const appeals=section('Réactivations');
+          const count=(sec)=>sec?sec.querySelectorAll('.admin-data-row').length:0;
+          const pending=(sec)=>sec?[...sec.querySelectorAll('.admin-status')].filter(x=>/pending|en attente/i.test(x.textContent||'')).length:0;
+          const bar=document.createElement('section');bar.className='tafa-v51-command';
+          bar.innerHTML=`<div class="tafa-v51-command-head"><div><span class="eyebrow">TAFAß · ADMIN PRO V51</span><b>Moderation & Analytics</b><small>Priorisez les dossiers sensibles et surveillez les volumes clés.</small></div><span class="tafa-v51-live"><i></i> LIVE</span></div><div class="tafa-v51-kpis"><div><b>${pending(reports)}</b><span>Signalements en attente</span></div><div><b>${pending(verifs)}</b><span>Vérifications à examiner</span></div><div><b>${pending(appeals)}</b><span>Réactivations à examiner</span></div><div><b>${count(reports)}</b><span>Signalements affichés</span></div></div><div class="tafa-v51-priority"><span>⚡ Priorité actuelle</span><strong>${pending(reports)+pending(verifs)+pending(appeals)>0?'Action administrative requise':'Aucun dossier urgent détecté'}</strong></div>`;
+          hero.insertAdjacentElement('afterend',bar);
+        }
+      }
+      loadAudit();
+    }
+    function bind(){
+      if(window.__tafaV51AdminBound)return;window.__tafaV51AdminBound=true;
+      document.addEventListener('click',e=>{const b=e.target.closest?.('[data-v51-report-open]');if(b){e.preventDefault();e.stopPropagation();openReport(b.closest('.tafa-v51-report-row'));}},true);
+    }
+    function refresh(){auditLoaded=false;mounted=false;setTimeout(()=>{mount();},0);}
+    return {mount,bind,refresh};
+  })();
+  tafaV51Admin.bind();
+  tafaV51Admin.mount();
+  const tafaV51OriginalAdminTotalPage = adminTotalPage;
+  adminTotalPage = async function(...args){ const result=await tafaV51OriginalAdminTotalPage.apply(this,args); tafaV51Admin.refresh(); return result; };
 
   /* TAFAß V50 — Admin Pro Command Center */
   const tafaV50Admin = (() => {
