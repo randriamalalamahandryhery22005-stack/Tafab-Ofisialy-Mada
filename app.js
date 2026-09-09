@@ -5012,7 +5012,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     let el=document.getElementById(id);
     if(!el){
       el=document.createElement("div"); el.id=id; el.className="tafass-app-transition";
-      el.innerHTML='<div class="tafass-transition-card"><img src="assets/tafass-logo-premium.svg" alt="Tafaß"><div class="tafass-transition-spinner" aria-hidden="true"></div><b data-transition-label>Ouverture…</b></div>';
+      el.innerHTML='<div class="tafass-transition-card"><img src="assets/tafass-logo-premium.svg" alt="Tafaß"><div class="tafass-transition-progress" aria-hidden="true"><span></span></div></div>';
       document.body.appendChild(el);
     }
     el.dataset.kind=kind||"enter";
