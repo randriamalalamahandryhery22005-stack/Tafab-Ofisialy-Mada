@@ -6502,4 +6502,84 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       e.preventDefault();
     }
   });
+
+  /* TAFAß V49 — Recherche intelligente & suggestions instantanées */
+  const tafaV49Search = (() => {
+    let timer = null;
+    let seq = 0;
+    const escSafe = v => esc(String(v ?? ''));
+    const panel = () => {
+      const box = document.querySelector('.premium-searchbox');
+      if (!box) return null;
+      let el = document.getElementById('tafaV49SearchSuggestions');
+      if (!el) {
+        el = document.createElement('div');
+        el.id = 'tafaV49SearchSuggestions';
+        el.className = 'tafa-v49-search-suggestions';
+        box.appendChild(el);
+      }
+      return el;
+    };
+    const close = () => { const el=document.getElementById('tafaV49SearchSuggestions'); if(el) el.innerHTML=''; };
+    async function show(q='') {
+      const input=document.getElementById('searchInput');
+      if (!input || state.route!=='search') return;
+      const term=String(q||'').trim();
+      const el=panel(); if(!el)return;
+      const my=++seq;
+      if(!term){
+        const r=state.user ? await sb.from('search_history').select('id,search_text,created_at').eq('user_id',state.user.id).order('created_at',{ascending:false}).limit(6) : {data:[]};
+        if(my!==seq || state.route!=='search')return;
+        const rows=(r.data||[]).filter(x=>x.search_text).map(x=>`<button type="button" class="tafa-v49-suggestion" data-v49-query="${escSafe(x.search_text)}"><span class="v49-suggest-icon">◷</span><span>${escSafe(x.search_text)}</span><small>Récent</small></button>`).join('');
+        el.innerHTML=rows?`<div class="tafa-v49-suggest-head"><b>Recherches récentes</b><span>Vos dernières recherches</span></div>${rows}`:'';
+        return;
+      }
+      if(term.length<2){ close(); return; }
+      el.innerHTML='<div class="tafa-v49-suggest-loading"><span></span><span></span><span></span> Recherche…</div>';
+      const safe=term.replace(/[%_]/g,'');
+      const [peopleR,pagesR,groupsR]=await Promise.all([
+        sb.from('profiles').select('id,first_name,last_name,username,avatar_url').or(`first_name.ilike.%${safe}%,last_name.ilike.%${safe}%,username.ilike.%${safe}%`).limit(5),
+        sb.from('pages').select('id,name,category').or(`name.ilike.%${safe}%,category.ilike.%${safe}%`).limit(3),
+        sb.from('groups').select('id,name,privacy').or(`name.ilike.%${safe}%,description.ilike.%${safe}%`).limit(3)
+      ]);
+      if(my!==seq || state.route!=='search')return;
+      const people=filterBlocked(peopleR.data||[],'id');
+      const phtml=people.map(x=>`<button type="button" class="tafa-v49-suggestion" data-v49-profile="${escSafe(x.id)}">${avatarHTML(x)}<span class="v49-suggest-copy"><b>${displayNameHTML(x)}</b><small>@${escSafe(x.username||'')}</small></span><small>Compte</small></button>`).join('');
+      const pagehtml=(pagesR.data||[]).map(x=>`<button type="button" class="tafa-v49-suggestion" data-v49-page="${escSafe(x.id)}"><span class="v49-suggest-icon">▣</span><span class="v49-suggest-copy"><b>${escSafe(x.name)}</b><small>${escSafe(x.category||'Page')}</small></span><small>Page</small></button>`).join('');
+      const grouphtml=(groupsR.data||[]).map(x=>`<button type="button" class="tafa-v49-suggestion" data-v49-group="${escSafe(x.id)}"><span class="v49-suggest-icon">◎</span><span class="v49-suggest-copy"><b>${escSafe(x.name)}</b><small>${escSafe(x.privacy||'public')}</small></span><small>Groupe</small></button>`).join('');
+      const any=phtml||pagehtml||grouphtml;
+      el.innerHTML=any?`<div class="tafa-v49-suggest-head"><b>Suggestions</b><span>Résultats rapides</span></div>${phtml}${pagehtml}${grouphtml}<button type="button" class="tafa-v49-search-all" data-v49-search-all="${escSafe(term)}">Voir tous les résultats pour « ${escSafe(term)} »</button>`:`<div class="tafa-v49-suggest-empty">Aucune suggestion · appuyez sur Entrée pour rechercher.</div>`;
+    }
+    function bind(){
+      if(window.__tafaV49SearchBound)return;
+      window.__tafaV49SearchBound=true;
+      document.addEventListener('input',e=>{
+        if(e.target?.id!=='searchInput')return;
+        clearTimeout(timer); timer=setTimeout(()=>show(e.target.value),90);
+      });
+      document.addEventListener('keydown',e=>{
+        if(e.target?.id==='searchInput' && e.key==='Escape')close();
+      });
+      document.addEventListener('click',e=>{
+        const b=e.target.closest?.('[data-v49-query],[data-v49-profile],[data-v49-page],[data-v49-group],[data-v49-search-all]');
+        if(!b)return;
+        e.preventDefault(); e.stopPropagation();
+        if(b.dataset.v49Query){ const input=document.getElementById('searchInput'); if(input){input.value=b.dataset.v49Query; searchPage(b.dataset.v49Query,searchCategory);} return close(); }
+        if(b.dataset.v49Profile){ close(); return openUserProfile(b.dataset.v49Profile); }
+        if(b.dataset.v49Page){ close(); return openPageDetail(b.dataset.v49Page); }
+        if(b.dataset.v49Group){ close(); return openGroupDetail(b.dataset.v49Group); }
+        if(b.dataset.v49SearchAll){ close(); return searchPage(b.dataset.v49SearchAll,searchCategory); }
+      },true);
+    }
+    return {bind,show};
+  })();
+  tafaV49Search.bind();
+  const oldNavigate = navigate;
+  if(!window.__tafaV49NavigateWrapped && typeof oldNavigate==='function'){
+    window.__tafaV49NavigateWrapped=true;
+    // Search suggestions are refreshed whenever the search route becomes visible.
+    const nav0=oldNavigate;
+    navigate=function(...args){ const r=nav0.apply(this,args); setTimeout(()=>{if(state.route==='search')tafaV49Search.show(document.getElementById('searchInput')?.value||'');},0); return r; };
+  }
+
 })();
