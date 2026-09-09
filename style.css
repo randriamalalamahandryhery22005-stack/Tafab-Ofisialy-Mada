@@ -5323,3 +5323,100 @@ html,body{overflow-x:hidden;}
 /* Pages that used their own large end padding are also tightened. */
 .admin-total-page{padding-bottom:24px!important;}
 .profile-page-premium,.clean-page-shell,.clean-page{padding-bottom:12px!important;}
+
+
+/* ============================================================
+   TAFAß V55 — PREMIUM PROFILE MEDIA / MESSENGER FRAME / SEARCH PRO
+   ============================================================ */
+.tafa-v55-media-actions{
+  display:flex;align-items:center;justify-content:flex-end;gap:7px;margin-top:10px;flex-wrap:wrap
+}
+.tafa-v55-media-delete{
+  border:1px solid rgba(255,96,112,.24)!important;background:rgba(255,70,92,.08)!important;
+  color:#ff9aa7!important;border-radius:10px!important;padding:7px 10px!important;font-size:9px!important;font-weight:900!important;
+  cursor:pointer!important
+}
+.tafa-v55-media-delete:disabled{opacity:.38!important;cursor:not-allowed!important}
+.tafa-v55-danger-modal{text-align:center!important;width:min(430px,calc(100vw - 24px))!important}
+.tafa-v55-danger-icon{width:54px;height:54px;margin:2px auto 12px;border-radius:17px;display:grid;place-items:center;background:rgba(255,70,92,.10);border:1px solid rgba(255,96,112,.22);color:#ff7d8b;font-size:24px}
+.tafa-v55-danger-modal p{color:var(--muted);font-size:12px;line-height:1.55;margin:0 0 16px}
+
+/* A conversation is an app-like viewport: only the message history scrolls. */
+body.tafa-conversation-active .main-layout{
+  padding-top:0!important;padding-bottom:0!important;min-height:0!important;height:calc(100dvh - 72px)!important
+}
+body.tafa-conversation-active .content{
+  padding-bottom:0!important;min-height:0!important;height:100%!important;overflow:hidden!important
+}
+.conversation-page-clean{
+  height:100%!important;max-height:100%!important;min-height:0!important;display:flex!important;flex-direction:column!important;
+  overflow:hidden!important;margin:0 auto!important
+}
+.conversation-page-clean .conversation-clean-topbar{
+  position:relative!important;top:auto!important;flex:0 0 auto!important
+}
+.conversation-page-clean .conversation-search-bar,
+.conversation-page-clean .typing-indicator{flex:0 0 auto!important}
+.conversation-page-clean .clean-message-list{
+  flex:1 1 auto!important;min-height:0!important;height:auto!important;max-height:none!important;
+  overflow-x:hidden!important;overflow-y:auto!important;overscroll-behavior:contain!important;
+  -webkit-overflow-scrolling:touch!important;scrollbar-gutter:stable!important
+}
+.conversation-page-clean .clean-message-form{
+  position:relative!important;bottom:auto!important;flex:0 0 auto!important;z-index:20!important;
+  padding-bottom:max(8px,env(safe-area-inset-bottom))!important
+}
+/* Reactions live in normal flow while open: they can never cover another message. */
+.conversation-page-clean .message-inline-reactions{
+  position:relative!important;right:auto!important;bottom:auto!important;z-index:3!important;
+  display:flex!important;align-items:center!important;align-self:flex-end!important;gap:4px!important;
+  min-height:25px!important;margin-top:2px!important
+}
+.conversation-page-clean .message:not(.mine) .message-inline-reactions{align-self:flex-start!important}
+.conversation-page-clean .message-react-trigger{position:relative!important;right:auto!important;bottom:auto!important;flex:0 0 25px!important}
+.conversation-page-clean .message-reaction-picker{
+  position:static!important;right:auto!important;bottom:auto!important;flex:0 0 auto!important;
+  max-width:min(92vw,290px)!important;overflow-x:auto!important;box-sizing:border-box!important;
+  animation:messageReactionFlow .14s ease-out!important
+}
+@keyframes messageReactionFlow{from{opacity:0;transform:translateY(-2px) scale(.98)}to{opacity:1;transform:none}}
+.conversation-page-clean .message-reaction-picker button{flex:0 0 30px!important}
+
+/* SEARCH PRO */
+.tafa-v55-search-pro,.tafa-v55-recent-searches{
+  margin:10px 0 12px;padding:13px;border:1px solid rgba(91,145,255,.16);border-radius:18px;
+  background:linear-gradient(145deg,rgba(16,27,47,.96),rgba(8,15,28,.96));box-shadow:0 12px 34px rgba(0,0,0,.14)
+}
+.tafa-v55-search-pro-head,.tafa-v55-recent-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.tafa-v55-search-pro-head b,.tafa-v55-recent-head b{display:block;font-size:14px;margin-top:2px}
+.tafa-v55-search-pro-head small{display:block;color:var(--muted);font-size:10px;line-height:1.45;margin-top:3px}
+.tafa-v55-search-pro-head strong{color:#8bb8ff}
+.tafa-v55-search-status{font-size:8px;font-weight:900;letter-spacing:.6px;color:#69e0a3;white-space:nowrap;padding:6px 8px;border-radius:999px;background:rgba(54,210,135,.08);border:1px solid rgba(54,210,135,.16)}
+.tafa-v55-search-shortcuts{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;margin-top:11px}
+.tafa-v55-search-shortcuts button{min-height:34px;border-radius:10px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.035);color:#b9c7da;font-size:9px;font-weight:850;cursor:pointer}
+.tafa-v55-search-shortcuts button:hover,.tafa-v55-search-shortcuts button:focus-visible{border-color:rgba(91,145,255,.35);color:#fff;background:rgba(91,145,255,.10);outline:none}
+.tafa-v55-recent-head button{border:0;background:transparent;color:#ff9aa7;font-size:9px;font-weight:850;cursor:pointer}
+.tafa-v55-recent-list{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
+.tafa-v55-recent-list button{display:inline-flex;align-items:center;gap:6px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.035);color:#d8e2ef;border-radius:999px;padding:7px 10px;font-size:9px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+.tafa-v55-recent-list button span{color:#76a9ff}
+
+/* LIMITS: timing and explanation share one premium two-column composition. */
+.tafa-v55-limit-layout{display:grid;grid-template-columns:minmax(250px,.92fr) minmax(280px,1.08fr);gap:12px;align-items:stretch;margin-bottom:12px}
+.tafa-v55-limit-layout .time-limit-settings-hero,.tafa-v55-limit-info{
+  min-width:0;box-sizing:border-box;border:1px solid rgba(91,145,255,.15);border-radius:18px;
+  background:linear-gradient(145deg,rgba(17,29,51,.96),rgba(8,15,28,.96));box-shadow:0 12px 30px rgba(0,0,0,.12)
+}
+.tafa-v55-limit-layout .time-limit-settings-hero{margin:0!important}
+.tafa-v55-limit-layout .time-limit-policy-grid{grid-column:1/-1;display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0!important}
+.tafa-v55-limit-info{padding:10px;display:grid;gap:7px}
+.tafa-v55-limit-info>div{padding:9px 10px;border:1px solid rgba(255,255,255,.055);border-radius:12px;background:rgba(255,255,255,.025)}
+.tafa-v55-limit-info b{display:block;font-size:10px}.tafa-v55-limit-info small{display:block;color:var(--muted);font-size:9px;line-height:1.45;margin-top:3px}
+@media(max-width:700px){
+  body.tafa-conversation-active .main-layout{height:calc(100dvh - 132px)!important}
+  .tafa-v55-search-shortcuts{grid-template-columns:repeat(2,minmax(0,1fr))}.tafa-v55-search-shortcuts button:last-child{grid-column:1/-1}
+  .tafa-v55-limit-layout{grid-template-columns:1fr}.tafa-v55-limit-layout .time-limit-policy-grid{grid-column:auto;grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media(max-width:420px){
+  .tafa-v55-limit-layout .time-limit-policy-grid{grid-template-columns:1fr}.tafa-v55-limit-layout .time-limit-policy-grid>div{min-height:52px}
+  .tafa-v55-search-pro,.tafa-v55-recent-searches{padding:11px}.tafa-v55-search-status{font-size:7px}
+}

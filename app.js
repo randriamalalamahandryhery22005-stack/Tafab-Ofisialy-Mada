@@ -1619,6 +1619,7 @@ function publisherBackgrounds(){
   }
 
   async function messagesPage() {
+    document.body.classList.remove("tafa-conversation-active");
     if(state.conversationChannel){ try{ await sb.removeChannel(state.conversationChannel); }catch(_){} state.conversationChannel=null; }
     state.selectedConversation=null;
     if(pageModeActive()) return pageMessagesHub();
@@ -1705,6 +1706,7 @@ function publisherBackgrounds(){
     closeModal(); await openConversation(conv.id);
   }
   async function openConversation(id) {
+    document.body.classList.add("tafa-conversation-active");
     const token = state.renderToken;
     state.selectedConversation = id;
     if (state.route !== "messages") {
@@ -6054,6 +6056,9 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if (action === "profile-tab") return profilePage(actionEl.dataset.tab);
     if (action === "public-profile-tab") return openUserProfileTab(id, actionEl.dataset.tab);
     if (action === "edit-profile") return editProfile();
+    if (action === "remove-profile-avatar") return removeProfileMedia("avatar");
+    if (action === "remove-profile-cover") return removeProfileMedia("cover");
+    if (action === "confirm-remove-profile-media") return performRemoveProfileMedia(actionEl.dataset.kind || "avatar");
     if (action === "account-settings") return accountSettings();
     if (action === "save-account-settings") return saveAccountSettings();
     if (action === "complete-onboarding") return completeOnboarding();
@@ -6895,6 +6900,137 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
         mobile?.insertAdjacentElement('afterend',dash) || root.prepend(dash);
       }catch(e){console.warn('Tafaß V52 paramètres:',e);}
     };
+
+  /* ============================================================
+     TAFAß V55 — PROFIL MEDIA • MESSAGERIE • RECHERCHE EXPERT
+     Frontend-only patch. Supabase schema is unchanged.
+     ============================================================ */
+  (function tafoV55CompleteUX(){
+    // PROFILE — allow the owner to remove PDP/PDC completely.
+    async function performRemoveProfileMedia(kind){
+      const key = kind === "cover" ? "cover_url" : "avatar_url";
+      const label = kind === "cover" ? "photo de couverture" : "photo de profil";
+      if(!state.user?.id) return toast("Vous devez être connecté.");
+      try{
+        const current = state.profile?.[key] || "";
+        // Best-effort Storage cleanup. The database value is the source of truth.
+        if(current){
+          try{
+            const url=String(current);
+            const markers=["/storage/v1/object/public/posts/","/storage/v1/object/sign/posts/"];
+            let path=null;
+            for(const marker of markers){
+              if(url.includes(marker)){ path=decodeURIComponent(url.split(marker)[1].split("?")[0]); break; }
+            }
+            if(path) await sb.storage.from("posts").remove([path]);
+          }catch(_){ /* DB cleanup still proceeds. */ }
+        }
+        const r=await sb.from("profiles").update({[key]:null}).eq("id",state.user.id);
+        if(r.error) throw new Error(r.error.message);
+        if(state.profile) state.profile[key]=null;
+        closeModal();
+        await loadProfile();
+        if(state.route==="profile") await profilePage(state.profileTab);
+        toast(`${label.charAt(0).toUpperCase()+label.slice(1)} supprimée.`);
+      }catch(e){ toast(e?.message || `Impossible de supprimer la ${label}.`); }
+    }
+    window.__tafaV55RemoveProfileMedia=performRemoveProfileMedia;
+    function removeProfileMedia(kind){
+      const key=kind==="cover"?"cover_url":"avatar_url";
+      const label=kind==="cover"?"photo de couverture":"photo de profil";
+      if(!state.profile?.[key]) return toast(`Aucune ${label} à supprimer.`);
+      openModal(`<div class="modal-box tafa-v55-danger-modal">
+        <button class="modal-close" data-action="close-modal">×</button>
+        <div class="tafa-v55-danger-icon">⌫</div>
+        <span class="eyebrow">TAFAß · PROFIL</span>
+        <h3>Supprimer la ${label} ?</h3>
+        <p>La ${label} sera retirée de votre profil. Vous pourrez en ajouter une nouvelle à tout moment.</p>
+        <div class="message-action-footer">
+          <button class="ghost-action" data-action="close-modal">Annuler</button>
+          <button class="primary danger-confirm" data-action="confirm-remove-profile-media" data-kind="${esc(kind)}">Supprimer</button>
+        </div>
+      </div>`);
+    };
+
+    const originalEditProfileV55=editProfile;
+    editProfile=function(){
+      originalEditProfileV55();
+      const root=document.querySelector('.profile-redesign-v5');
+      if(!root || root.querySelector('.tafa-v55-media-actions')) return;
+      const p=state.profile||{};
+      const meta=root.querySelector('.profile-visual-meta-v5');
+      if(!meta) return;
+      const actions=document.createElement('div');
+      actions.className='tafa-v55-media-actions';
+      actions.innerHTML=`<button type="button" class="tafa-v55-media-delete" data-action="remove-profile-avatar" ${p.avatar_url?'':'disabled'}>⌫ PDP</button><button type="button" class="tafa-v55-media-delete" data-action="remove-profile-cover" ${p.cover_url?'':'disabled'}>⌫ PDC</button>`;
+      meta.insertAdjacentElement('afterend',actions);
+    };
+
+    // SEARCH — professional explorer: quick syntax, history and explicit filters.
+    const originalSearchPageV55=searchPage;
+    searchPage=async function(q='',category=searchCategory){
+      const raw=String(q||'');
+      let normalized=raw.trim();
+      // Expert shortcuts: @username searches the account, #tag searches content.
+      const expertType=normalized.startsWith('@')?'account':normalized.startsWith('#')?'hashtag':'general';
+      if(expertType==='account') normalized=normalized.slice(1).trim();
+      else if(expertType==='hashtag') normalized=normalized.slice(1).trim();
+      await originalSearchPageV55(normalized,category);
+      if(state.route!=='search')return;
+      try{
+        const root=document.querySelector('.search-page-premium'); if(!root)return;
+        const input=root.querySelector('#searchInput');
+        if(input){
+          input.placeholder='Nom, @username, #hashtag, publication, Page ou groupe…';
+          input.setAttribute('aria-label','Recherche experte Tafaß');
+        }
+        if(!root.querySelector('.tafa-v55-search-pro')){
+          const pro=document.createElement('section'); pro.className='tafa-v55-search-pro';
+          pro.innerHTML=`<div class="tafa-v55-search-pro-head"><div><span class="eyebrow">TAFAß · SEARCH PRO</span><b>Recherche experte</b><small>Utilisez <strong>@nom</strong> pour un compte ou <strong>#mot</strong> pour explorer un sujet.</small></div><span class="tafa-v55-search-status">● PRÊT</span></div>
+            <div class="tafa-v55-search-shortcuts"><button data-v55-search-cat="accounts">♙ Comptes</button><button data-v55-search-cat="posts">▤ Publications</button><button data-v55-search-cat="pages">▣ Pages</button><button data-v55-search-cat="groups">◎ Groupes</button><button data-v55-search-clear>Effacer</button></div>`;
+          root.querySelector('.clean-search')?.insertAdjacentElement('afterend',pro);
+          pro.addEventListener('click',e=>{
+            const cat=e.target.closest('[data-v55-search-cat]');
+            if(cat){searchCategory=cat.dataset.v55SearchCat;return searchPage(input?.value||'',searchCategory);}
+            if(e.target.closest('[data-v55-search-clear]')){if(input)input.value='';searchCategory='accounts';return searchPage('',searchCategory);}
+          });
+        }
+        // Personal recent searches — compact, removable, no extra schema.
+        if(!root.querySelector('.tafa-v55-recent-searches') && !normalized){
+          const rr=await sb.from('search_history').select('id,search_text,created_at').eq('user_id',state.user.id).order('created_at',{ascending:false}).limit(8);
+          const rows=rr.data||[];
+          if(rows.length){
+            const recent=document.createElement('section'); recent.className='tafa-v55-recent-searches';
+            recent.innerHTML=`<div class="tafa-v55-recent-head"><div><span class="eyebrow">VOS RECHERCHES</span><b>Récents</b></div><button type="button" data-v55-history-clear>Effacer</button></div><div class="tafa-v55-recent-list">${rows.map(r=>`<button type="button" data-v55-recent="${esc(r.search_text||'')}"><span>⌕</span>${esc(r.search_text||'')}</button>`).join('')}</div>`;
+            root.querySelector('.tafa-v55-search-pro')?.insertAdjacentElement('afterend',recent);
+            recent.addEventListener('click',async e=>{
+              const item=e.target.closest('[data-v55-recent]');
+              if(item&&input){input.value=item.dataset.v55Recent||'';return searchPage(input.value,searchCategory);}
+              if(e.target.closest('[data-v55-history-clear]')){
+                const del=await sb.from('search_history').delete().eq('user_id',state.user.id);
+                if(del.error)return toast(del.error.message);
+                recent.remove();toast('Historique de recherche effacé.');
+              }
+            });
+          }
+        }
+        if(input && !input.dataset.v55expert){
+          input.dataset.v55expert='1';
+          input.addEventListener('keydown',e=>{if(e.key==='Enter'){const v=input.value.trim(); if(v.startsWith('@')||v.startsWith('#')){e.preventDefault();searchPage(v,searchCategory);}}});
+        }
+        const status=root.querySelector('.tafa-v55-search-status');
+        if(status) status.textContent=expertType==='account'?'● COMPTE':expertType==='hashtag'?'● SUJET':'● PRÊT';
+      }catch(e){console.warn('Tafaß V55 recherche:',e);}
+    };
+
+    // Time limits — keep the timing cards and information visually side-by-side.
+    const originalTimeLimitSettingsHTMLV55=timeLimitSettingsHTML;
+    timeLimitSettingsHTML=function(){
+      const html=originalTimeLimitSettingsHTMLV55();
+      return html.replace('<div class="time-limit-settings-hero">','<div class="tafa-v55-limit-layout"><div class="time-limit-settings-hero">').replace('</div><div class="time-limit-policy-grid">','</div><div class="time-limit-policy-grid">').replace('</div><div class="settings-section-block time-limit-info-list">','</div><div class="tafa-v55-limit-info">').replace('</div><button class="ghost-action big" data-action="time-limit-intro">','</div></div><button class="ghost-action big" data-action="time-limit-intro">');
+    };
+  })();
+
   })();
 
 })();
