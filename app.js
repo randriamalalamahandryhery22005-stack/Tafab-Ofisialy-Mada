@@ -3543,16 +3543,65 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     } catch(e) { toast(e?.message||"Impossible d’enregistrer ce réglage."); }
   }
 
-  function securitySettings() {
-    openModal(`<div class="modal-box settings-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • SÉCURITÉ</span><h3>Sécurité et connexion</h3><p class="muted">Compte connecté : ${esc(state.user?.email || "Compte Tafaß")}</p><div class="form-stack"><label>Nouveau mot de passe<input id="newPassword" type="password" minlength="6" autocomplete="new-password" placeholder="Au moins 6 caractères"></label><label>Confirmer le mot de passe<input id="confirmPassword" type="password" minlength="6" autocomplete="new-password" placeholder="Répétez le mot de passe"></label><button class="primary big" data-action="change-password">Modifier le mot de passe</button><button class="ghost-action big" data-action="new-logout">Se déconnecter</button></div></div>`);
+  async function securitySettings() {
+    const user=state.user;
+    if(!user) return toast("Session introuvable.");
+    let session=null, factors=[], activities=[];
+    try{
+      const sr=await sb.auth.getSession(); session=sr.data?.session||null;
+      const mr=await sb.auth.mfa?.listFactors?.(); factors=mr?.data?.all||[];
+      const ar=await sb.from("activity_history").select("id,action_type,description,created_at").eq("user_id",user.id).order("created_at",{ascending:false}).limit(8);
+      activities=ar.data||[];
+    }catch(e){ console.warn('[TAFAß V48] security load:',e); }
+    const verified=factors.filter(f=>f.status==='verified');
+    const pending=factors.filter(f=>f.status!=='verified');
+    const created=session?.user?.created_at||user.created_at;
+    const lastSignIn=session?.user?.last_sign_in_at||user.last_sign_in_at;
+    const fmt=d=>d?new Date(d).toLocaleString('fr-FR',{dateStyle:'medium',timeStyle:'short'}):'—';
+    openModal(`<div class="modal-box security-center-v48"><button class="modal-close" data-action="close-modal">×</button>
+      <div class="security-hero-v48"><div class="security-shield-v48">🛡️</div><div><span class="eyebrow">TAFAß • SECURITY CENTER</span><h3>Sécurité et connexion</h3><p>Renforcez la protection de votre compte et contrôlez vos sessions.</p></div></div>
+      <div class="security-status-grid-v48"><div><span>Compte</span><b>${esc(user.email||'Compte Tafaß')}</b></div><div><span>2FA</span><b class="${verified.length?'ok':''}">${verified.length?'Activée':'Non activée'}</b></div><div><span>Dernière connexion</span><b>${esc(fmt(lastSignIn))}</b></div><div><span>Compte créé</span><b>${esc(fmt(created))}</b></div></div>
+      <section class="security-card-v48"><div class="security-card-head-v48"><div><b>🔐 Authentification à deux facteurs</b><small>Ajoutez une deuxième étape avec une application d’authentification.</small></div><span class="security-pill-v48 ${verified.length?'on':''}">${verified.length?'PROTÉGÉ':'À CONFIGURER'}</span></div>
+        ${verified.length?`<div class="security-factor-row-v48"><span>✓ Facteur TOTP vérifié</span><button class="danger-outline-v48" data-action="mfa-unenroll" data-factor-id="${esc(verified[0].id)}">Désactiver</button></div>`:`<button class="primary big" data-action="mfa-enroll">Activer la 2FA</button>`}
+        ${pending.length?`<small class="security-note-v48">Une configuration 2FA incomplète existe. Vous pouvez relancer l’activation.</small>`:''}
+      </section>
+      <section class="security-card-v48"><div class="security-card-head-v48"><div><b>💻 Session actuelle</b><small>Cette session est authentifiée par Supabase.</small></div><span class="security-pill-v48 on">ACTIVE</span></div><div class="security-session-v48"><span>Utilisateur</span><b>${esc(user.email||'—')}</b><span>Expiration</span><b>${esc(fmt(session?.expires_at?Number(session.expires_at)*1000:null))}</b></div><button class="ghost-action big" data-action="security-global-logout">Déconnecter toutes les sessions</button></section>
+      <section class="security-card-v48"><div class="security-card-head-v48"><div><b>🔑 Mot de passe</b><small>Utilisez un mot de passe unique et suffisamment long.</small></div></div><div class="form-stack"><label>Nouveau mot de passe<input id="newPassword" type="password" minlength="8" autocomplete="new-password" placeholder="Au moins 8 caractères"></label><label>Confirmer<input id="confirmPassword" type="password" minlength="8" autocomplete="new-password" placeholder="Répétez le mot de passe"></label><button class="primary big" data-action="change-password">Modifier le mot de passe</button></div></section>
+      <section class="security-card-v48"><div class="security-card-head-v48"><div><b>🧾 Activité de sécurité</b><small>Les dernières actions enregistrées sur votre compte.</small></div></div><div class="security-activity-v48">${activities.length?activities.map(a=>`<div><span class="security-activity-dot"></span><div><b>${esc(a.description||a.action_type||'Activité')}</b><small>${esc(fmt(a.created_at))}</small></div></div>`).join(''):`<div class="muted">Aucune activité récente.</div>`}</div></section>
+      <div class="security-footer-v48"><button class="ghost-action" data-action="new-logout">Se déconnecter de cet appareil</button></div>
+    </div>`);
   }
-  async function changePassword() {
-    const password=$("newPassword")?.value || "", confirm=$("confirmPassword")?.value || "";
-    if(password.length < 6) return toast("Le mot de passe doit contenir au moins 6 caractères.");
-    if(password !== confirm) return toast("Les mots de passe ne correspondent pas.");
-    const r=await sb.auth.updateUser({password});
-    if(r.error)return toast(r.error.message);
-    closeModal(); toast("Mot de passe modifié"); await logActivity("password_changed","Mot de passe modifié","security");
+
+  async function enrollMFA(){
+    try{
+      if(!sb.auth.mfa?.enroll) return toast("La 2FA n’est pas disponible dans cette configuration.");
+      const existing=(await sb.auth.mfa.listFactors()).data?.all||[];
+      const unverified=existing.filter(f=>f.status!=='verified');
+      for(const f of unverified){ try{await sb.auth.mfa.unenroll({factorId:f.id});}catch(_){} }
+      const r=await sb.auth.mfa.enroll({factorType:'totp',friendlyName:'Tafaß Authenticator'});
+      if(r.error) throw r.error;
+      const f=r.data;
+      openModal(`<div class="modal-box security-mfa-v48"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • 2FA</span><h3>Configurer l’authentification à deux facteurs</h3><p class="muted">Scannez le QR code avec Google Authenticator, Microsoft Authenticator ou une application TOTP compatible.</p><div class="mfa-qr-v48">${f.totp?.qr_code?`<img src="${esc(f.totp.qr_code)}" alt="QR code 2FA">`:`<div class="mfa-secret-v48">QR indisponible</div>`}</div><div class="mfa-secret-v48"><span>Clé secrète</span><b>${esc(f.totp?.secret||'—')}</b></div><label class="mfa-code-v48">Code à 6 chiffres<input id="mfaVerifyCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="000000"></label><button class="primary big" data-action="mfa-verify" data-factor-id="${esc(f.id)}">Vérifier et activer</button></div>`);
+    }catch(e){ toast(e?.message||"Impossible d’activer la 2FA."); }
+  }
+  async function verifyMFA(factorId){
+    const code=String($("mfaVerifyCode")?.value||'').replace(/\D/g,'');
+    if(code.length!==6)return toast("Entrez le code à 6 chiffres.");
+    try{
+      const c=await sb.auth.mfa.challenge({factorId}); if(c.error)throw c.error;
+      const v=await sb.auth.mfa.verify({factorId,challengeId:c.data.id,code}); if(v.error)throw v.error;
+      closeModal(); toast("2FA activée avec succès."); await logActivity("mfa_enabled","Authentification à deux facteurs activée","security"); return securitySettings();
+    }catch(e){ toast(e?.message||"Code 2FA invalide."); }
+  }
+  async function unenrollMFA(factorId){
+    if(!factorId)return;
+    if(!confirm("Désactiver l’authentification à deux facteurs ?"))return;
+    try{ const r=await sb.auth.mfa.unenroll({factorId}); if(r.error)throw r.error; toast("2FA désactivée."); await logActivity("mfa_disabled","Authentification à deux facteurs désactivée","security"); return securitySettings(); }
+    catch(e){ toast(e?.message||"Impossible de désactiver la 2FA."); }
+  }
+  async function globalSecurityLogout(){
+    try{ const r=await sb.auth.signOut({scope:'global'}); if(r.error)throw r.error; toast("Toutes les sessions ont été déconnectées."); }
+    catch(e){ toast(e?.message||"Impossible de fermer toutes les sessions."); }
   }
 
   function settingInfo(name) {
@@ -5643,6 +5692,10 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if (action === "new-logout") return newLogout();
     if (action === "close-modal") { closeModal(); return; }
     if (action === "change-password") return changePassword();
+    if (action === "mfa-enroll") return enrollMFA();
+    if (action === "mfa-verify") return verifyMFA(actionEl.dataset.factorId);
+    if (action === "mfa-unenroll") return unenrollMFA(actionEl.dataset.factorId);
+    if (action === "security-global-logout") return globalSecurityLogout();
     if (action === "publisher-audience") return openPublisherAudience();
     if (action === "set-publisher-audience") {
       state.composerVisibility = actionEl.dataset.audience || "public";
