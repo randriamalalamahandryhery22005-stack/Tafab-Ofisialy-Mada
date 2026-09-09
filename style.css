@@ -5618,3 +5618,38 @@ body.tafa-conversation-active .content{
 @media(prefers-reduced-motion:reduce){
  .splash-logo-image,.splash-ring,.splash-dots i,.page-loader span,.tafass-transition-card img,.tafass-transition-progress span,.v58-loading:after,.v44-loading-points:after{animation:none!important}
 }
+
+/* =========================================================
+   TAFAß V64 — LOADING RULE
+   ONLY the very top page-loader is a horizontal progress line.
+   Every other loading indicator is circular.
+========================================================= */
+
+/* Topmost navigation/page loading stays a thin premium line. */
+.page-loader{height:3px!important;width:100%!important;display:block!important}
+.page-loader span{display:block!important}
+
+/* Splash: logo + circular loader, never a horizontal loading bar. */
+.splash-dots{position:relative!important;width:28px!important;height:28px!important;margin:16px auto 0!important;border-radius:50%!important;background:rgba(255,255,255,.055)!important;border:2px solid rgba(255,255,255,.10)!important;box-sizing:border-box!important;overflow:visible!important}
+.splash-dots:after{content:""!important;position:absolute!important;inset:-2px!important;border-radius:50%!important;border:3px solid transparent!important;border-top-color:#00e676!important;border-right-color:#ffd166!important;animation:tafaV64Spin .78s linear infinite!important}
+.splash-dots i{display:none!important}
+
+/* App transition: compact circular spinner under the logo. */
+.tafass-transition-progress{width:28px!important;height:28px!important;border-radius:50%!important;overflow:visible!important;background:rgba(255,255,255,.055)!important;border:2px solid rgba(255,255,255,.10)!important;box-shadow:none!important;box-sizing:border-box!important}
+.tafass-transition-progress:after{content:""!important;position:absolute!important;inset:-2px!important;border-radius:50%!important;border:3px solid transparent!important;border-top-color:#00e676!important;border-right-color:#ff9f1a!important;animation:tafaV64Spin .78s linear infinite!important}
+.tafass-transition-progress span{display:none!important}
+
+/* Other inline loading states become circular. */
+.v58-loading:after{content:""!important;display:block!important;width:24px!important;height:24px!important;max-width:none!important;margin:2px auto!important;border-radius:50%!important;background:transparent!important;background-image:none!important;border:3px solid rgba(255,255,255,.10)!important;border-top-color:#00e676!important;border-right-color:#ff9f1a!important;box-shadow:none!important;animation:tafaV64Spin .78s linear infinite!important}
+.v44-loading-points{display:block!important;width:24px!important;height:24px!important;margin:8px auto!important;border-radius:50%!important;overflow:visible!important;background:rgba(255,255,255,.055)!important;border:2px solid rgba(255,255,255,.10)!important;box-sizing:border-box!important}
+.v44-loading-points:after{content:""!important;position:absolute!important;left:-2px!important;top:-2px!important;width:24px!important;height:24px!important;border-radius:50%!important;background:transparent!important;border:3px solid transparent!important;border-top-color:#00e676!important;border-right-color:#ffd166!important;animation:tafaV64Spin .78s linear infinite!important}
+.v44-loading-points i{display:none!important}
+
+/* Generic loading helpers already present in the app. */
+.loading-spinner,.loader-spinner,.spinner,.tafa-spinner,.tafa-loader-spinner{animation:tafaV64Spin .78s linear infinite!important}
+
+@keyframes tafaV64Spin{to{transform:rotate(360deg)}}
+
+@media(prefers-reduced-motion:reduce){
+ .splash-dots:after,.tafass-transition-progress:after,.v58-loading:after,.v44-loading-points:after,.loading-spinner,.loader-spinner,.spinner,.tafa-spinner,.tafa-loader-spinner{animation:none!important}
+}
