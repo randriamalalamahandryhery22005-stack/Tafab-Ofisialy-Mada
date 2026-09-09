@@ -5300,3 +5300,26 @@ body.light .tafa-v50-search{background:rgba(0,0,0,.025);border-color:rgba(0,0,0,
 
 
 /* TAFAß V53.1 — SINGLE VERSION CLEANUP: keep the latest build shell authoritative. */
+
+/* ============================================================
+   TAFAß V54 — TIGHT PAGE END / NO EMPTY SCROLL TAIL
+   The previous shell reserved too much bottom space (112–118px)
+   even when the page had already reached its real last element.
+   Keep only the space genuinely needed for the fixed mobile nav.
+   ============================================================ */
+html,body{overflow-x:hidden;}
+.main-layout{padding-bottom:24px!important;}
+.content{padding-bottom:24px!important;min-height:0!important;}
+
+@media(max-width:820px){
+  .main-layout{padding-bottom:calc(72px + env(safe-area-inset-bottom))!important;}
+  .content{padding-bottom:8px!important;min-height:0!important;}
+}
+@media(max-width:390px){
+  .main-layout{padding-bottom:calc(68px + env(safe-area-inset-bottom))!important;}
+  .content{padding-bottom:6px!important;}
+}
+
+/* Pages that used their own large end padding are also tightened. */
+.admin-total-page{padding-bottom:24px!important;}
+.profile-page-premium,.clean-page-shell,.clean-page{padding-bottom:12px!important;}
