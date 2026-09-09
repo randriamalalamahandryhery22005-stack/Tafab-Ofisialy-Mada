@@ -37,7 +37,7 @@ document.documentElement.classList.add("app-boot");
     channel: null, theme: "dark", entering: false, loggingOut: false, composerOpen: false, composerBackground: "plain", composerLocation: "",
     composerDraftText: "", composerFile: null, composerVisibility: "public", composerMeta: {},
     liveFeedChannel: null, conversationChannel: null, presenceChannel: null, activeLive: null, adminDashboardChannel:null, adminDashboardTimer:null, adminDashboardRefreshing:false, adminDashboardRefreshTimer:null,
-    profileTab: "posts", reactionSettingsCache:new Map(), locationWatchId:null, friendsTab: "suggestions", pagesTab: "mine", groupsTab: "mine", groupSort: "recent", selectedConversation: null, viewingProfileId: null, renderToken: 0, activePage: null, entityBackRoute: null
+    profileTab: "posts", reactionSettingsCache:new Map(), locationWatchId:null, timeLimitRuntime:null, timeLimitTimer:null, timeLimitOverlay:null, friendsTab: "suggestions", pagesTab: "mine", groupsTab: "mine", groupSort: "recent", selectedConversation: null, viewingProfileId: null, renderToken: 0, activePage: null, entityBackRoute: null
   };
 
   // Production network/realtime guard: keeps the UI honest when connectivity changes.
@@ -3224,15 +3224,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       }
 
       if (action === "time-management") {
-        const x=await getSettingsTable("time_management_settings");
-        settingsDetail("Gestion du temps","TAFAß • VOTRE TEMPS","Contrôlez le temps passé sur Tafaß avec des limites et des rappels.",
-          `<div class="time-summary-card"><b>${x.daily_limit_minutes>0 ? x.daily_limit_minutes+" min / jour" : "Aucune limite quotidienne"}</b><small>Votre limite est appliquée sur cet appareil lorsque le suivi est disponible.</small></div>
-           <div class="settings-section-block">
-             ${settingChoice("timeLimit","Limite quotidienne","0 désactive la limite.",String(x.daily_limit_minutes||0),[["0","Désactivée"],["15","15 minutes"],["30","30 minutes"],["60","1 heure"],["90","1 h 30"],["120","2 heures"]])}
-             ${settingSwitch("timeReminders","Rappels de temps","Recevoir un rappel lorsque vous approchez de votre limite.",x.reminders_enabled)}
-             ${settingChoice("quietStart","Début du mode silencieux","Heure de début des rappels silencieux.",String(x.quiet_start||"22:00"),[["20:00","20:00"],["21:00","21:00"],["22:00","22:00"],["23:00","23:00"]])}
-             ${settingChoice("quietEnd","Fin du mode silencieux","Heure de fin des rappels silencieux.",String(x.quiet_end||"06:00"),[["05:00","05:00"],["06:00","06:00"],["07:00","07:00"],["08:00","08:00"]])}
-           </div><button class="primary big settings-save" data-action="save-time-settings">Enregistrer</button>`);
+        settingsDetail("Gestion du temps","TAFAß • VOTRE TEMPS","Les limites Tafaß sont affichées clairement avant et pendant l’utilisation.",timeLimitSettingsHTML());
         return;
       }
 
@@ -3478,6 +3470,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       if(action==="save-publication-settings") return saveSettingsTable("publication_settings",{future_audience:$('futureAudience')?.value||"public",limit_old_posts:!!$('limitOldPosts')?.checked,comment_summaries:!!$('commentSummaries')?.checked,share_posts_to_story:!!$('sharePostsStory')?.checked},"Réglages des publications enregistrés");
       if(action==="save-public-content-settings") return saveSettingsTable("public_content_settings",{followers_visibility:$('followersVisibility')?.value||"public",following_visibility:$('followingVisibility')?.value||"private",public_comments:$('publicComments')?.value||"public",public_post_notifications:!!$('publicNotifications')?.checked,public_profile_info:!!$('publicProfileInfo')?.checked,relevant_comments_first:!!$('relevantComments')?.checked,off_facebook_preview:!!$('offFacebookPreview')?.checked,blocklist_filter:!!$('blocklistFilter')?.checked},"Réglages du contenu public enregistrés");
       if(action==="save-media-settings") return saveSettingsTable("media_settings",{data_saver:!!$('mediaSaver')?.checked,autoplay_videos:!!$('mediaAutoplay')?.checked,upload_quality:$('mediaQuality')?.value||"standard"},"Préférences multimédia enregistrées");
+      if(action==="time-limit-intro"){ const mins=(state.timeLimitRuntime?.activeSeconds||0)/60; return showTimeLimitOverlay('warning',mins); }
       if(action==="save-time-settings") return saveSettingsTable("time_management_settings",{daily_limit_minutes:Number($('timeLimit')?.value||0),reminders_enabled:!!$('timeReminders')?.checked,quiet_start:$('quietStart')?.value||"22:00",quiet_end:$('quietEnd')?.value||"06:00"},"Gestion du temps enregistrée");
       if(action==="save-reaction-settings") return saveSettingsTable("reaction_settings",{show_reaction_counts:!$('reactionCounts')?.checked,personalized_reactions:!!$('reactionPersonalized')?.checked},"Préférences des réactions enregistrées");
       if(action==="save-audience-setting") return saveSettingsTable("audience_settings",{[$('audienceValue')?.closest('label')?.querySelector('select')?.id?($('audienceValue')?.id):"default_post_audience"]:$('audienceValue')?.value||"public"},"Audience enregistrée").then(()=>{});
@@ -4030,7 +4023,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if(!state.adminDashboardChannel && navigator.onLine){
       const ch=sb.channel('tafass-admin-dashboard-live')
         .on('postgres_changes',{event:'*',schema:'public',table:'profiles'},()=>adminDashboardRefreshSoon())
-        .on('postgres_changes',{event:'*',schema:'public',table:'tafa_account_appeals'},()=>adminDashboardRefreshSoon()).on('postgres_changes',{event:'*',schema:'public',table:'badge_requests'},()=>adminDashboardRefreshSoon())
+        .on('postgres_changes',{event:'*',schema:'public',table:'tafa_account_appeals'},()=>adminDashboardRefreshSoon()).on('postgres_changes',{event:'*',schema:'public',table:'tafa_verification_requests'},()=>adminDashboardRefreshSoon())
         .on('postgres_changes',{event:'*',schema:'public',table:'tafab_ad_payments'},()=>adminDashboardRefreshSoon())
         .on('postgres_changes',{event:'*',schema:'public',table:'tafab_ad_campaigns'},()=>adminDashboardRefreshSoon())
         .on('postgres_changes',{event:'*',schema:'public',table:'tafab_withdrawal_requests'},()=>adminDashboardRefreshSoon())
@@ -4133,7 +4126,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   async function loadVerificationRequests(){
     if(!state.user) return [];
     try{
-      const {data,error}=await sb.from('badge_requests').select('*').eq('user_id',state.user.id).order('created_at',{ascending:false}).limit(20);
+      const {data,error}=await sb.from('tafa_verification_requests').select('*').eq('user_id',state.user.id).order('created_at',{ascending:false}).limit(20);
       if(error) throw error;
       state.verificationRequests=(data||[]).map(r=>({...r,identity_name:r.identity_name||r.reason||'',category:r.category||r.badge_type||'Autre',proof_path:r.proof_path||r.document_url||'',payment_method:r.payment_method||'',payment_reference:r.payment_reference||''}));
       return state.verificationRequests;
@@ -4182,15 +4175,15 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   }
   async function submitVerificationRequest(data,proofFile){
     if(!state.user) throw new Error('Connexion requise.');
-    const {data:pending,error:checkError}=await sb.from('badge_requests').select('id,status').eq('user_id',state.user.id).eq('status','pending').limit(1).maybeSingle();
+    const {data:pending,error:checkError}=await sb.from('tafa_verification_requests').select('id,status').eq('user_id',state.user.id).eq('status','pending').limit(1).maybeSingle();
     if(checkError) throw checkError;
     if(pending) throw new Error('Une demande de vérification est déjà en attente.');
     let proofPath='';
     if(proofFile){const ext=(proofFile.name.split('.').pop()||'bin').toLowerCase().replace(/[^a-z0-9]/g,'')||'bin';proofPath=`${state.user.id}/${crypto.randomUUID()}.${ext}`;const up=await sb.storage.from('badge-proofs').upload(proofPath,proofFile,{upsert:false,contentType:proofFile.type||undefined});if(up.error)throw new Error('Justificatif : '+up.error.message);}
     const ins=await sb.rpc('tafa_create_badge_request',{
       p_category:String(data.category||'Autre'),
-      p_identity:String(data.identity||''),
-      p_document_path:proofPath||'',
+      p_identity_name:String(data.identity||''),
+      p_proof_path:proofPath||'',
       p_payment_method:String(data.method||''),
       p_payment_reference:String(data.ref||'')
     });
@@ -4266,7 +4259,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if(!id)return;
     return openBoostAdminConfirm('campaign',id,status);
   }
-  async function adminSetVerificationStatus(id,status){ if(!['approved','rejected'].includes(String(status)))return toast('Statut de vérification invalide.'); if(!(await premiumConfirm(status==='approved'?'Approuver la vérification':'Refuser la vérification',status==='approved'?'Le badge bleu sera activé après validation administrative.':'La demande sera refusée.',status==='approved'?'Approuver':'Refuser',status!=='approved')))return; const r=await sb.rpc('tafa_admin_review_badge',{p_request_id:id,p_status:status}); if(r.error)return toast(r.error.message); await loadVerificationRequests(); toast(status==='approved'?'Badge bleu activé.':'Demande refusée.'); if(state.route==='verification') await verificationPage(); return adminTotalPage(); }
+  async function adminSetVerificationStatus(id,status){ if(!['approved','rejected'].includes(String(status)))return toast('Statut de vérification invalide.'); if(!(await premiumConfirm(status==='approved'?'Approuver la vérification':'Refuser la vérification',status==='approved'?'Le badge bleu sera activé après validation administrative.':'La demande sera refusée.',status==='approved'?'Approuver':'Refuser',status!=='approved')))return; const r=await sb.rpc('tafa_admin_set_verification_status',{p_id:id,p_status:status}); if(r.error)return toast(r.error.message); await loadVerificationRequests(); toast(status==='approved'?'Badge bleu activé.':'Demande refusée.'); if(state.route==='verification') await verificationPage(); return adminTotalPage(); }
   async function openRestrictionAppeal(){
     const r=await sb.from('tafa_account_appeals').select('status,created_at').eq('user_id',state.user.id).order('created_at',{ascending:false}).limit(3);
     const history=r.data||[];
@@ -4418,6 +4411,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
 
   async function newLogout(){
     if(state.loggingOut)return;
+    stopTimeLimitGuard();
     state.loggingOut=true;
     try{
       document.body.classList.add("app-logging-out");
@@ -4486,7 +4480,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
         if (state.route==="search") searchPage($("searchInput")?.value||"");
         if (state.viewingProfileId && state.route==="profile") openUserProfile(state.viewingProfileId);
       },
-      badge_requests: async payload => {
+      tafa_verification_requests: async payload => {
         const rec=payload?.new||payload?.record||payload;
         if(!rec?.user_id || String(rec.user_id)!==String(state.user.id)) return;
         await loadVerificationRequests();
@@ -4716,6 +4710,101 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     } catch(e){ setLoading(btn,false,'Déverrouiller Tafaß'); toast(e?.message||'Impossible de valider le compte.'); }
   }
 
+  // ============================================================
+  // TAFAß — TEMPS D'UTILISATION / BIEN-ÊTRE NUMÉRIQUE
+  // Compte le temps réellement passé au premier plan. Les administrateurs
+  // officiels sont exemptés. Le compteur survit à un simple rechargement
+  // de la page pendant la même session, puis est effacé à la déconnexion.
+  // ============================================================
+  const TIME_LIMIT_KEY = "tafass_usage_limit_v40";
+  function accountAgeYears(){
+    const b=state.profile?.birth;
+    if(!b)return null;
+    const d=new Date(String(b).slice(0,10)+"T00:00:00");
+    if(Number.isNaN(d.getTime()))return null;
+    const now=new Date(); let age=now.getFullYear()-d.getFullYear();
+    const md=now.getMonth()-d.getMonth();
+    if(md<0 || (md===0 && now.getDate()<d.getDate())) age--;
+    return age;
+  }
+  function timeLimitPolicy(){
+    const age=accountAgeYears();
+    const minor=age!==null && age<13;
+    return {minor,age,warningMinutes:minor?15:30,logoutMinutes:minor?45:90};
+  }
+  function isOfficialAdmin(){ return isAdminProfile(state.profile)||state.profile?.is_admin===true||state.profile?.admin_badge===true; }
+  function readUsageRuntime(){
+    try{
+      const raw=sessionStorage.getItem(TIME_LIMIT_KEY); if(!raw)return {activeSeconds:0};
+      const x=JSON.parse(raw); return {activeSeconds:Math.max(0,Number(x.activeSeconds)||0)};
+    }catch{return {activeSeconds:0};}
+  }
+  function writeUsageRuntime(){
+    if(!state.timeLimitRuntime)return;
+    try{sessionStorage.setItem(TIME_LIMIT_KEY,JSON.stringify({activeSeconds:Math.floor(state.timeLimitRuntime.activeSeconds||0)}));}catch{}
+  }
+  function removeUsageRuntime(){try{sessionStorage.removeItem(TIME_LIMIT_KEY);}catch{}}
+  function closeTimeLimitOverlay(){
+    const o=state.timeLimitOverlay; if(o)o.remove(); state.timeLimitOverlay=null; document.body.classList.remove('time-limit-locked');
+  }
+  function showTimeLimitOverlay(mode='warning',minutesUsed=0){
+    closeTimeLimitOverlay();
+    const policy=timeLimitPolicy(), limit=policy.logoutMinutes, next=policy.warningMinutes;
+    const used=Math.floor(minutesUsed);
+    const remaining=Math.max(0,limit-used);
+    const final=mode==='final';
+    const title=final?'Temps maximal atteint':'Petit rappel Tafaß';
+    const copy=mode==='intro'
+      ? `Tafaß intègre une gestion du temps pour encourager des pauses régulières. Le suivi compte le temps réellement passé au premier plan : il ne continue pas lorsque l’application est en arrière-plan. À ${policy.warningMinutes} minutes, un premier rappel apparaît. Si vous choisissez de continuer, un second rappel arrive à ${policy.warningMinutes*2} minutes. À ${limit} minutes, la session est automatiquement déconnectée.`
+      : final
+      ? `Votre temps d’utilisation autorisé pour cette session est arrivé à ${limit} minutes. Pour préserver un usage équilibré, Tafaß va fermer cette session et vous déconnecter.`
+      : `Vous utilisez Tafaß depuis ${used} minute${used>1?'s':''}. Prenez une pause et évitez de rester trop longtemps connecté. Le prochain rappel arrivera à ${policy.warningMinutes*2} minutes.`;
+    const o=document.createElement('div'); o.className='time-limit-overlay'; o.innerHTML=`<div class="time-limit-card" role="dialog" aria-modal="true" aria-labelledby="timeLimitTitle">
+      <div class="time-limit-brand"><span class="time-limit-logo">T</span><div><b>Tafaß</b><small>Gestion du temps</small></div><span class="time-limit-status">${final?'FIN DE SESSION':mode==='intro'?'INFORMATION':'RAPPEL'}</span></div>
+      <div class="time-limit-icon">${final?'⏱':'◷'}</div>
+      <span class="eyebrow">TAFAß · BIEN-ÊTRE NUMÉRIQUE</span>
+      <h2 id="timeLimitTitle">${title}</h2>
+      <p>${copy}</p>
+      <div class="time-limit-progress"><span style="width:${Math.min(100,Math.round((used/limit)*100))}%"></span></div>
+      <div class="time-limit-stats"><div><b>${used} min</b><small>Utilisées</small></div><div><b>${limit} min</b><small>Limite</small></div><div><b>${remaining} min</b><small>Restantes</small></div></div>
+      <div class="time-limit-rules"><div><b>${policy.minor?'15 min':'30 min'}</b><span>Premier rappel</span></div><div><b>${policy.minor?'30 min':'60 min'}</b><span>Deuxième rappel</span></div><div><b>${limit} min</b><span>Déconnexion automatique</span></div></div>
+      <div class="time-limit-actions">${final?`<button class="primary big" data-time-limit-logout>Se déconnecter</button>`:mode==='intro'?`<button class="primary big" data-time-limit-continue>J’ai compris, entrer dans Tafaß</button>`:`<button class="ghost-action big" data-time-limit-logout>Se déconnecter maintenant</button><button class="primary big" data-time-limit-continue>Annuler et continuer</button>`}</div>
+      <small class="time-limit-footnote">Vous pouvez quitter Tafaß à tout moment. La déconnexion arrête le compteur de cette session.</small>
+    </div>`;
+    document.body.appendChild(o); state.timeLimitOverlay=o; document.body.classList.add('time-limit-locked');
+    o.querySelector('[data-time-limit-continue]')?.addEventListener('click',()=>closeTimeLimitOverlay());
+    o.querySelector('[data-time-limit-logout]')?.addEventListener('click',()=>{closeTimeLimitOverlay();newLogout();});
+    if(final) setTimeout(()=>{ if(state.timeLimitOverlay===o && state.user){ closeTimeLimitOverlay(); newLogout(); } },1800);
+  }
+  async function startTimeLimitGuard(){
+    if(!state.user || isOfficialAdmin())return;
+    if(state.timeLimitTimer)clearInterval(state.timeLimitTimer);
+    const policy=timeLimitPolicy(), saved=readUsageRuntime();
+    state.timeLimitRuntime={activeSeconds:saved.activeSeconds||0,lastWarning:(saved.activeSeconds||0)>=policy.logoutMinutes*60?3:(saved.activeSeconds||0)>=policy.warningMinutes*120?2:(saved.activeSeconds||0)>=policy.warningMinutes*60?1:0,policy};
+    const usedMin=state.timeLimitRuntime.activeSeconds/60;
+    // Explain the rules before the first usable screen, once per session.
+    if(!sessionStorage.getItem(TIME_LIMIT_KEY+'_intro')){
+      try{sessionStorage.setItem(TIME_LIMIT_KEY+'_intro','1');}catch{}
+      showTimeLimitOverlay('intro',usedMin);
+    }
+    state.timeLimitTimer=setInterval(()=>{
+      if(!state.user || isOfficialAdmin())return;
+      if(document.visibilityState!=='visible')return;
+      state.timeLimitRuntime.activeSeconds+=1;
+      const sec=state.timeLimitRuntime.activeSeconds, mins=sec/60;
+      const first=policy.warningMinutes*60, second=policy.warningMinutes*2*60, end=policy.logoutMinutes*60;
+      if(sec>=end){clearInterval(state.timeLimitTimer);state.timeLimitTimer=null;writeUsageRuntime();showTimeLimitOverlay('final',mins);return;}
+      if(sec>=second && state.timeLimitRuntime.lastWarning<2){state.timeLimitRuntime.lastWarning=2;writeUsageRuntime();showTimeLimitOverlay('warning',mins);return;}
+      if(sec>=first && state.timeLimitRuntime.lastWarning<1){state.timeLimitRuntime.lastWarning=1;writeUsageRuntime();showTimeLimitOverlay('warning',mins);return;}
+      if(sec%15===0)writeUsageRuntime();
+    },1000);
+  }
+  function stopTimeLimitGuard(){if(state.timeLimitTimer){clearInterval(state.timeLimitTimer);state.timeLimitTimer=null;}closeTimeLimitOverlay();removeUsageRuntime();}
+  function timeLimitSettingsHTML(){
+    const p=timeLimitPolicy();
+    return `<section class="time-limit-settings-v40"><div class="time-limit-settings-hero"><div class="time-limit-settings-logo">T</div><div><span class="eyebrow">TAFAß · GESTION DU TEMPS</span><h3>Limites d’utilisation</h3><p>Ces rappels sont conçus pour encourager des pauses régulières et éviter une utilisation trop prolongée.</p></div></div><div class="time-limit-policy-grid"><div><b>${p.minor?'15':'30'} min</b><span>Premier rappel</span></div><div><b>${p.minor?'30':'60'} min</b><span>Deuxième rappel</span></div><div><b>${p.logoutMinutes} min</b><span>Déconnexion automatique</span></div></div><div class="settings-section-block time-limit-info-list"><div><b>À chaque rappel</b><small>Un écran Tafaß apparaît au-dessus de l’application, où que vous soyez. Vous pouvez continuer ou vous déconnecter.</small></div><div><b>Si vous continuez</b><small>Le compteur reprend et le prochain rappel arrive au palier suivant.</small></div><div><b>À la limite finale</b><small>Tafaß ferme automatiquement la session. Vous devrez vous reconnecter pour utiliser à nouveau le compte.</small></div><div><b>Administrateur officiel</b><small>Le compte administrateur officiel n’est pas soumis à cette limite.</small></div></div><button class="ghost-action big" data-action="time-limit-intro">Voir l’explication complète</button></section>`;
+  }
+
   async function enterApp() {
     if (state.entering || !state.user) return;
     state.entering = true;
@@ -4740,6 +4829,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       $("auth").classList.add("hidden"); $("app").classList.remove("hidden");
       await loadPosts(); await setupRealtime(); ensureLiveFeedRealtime();
       await render();
+      await startTimeLimitGuard();
     }finally{
       state.entering = false;
     }
@@ -5016,8 +5106,14 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
 
   async function togglePageFollow(id){
     if(!state.user?.id) return toast('Connectez-vous pour suivre une Page.');
-    const {data:r,error}=await sb.rpc('tafa_toggle_page_follow',{p_page_id:id});
-    if(error) return toast(error.message||'Impossible de modifier le suivi de la Page.');
+    let r=null, error=null;
+    ({data:r,error}=await sb.rpc('tafa_toggle_page_follow',{p_page_id:id}));
+    if(error){
+      const q=await sb.from('page_followers').select('id').eq('page_id',id).eq('user_id',state.user.id).maybeSingle();
+      if(q.error)return toast(q.error.message||error.message||'Impossible de modifier le suivi de la Page.');
+      if(q.data){ const d=await sb.from('page_followers').delete().eq('id',q.data.id); if(d.error)return toast(d.error.message); r={followed:false}; }
+      else { const i=await sb.from('page_followers').insert({page_id:id,user_id:state.user.id}); if(i.error)return toast(i.error.message); r={followed:true}; }
+    }
     if(r?.success===false) return toast(r.message||'Action impossible.');
     const followed=!!r?.followed;
     if(followed){
@@ -5097,8 +5193,21 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
 
   async function toggleGroupMember(id){
     if(!state.user?.id) return toast('Connectez-vous pour rejoindre un groupe.');
-    const {data:r,error}=await sb.rpc('tafa_toggle_group_membership',{p_group_id:id});
-    if(error) return toast(error.message||'Impossible de modifier votre adhésion au groupe.');
+    let r=null,error=null;
+    ({data:r,error}=await sb.rpc('tafa_toggle_group_membership',{p_group_id:id}));
+    if(error){
+      const g=(await sb.from('groups').select('id,owner_id,privacy').eq('id',id).maybeSingle());
+      if(g.error||!g.data)return toast(g.error?.message||error.message||'Groupe introuvable.');
+      const q=await sb.from('group_members').select('id,role').eq('group_id',id).eq('user_id',state.user.id).maybeSingle();
+      if(q.error)return toast(q.error.message||error.message);
+      if(q.data){
+        if(q.data.role==='admin' && g.data.owner_id===state.user.id)return toast('Le propriétaire ne peut pas quitter ce groupe.');
+        const d=await sb.from('group_members').delete().eq('id',q.data.id); if(d.error)return toast(d.error.message); r={joined:false};
+      }else{
+        if(g.data.owner_id!==state.user.id && String(g.data.privacy||'public')!=='public')return toast('Ce groupe est privé. Demandez à le rejoindre depuis sa page.');
+        const i=await sb.from('group_members').insert({group_id:id,user_id:state.user.id,role:'member'}); if(i.error)return toast(i.error.message); r={joined:true};
+      }
+    }
     if(r?.success===false) return toast(r.message||'Action impossible.');
     const joined=!!r?.joined;
     toast(joined?'Vous avez rejoint le groupe.':'Vous avez quitté le groupe.');
