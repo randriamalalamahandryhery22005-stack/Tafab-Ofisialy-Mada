@@ -2189,10 +2189,27 @@ function publisherBackgrounds(){
     openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">COMPTE</span><h3>Options du profil</h3><div class="menu-grid"><button class="menu-card" data-action="report-profile" data-id="${esc(id)}"><span class="menu-icon">⚑</span><span><b>Signaler le compte</b><small>Signaler un comportement ou un contenu</small></span></button><button class="menu-card ${blocked?"":"danger-card"}" data-action="${blocked?"unblock-profile":"block-profile"}" data-id="${esc(id)}"><span class="menu-icon">${blocked?"✓":"⊘"}</span><span><b>${blocked?"Débloquer le compte":"Bloquer le compte"}</b><small>${blocked?"Autoriser à nouveau les interactions":"Empêcher les interactions avec ce compte"}</small></span></button></div></div>`);
   }
   async function reportProfile(id) {
+    if(!id || !state.user?.id || String(id)===String(state.user.id)) return toast("Signalement invalide");
     const reason=await premiumPrompt("Signaler ce compte","Expliquez brièvement le motif du signalement. Votre message sera transmis à la modération.","Comportement ou contenu inapproprié","Envoyer le signalement");
     if(reason===null)return;
-    const r=await sb.from("profile_reports").upsert({reporter_id:state.user.id,reported_id:id,reason:reason.trim()||"Contenu à vérifier",status:"pending"},{onConflict:"reporter_id,reported_id"});
-    if(r.error)return toast(r.error.message); closeModal(); toast("Signalement envoyé"); await logActivity("profile_reported","Compte signalé","profile",id);
+    const payload={
+      reporter_id:state.user.id,
+      reported_id:id,
+      reason:String(reason).trim()||"Contenu à vérifier",
+      status:"pending"
+    };
+    // Insert-only: an upsert can turn into UPDATE and therefore requires an
+    // UPDATE RLS policy. Profile reports are immutable submissions from the
+    // reporter, so only INSERT is needed and is compatible with the stable
+    // Supabase policy installed by V53.
+    const r=await sb.from("profile_reports").insert(payload);
+    if(r.error){
+      if(String(r.error.code||"")==="23505") return closeModal(),toast("Ce compte a déjà été signalé par vous.");
+      return toast(r.error.message);
+    }
+    closeModal();
+    toast("Signalement envoyé");
+    await logActivity("profile_reported","Compte signalé","profile",id);
   }
   async function blockProfile(id) {
     if(!id || id===state.user.id)return;
