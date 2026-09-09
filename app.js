@@ -7200,4 +7200,132 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   };
 
 
+  /* ============================================================
+     TAFAß V60 — PARA & CONF / PREMIUM SETTINGS COMMAND CENTER
+     Complete option + sub-option information layer. No SQL change.
+     ============================================================ */
+  (() => {
+    const V60_META = {
+      'account-settings':['Votre compte','Identité, coordonnées, mot de passe, sécurité, vérification et préférences liées au compte.','Ces informations définissent votre identité Tafaß et les accès sensibles.'],
+      'privacy-settings':['Assistance confidentialité','Vue d’ensemble des principaux contrôles de visibilité, de contact et de protection.','Utilisez cette rubrique comme point de départ pour régler rapidement votre confidentialité.'],
+      'family-center':['Centre familial','Contrôles de sécurité, de contact et de visibilité destinés aux relations et à l’accompagnement familial.','Les réglages activés ici peuvent limiter certaines interactions.'],
+      'audience-defaults':['Audience par défaut','Choisissez qui peut voir vos nouvelles publications lorsque vous ne sélectionnez pas une audience différente.','Ce choix concerne l’audience par défaut, pas les contenus déjà publiés.'],
+      'reaction-settings':['Préférences des réactions','Gérez l’affichage des compteurs et la personnalisation de vos réactions.','Les préférences modifient l’expérience d’affichage sans supprimer les réactions existantes.'],
+      'notifications-settings':['Notifications','Contrôlez les alertes générales, messages, amis, réactions et commentaires.','Les notifications peuvent rester disponibles dans l’application même si certaines alertes sont désactivées.'],
+      'accessibility-settings':['Accessibilité','Adaptez la taille du texte, les animations et le contraste pour une utilisation plus confortable.','Les options d’accessibilité sont personnelles et n’affectent pas les autres comptes.'],
+      'language-settings':['Langue et région','Choisissez la langue et les conventions utilisées par l’interface.','Le changement peut nécessiter un rafraîchissement de certaines zones de l’application.'],
+      'media-settings':['Contenu multimédia','Contrôlez la lecture automatique, l’économie de données et la qualité des médias.','Une qualité plus élevée peut utiliser davantage de données mobiles et de stockage.'],
+      'time-management':['Gestion du temps','Suivez votre temps d’utilisation et les rappels de pause de Tafaß.','Les rappels sont conçus pour vous informer ; ils ne remplacent pas les réglages système de votre appareil.'],
+      'effects-settings':['Effets pour le visage et les mains','Activez ou désactivez les effets compatibles avec les capacités de votre appareil.','La disponibilité dépend du navigateur, de l’APK et des capacités matérielles.'],
+      'profile-lock':['Verrouillage du profil','Limitez l’accès aux éléments privés de votre profil et activez les protections disponibles.','Le verrouillage n’empêche pas les informations rendues publiques ailleurs de rester visibles.'],
+      'professional-mode':['Mode professionnel','Activez les outils professionnels et gérez vos Pages depuis votre espace personnel.','Les Pages et leurs permissions restent séparées du profil personnel.'],
+      'find-contact-settings':['Comment les autres peuvent vous trouver et vous contacter','Gérez les demandes d’amis, messages et possibilités de recherche par téléphone ou e-mail.','Désactiver un moyen de recherche réduit la découverte de votre compte par ce moyen.'],
+      'post-privacy':['Publications','Définissez l’audience par défaut et certains contrôles de partage de vos publications.','Les réglages futurs ne changent pas automatiquement l’audience de chaque ancienne publication.'],
+      'story-privacy':['Stories','Choisissez qui voit vos stories et contrôlez leur partage, archivage et mise en sourdine.','Les stories expirées suivent les règles d’archivage configurées.'],
+      'page-privacy':['Pages','Consultez les Pages que vous gérez et ouvrez leurs outils de permissions et de gestion.','Les permissions d’une Page sont gérées dans son propre espace.'],
+      'followers-public':['Followers et contenu public','Gérez qui peut vous suivre, la visibilité des abonnements et les règles de contenu public.','Les options publiques déterminent la découverte et les interactions autorisées sur le contenu public.'],
+      'profile-identification':['Profil et identification','Contrôlez les identifications, leur validation et l’indexation publique de votre profil.','La validation des tags vous permet de contrôler ce qui apparaît sur votre profil.'],
+      'blocking':['Blocage','Consultez les comptes bloqués et retirez un blocage lorsque vous le souhaitez.','Le blocage limite les interactions selon les protections Tafaß.'],
+      'online-status':['Statut En ligne','Contrôlez l’affichage de votre présence et de votre dernière activité dans la messagerie.','Masquer votre présence peut aussi limiter ce que vous voyez de la présence des autres selon les règles du service.'],
+      'payment-settings':['Paiements','Consultez les demandes et l’historique des opérations de paiement disponibles dans Tafaß.','Une demande de paiement reste en attente jusqu’à validation réelle.'],
+      'activity-settings':['Historique d’activité','Consultez vos recherches et les actions enregistrées sur votre compte.','Vous pouvez supprimer les recherches enregistrées sans supprimer les contenus d’origine.'],
+      'location-settings':['Localisation','Contrôlez la localisation du profil et, lorsque vous le demandez, la position GPS exacte.','La position précise n’est enregistrée que lorsqu’une autorisation et une action explicite le permettent.'],
+      'apps-web':['Applications et sites Web','Consultez les connexions externes ou sessions enregistrées et révoquez celles dont vous n’avez plus besoin.','Révoquer une connexion empêche son utilisation selon l’état enregistré par Tafaß.'],
+      'professional-integrations':['Intégrations professionnelles','Gérez les intégrations professionnelles et les connexions liées à vos outils Tafaß.','Révoquez une intégration si vous ne souhaitez plus qu’elle reste active.'],
+      'information-management':['Comment gérer vos informations','Accédez rapidement à l’activité, aux informations du profil et aux contrôles de confidentialité.','Cette rubrique sert de centre de gestion et ne supprime aucune donnée automatiquement.'],
+      'terms':['Conditions de service','Règles d’utilisation de Tafaß, responsabilités, restrictions et fonctionnement général du service.','Lisez cette section avant d’utiliser une fonction sensible ou professionnelle.'],
+      'privacy-policy':['Politique de confidentialité','Explique quelles informations peuvent être traitées, pourquoi et quels contrôles sont disponibles.','Les réglages de confidentialité restent le moyen principal de contrôler votre visibilité.'],
+      'cookies':['Politique d’utilisation des cookies','Explique les mécanismes locaux utilisés pour la session, les préférences et certaines fonctions.','Les réglages du navigateur peuvent limiter certaines données locales nécessaires au fonctionnement.'],
+      'community-standards':['Standards de la communauté','Règles concernant le respect, la sécurité, la vie privée, la fraude et les signalements.','Un signalement déclenche un examen ; il ne garantit pas automatiquement une mesure précise.'],
+      'about-tafass':['À propos','Présentation de Tafaß, de ses espaces sociaux, de la création, des Pages et des fonctions complémentaires.','La version disponible sur votre appareil détermine les fonctionnalités réellement accessibles.']
+    };
+
+    const V60_CATS = {
+      'Votre compte':['account-settings'],
+      'Confidentialité':['privacy-settings','family-center','audience-defaults','profile-lock','find-contact-settings','post-privacy','story-privacy','page-privacy','followers-public','profile-identification','blocking','online-status'],
+      'Préférences':['reaction-settings','notifications-settings','accessibility-settings','language-settings','media-settings','time-management','effects-settings'],
+      'Professionnel':['professional-mode','page-privacy','professional-integrations','apps-web','payment-settings'],
+      'Activité & données':['activity-settings','location-settings','information-management'],
+      'Informations légales':['terms','privacy-policy','cookies','community-standards','about-tafass']
+    };
+
+    function v60CatFor(action){
+      for(const [cat,ids] of Object.entries(V60_CATS)) if(ids.includes(action)) return cat;
+      return 'Paramètre';
+    }
+    function v60ActionForRow(row){ return row?.dataset?.action || ''; }
+    function v60EnhanceHub(){
+      const root=document.querySelector('.fb-settings-page');
+      if(!root || root.dataset.v60Enhanced==='1') return;
+      root.dataset.v60Enhanced='1';
+      const rows=[...root.querySelectorAll('.fb-settings-row')];
+      rows.forEach(row=>{
+        const action=v60ActionForRow(row), meta=V60_META[action];
+        if(!meta) return;
+        row.classList.add('tafa-v60-setting-row');
+        row.dataset.v60Search=(meta[0]+' '+meta[1]+' '+v60CatFor(action)).toLowerCase();
+        const copy=row.querySelector('.fb-settings-copy');
+        if(copy && !copy.querySelector('.tafa-v60-row-meta')) copy.insertAdjacentHTML('beforeend',`<span class="tafa-v60-row-meta"><i>${esc(v60CatFor(action))}</i><em>Configurer</em></span>`);
+      });
+      const dash=root.querySelector('.tafa-v52-settings-dashboard');
+      if(dash && !dash.querySelector('.tafa-v60-dashboard-strip')){
+        const total=rows.length;
+        dash.insertAdjacentHTML('beforeend',`<div class="tafa-v60-dashboard-strip"><span><b>${total}</b><small>contrôles disponibles</small></span><span><b>6</b><small>espaces de réglage</small></span><span><b>24/7</b><small>centre accessible</small></span></div>`);
+      }
+      const search=root.querySelector('#settingsSearch');
+      if(search && !search.dataset.v60Bound){
+        search.dataset.v60Bound='1';
+        search.placeholder='Rechercher un réglage, une protection ou une fonction…';
+        search.addEventListener('input',()=>{
+          const q=search.value.trim().toLowerCase();
+          rows.forEach(row=>{row.hidden=!!q && !(row.dataset.v60Search||row.textContent.toLowerCase()).includes(q)});
+          root.querySelectorAll('.fb-settings-group').forEach(group=>{
+            const visible=[...group.querySelectorAll('.fb-settings-row')].some(r=>!r.hidden);
+            group.hidden=!!q && !visible;
+          });
+        });
+      }
+    }
+
+    const v60OriginalSettingsPage=settingsPage;
+    settingsPage=async function(...args){
+      await v60OriginalSettingsPage.apply(this,args);
+      if(state.route!=='settings') return;
+      requestAnimationFrame(v60EnhanceHub);
+    };
+
+    function v60EnhanceDetail(action){
+      const root=document.querySelector('.settings-detail-page');
+      if(!root || root.dataset.v60Detail===action) return;
+      root.dataset.v60Detail=action;
+      const meta=V60_META[action] || ['Paramètre Tafaß','Réglage de votre compte et de votre expérience Tafaß.','Les modifications sont enregistrées pour votre compte.'];
+      const blocks=[...root.querySelectorAll('.settings-section-block')];
+      blocks.forEach((block,i)=>{
+        if(block.querySelector('.tafa-v60-subinfo')) return;
+        const title=block.querySelector('h3')?.textContent?.trim() || `Sous-options ${i+1}`;
+        const count=block.querySelectorAll('.settings-control-row,.settings-link-row,.settings-info-card').length;
+        block.classList.add('tafa-v60-settings-block');
+        block.insertAdjacentHTML('afterbegin',`<div class="tafa-v60-subinfo"><span class="tafa-v60-subinfo-icon">✦</span><div><b>${esc(title)}</b><small>${count ? `${count} réglage${count>1?'s':''} disponible${count>1?'s':''} dans cette rubrique.` : 'Informations et contrôles disponibles dans cette rubrique.'}</small></div></div>`);
+      });
+      const intro=root.querySelector('.settings-detail-intro');
+      if(intro && !intro.querySelector('.tafa-v60-detail-hero')){
+        intro.insertAdjacentHTML('afterbegin',`<div class="tafa-v60-detail-hero"><div><span class="tafa-v60-kicker">TAFAß • ${esc(v60CatFor(action).toUpperCase())}</span><h2>${esc(meta[0])}</h2><p>${esc(meta[1])}</p></div><span class="tafa-v60-hero-badge">✓ SÉCURISÉ</span></div>`);
+        intro.insertAdjacentHTML('beforeend',`<div class="tafa-v60-detail-note"><span>ⓘ</span><div><b>À savoir</b><small>${esc(meta[2])}</small></div></div>`);
+      }
+      const save=root.querySelector('.settings-save');
+      if(save){save.classList.add('tafa-v60-save');save.textContent='Enregistrer les modifications';}
+    }
+
+    const v60OriginalOpenAdvancedSetting=openAdvancedSetting;
+    openAdvancedSetting=async function(action,...args){
+      await v60OriginalOpenAdvancedSetting.call(this,action,...args);
+      if(state.route!=='settings') return;
+      requestAnimationFrame(()=>v60EnhanceDetail(action));
+    };
+
+    // Keep the existing detailed pages authoritative; this layer only enriches their presentation.
+    v60EnhanceHub();
+  })();
+
+
 })();
