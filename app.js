@@ -6701,4 +6701,150 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   };
   tafaV50Admin.mount();
 
+
+  /* TAFAß V52 — Profil • Amis • Recherche • Para & Conf : COMPLETE UX */
+  (() => {
+    const originalProfilePage = profilePage;
+    const originalFriendsPage = friendsPage;
+    const originalSearchPage = searchPage;
+    const originalSettingsPage = settingsPage;
+
+    function v52SafeCount(v){ return Number(v||0).toLocaleString('fr-FR'); }
+    function v52Stat(label,value,icon){ return `<div class="tafa-v52-stat"><span>${icon}</span><div><b>${v52SafeCount(value)}</b><small>${esc(label)}</small></div></div>`; }
+
+    // PROFIL — richer dashboard while keeping the existing real data/functions.
+    profilePage = async function(tab = state.profileTab){
+      await originalProfilePage(tab);
+      if(state.route !== 'profile' || !state.profile) return;
+      try{
+        const p=state.profile;
+        const [postsR,friendsR,followersR,followingR]=await Promise.all([
+          sb.from('posts').select('id',{count:'exact',head:true}).eq('user_id',state.user.id),
+          sb.from('friendships').select('id',{count:'exact',head:true}).eq('user_id',state.user.id),
+          sb.from('follows').select('id',{count:'exact',head:true}).eq('following_id',state.user.id),
+          sb.from('follows').select('id',{count:'exact',head:true}).eq('follower_id',state.user.id)
+        ]);
+        const root=document.querySelector('.profile-page-premium'); if(!root)return;
+        const old=root.querySelector('.tafa-v52-profile-dashboard'); old?.remove();
+        const dash=document.createElement('section'); dash.className='tafa-v52-profile-dashboard';
+        const completeness=[p.first_name,p.last_name,p.bio,p.avatar_url,p.cover_url,p.city_current,p.city_origin].filter(Boolean).length;
+        const pct=Math.round(completeness/7*100);
+        dash.innerHTML=`
+          <div class="tafa-v52-profile-hero-line">
+            <div><span class="eyebrow">TAFAß • MON PROFIL</span><b>Votre espace personnel</b><small>Gérez votre identité, votre réseau et votre contenu depuis un seul endroit.</small></div>
+            <span class="tafa-v52-completion"><i style="width:${pct}%"></i><b>${pct}%</b><small>profil complété</small></span>
+          </div>
+          <div class="tafa-v52-stats-grid">
+            ${v52Stat('Publications',postsR.count,'▤')}${v52Stat('Amis',friendsR.count,'♙')}${v52Stat('Abonnés',followersR.count,'◎')}${v52Stat('Abonnements',followingR.count,'＋')}
+          </div>
+          <div class="tafa-v52-profile-actions">
+            <button class="tafa-v52-action-main" data-action="edit-profile">✎ Modifier mon profil</button>
+            <button data-action="friends-tab" data-tab="friends">♙ Mes amis</button>
+            <button data-action="privacy-settings">🔒 Confidentialité</button>
+            <button data-route="settings">⚙ Para & Conf</button>
+          </div>`;
+        root.querySelector('.profile-main-premium')?.insertAdjacentElement('afterend',dash);
+        // Make the tabs truly complete, including video content.
+        const tabs=root.querySelector('.profile-tabs');
+        if(tabs && !tabs.querySelector('[data-tab="videos"]')){
+          tabs.insertAdjacentHTML('beforeend','<button data-action="profile-tab" data-tab="videos">Vidéos</button>');
+        }
+        // Show a compact identity card with username when available.
+        const nameBlock=root.querySelector('.profile-name-block');
+        if(nameBlock && !nameBlock.querySelector('.tafa-v52-username') && p.username){
+          nameBlock.insertAdjacentHTML('beforeend',`<small class="tafa-v52-username">@${esc(p.username)}</small>`);
+        }
+      }catch(e){ console.warn('Tafaß V52 profil:',e); }
+    };
+
+    // FRIENDS — complete network hub: search, counts, outgoing requests and safer actions.
+    friendRow = function(p,type,commonCount=0){
+      const common = commonCount > 0 ? `<small class="mutual-friends">${commonCount} ami${commonCount>1?'s':''} en commun</small>` : `<small class="mutual-friends">Membre Tafaß</small>`;
+      let action='';
+      if(type==='friend') action=`<div class="friend-actions"><button class="ghost-action" data-action="view-profile" data-id="${esc(p.id)}">Profil</button><button class="ghost-action danger-lite" data-action="remove-friend" data-id="${esc(p.id)}">Retirer</button></div>`;
+      else if(type==='sent') action=`<button class="ghost-action" disabled>Demande envoyée ✓</button>`;
+      else if(type==='incoming') action=`<div class="friend-actions"><button class="small-action" data-action="accept-friend" data-id="${esc(p.id)}">Confirmer</button><button class="ghost-action" data-action="decline-friend" data-id="${esc(p.id)}">Refuser</button></div>`;
+      else action=`<button class="small-action" data-action="add-friend" data-id="${esc(p.id)}">Ajouter</button>`;
+      return `<div class="list-row friend-row tafa-v52-friend-row" data-person-name="${esc(nameOf(p).toLowerCase())}" data-person-user="${esc(p.username||'').toLowerCase()}">${avatarHTML(p)}<div class="grow">${displayNameHTML(p)}${common}${p.username?`<small class="tafa-v52-handle">@${esc(p.username)}</small>`:''}</div>${action}</div>`;
+    };
+    friendsPage = async function(tab = state.friendsTab){
+      await originalFriendsPage(tab);
+      if(state.route !== 'friends')return;
+      try{
+        const root=document.querySelector('.friends-page'); if(!root)return;
+        const header=root.querySelector('.clean-page-header');
+        if(header && !root.querySelector('.tafa-v52-friends-search')){
+          const box=document.createElement('div'); box.className='tafa-v52-friends-search';
+          box.innerHTML='<span>⌕</span><input id="friendsLiveSearch" type="search" placeholder="Rechercher dans votre réseau…" autocomplete="off"><button type="button" data-friends-clear>×</button>';
+          header.insertAdjacentElement('afterend',box);
+          const input=box.querySelector('input');
+          const apply=()=>{const q=(input.value||'').trim().toLowerCase();root.querySelectorAll('.tafa-v52-friend-row').forEach(row=>{row.hidden=!!q && !(`${row.dataset.personName} ${row.dataset.personUser}`).includes(q)});};
+          input.addEventListener('input',apply);
+          box.addEventListener('click',e=>{if(e.target.closest('[data-friends-clear]')){input.value='';apply();input.focus();}});
+        }
+        if(!root.querySelector('.tafa-v52-friends-info')){
+          const section=root.querySelector('.friends-section');
+          if(section){
+            const info=document.createElement('div'); info.className='tafa-v52-friends-info';
+            info.innerHTML='<div><b>Votre réseau</b><small>Ajoutez, confirmez ou gérez vos relations Tafaß.</small></div><span>100% réel · temps réel</span>';
+            section.insertAdjacentElement('afterbegin',info);
+          }
+        }
+      }catch(e){console.warn('Tafaß V52 amis:',e);}
+    };
+
+    // SEARCH — adds a complete explorer header, quick filters and result quality indicators.
+    searchPage = async function(q='',category=searchCategory){
+      await originalSearchPage(q,category);
+      if(state.route!=='search')return;
+      try{
+        const root=document.querySelector('.search-page-premium'); if(!root)return;
+        const input=root.querySelector('#searchInput');
+        if(input && !root.querySelector('.tafa-v52-search-tools')){
+          const tools=document.createElement('div'); tools.className='tafa-v52-search-tools';
+          tools.innerHTML=`<button type="button" data-v52-search-filter="accounts">♙ Comptes</button><button type="button" data-v52-search-filter="pages">▣ Pages</button><button type="button" data-v52-search-filter="groups">◎ Groupes</button><button type="button" data-v52-search-filter="posts">▤ Publications</button><button type="button" data-v52-search-clear>Effacer</button>`;
+          root.querySelector('.clean-search')?.insertAdjacentElement('afterend',tools);
+          tools.addEventListener('click',e=>{
+            const f=e.target.closest('[data-v52-search-filter]');
+            if(f){ searchCategory=f.dataset.v52SearchFilter; return searchPage(input.value,searchCategory); }
+            if(e.target.closest('[data-v52-search-clear]')){input.value='';searchCategory='accounts';return searchPage('',searchCategory);}
+          });
+        }
+        if(input && !input.dataset.v52bound){
+          input.dataset.v52bound='1';
+          input.addEventListener('keydown',e=>{if(e.key==='Escape'){input.value='';searchPage('',searchCategory);}});
+        }
+        const active=root.querySelector('.search-active-result');
+        if(active && !active.querySelector('.tafa-v52-search-note')){
+          const note=document.createElement('div'); note.className='tafa-v52-search-note';
+          note.innerHTML='<span>✓</span><div><b>Recherche protégée</b><small>Les comptes bloqués et contenus masqués sont automatiquement exclus des résultats.</small></div>';
+          active.prepend(note);
+        }
+      }catch(e){console.warn('Tafaß V52 recherche:',e);}
+    };
+
+    // PARA & CONF — adds a true control-center summary above the existing detailed settings.
+    settingsPage = async function(){
+      await originalSettingsPage();
+      if(state.route!=='settings')return;
+      try{
+        const root=document.querySelector('.fb-settings-page'); if(!root || root.querySelector('.tafa-v52-settings-dashboard'))return;
+        const cfg=(await sb.from('user_settings').select('profile_visibility,allow_friend_requests,allow_messages,allow_search_by_phone,allow_search_by_email,notifications_enabled').eq('user_id',state.user.id).maybeSingle()).data||{};
+        const privacy=(await sb.from('profile_identification_settings').select('allow_tagging,review_tags,search_engine_index').eq('user_id',state.user.id).maybeSingle()).data||{};
+        const dash=document.createElement('section'); dash.className='tafa-v52-settings-dashboard';
+        const status=v=>v===false?'Désactivé':'Activé';
+        dash.innerHTML=`<div class="tafa-v52-settings-top"><div><span class="eyebrow">TAFAß • CONTROL CENTER</span><h3>Votre compte, vos règles.</h3><p>Un centre unique pour la confidentialité, la sécurité, les notifications et la personnalisation.</p></div><span class="tafa-v52-settings-secure">🛡️ PROTÉGÉ</span></div>
+          <div class="tafa-v52-settings-cards">
+            <button data-action="privacy-settings"><span>🔒</span><b>Confidentialité</b><small>${cfg.profile_visibility==='private'?'Profil verrouillé':'Profil public'} · Messages ${status(cfg.allow_messages)}</small></button>
+            <button data-action="security-settings"><span>🛡️</span><b>Sécurité</b><small>Connexion, sessions et authentification renforcée</small></button>
+            <button data-action="notifications-settings"><span>🔔</span><b>Notifications</b><small>${status(cfg.notifications_enabled)} · Alertes en temps réel</small></button>
+            <button data-action="profile-identification"><span>👤</span><b>Profil & identification</b><small>Tags ${status(privacy.allow_tagging)} · Indexation ${status(privacy.search_engine_index)}</small></button>
+          </div>
+          <div class="tafa-v52-settings-quick"><b>Accès rapides</b><button data-action="account-settings">Informations du compte</button><button data-action="find-contact-settings">Qui peut me trouver</button><button data-action="blocking">Blocage</button><button data-action="online-status">Statut en ligne</button><button data-action="accessibility-settings">Accessibilité</button></div>`;
+        const mobile=root.querySelector('.fb-settings-mobile-head');
+        mobile?.insertAdjacentElement('afterend',dash) || root.prepend(dash);
+      }catch(e){console.warn('Tafaß V52 paramètres:',e);}
+    };
+  })();
+
 })();
