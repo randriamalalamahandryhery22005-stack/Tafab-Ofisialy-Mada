@@ -7083,38 +7083,46 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
 
 
   /* ============================================================
-     TAFAß V58 — BADGE OFFICIEL : STABLE / NO-STUCK PATCH
-     - First paint does not wait for Supabase.
-     - Verification table fallback is supported.
-     - Long network calls have hard timeouts.
-     - Existing RPC remains preferred; direct stable-table fallback
-       is used only when the RPC is unavailable.
+     TAFAß V59 — BADGE OFFICIEL : ZERO-WAIT / STABLE PREMIUM
+     - The verification screen is rendered immediately.
+     - Network/database reads never block the first paint.
+     - A slow or unavailable table becomes a recoverable status card.
+     - Existing schema/RPC logic is preserved.
   ============================================================ */
-  const tafaV58Race = (promise, ms, message) => Promise.race([
+  const tafaV59Race = (promise, ms, message) => Promise.race([
     promise,
     new Promise((_, reject) => setTimeout(() => reject(new Error(message)), ms))
   ]);
 
-  const tafaV58Rows = async (table, userId) => {
+  const tafaV59Rows = async (table, userId, ms=2500) => {
     try {
+      if(!sb || !userId) return {data:[],error:null};
       const q = sb.from(table).select('*').eq('user_id', userId).order('created_at',{ascending:false}).limit(20);
-      const r = await tafaV58Race(q, 7000, 'TIMEOUT');
-      if (r.error) return {data:null,error:r.error};
-      return {data:r.data||[],error:null};
-    } catch (e) { return {data:null,error:e}; }
+      const r = await tafaV59Race(q, ms, 'TIMEOUT');
+      if(r?.error) return {data:null,error:r.error};
+      return {data:r?.data||[],error:null};
+    } catch(e) { return {data:null,error:e}; }
+  };
+
+  const tafaV59LoadRows = async (userId) => {
+    // Query both known schemas in parallel. This avoids the old sequential
+    // 7s + 7s wait that made the page look permanently frozen.
+    const [primary,fallback] = await Promise.all([
+      tafaV59Rows('tafa_verification_requests',userId),
+      tafaV59Rows('badge_requests',userId)
+    ]);
+    const primaryRows=Array.isArray(primary.data)?primary.data:[];
+    const fallbackRows=Array.isArray(fallback.data)?fallback.data:[];
+    const rows=[...primaryRows,...fallbackRows];
+    const unique=new Map();
+    rows.forEach(r=>{ if(r?.id!=null) unique.set(String(r.id),r); });
+    return {rows:[...unique.values()].sort((a,b)=>String(b?.created_at||'').localeCompare(String(a?.created_at||''))),primary,fallback};
   };
 
   loadVerificationRequests = async function(){
     if(!state.user) return [];
-    const primary = await tafaV58Rows('tafa_verification_requests', state.user.id);
-    let rows = primary.data;
-    if(!rows && /relation|table|schema|does not exist|TIMEOUT/i.test(String(primary.error?.message||primary.error||''))) {
-      const fallback = await tafaV58Rows('badge_requests', state.user.id);
-      rows = fallback.data;
-      if(!rows) console.warn('Tafaß V58 verification fallback:', fallback.error?.message||fallback.error);
-    }
-    if(!rows) rows=[];
-    state.verificationRequests=rows.map(r=>({
+    const result=await tafaV59LoadRows(state.user.id);
+    state.verificationRequests=result.rows.map(r=>({
       ...r,
       identity_name:r.identity_name||r.reason||'',
       category:r.category||r.badge_type||'Autre',
@@ -7128,20 +7136,19 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   submitVerificationRequest = async function(data,proofFile){
     if(!state.user) throw new Error('Connexion requise.');
     const uid=state.user.id;
-    const a=await tafaV58Rows('tafa_verification_requests',uid);
-    const b=await tafaV58Rows('badge_requests',uid);
-    const pending=[...(a.data||[]),...(b.data||[])].find(x=>String(x.status).toLowerCase()==='pending');
+    const loaded=await tafaV59LoadRows(uid);
+    const pending=loaded.rows.find(x=>String(x.status).toLowerCase()==='pending');
     if(pending) throw new Error('Une demande de badge est déjà en attente de validation.');
     let proofPath='';
     if(proofFile){
       if(proofFile.size>15*1024*1024) throw new Error('Le justificatif dépasse 15 Mo.');
       const ext=(proofFile.name.split('.').pop()||'bin').toLowerCase().replace(/[^a-z0-9]/g,'')||'bin';
       proofPath=`${uid}/${crypto.randomUUID()}.${ext}`;
-      const up=await tafaV58Race(sb.storage.from('badge-proofs').upload(proofPath,proofFile,{upsert:false,contentType:proofFile.type||undefined}),15000,'Le stockage du justificatif ne répond pas.');
+      const up=await tafaV59Race(sb.storage.from('badge-proofs').upload(proofPath,proofFile,{upsert:false,contentType:proofFile.type||undefined}),15000,'Le stockage du justificatif ne répond pas.');
       if(up.error) throw new Error('Justificatif : '+up.error.message);
     }
     try{
-      const rpc=await tafaV58Race(sb.rpc('tafa_create_badge_request',{
+      const rpc=await tafaV59Race(sb.rpc('tafa_create_badge_request',{
         p_category:String(data.category||'Autre'),
         p_identity_name:String(data.identity||''),
         p_proof_path:proofPath||'',
@@ -7149,17 +7156,11 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
         p_payment_reference:String(data.ref||'')
       }),12000,'Le serveur de vérification ne répond pas.');
       if(!rpc.error) return rpc.data;
-      console.warn('Tafaß V58 badge RPC:',rpc.error.message||rpc.error);
-    }catch(rpcError){ console.warn('Tafaß V58 badge RPC indisponible:',rpcError?.message||rpcError); }
-
-    // Stable schema fallback. This is only attempted if the RPC is unavailable.
-    const direct=await tafaV58Race(sb.from('badge_requests').insert({
-      user_id:uid,
-      badge_type:String(data.category||'Autre'),
-      page_id:null,
-      reason:String(data.identity||''),
-      document_url:proofPath||'',
-      status:'pending'
+      console.warn('Tafaß V59 badge RPC:',rpc.error.message||rpc.error);
+    }catch(rpcError){ console.warn('Tafaß V59 badge RPC indisponible:',rpcError?.message||rpcError); }
+    const direct=await tafaV59Race(sb.from('badge_requests').insert({
+      user_id:uid,badge_type:String(data.category||'Autre'),page_id:null,
+      reason:String(data.identity||''),document_url:proofPath||'',status:'pending'
     }).select('*').single(),12000,'La demande de badge ne répond pas. Vérifiez la policy INSERT de badge_requests.');
     if(direct.error){
       if(proofPath) try{await sb.storage.from('badge-proofs').remove([proofPath]);}catch(_){ }
@@ -7171,24 +7172,32 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
 
   verificationPage = async function(){
     const token=++state.verificationRenderToken;
-    // Paint immediately: the page must never remain on an endless verification skeleton.
-    simplePage('Vérification',`<section class="verification-page-v58">
-      <section class="v58-hero"><div class="v58-brand"><span class="v58-mark">✓</span><div><span class="v58-kicker">TAFAß · BADGE OFFICIEL</span><h3>Badge bleu vérifié</h3><p>Un parcours sécurisé pour demander, suivre et obtenir votre badge officiel. Votre dossier est contrôlé par l’administration Tafaß.</p></div></div></section>
-      <section id="v58VerificationBody"><div class="v58-status"><div class="v58-loading"><span class="v58-spinner"></span><span>Chargement sécurisé de votre dossier…</span></div></div></section>
+    // IMPORTANT: paint the complete page before any Supabase request.
+    simplePage('Vérification',`<section class="verification-page-v59">
+      <section class="v59-hero"><div class="v59-brand"><span class="v59-mark">✓</span><div><span class="v59-kicker">TAFAß · BADGE OFFICIEL</span><h3>Badge bleu vérifié</h3><p>Un parcours sécurisé pour demander, suivre et obtenir votre badge officiel. Votre dossier est contrôlé par l’administration Tafaß.</p></div></div></section>
+      <section id="v59VerificationBody"><section class="v59-status v59-status-ready"><div class="v59-status-main"><small>VOTRE ESPACE</small><b>Vérification prête</b><p>Votre espace est disponible. Nous vérifions votre dossier en arrière-plan.</p></div><span class="v59-status-dot"></span></section></section>
     </section>`);
-    const rows=await loadVerificationRequests();
-    if(token!==state.verificationRenderToken || state.route!=='verification')return;
-    const latest=(rows||[])[0];
-    const status=String(latest?.status||'none').toLowerCase();
-    const statusLabel=latest?verificationStatusLabel(status):'Aucune demande';
-    const cls=latest?verificationStatusClass(status):'empty';
-    const action=status==='pending'?'Voir le suivi':status==='approved'?'Voir mon statut':'Commencer la vérification';
-    const body=$('v58VerificationBody');
-    if(!body)return;
-    body.innerHTML=`${latest?`<section class="v58-status"><div class="v58-status-main"><small>STATUT DU DOSSIER</small><b>${esc(statusLabel)}</b><p>${esc(status==='approved'?'Votre badge bleu est actif.':status==='rejected'?'Votre demande a été refusée. Vous pouvez constituer un nouveau dossier.':'Votre dossier est enregistré et attend le contrôle de l’administration.')}</p></div><span class="v58-status-dot ${cls}"></span></section>`:`<section class="v58-status"><div class="v58-status-main"><small>VOTRE DOSSIER</small><b>Prêt à être vérifié</b><p>Préparez une identité cohérente, un justificatif lisible et la référence exacte de votre paiement.</p></div><span class="v58-status-dot"></span></section>`}
-      <section class="v58-grid"><article class="v58-mini"><span>🪪</span><b>Identité</b><small>Informations publiques cohérentes.</small></article><article class="v58-mini"><span>🔐</span><b>Justificatif</b><small>Document envoyé dans l’espace sécurisé.</small></article><article class="v58-mini"><span>✓</span><b>Validation</b><small>Contrôle final par l’administration.</small></article></section>
-      ${verificationTimeline(status)}
-      <section class="v58-action"><div class="v58-action-copy"><b>${status==='pending'?'Dossier en cours de traitement':status==='approved'?'Badge bleu actif':'Demander la vérification'}</b><small>${status==='pending'?'Une seule demande en attente est autorisée.':status==='approved'?'Votre compte est actuellement vérifié.':'Frais de vérification : 25 000 Ar / mois. La décision finale appartient à l’administration.'}</small></div><button class="primary big" data-action="verification-start">${esc(action)}</button></section>`;
+
+    // Never make navigation wait for the database. The page is already usable.
+    try{
+      const rows=await loadVerificationRequests();
+      if(token!==state.verificationRenderToken || state.route!=='verification') return;
+      const latest=(rows||[])[0];
+      const status=String(latest?.status||'none').toLowerCase();
+      const statusLabel=latest?verificationStatusLabel(status):'Aucune demande';
+      const cls=latest?verificationStatusClass(status):'empty';
+      const action=status==='pending'?'Voir le suivi':status==='approved'?'Voir mon statut':'Commencer la vérification';
+      const body=$('v59VerificationBody'); if(!body)return;
+      body.innerHTML=`${latest?`<section class="v59-status"><div class="v59-status-main"><small>STATUT DU DOSSIER</small><b>${esc(statusLabel)}</b><p>${esc(status==='approved'?'Votre badge bleu est actif.':status==='rejected'?'Votre demande a été refusée. Vous pouvez constituer un nouveau dossier.':'Votre dossier est enregistré et attend le contrôle de l’administration.')}</p></div><span class="v59-status-dot ${cls}"></span></section>`:`<section class="v59-status v59-status-ready"><div class="v59-status-main"><small>VOTRE DOSSIER</small><b>Aucune demande en cours</b><p>Vous pouvez commencer une nouvelle demande de badge officiel lorsque votre dossier est prêt.</p></div><span class="v59-status-dot empty"></span></section>`}
+        <section class="v59-grid"><article class="v59-mini"><span>🪪</span><b>Identité</b><small>Informations publiques cohérentes.</small></article><article class="v59-mini"><span>🔐</span><b>Justificatif</b><small>Document envoyé dans l’espace sécurisé.</small></article><article class="v59-mini"><span>✓</span><b>Validation</b><small>Contrôle final par l’administration.</small></article></section>
+        ${verificationTimeline(status)}
+        <section class="v59-action"><div class="v59-action-copy"><b>${status==='pending'?'Dossier en cours de traitement':status==='approved'?'Badge bleu actif':'Demander la vérification'}</b><small>${status==='pending'?'Une seule demande en attente est autorisée.':status==='approved'?'Votre compte est actuellement vérifié.':'Frais de vérification : 25 000 Ar / mois. La décision finale appartient à l’administration.'}</small></div><button class="primary big" data-action="verification-start">${esc(action)}</button></section>`;
+    }catch(error){
+      if(token!==state.verificationRenderToken || state.route!=='verification')return;
+      const body=$('v59VerificationBody'); if(!body)return;
+      body.innerHTML=`<section class="v59-status v59-status-error"><div class="v59-status-main"><small>CONNEXION AU DOSSIER</small><b>Votre espace reste disponible</b><p>Le serveur met plus de temps que prévu. Vous pouvez réessayer sans quitter cette page.</p></div><button class="ghost-action" data-action="verification">Réessayer</button></section>`;
+    }
   };
+
 
 })();
