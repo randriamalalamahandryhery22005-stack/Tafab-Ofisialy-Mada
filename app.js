@@ -7081,4 +7081,114 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
 
   })();
 
+
+  /* ============================================================
+     TAFAß V58 — BADGE OFFICIEL : STABLE / NO-STUCK PATCH
+     - First paint does not wait for Supabase.
+     - Verification table fallback is supported.
+     - Long network calls have hard timeouts.
+     - Existing RPC remains preferred; direct stable-table fallback
+       is used only when the RPC is unavailable.
+  ============================================================ */
+  const tafaV58Race = (promise, ms, message) => Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(message)), ms))
+  ]);
+
+  const tafaV58Rows = async (table, userId) => {
+    try {
+      const q = sb.from(table).select('*').eq('user_id', userId).order('created_at',{ascending:false}).limit(20);
+      const r = await tafaV58Race(q, 7000, 'TIMEOUT');
+      if (r.error) return {data:null,error:r.error};
+      return {data:r.data||[],error:null};
+    } catch (e) { return {data:null,error:e}; }
+  };
+
+  loadVerificationRequests = async function(){
+    if(!state.user) return [];
+    const primary = await tafaV58Rows('tafa_verification_requests', state.user.id);
+    let rows = primary.data;
+    if(!rows && /relation|table|schema|does not exist|TIMEOUT/i.test(String(primary.error?.message||primary.error||''))) {
+      const fallback = await tafaV58Rows('badge_requests', state.user.id);
+      rows = fallback.data;
+      if(!rows) console.warn('Tafaß V58 verification fallback:', fallback.error?.message||fallback.error);
+    }
+    if(!rows) rows=[];
+    state.verificationRequests=rows.map(r=>({
+      ...r,
+      identity_name:r.identity_name||r.reason||'',
+      category:r.category||r.badge_type||'Autre',
+      proof_path:r.proof_path||r.document_url||'',
+      payment_method:r.payment_method||r.provider||'',
+      payment_reference:r.payment_reference||r.provider_payment_id||''
+    }));
+    return state.verificationRequests;
+  };
+
+  submitVerificationRequest = async function(data,proofFile){
+    if(!state.user) throw new Error('Connexion requise.');
+    const uid=state.user.id;
+    const a=await tafaV58Rows('tafa_verification_requests',uid);
+    const b=await tafaV58Rows('badge_requests',uid);
+    const pending=[...(a.data||[]),...(b.data||[])].find(x=>String(x.status).toLowerCase()==='pending');
+    if(pending) throw new Error('Une demande de badge est déjà en attente de validation.');
+    let proofPath='';
+    if(proofFile){
+      if(proofFile.size>15*1024*1024) throw new Error('Le justificatif dépasse 15 Mo.');
+      const ext=(proofFile.name.split('.').pop()||'bin').toLowerCase().replace(/[^a-z0-9]/g,'')||'bin';
+      proofPath=`${uid}/${crypto.randomUUID()}.${ext}`;
+      const up=await tafaV58Race(sb.storage.from('badge-proofs').upload(proofPath,proofFile,{upsert:false,contentType:proofFile.type||undefined}),15000,'Le stockage du justificatif ne répond pas.');
+      if(up.error) throw new Error('Justificatif : '+up.error.message);
+    }
+    try{
+      const rpc=await tafaV58Race(sb.rpc('tafa_create_badge_request',{
+        p_category:String(data.category||'Autre'),
+        p_identity_name:String(data.identity||''),
+        p_proof_path:proofPath||'',
+        p_payment_method:String(data.method||''),
+        p_payment_reference:String(data.ref||'')
+      }),12000,'Le serveur de vérification ne répond pas.');
+      if(!rpc.error) return rpc.data;
+      console.warn('Tafaß V58 badge RPC:',rpc.error.message||rpc.error);
+    }catch(rpcError){ console.warn('Tafaß V58 badge RPC indisponible:',rpcError?.message||rpcError); }
+
+    // Stable schema fallback. This is only attempted if the RPC is unavailable.
+    const direct=await tafaV58Race(sb.from('badge_requests').insert({
+      user_id:uid,
+      badge_type:String(data.category||'Autre'),
+      page_id:null,
+      reason:String(data.identity||''),
+      document_url:proofPath||'',
+      status:'pending'
+    }).select('*').single(),12000,'La demande de badge ne répond pas. Vérifiez la policy INSERT de badge_requests.');
+    if(direct.error){
+      if(proofPath) try{await sb.storage.from('badge-proofs').remove([proofPath]);}catch(_){ }
+      throw direct.error;
+    }
+    try{await sb.from('payments').insert({user_id:uid,provider:String(data.method||''),provider_payment_id:String(data.ref||''),purpose:'badge',status:'pending'});}catch(_){ }
+    return direct.data;
+  };
+
+  verificationPage = async function(){
+    const token=++state.verificationRenderToken;
+    // Paint immediately: the page must never remain on an endless verification skeleton.
+    simplePage('Vérification',`<section class="verification-page-v58">
+      <section class="v58-hero"><div class="v58-brand"><span class="v58-mark">✓</span><div><span class="v58-kicker">TAFAß · BADGE OFFICIEL</span><h3>Badge bleu vérifié</h3><p>Un parcours sécurisé pour demander, suivre et obtenir votre badge officiel. Votre dossier est contrôlé par l’administration Tafaß.</p></div></div></section>
+      <section id="v58VerificationBody"><div class="v58-status"><div class="v58-loading"><span class="v58-spinner"></span><span>Chargement sécurisé de votre dossier…</span></div></div></section>
+    </section>`);
+    const rows=await loadVerificationRequests();
+    if(token!==state.verificationRenderToken || state.route!=='verification')return;
+    const latest=(rows||[])[0];
+    const status=String(latest?.status||'none').toLowerCase();
+    const statusLabel=latest?verificationStatusLabel(status):'Aucune demande';
+    const cls=latest?verificationStatusClass(status):'empty';
+    const action=status==='pending'?'Voir le suivi':status==='approved'?'Voir mon statut':'Commencer la vérification';
+    const body=$('v58VerificationBody');
+    if(!body)return;
+    body.innerHTML=`${latest?`<section class="v58-status"><div class="v58-status-main"><small>STATUT DU DOSSIER</small><b>${esc(statusLabel)}</b><p>${esc(status==='approved'?'Votre badge bleu est actif.':status==='rejected'?'Votre demande a été refusée. Vous pouvez constituer un nouveau dossier.':'Votre dossier est enregistré et attend le contrôle de l’administration.')}</p></div><span class="v58-status-dot ${cls}"></span></section>`:`<section class="v58-status"><div class="v58-status-main"><small>VOTRE DOSSIER</small><b>Prêt à être vérifié</b><p>Préparez une identité cohérente, un justificatif lisible et la référence exacte de votre paiement.</p></div><span class="v58-status-dot"></span></section>`}
+      <section class="v58-grid"><article class="v58-mini"><span>🪪</span><b>Identité</b><small>Informations publiques cohérentes.</small></article><article class="v58-mini"><span>🔐</span><b>Justificatif</b><small>Document envoyé dans l’espace sécurisé.</small></article><article class="v58-mini"><span>✓</span><b>Validation</b><small>Contrôle final par l’administration.</small></article></section>
+      ${verificationTimeline(status)}
+      <section class="v58-action"><div class="v58-action-copy"><b>${status==='pending'?'Dossier en cours de traitement':status==='approved'?'Badge bleu actif':'Demander la vérification'}</b><small>${status==='pending'?'Une seule demande en attente est autorisée.':status==='approved'?'Votre compte est actuellement vérifié.':'Frais de vérification : 25 000 Ar / mois. La décision finale appartient à l’administration.'}</small></div><button class="primary big" data-action="verification-start">${esc(action)}</button></section>`;
+  };
+
 })();
