@@ -7031,6 +7031,54 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     };
   })();
 
+
+    // Tafaß V56 — Time Limits Premium UI
+    // Visual redesign only: keeps the existing policy/guard logic and values.
+    const originalTimeLimitSettingsHTMLV56=timeLimitSettingsHTML;
+    timeLimitSettingsHTML=function(){
+      const p=timeLimitPolicy();
+      const first=p.minor?15:30, second=p.minor?30:60, final=p.logoutMinutes;
+      return `<section class="tafa-v56-limits-card">
+        <div class="tafa-v56-limits-hero">
+          <div class="tafa-v56-hero-icon"><span>◷</span></div>
+          <div class="tafa-v56-hero-copy">
+            <div class="tafa-v56-kicker"><span class="tafa-v56-live-dot"></span> TAFAß · TEMPS & ÉQUILIBRE</div>
+            <h3>Limites d’utilisation</h3>
+            <p>Un contrôle intelligent du temps, conçu pour rester clair, discret et élégant pendant votre utilisation de Tafaß.</p>
+          </div>
+          <div class="tafa-v56-hero-status"><span>PROTECTION</span><b>ACTIVE</b></div>
+        </div>
+
+        <div class="tafa-v56-timeline">
+          <div class="tafa-v56-line" aria-hidden="true"></div>
+          <article class="tafa-v56-time-card">
+            <div class="tafa-v56-time-icon">⌛</div>
+            <div class="tafa-v56-time-main"><span>PREMIER RAPPEL</span><strong>${first}<small> min</small></strong><p>Une première pause vous est proposée.</p></div>
+            <i>01</i>
+          </article>
+          <article class="tafa-v56-time-card">
+            <div class="tafa-v56-time-icon orange">◴</div>
+            <div class="tafa-v56-time-main"><span>SECOND RAPPEL</span><strong>${second}<small> min</small></strong><p>Un rappel renforcé avant la limite finale.</p></div>
+            <i>02</i>
+          </article>
+          <article class="tafa-v56-time-card final">
+            <div class="tafa-v56-time-icon gold">⏱</div>
+            <div class="tafa-v56-time-main"><span>LIMITE FINALE</span><strong>${final}<small> min</small></strong><p>La session est automatiquement arrêtée à ce palier.</p></div>
+            <i>03</i>
+          </article>
+        </div>
+
+        <div class="tafa-v56-info-head"><div><span class="tafa-v56-kicker">CENTRE DE CONTRÔLE</span><h4>Comment fonctionne votre temps</h4></div><span class="tafa-v56-secure-pill">● SÉCURISÉ</span></div>
+        <div class="tafa-v56-info-grid">
+          <article><div class="tafa-v56-info-icon">🔔</div><div><b>À chaque rappel</b><small>Une interface Tafaß s’affiche sans modifier votre compte ni vos données.</small></div></article>
+          <article><div class="tafa-v56-info-icon">↻</div><div><b>Si vous continuez</b><small>Le compteur reprend automatiquement jusqu’au prochain palier.</small></div></article>
+          <article><div class="tafa-v56-info-icon gold">⛔</div><div><b>À la limite finale</b><small>La session est fermée automatiquement et une nouvelle connexion sera nécessaire.</small></div></article>
+          <article><div class="tafa-v56-info-icon admin">★</div><div><b>Administrateur officiel</b><small>Le compte administrateur officiel n’est pas soumis à cette limite.</small></div></article>
+        </div>
+        <div class="tafa-v56-bottom"><div><b>Votre équilibre numérique</b><small>Vous pouvez quitter Tafaß à tout moment. La déconnexion arrête le compteur de cette session.</small></div><button class="ghost-action big" data-action="time-limit-intro">Voir l’explication complète <span>→</span></button></div>
+      </section>`;
+    };
+
   })();
 
 })();
