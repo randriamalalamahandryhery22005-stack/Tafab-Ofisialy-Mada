@@ -3693,12 +3693,16 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     return el;
   }
   let pageLoading = false;
-  function beginPageLoading() {
+  let pageLoadingToken = 0;
+  function beginPageLoading(token = 0) {
     pageLoading = true;
+    pageLoadingToken = token;
     ensurePageLoader().classList.add("active");
     document.body.classList.add("page-loading");
   }
-  function endPageLoading() {
+  function endPageLoading(token = 0) {
+    // A stale render must never unlock navigation while a newer render is active.
+    if (token && token !== pageLoadingToken) return;
     const el = ensurePageLoader();
     // Do not block taps while the tiny visual transition finishes.
     pageLoading = false;
@@ -4330,7 +4334,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     const token = ++state.renderToken;
     const route = routes.includes(state.route) ? state.route : "home";
     state.route = route;
-    beginPageLoading();
+    beginPageLoading(token);
     document.querySelectorAll("[data-route]").forEach(el => el.classList.toggle("active", el.dataset.route === route));
     window.scrollTo({ top: 0, behavior: "auto" });
     try {
@@ -4364,7 +4368,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
         $("content").innerHTML = `<section class="clean-page clean-page-shell error-page"><div class="page-header clean-page-header"><h2>${esc(route === "profile" ? "Profil" : route === "settings" ? "Para & Conf" : "Tafaß")}</h2></div><div class="empty-block"><b>Impossible d’afficher cette section.</b><small>${esc(err?.message || "Une erreur est survenue.")}</small><button class="primary big" data-route="home">Retour à l’accueil</button></div></section>`;
       }
     } finally {
-      endPageLoading();
+      endPageLoading(token);
     }
   }
 
@@ -5973,10 +5977,14 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
         if(!validateSignupStep(1)||!validateSignupStep(2)||!validateSignupStep(3)||!validateSignupStep(4))return;
         if(password!==confirm)return toast("Les deux mots de passe ne correspondent pas.");
         if(!$("terms")?.checked)return toast("Acceptez les conditions pour continuer.");
-        const phone=normalizePhone($("phone")?.value||"",COUNTRY_META.MG); if(!COUNTRY_META.MG.test.test(phone))return toast("Numéro malgache invalide. Exemple : 330000000.");
+        const selectedCode=$("phoneCode")?.value||"+261";
+        const signupMeta=Object.values(COUNTRY_META).find(x=>x.code===selectedCode)||COUNTRY_META.MG;
+        const phone=normalizePhone($("phone")?.value||"",signupMeta);
+        if(!signupMeta.test.test(phone)) return toast(`Numéro ${signupMeta.name} invalide. Exemple : ${signupMeta.placeholder}.`);
+        const signupCountry=$("country")?.value||signupMeta.name;
         const btn=signupForm.querySelector('button[type="submit"]');setLoading(btn,true,"Créer mon compte");$("signupMsg").textContent="Création du compte…";
         try{
-          const meta={first_name:first,last_name:last,phone,phone_code:"+261",country:"Madagascar",birth:$("birth")?.value||null};
+          const meta={first_name:first,last_name:last,phone,phone_code:signupMeta.code,country:signupCountry,birth:$("birth")?.value||null};
           const {data,error}=await sb.auth.signUp({email,password,data:meta});
           if(error)throw error;
           if(data.session){
@@ -6030,9 +6038,6 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   });
   $("globalSearch").addEventListener("keydown", e => { if (e.key === "Enter") { const q=e.target.value; navigate("search"); setTimeout(()=>{ const input=$("searchInput"); if(input){input.value=q; searchPage(q);} },0); } });
   window.addEventListener("hashchange", () => { const r=location.hash.slice(1); if(routes.includes(r) && r !== state.route) navigate(r); });
-  document.addEventListener("contextmenu",e=>{ if(e.target.closest(".protected-media,.profile-page-premium.public-profile-page")) e.preventDefault(); });
-  document.addEventListener("dragstart",e=>{ if(e.target.closest(".protected-media,.profile-page-premium.public-profile-page")) e.preventDefault(); });
-
   const initialRoute = routes.includes(location.hash.slice(1)) ? location.hash.slice(1) : "home";
   state.route = initialRoute; state.navStack = [initialRoute];
 

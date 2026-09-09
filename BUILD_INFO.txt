@@ -1,5 +1,5 @@
-Tafaß — Premium Production Clean V37
-Frontend audit + Verification Badge Premium V2 alignment
-Date: 2026-09-06
+Tafaß — Production Stability & UI Audit V38
+Frontend audit, navigation stability, splash refresh, PWA cache refresh
+Date: 2026-09-08
 JavaScript syntax: node --check OK
-Verification: badge_requests + payment_transactions + private badge-proofs + admin RPC
+Changes: render-lock token, stale-render protection, responsive cleanup, modern splash, signup country/phone consistency, service-worker cache version refresh
