@@ -2850,7 +2850,11 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     /* ADMIN MENU: resolve the server-side role before rendering the Menu.
        This makes Administration appear immediately for a real Supabase admin. */
     if(!pageModeActive()){
-      try { state.__isAdmin = await adminIsAllowed(); } catch(_) { state.__isAdmin = false; }
+      const cachedAdmin = state.__isAdmin === true;
+      state.__isAdmin = cachedAdmin;
+      Promise.resolve().then(()=>adminIsAllowed()).then(ok=>{
+        if(state.route==="menu" && ok!==state.__isAdmin){ state.__isAdmin=ok; render().catch(()=>{}); }
+      }).catch(()=>{});
     }
     if(pageModeActive()) return pageMenu();
     const p = state.profile || {};
@@ -2875,7 +2879,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     const adminCard = state.__isAdmin ? [
       ["admin","shield","Administration","Centre unique : comptes, vérifications, monétisation, signalements et sécurité"]
     ] : [];
-    const verificationCard = !state.__isAdmin ? [["verification","shield","Vérification","Demander le badge bleu officiel"]] : [];
+    const verificationCard = !state.__isAdmin ? [["verification","shield","Badge officiel","Nouveau parcours sécurisé pour demander le badge bleu"]] : [];
     const actions = [
       ["history","history","Historique d'activité","Vos actions enregistrées", "activity"],
       ["payment","payment","Paiement","Vos paiements et transactions", "payment"],
@@ -3859,7 +3863,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if(q.error||!post)return toast('Publication introuvable.');
     if(post.user_id!==state.user.id)return toast('Vous pouvez uniquement booster votre propre publication.');
     const type=post.media_type==='reel'?'reel':String(post.media_type||'').startsWith('video')?'video':String(post.media_type||'').startsWith('image')?'photo':'post';
-    openModal(`<div class="modal-box boost-modal-premium"><button class="modal-close" data-action="close-modal">×</button><div class="boost-hero"><div class="boost-mark">✦</div><div><span class="eyebrow">TAFAß • BOOST</span><h3>Booster cette publication</h3><p>Transformez votre publication en contenu sponsorisé après paiement et validation administrative.</p></div></div><div class="boost-preview">${post.media_url?(type==='video'||type==='reel'?`<video src="${esc(post.media_url)}" controls playsinline></video>`:`<img src="${esc(post.media_url)}" alt="Publication">`):''}<div><b>${esc((post.content||'Publication Tafaß').slice(0,100))}</b><small>Type : ${esc(type.toUpperCase())}</small></div></div><div class="boost-section"><span class="boost-section-title">OBJECTIF</span><div class="boost-objective-grid"><button class="boost-choice active" data-boost-objective="awareness">👁️<b>Visibilité</b><small>Plus de portée</small></button><button class="boost-choice" data-boost-objective="engagement">❤️<b>Engagement</b><small>Réactions, commentaires</small></button><button class="boost-choice" data-boost-objective="traffic">🔗<b>Trafic</b><small>Plus de clics</small></button></div></div><div class="boost-section"><span class="boost-section-title">AUDIENCE</span><label>Zone ciblée<input id="boostLocation" class="premium-input" value="Madagascar" maxlength="120" placeholder="Madagascar ou une ville"></label><div class="grid2"><label>Âge minimum<input id="boostAgeMin" type="number" min="13" max="100" value="18"></label><label>Âge maximum<input id="boostAgeMax" type="number" min="13" max="100" value="65"></label></div><label>Genre<select id="boostGender" class="premium-input"><option value="all">Tout le monde</option><option value="male">Hommes</option><option value="female">Femmes</option></select></label><small class="boost-note">Le ciblage utilise uniquement les informations réellement disponibles dans les profils Tafaß. Aucun profil individuel n'est vendu.</small></div><div class="boost-section"><span class="boost-section-title">BUDGET & DURÉE</span><div class="grid2"><label>Budget / jour (Ar)<input id="boostDaily" type="number" min="0" step="1000" value="10000"></label><label>Budget total (Ar)<input id="boostTotal" type="number" min="1000" step="1000" value="70000"></label></div><div class="grid2"><label>Début<input id="boostStart" type="date" value="${new Date().toISOString().slice(0,10)}"></label><label>Fin<input id="boostEnd" type="date"></label></div></div><input type="hidden" id="boostPostId" value="${esc(post.id)}"><input type="hidden" id="boostAdType" value="${esc(type)}"><button class="primary big boost-submit" data-action="create-boost-post">Continuer vers le paiement →</button></div>`);
+    openModal(`<div class="modal-box boost-modal-premium"><button class="modal-close" data-action="close-modal">×</button><div class="boost-hero"><div class="boost-mark">✦</div><div><span class="eyebrow">TAFAß • BOOST</span><h3>Booster cette publication</h3><p>Transformez votre publication en contenu sponsorisé après paiement et validation administrative.</p></div></div><div class="boost-preview">${post.media_url?(type==='video'||type==='reel'?`<video src="${esc(post.media_url)}" controls playsinline></video>`:`<img src="${esc(post.media_url)}" alt="Publication">`):''}<div><b>${esc((post.content||'Publication Tafaß').slice(0,100))}</b><small>Type : ${esc(type.toUpperCase())}</small></div></div><div class="boost-section"><span class="boost-section-title">OBJECTIF</span><div class="boost-objective-grid"><button class="boost-choice active" data-boost-objective="awareness">👁️<b>Visibilité</b><small>Plus de portée</small></button><button class="boost-choice" data-boost-objective="engagement">❤️<b>Engagement</b><small>Réactions, commentaires</small></button><button class="boost-choice" data-boost-objective="traffic">🔗<b>Trafic</b><small>Plus de clics</small></button></div></div><div class="boost-section"><span class="boost-section-title">AUDIENCE</span><label>Zone ciblée<input id="boostLocation" class="premium-input" value="Madagascar" maxlength="120" placeholder="Madagascar ou une ville"></label><div class="grid2"><label>Âge minimum<input id="boostAgeMin" type="number" min="18" max="100" value="18"></label><label>Âge maximum<input id="boostAgeMax" type="number" min="18" max="100" value="65"></label></div><label>Genre<select id="boostGender" class="premium-input"><option value="all">Tout le monde</option><option value="male">Hommes</option><option value="female">Femmes</option></select></label><small class="boost-note">Le ciblage utilise uniquement les informations réellement disponibles dans les profils Tafaß. Aucun profil individuel n'est vendu.</small></div><div class="boost-section"><span class="boost-section-title">BUDGET & DURÉE</span><div class="grid2"><label>Budget / jour (Ar)<input id="boostDaily" type="number" min="0" step="1000" value="10000"></label><label>Budget total (Ar)<input id="boostTotal" type="number" min="1000" step="1000" value="70000"></label></div><div class="grid2"><label>Début<input id="boostStart" type="date" value="${new Date().toISOString().slice(0,10)}"></label><label>Fin<input id="boostEnd" type="date"></label></div></div><input type="hidden" id="boostPostId" value="${esc(post.id)}"><input type="hidden" id="boostAdType" value="${esc(type)}"><button class="primary big boost-submit" data-action="create-boost-post">Continuer vers le paiement →</button></div>`);
     document.querySelectorAll('[data-boost-objective]').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('[data-boost-objective]').forEach(x=>x.classList.remove('active'));b.classList.add('active');},{once:false}));
   }
   async function createBoostPost(){
@@ -3883,7 +3887,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   async function openBoostPage(){
     const q=await sb.from('pages').select('id,name,username,logo_url').eq('owner_id',state.user.id).order('created_at',{ascending:false});
     const pages=q.data||[]; if(q.error)return toast(q.error.message); if(!pages.length)return toast('Créez d’abord une Page.');
-    openModal(`<div class="modal-box boost-modal-premium"><button class="modal-close" data-action="close-modal">×</button><div class="boost-hero"><div class="boost-mark">👥</div><div><span class="eyebrow">TAFAß • PAGE</span><h3>Promouvoir une Page</h3><p>Votre Page sera présentée comme sponsorisée pour gagner de nouveaux abonnés.</p></div></div><label>Page<select id="boostPageId" class="premium-input">${pages.map(x=>`<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('')}</select></label><div class="boost-section"><span class="boost-section-title">OBJECTIF</span><div class="boost-objective-grid"><button class="boost-choice active"><span>👥</span><b>Plus d'abonnés</b><small>Développer la communauté</small></button></div></div><div class="boost-section"><span class="boost-section-title">AUDIENCE</span><label>Zone ciblée<input id="boostLocation" class="premium-input" value="Madagascar" maxlength="120"></label><div class="grid2"><label>Âge minimum<input id="boostAgeMin" type="number" min="13" max="100" value="18"></label><label>Âge maximum<input id="boostAgeMax" type="number" min="13" max="100" value="65"></label></div><label>Genre<select id="boostGender" class="premium-input"><option value="all">Tout le monde</option><option value="male">Hommes</option><option value="female">Femmes</option></select></label></div><div class="boost-section"><span class="boost-section-title">BUDGET</span><div class="grid2"><label>Budget / jour (Ar)<input id="boostDaily" type="number" min="0" step="1000" value="10000"></label><label>Budget total (Ar)<input id="boostTotal" type="number" min="1000" step="1000" value="70000"></label></div></div><button class="primary big" data-action="create-boost-page">Continuer vers le paiement →</button></div>`);
+    openModal(`<div class="modal-box boost-modal-premium"><button class="modal-close" data-action="close-modal">×</button><div class="boost-hero"><div class="boost-mark">👥</div><div><span class="eyebrow">TAFAß • PAGE</span><h3>Promouvoir une Page</h3><p>Votre Page sera présentée comme sponsorisée pour gagner de nouveaux abonnés.</p></div></div><label>Page<select id="boostPageId" class="premium-input">${pages.map(x=>`<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('')}</select></label><div class="boost-section"><span class="boost-section-title">OBJECTIF</span><div class="boost-objective-grid"><button class="boost-choice active"><span>👥</span><b>Plus d'abonnés</b><small>Développer la communauté</small></button></div></div><div class="boost-section"><span class="boost-section-title">AUDIENCE</span><label>Zone ciblée<input id="boostLocation" class="premium-input" value="Madagascar" maxlength="120"></label><div class="grid2"><label>Âge minimum<input id="boostAgeMin" type="number" min="18" max="100" value="18"></label><label>Âge maximum<input id="boostAgeMax" type="number" min="18" max="100" value="65"></label></div><label>Genre<select id="boostGender" class="premium-input"><option value="all">Tout le monde</option><option value="male">Hommes</option><option value="female">Femmes</option></select></label></div><div class="boost-section"><span class="boost-section-title">BUDGET</span><div class="grid2"><label>Budget / jour (Ar)<input id="boostDaily" type="number" min="0" step="1000" value="10000"></label><label>Budget total (Ar)<input id="boostTotal" type="number" min="1000" step="1000" value="70000"></label></div></div><button class="primary big" data-action="create-boost-page">Continuer vers le paiement →</button></div>`);
   }
   async function createBoostPage(){
     const pageId=$('boostPageId')?.value, min=Number($('boostAgeMin')?.value||18),max=Number($('boostAgeMax')?.value||65),daily=Math.max(0,Number($('boostDaily')?.value||0)),total=Math.max(0,Number($('boostTotal')?.value||0));
@@ -3929,7 +3933,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     const status=adStatusLabel(c.status);
     const remaining=Math.max(0,Number(c.total_budget_mga||0)-Number(c.spent_amount_mga||0));
     const paymentBlock=payment?`<div class="ad-dashboard-payment"><div><span>PAIEMENT</span><b>${adMoney(payment.amount_mga)}</b><small>${esc(payment.method||'')} · Réf. ${esc(payment.transaction_reference||'')}</small></div><em class="ad-payment-state ${esc(payment.status||'')}">${esc(payment.status==='verified'?'Vérifié':payment.status==='pending'?'En vérification':payment.status==='rejected'?'Refusé':'Annulé')}</em></div>`:`<div class="ad-dashboard-empty">Aucun paiement enregistré.</div>`;
-    openModal(`<div class="modal-box ad-owner-dashboard-modal"><button class="modal-close" data-action="close-modal">×</button><div class="ad-dashboard-hero"><div class="ad-dashboard-mark">✦</div><div class="grow"><span class="eyebrow">TAFAß ADS · MON TABLEAU DE BORD</span><h3>${esc(c.name||'Campagne sponsorisée')}</h3><p>${esc(c.audience_location||'Madagascar')} · ${esc(c.objective||'awareness')} · ${esc(status)}</p></div><span class="ad-live-pill ${c.status==='active'?'live':''}"><i></i>${esc(status)}</span></div><div class="ad-dashboard-kpis"><div><strong>${Number(x.impressions||0).toLocaleString('fr-FR')}</strong><span>Impressions</span></div><div><strong>${Number(x.unique_reach||0).toLocaleString('fr-FR')}</strong><span>Personnes atteintes</span></div><div><strong>${Number(x.clicks||0).toLocaleString('fr-FR')}</strong><span>Clics</span></div><div><strong>${adPct(x.ctr)}</strong><span>CTR</span></div><div><strong>${adMoney(c.spent_amount_mga)}</strong><span>Dépensé</span></div><div><strong>${adMoney(remaining)}</strong><span>Reste</span></div></div><section class="ad-dashboard-section"><div class="ad-dashboard-section-head"><div><span class="eyebrow">ÉVOLUTION</span><h4>14 derniers jours</h4></div><span class="ad-dashboard-mini">Impressions quotidiennes</span></div>${chart}</section><section class="ad-dashboard-section"><div class="ad-dashboard-section-head"><div><span class="eyebrow">CAMPAGNE</span><h4>Paramètres & diffusion</h4></div></div><div class="ad-dashboard-grid"><div><span>Objectif</span><b>${esc(c.objective||'awareness')}</b></div><div><span>Audience</span><b>${esc(c.audience_location||'Madagascar')}</b></div><div><span>Âge</span><b>${Number(c.audience_age_min||13)}–${Number(c.audience_age_max||100)} ans</b></div><div><span>Budget total</span><b>${adMoney(c.total_budget_mga)}</b></div><div><span>Budget / jour</span><b>${adMoney(c.daily_budget_mga)}</b></div><div><span>Statut</span><b>${esc(status)}</b></div></div></section><section class="ad-dashboard-section"><div class="ad-dashboard-section-head"><div><span class="eyebrow">TRANSACTION</span><h4>Dernier paiement</h4></div></div>${paymentBlock}</section><div class="ad-dashboard-actions">${c.status==='active'?`<button class="secondary-action" data-action="owner-pause-boost" data-id="${esc(c.id)}">⏸ Mettre en pause</button>`:''}<button class="primary" data-action="owner-refresh-boost-dashboard" data-id="${esc(c.id)}">↻ Actualiser</button></div><div class="ad-dashboard-footnote">✦ Votre publicité conserve la marque <b>TAFAß ADS · SPONSORISÉ</b> pendant toute sa diffusion. Les chiffres sont calculés à partir des événements enregistrés côté serveur.</div></div>`);
+    openModal(`<div class="modal-box ad-owner-dashboard-modal"><button class="modal-close" data-action="close-modal">×</button><div class="ad-dashboard-hero"><div class="ad-dashboard-mark">✦</div><div class="grow"><span class="eyebrow">TAFAß ADS · MON TABLEAU DE BORD</span><h3>${esc(c.name||'Campagne sponsorisée')}</h3><p>${esc(c.audience_location||'Madagascar')} · ${esc(c.objective||'awareness')} · ${esc(status)}</p></div><span class="ad-live-pill ${c.status==='active'?'live':''}"><i></i>${esc(status)}</span></div><div class="ad-dashboard-kpis"><div><strong>${Number(x.impressions||0).toLocaleString('fr-FR')}</strong><span>Impressions</span></div><div><strong>${Number(x.unique_reach||0).toLocaleString('fr-FR')}</strong><span>Personnes atteintes</span></div><div><strong>${Number(x.clicks||0).toLocaleString('fr-FR')}</strong><span>Clics</span></div><div><strong>${adPct(x.ctr)}</strong><span>CTR</span></div><div><strong>${adMoney(c.spent_amount_mga)}</strong><span>Dépensé</span></div><div><strong>${adMoney(remaining)}</strong><span>Reste</span></div></div><section class="ad-dashboard-section"><div class="ad-dashboard-section-head"><div><span class="eyebrow">ÉVOLUTION</span><h4>14 derniers jours</h4></div><span class="ad-dashboard-mini">Impressions quotidiennes</span></div>${chart}</section><section class="ad-dashboard-section"><div class="ad-dashboard-section-head"><div><span class="eyebrow">CAMPAGNE</span><h4>Paramètres & diffusion</h4></div></div><div class="ad-dashboard-grid"><div><span>Objectif</span><b>${esc(c.objective||'awareness')}</b></div><div><span>Audience</span><b>${esc(c.audience_location||'Madagascar')}</b></div><div><span>Âge</span><b>${Number(c.audience_age_min||18)}–${Number(c.audience_age_max||100)} ans</b></div><div><span>Budget total</span><b>${adMoney(c.total_budget_mga)}</b></div><div><span>Budget / jour</span><b>${adMoney(c.daily_budget_mga)}</b></div><div><span>Statut</span><b>${esc(status)}</b></div></div></section><section class="ad-dashboard-section"><div class="ad-dashboard-section-head"><div><span class="eyebrow">TRANSACTION</span><h4>Dernier paiement</h4></div></div>${paymentBlock}</section><div class="ad-dashboard-actions">${c.status==='active'?`<button class="secondary-action" data-action="owner-pause-boost" data-id="${esc(c.id)}">⏸ Mettre en pause</button>`:''}<button class="primary" data-action="owner-refresh-boost-dashboard" data-id="${esc(c.id)}">↻ Actualiser</button></div><div class="ad-dashboard-footnote">✦ Votre publicité conserve la marque <b>TAFAß ADS · SPONSORISÉ</b> pendant toute sa diffusion. Les chiffres sont calculés à partir des événements enregistrés côté serveur.</div></div>`);
   }
   async function pauseOwnerBoost(id){
     if(!id)return;
@@ -3957,7 +3961,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   }
   function openBusinessProfile(){const b=window.__tafassBusiness||{};openModal(`<div class="modal-box v26-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • BUSINESS</span><h3>Profil professionnel</h3><label>Nom de l'entreprise<input id="bizName" class="premium-input" maxlength="120" value="${esc(b.business_name||'')}" placeholder="Ex. Tafaß Studio"></label><label>Catégorie<input id="bizCat" class="premium-input" maxlength="80" value="${esc(b.category||'Entreprise')}"></label><label>Localisation<input id="bizLoc" class="premium-input" maxlength="120" value="${esc(b.location||'Madagascar')}"></label><label>Description<textarea id="bizDesc" class="premium-input" maxlength="1000">${esc(b.description||'')}</textarea></label><label>Site web<input id="bizWeb" class="premium-input" maxlength="300" value="${esc(b.website||'')}"></label><button class="primary big" data-action="save-business-profile">Enregistrer</button></div>`)}
   async function saveBusinessProfile(){const name=$('bizName')?.value.trim();if(!name)return toast("Nom de l'entreprise requis.");const payload={owner_id:state.user.id,business_name:name,category:$('bizCat')?.value.trim()||'Entreprise',location:$('bizLoc')?.value.trim()||'',description:$('bizDesc')?.value.trim()||'',website:$('bizWeb')?.value.trim()||''};const r=await sb.from('tafab_business_profiles').upsert(payload,{onConflict:'owner_id'});if(r.error)return toast(r.error.message);closeModal();toast('Profil Business enregistré.');return businessAdsPage();}
-  function openAdCampaign(){openModal(`<div class="modal-box v26-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • PUBLICITÉ</span><h3>Nouvelle campagne</h3><label>Nom<input id="adName" class="premium-input" maxlength="120" placeholder="Ex. Lancement produit"></label><label>Titre de l'annonce<input id="adCreativeTitle" class="premium-input" maxlength="120" placeholder="Message publicitaire"></label><label>Description<textarea id="adCreativeDesc" class="premium-input" maxlength="500" placeholder="Présentez votre offre…"></textarea></label><label>Lien de destination<input id="adTargetUrl" class="premium-input" maxlength="500" placeholder="https://…"></label><label>Objectif<select id="adObjective" class="premium-input"><option value="awareness">Notoriété</option><option value="traffic">Trafic</option><option value="engagement">Engagement</option><option value="sales">Ventes</option></select></label><label>Zone ciblée<input id="adLocation" class="premium-input" maxlength="120" value="Madagascar"></label><div class="grid2"><label>Budget/jour (Ar)<input id="adDaily" type="number" min="0" step="100" value="0"></label><label>Budget total (Ar)<input id="adTotal" type="number" min="0" step="100" value="0"></label></div><div class="grid2"><label>Âge min<input id="adAgeMin" type="number" min="13" max="100" value="18"></label><label>Âge max<input id="adAgeMax" type="number" min="13" max="100" value="65"></label></div><label>Centres d'intérêt<input id="adInterests" class="premium-input" maxlength="300" placeholder="mode, musique, technologie"></label><button class="primary big" data-action="save-ad-campaign">Créer la campagne</button></div>`)}
+  function openAdCampaign(){openModal(`<div class="modal-box v26-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • PUBLICITÉ</span><h3>Nouvelle campagne</h3><label>Nom<input id="adName" class="premium-input" maxlength="120" placeholder="Ex. Lancement produit"></label><label>Titre de l'annonce<input id="adCreativeTitle" class="premium-input" maxlength="120" placeholder="Message publicitaire"></label><label>Description<textarea id="adCreativeDesc" class="premium-input" maxlength="500" placeholder="Présentez votre offre…"></textarea></label><label>Lien de destination<input id="adTargetUrl" class="premium-input" maxlength="500" placeholder="https://…"></label><label>Objectif<select id="adObjective" class="premium-input"><option value="awareness">Notoriété</option><option value="traffic">Trafic</option><option value="engagement">Engagement</option><option value="sales">Ventes</option></select></label><label>Zone ciblée<input id="adLocation" class="premium-input" maxlength="120" value="Madagascar"></label><div class="grid2"><label>Budget/jour (Ar)<input id="adDaily" type="number" min="0" step="100" value="0"></label><label>Budget total (Ar)<input id="adTotal" type="number" min="0" step="100" value="0"></label></div><div class="grid2"><label>Âge min<input id="adAgeMin" type="number" min="18" max="100" value="18"></label><label>Âge max<input id="adAgeMax" type="number" min="18" max="100" value="65"></label></div><label>Centres d'intérêt<input id="adInterests" class="premium-input" maxlength="300" placeholder="mode, musique, technologie"></label><button class="primary big" data-action="save-ad-campaign">Créer la campagne</button></div>`)}
   async function saveAdCampaign(){const name=$('adName')?.value.trim();if(!name)return toast('Nom de campagne requis.');const min=Number($('adAgeMin')?.value||18),max=Number($('adAgeMax')?.value||65);if(min>max)return toast("L'âge minimum doit être inférieur ou égal à l'âge maximum.");const interests=($('adInterests')?.value||'').split(',').map(x=>x.trim()).filter(Boolean).slice(0,20);const r=await sb.from('tafab_ad_campaigns').insert({owner_id:state.user.id,name,creative_title:$('adCreativeTitle')?.value.trim()||name,creative_description:$('adCreativeDesc')?.value.trim()||'',target_url:$('adTargetUrl')?.value.trim()||'',objective:$('adObjective')?.value||'awareness',status:'draft',daily_budget_mga:Math.max(0,Number($('adDaily')?.value||0)),total_budget_mga:Math.max(0,Number($('adTotal')?.value||0)),audience_location:$('adLocation')?.value.trim()||'Madagascar',audience_age_min:min,audience_age_max:max,audience_interests:interests});if(r.error)return toast(r.error.message);closeModal();toast('Campagne créée en brouillon.');return businessAdsPage();}
   async function toggleAdCampaign(id,status){const next=status==='active'?'paused':'active';const q=await sb.from('tafab_ad_campaigns').select('*').eq('id',id).eq('owner_id',state.user.id).maybeSingle();if(q.error||!q.data)return toast('Campagne introuvable.');if(next==='active' && !Number(q.data.daily_budget_mga||0) && !Number(q.data.total_budget_mga||0))return toast('Ajoutez un budget avant d’activer la campagne.');const r=await sb.from('tafab_ad_campaigns').update({status:next,updated_at:new Date().toISOString()}).eq('id',id).eq('owner_id',state.user.id);if(r.error)return toast(r.error.message);const adPayload={owner_id:state.user.id,campaign_id:id,title:q.data.creative_title||q.data.name,description:q.data.creative_description||'',target_url:q.data.target_url||'',image_url:q.data.image_url||null,status:next==='active'?'active':'paused',starts_at:q.data.starts_at||new Date().toISOString(),ends_at:q.data.ends_at||null};const ar=await sb.from('tafab_ads').upsert(adPayload,{onConflict:'campaign_id'});if(ar.error)console.warn('Ad creative sync:',ar.error.message);toast(next==='active'?'Campagne activée.':'Campagne mise en pause.');return businessAdsPage();}
   async function deleteAdCampaign(id){if(!(await premiumConfirm('Supprimer la campagne','Cette campagne sera supprimée de votre espace publicitaire.','Supprimer',true)))return;const r=await sb.from('tafab_ad_campaigns').delete().eq('id',id).eq('owner_id',state.user.id);if(r.error)return toast(r.error.message);toast('Campagne supprimée.');return businessAdsPage();}
@@ -4146,17 +4150,21 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     const latest=(state.verificationRequests||[])[0];
     if(latest?.status==='pending') return verificationPage(true);
     if(latest?.status==='approved') return verificationPage(false);
-    let step=1, data={identity:displayName(state.profile||state.user)||'',category:'',method:'',ref:''}, proofFile=null;
-    const titles=['Identité','Catégorie','Justificatif','Paiement','Confirmation'];
+    let step=1;
+    const data={identity:displayName(state.profile||state.user)||'',category:'',method:'',ref:''};
+    let proofFile=null;
+    const titles=['Profil','Éligibilité','Justificatif','Paiement & envoi'];
     const categories=['Personnalité publique','Créateur de contenu','Artiste','Entreprise','Marque','Média','Journaliste','Sportif','Institution','Organisation','Professionnel','Autre'];
     const show=()=>{
       let body='';
-      if(step===1) body=`<div class="verification-step-v2"><div class="verification-step-icon-v2">◎</div><h3>Vérifiez votre identité</h3><p>Utilisez votre nom légal. Cette information sert uniquement à l’examen de votre demande.</p><label>Nom légal<input id="vIdentity" class="premium-input" maxlength="160" value="${esc(data.identity)}" placeholder="Nom complet"></label><label>Nom d’utilisateur<input class="premium-input" value="@${esc(state.profile?.username||'')}" readonly></label></div>`;
-      if(step===2) body=`<div class="verification-step-v2"><div class="verification-step-icon-v2">✓</div><h3>Choisissez votre catégorie</h3><p>Sélectionnez la catégorie qui correspond le mieux à votre présence publique.</p><label>Catégorie<select id="vCategory" class="premium-input">${categories.map(x=>`<option ${x===data.category?'selected':''}>${x}</option>`).join('')}</select></label></div>`;
-      if(step===3) body=`<div class="verification-step-v2"><div class="verification-step-icon-v2">▣</div><h3>Ajoutez votre justificatif</h3><p>Importez une pièce pertinente. Le fichier est envoyé dans le stockage privé réservé aux vérifications.</p><label>Document<input id="vProof" type="file" accept="image/*,.pdf"></label><div class="verification-file-v2">${proofFile?`✓ ${esc(proofFile.name)}`:'Image ou PDF accepté'}</div></div>`;
-      if(step===4) body=`<div class="verification-step-v2"><div class="verification-step-icon-v2">◇</div><h3>Confirmez votre paiement</h3><p>Frais de vérification : <b>25 000 Ar / mois</b>. Effectuez le paiement puis saisissez la référence exacte.</p><div class="verification-payments-v2"><span><b>Yas Money</b><small>Canal officiel configuré par Tafaß</small></span><span><b>Airtel Money</b><small>Canal officiel configuré par Tafaß</small></span></div><label>Méthode<select id="vMethod" class="premium-input"><option>Yas Money</option><option>Airtel Money</option></select></label><label>Référence<input id="vRef" class="premium-input" maxlength="120" value="${esc(data.ref)}" placeholder="Référence exacte du paiement"></label></div>`;
-      if(step===5) body=`<div class="verification-step-v2"><div class="verification-success-v2">✓</div><h3>Tout est prêt</h3><p>Relisez votre dossier avant l’envoi. L’administration vérifiera l’identité, le justificatif et le paiement avant toute activation.</p><div class="verification-summary-v2"><span>Identité<strong>${esc(data.identity||'—')}</strong></span><span>Catégorie<strong>${esc(data.category||'—')}</strong></span><span>Justificatif<strong>${esc(proofFile?.name||'—')}</strong></span><span>Paiement<strong>${esc(data.method||'—')}</strong></span><span>Référence<strong>${esc(data.ref||'—')}</strong></span></div></div>`;
-      openModal(`<div class="modal-box verification-wizard-v2"><div class="verification-wizard-head"><div><span class="eyebrow">TAFAß · VÉRIFICATION</span><h3>Badge bleu officiel</h3><small>Étape ${step} sur 5 · ${titles[step-1]}</small></div><button class="modal-close" data-action="close-modal">×</button></div><div class="verification-progress-v2">${titles.map((t,i)=>`<span class="${i+1<=step?'active':''}"><b>${i+1}</b><small>${t}</small></span>`).join('')}</div>${body}<div class="verification-wizard-actions-v2"><button type="button" class="ghost-action" id="verificationBack">${step===1?'Annuler':'Retour'}</button><button type="button" class="primary big" id="verificationNext">${step===5?'Envoyer la demande':'Continuer'}</button></div></div>`);
+      if(step===1) body=`<div class="verification-step-v41"><div class="verification-step-icon-v41">01</div><span class="verification-kicker">PROFIL OFFICIEL</span><h3>Confirmez votre identité publique</h3><p>Le nom fourni sera comparé aux éléments de votre dossier. Utilisez une identité réelle et cohérente.</p><label>Nom légal<input id="vIdentity" class="premium-input" maxlength="160" value="${esc(data.identity)}" placeholder="Nom complet"></label><div class="verification-readonly"><span>Nom d’utilisateur</span><b>@${esc(state.profile?.username||'—')}</b></div></div>`;
+      if(step===2) body=`<div class="verification-step-v41"><div class="verification-step-icon-v41">02</div><span class="verification-kicker">ÉLIGIBILITÉ</span><h3>Choisissez votre catégorie</h3><p>Sélectionnez le motif qui décrit le mieux votre présence publique. L’administration utilisera cette information pour examiner le dossier.</p><label>Catégorie<select id="vCategory" class="premium-input">${categories.map(x=>`<option ${x===data.category?'selected':''}>${x}</option>`).join('')}</select></label><div class="verification-note-v41">✓ Une demande complète est examinée manuellement avant toute activation du badge.</div></div>`;
+      if(step===3) body=`<div class="verification-step-v41"><div class="verification-step-icon-v41">03</div><span class="verification-kicker">JUSTIFICATIF</span><h3>Ajoutez une preuve vérifiable</h3><p>Importez une pièce pertinente au dossier. Elle reste réservée au processus de vérification.</p><label class="verification-upload-v41"><span>Choisir un document</span><input id="vProof" type="file" accept="image/*,.pdf"><small>${proofFile?`✓ ${esc(proofFile.name)}`:'Image ou PDF · 15 Mo maximum'}</small></label><div class="verification-note-v41">🔒 Le fichier est envoyé dans l’espace privé dédié aux vérifications.</div></div>`;
+      if(step===4) body=`<div class="verification-step-v41"><div class="verification-step-icon-v41">04</div><span class="verification-kicker">PAIEMENT SÉCURISÉ</span><h3>Finalisez votre demande</h3><p>Frais de vérification : <strong class="verification-price-v41">25 000 Ar / mois</strong>. Saisissez exactement la référence du paiement effectué.</p><div class="verification-payments-v41"><button type="button" class="${data.method==='Yas Money'?'active':''}" data-vmethod="Yas Money"><b>Yas Money</b><small>Paiement mobile</small></button><button type="button" class="${data.method==='Airtel Money'?'active':''}" data-vmethod="Airtel Money"><b>Airtel Money</b><small>Paiement mobile</small></button></div><label>Référence de transaction<input id="vRef" class="premium-input" maxlength="120" value="${esc(data.ref)}" placeholder="Référence exacte"></label><div class="verification-final-check">✓ En envoyant, vous confirmez que les informations sont exactes et acceptez le contrôle administratif.</div></div>`;
+      openModal(`<div class="modal-box verification-wizard-v41"><div class="verification-v41-head"><div><span class="eyebrow">TAFAß · BADGE OFFICIEL</span><h3>Demande de badge bleu</h3><small>Étape ${step} sur 4 · ${titles[step-1]}</small></div><button class="modal-close" data-action="close-modal">×</button></div><div class="verification-progress-v41">${titles.map((t,i)=>`<span class="${i+1<=step?'active':''}"><b>${i+1}</b><small>${t}</small></span>`).join('')}</div>${body}<div class="verification-wizard-actions-v41"><button type="button" class="ghost-action" id="verificationBack">${step===1?'Annuler':'Retour'}</button><button type="button" class="primary big" id="verificationNext">${step===4?'Envoyer le dossier':'Continuer'}</button></div></div>`);
+      document.querySelectorAll('[data-vmethod]').forEach(b=>b.addEventListener('click',()=>{
+        data.method=b.dataset.vmethod; document.querySelectorAll('[data-vmethod]').forEach(x=>x.classList.toggle('active',x===b));
+      }));
       const back=$('verificationBack'), next=$('verificationNext');
       if(back) back.onclick=()=>{if(step===1)closeModal();else{step--;show();}};
       if(next) next.onclick=async()=>{
@@ -4164,11 +4172,16 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
         if(step===1){data.identity=$('vIdentity')?.value.trim()||'';if(data.identity.length<2)return toast('Indiquez votre nom légal.');}
         if(step===2){data.category=$('vCategory')?.value||'';if(!data.category)return toast('Choisissez une catégorie.');}
         if(step===3){const f=$('vProof')?.files?.[0];if(f)proofFile=f;if(!proofFile)return toast('Ajoutez votre justificatif.');if(proofFile.size>15*1024*1024)return toast('Le justificatif dépasse 15 Mo.');}
-        if(step===4){data.method=$('vMethod')?.value||'';data.ref=$('vRef')?.value.trim()||'';if(!data.ref)return toast('Ajoutez la référence exacte du paiement.');}
-        if(step<5){step++;show();return;}
-        next.disabled=true; next.textContent='Envoi en cours…';
-        try{await submitVerificationRequest(data,proofFile);closeModal();await loadVerificationRequests();render();toast('Demande envoyée ✓ · En attente de validation');}
-        catch(e){next.disabled=false;next.textContent='Envoyer la demande';toast(e?.message||'Impossible d’envoyer la demande.');}
+        if(step===4){
+          data.ref=$('vRef')?.value.trim()||'';
+          if(!data.method)return toast('Choisissez votre méthode de paiement.');
+          if(!data.ref)return toast('Ajoutez la référence exacte du paiement.');
+          next.disabled=true; next.textContent='Envoi en cours…';
+          try{await submitVerificationRequest(data,proofFile);closeModal();await loadVerificationRequests();render();toast('Demande envoyée ✓ · En attente de validation');}
+          catch(e){next.disabled=false;next.textContent='Envoyer le dossier';toast(e?.message||'Impossible d’envoyer la demande.');}
+          return;
+        }
+        step++; show();
       };
     };
     show();
@@ -4413,6 +4426,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if(state.loggingOut)return;
     stopTimeLimitGuard();
     state.loggingOut=true;
+    showAppTransition("logout");
     try{
       document.body.classList.add("app-logging-out");
       if(state.channel){try{await sb.removeChannel(state.channel);}catch(_){} state.channel=null;}
@@ -4438,6 +4452,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     }finally{
       state.loggingOut=false;
       document.body.classList.remove("app-logging-out");
+      hideAppTransition();
     }
   }
   async function setupRealtime() {
@@ -4687,7 +4702,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if(!validProvince(origin)) return toast('Sélectionnez une province réelle de Madagascar dans la liste.');
     const d=new Date(birth+'T00:00:00'), now=new Date();
     const age=now.getFullYear()-d.getFullYear()-((now.getMonth()<d.getMonth()||(now.getMonth()===d.getMonth()&&now.getDate()<d.getDate()))?1:0);
-    if(age<13) return toast('Vous devez avoir au moins 13 ans.');
+    if(age<18) return toast('Vous devez avoir au moins 18 ans.');
     const btn=document.querySelector('[data-action="complete-onboarding"]'); setLoading(btn,true,'Déverrouiller Tafaß');
     const row={id:state.user.id,first_name:first,last_name:last,email:state.user.email||'',birth,gender,phone,phone_code:phoneMeta().code,country,city_current:current,city_origin:origin,location:current,updated_at:new Date().toISOString()};
     try {
@@ -4729,7 +4744,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   }
   function timeLimitPolicy(){
     const age=accountAgeYears();
-    const minor=age!==null && age<13;
+    const minor=age!==null && age<18;
     return {minor,age,warningMinutes:minor?15:30,logoutMinutes:minor?45:90};
   }
   function isOfficialAdmin(){ return isAdminProfile(state.profile)||state.profile?.is_admin===true||state.profile?.admin_badge===true; }
@@ -4805,9 +4820,31 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     return `<section class="time-limit-settings-v40"><div class="time-limit-settings-hero"><div class="time-limit-settings-logo">T</div><div><span class="eyebrow">TAFAß · GESTION DU TEMPS</span><h3>Limites d’utilisation</h3><p>Ces rappels sont conçus pour encourager des pauses régulières et éviter une utilisation trop prolongée.</p></div></div><div class="time-limit-policy-grid"><div><b>${p.minor?'15':'30'} min</b><span>Premier rappel</span></div><div><b>${p.minor?'30':'60'} min</b><span>Deuxième rappel</span></div><div><b>${p.logoutMinutes} min</b><span>Déconnexion automatique</span></div></div><div class="settings-section-block time-limit-info-list"><div><b>À chaque rappel</b><small>Un écran Tafaß apparaît au-dessus de l’application, où que vous soyez. Vous pouvez continuer ou vous déconnecter.</small></div><div><b>Si vous continuez</b><small>Le compteur reprend et le prochain rappel arrive au palier suivant.</small></div><div><b>À la limite finale</b><small>Tafaß ferme automatiquement la session. Vous devrez vous reconnecter pour utiliser à nouveau le compte.</small></div><div><b>Administrateur officiel</b><small>Le compte administrateur officiel n’est pas soumis à cette limite.</small></div></div><button class="ghost-action big" data-action="time-limit-intro">Voir l’explication complète</button></section>`;
   }
 
+  function showAppTransition(kind){
+    const id="tafass-app-transition";
+    let el=document.getElementById(id);
+    if(!el){
+      el=document.createElement("div"); el.id=id; el.className="tafass-app-transition";
+      el.innerHTML='<div class="tafass-transition-card"><img src="assets/tafass-logo-premium.svg" alt="Tafaß"><div class="tafass-transition-spinner" aria-hidden="true"></div><b data-transition-label>Ouverture…</b></div>';
+      document.body.appendChild(el);
+    }
+    el.dataset.kind=kind||"enter";
+    const label=el.querySelector("[data-transition-label]");
+    if(label) label.textContent=kind==="logout"?"Déconnexion…":"Ouverture…";
+    requestAnimationFrame(()=>el.classList.add("active"));
+    return el;
+  }
+  function hideAppTransition(){
+    const el=document.getElementById("tafass-app-transition");
+    if(!el)return;
+    el.classList.remove("active");
+    setTimeout(()=>el.remove(),180);
+  }
+
   async function enterApp() {
     if (state.entering || !state.user) return;
     state.entering = true;
+    showAppTransition("enter");
     // Never hide an already authenticated app during token refresh/background re-entry.
     // The auth screen is shown only when there is genuinely no session.
     const appWasVisible = !$("app")?.classList.contains("hidden");
@@ -4830,8 +4867,10 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       await loadPosts(); await setupRealtime(); ensureLiveFeedRealtime();
       await render();
       await startTimeLimitGuard();
+      hideAppTransition();
     }finally{
       state.entering = false;
+      if(!state.user) hideAppTransition();
     }
   }
   async function signInWithProvider(provider) {
@@ -4893,7 +4932,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if (step === 4 && $("birth")?.value) {
       const d=new Date($("birth").value+"T00:00:00");
       const now=new Date(); const age=now.getFullYear()-d.getFullYear()-((now.getMonth()<d.getMonth() || (now.getMonth()===d.getMonth() && now.getDate()<d.getDate()))?1:0);
-      if(age<13){ toast("Vous devez avoir au moins 13 ans pour créer un compte."); return false; }
+      if(age<18){ toast("Vous devez avoir au moins 18 ans pour créer un compte."); return false; }
     }
     return true;
   }
@@ -5114,7 +5153,15 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       if(q.data){ const d=await sb.from('page_followers').delete().eq('id',q.data.id); if(d.error)return toast(d.error.message); r={followed:false}; }
       else { const i=await sb.from('page_followers').insert({page_id:id,user_id:state.user.id}); if(i.error)return toast(i.error.message); r={followed:true}; }
     }
-    if(r?.success===false) return toast(r.message||'Action impossible.');
+    if(r?.success===false){
+      const pg=(await sb.from('pages').select('id,owner_id').eq('id',id).maybeSingle()).data;
+      if(!pg) return toast(r.message||'Page introuvable.');
+      if(pg.owner_id===state.user.id) return toast('Le propriétaire ne peut pas suivre sa propre Page.');
+      const q=await sb.from('page_followers').select('id').eq('page_id',id).eq('user_id',state.user.id).maybeSingle();
+      if(q.error)return toast(q.error.message||r.message||'Impossible de modifier le suivi.');
+      if(q.data){const d=await sb.from('page_followers').delete().eq('id',q.data.id);if(d.error)return toast(d.error.message);r={followed:false};}
+      else {const i=await sb.from('page_followers').insert({page_id:id,user_id:state.user.id});if(i.error)return toast(i.error.message);r={followed:true};}
+    }
     const followed=!!r?.followed;
     if(followed){
       const pg=(await fetchPageById(id)).data;
@@ -5208,7 +5255,19 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
         const i=await sb.from('group_members').insert({group_id:id,user_id:state.user.id,role:'member'}); if(i.error)return toast(i.error.message); r={joined:true};
       }
     }
-    if(r?.success===false) return toast(r.message||'Action impossible.');
+    if(r?.success===false){
+      const g=(await sb.from('groups').select('id,owner_id,privacy').eq('id',id).maybeSingle()).data;
+      if(!g)return toast(r.message||'Groupe introuvable.');
+      const q=await sb.from('group_members').select('id,role').eq('group_id',id).eq('user_id',state.user.id).maybeSingle();
+      if(q.error)return toast(q.error.message||r.message||'Impossible de modifier l’adhésion.');
+      if(q.data){
+        if(g.owner_id===state.user.id)return toast('Le propriétaire ne peut pas quitter son propre groupe.');
+        const d=await sb.from('group_members').delete().eq('id',q.data.id);if(d.error)return toast(d.error.message);r={joined:false};
+      }else{
+        if(String(g.privacy||'public').toLowerCase()!=='public')return toast(r.message||'Ce groupe est privé.');
+        const i=await sb.from('group_members').insert({group_id:id,user_id:state.user.id,role:'member'});if(i.error)return toast(i.error.message);r={joined:true};
+      }
+    }
     const joined=!!r?.joined;
     toast(joined?'Vous avez rejoint le groupe.':'Vous avez quitté le groupe.');
     return openGroupDetail(id);

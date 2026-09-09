@@ -4972,3 +4972,80 @@ body.time-limit-locked{overflow:hidden!important}
 
 /* Hub-level refresh: Pages and Groupes now share the same premium visual system. */
 .fb-pages-hub,.fb-groups-hub{max-width:980px;margin:0 auto;padding:10px 4px 34px}.fb-pages-hub .fb-top-tabs,.fb-groups-hub .fb-top-tabs{position:sticky;top:0;z-index:4;background:color-mix(in srgb,var(--surface) 92%,transparent);backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:18px;padding:5px}.fb-pages-hub .fb-section-heading,.fb-groups-hub .fb-section-heading{margin:22px 4px 12px!important;padding:0!important}.fb-pages-hub .fb-entity-list,.fb-groups-hub .fb-entity-list{display:grid;gap:10px}.fb-pages-hub .fb-entity-row,.fb-groups-hub .fb-entity-row{border:1px solid var(--line)!important;border-radius:20px!important;background:linear-gradient(145deg,rgba(255,255,255,.035),rgba(255,255,255,.015))!important;box-shadow:0 12px 30px rgba(0,0,0,.08)!important;overflow:hidden}.fb-pages-hub .fb-entity-main,.fb-groups-hub .fb-entity-main{padding:15px!important}.fb-pages-hub .fb-entity-actions,.fb-groups-hub .fb-entity-actions{padding:0 12px 12px!important}.fb-pages-hub .fb-blue-btn,.fb-groups-hub .fb-blue-btn{border-radius:12px!important;font-weight:800}.fb-pages-hub .fb-entity-copy em,.fb-groups-hub .fb-entity-copy em{color:var(--muted)!important}
+
+
+/* =========================================================
+   TAFAß V41 — PREMIUM PAGES / GROUPES / LIMITES / LOADING
+   ========================================================= */
+.splash-brand,.splash-tagline,.splash-progress,.splash-status{display:none!important}
+.splash-content{gap:0!important}
+.splash-dots{display:flex;align-items:center;justify-content:center;gap:7px;margin-top:22px}
+.splash-dots i{width:7px;height:7px;border-radius:50%;background:#8db2ff;box-shadow:0 0 14px rgba(100,145,255,.7);animation:tafassSplashDot 1.1s infinite ease-in-out}
+.splash-dots i:nth-child(2){animation-delay:.16s}.splash-dots i:nth-child(3){animation-delay:.32s}
+@keyframes tafassSplashDot{0%,70%,100%{transform:scale(.55);opacity:.35}35%{transform:scale(1);opacity:1}}
+.tafass-app-transition{position:fixed;inset:0;z-index:99999;display:grid;place-items:center;background:rgba(4,7,18,.86);backdrop-filter:blur(10px);opacity:0;pointer-events:none;transition:opacity .16s ease}
+.tafass-app-transition.active{opacity:1;pointer-events:auto}
+.tafass-transition-card{min-width:190px;padding:25px 28px;border:1px solid rgba(130,160,255,.22);border-radius:24px;background:linear-gradient(145deg,rgba(20,29,58,.96),rgba(7,11,25,.98));box-shadow:0 24px 70px rgba(0,0,0,.4);display:flex;flex-direction:column;align-items:center;gap:11px}
+.tafass-transition-card img{width:54px;height:54px;object-fit:contain}
+.tafass-transition-card b{font-size:12px;letter-spacing:.03em}
+.tafass-transition-spinner{width:22px;height:22px;border:2px solid rgba(255,255,255,.13);border-top-color:#8eb1ff;border-radius:50%;animation:tafassSpin .7s linear infinite}
+@keyframes tafassSpin{to{transform:rotate(360deg)}}
+
+/* Pages & Groupes: completely refreshed visual shell */
+.fb-pages-hub,.fb-groups-hub{padding:2px 0 28px}
+.fb-pages-hub .fb-top-tabs,.fb-groups-hub .fb-top-tabs{padding:6px;border:1px solid rgba(125,155,255,.16);border-radius:18px;background:linear-gradient(135deg,rgba(22,31,62,.9),rgba(10,15,31,.92));box-shadow:0 12px 34px rgba(0,0,0,.18)}
+.fb-pages-hub .fb-top-tabs button,.fb-groups-hub .fb-top-tabs button{border-radius:13px;transition:.18s ease}
+.fb-pages-hub .fb-top-tabs button.active,.fb-groups-hub .fb-top-tabs button.active{background:linear-gradient(135deg,#477cff,#735dff);color:#fff;box-shadow:0 8px 24px rgba(73,111,255,.28)}
+.fb-create-top{background:linear-gradient(135deg,#d8b15b,#f2d98b)!important;color:#15100a!important;font-weight:800!important}
+.fb-section-heading{margin:20px 4px 12px}
+.fb-section-heading h3{font-size:20px;letter-spacing:-.02em}
+.fb-entity-list{display:grid;gap:12px}
+.fb-entity-row{border:1px solid rgba(125,155,255,.15)!important;border-radius:20px!important;background:linear-gradient(145deg,rgba(18,27,53,.94),rgba(9,14,29,.97))!important;box-shadow:0 14px 34px rgba(0,0,0,.18);padding:10px!important;transition:transform .18s ease,border-color .18s ease}
+.fb-entity-row:hover{transform:translateY(-1px);border-color:rgba(115,145,255,.32)!important}
+.fb-entity-copy b{font-size:15px}
+.fb-entity-copy small{color:#aebce0!important}
+.fb-entity-copy em{color:#7f90bb!important}
+.fb-entity-actions{gap:7px}
+.fb-blue-btn{background:linear-gradient(135deg,#3e78ff,#765cff)!important;border:0!important;box-shadow:0 7px 18px rgba(66,104,255,.22)}
+.fb-gray-btn{background:rgba(255,255,255,.07)!important;border:1px solid rgba(255,255,255,.12)!important}
+.fb-pages-hub .fb-business-card,.fb-groups-hub .fb-create-row{border-radius:19px!important;border:1px solid rgba(215,177,91,.2)!important;background:linear-gradient(135deg,rgba(47,38,18,.7),rgba(18,22,38,.9))!important}
+.fb-groups-hub .fb-create-row{padding:15px!important}
+
+/* Limites: important values visibly premium */
+.time-limit-settings-v40{border:1px solid rgba(115,145,255,.2)!important;border-radius:24px!important;background:linear-gradient(145deg,rgba(19,28,57,.96),rgba(8,13,27,.98))!important;box-shadow:0 18px 45px rgba(0,0,0,.22)}
+.time-limit-policy-grid>div{border:1px solid rgba(255,255,255,.08)!important;border-radius:18px!important;background:rgba(255,255,255,.035)!important}
+.time-limit-policy-grid b{font-size:22px!important;background:linear-gradient(90deg,#f4d47a,#8fb7ff);-webkit-background-clip:text;background-clip:text;color:transparent!important}
+.time-limit-info-list b{color:#f1d477!important}
+.time-limit-info-list small{color:#b7c3df!important}
+.time-limit-settings-hero h3{color:#fff}
+.time-limit-settings-hero p{color:#aab7d5}
+
+/* New verification wizard */
+.verification-wizard-v41{max-width:620px!important;border:1px solid rgba(116,151,255,.22)!important;background:linear-gradient(145deg,#111b38,#080d1c)!important;border-radius:26px!important;overflow:hidden}
+.verification-v41-head{display:flex;justify-content:space-between;gap:14px;padding:20px 20px 14px;border-bottom:1px solid rgba(255,255,255,.07)}
+.verification-v41-head h3{margin:4px 0;font-size:20px}
+.verification-v41-head small{color:#94a4ca}
+.verification-progress-v41{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:14px 18px}
+.verification-progress-v41 span{display:flex;flex-direction:column;align-items:center;gap:5px;opacity:.38}
+.verification-progress-v41 span.active{opacity:1}
+.verification-progress-v41 b{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.07);font-size:11px}
+.verification-progress-v41 .active b{background:linear-gradient(135deg,#477cff,#765dff);box-shadow:0 0 18px rgba(71,124,255,.25)}
+.verification-progress-v41 small{font-size:9px;text-align:center;color:#9eadd0}
+.verification-step-v41{margin:4px 18px 16px;padding:20px;border-radius:20px;border:1px solid rgba(119,151,255,.15);background:rgba(255,255,255,.025)}
+.verification-step-icon-v41{width:42px;height:42px;border-radius:14px;display:grid;place-items:center;background:linear-gradient(135deg,#477cff,#765dff);font-weight:900;margin-bottom:13px}
+.verification-kicker{font-size:9px;font-weight:800;letter-spacing:.14em;color:#91b3ff}
+.verification-step-v41 h3{margin:7px 0 7px;font-size:19px}
+.verification-step-v41 p{color:#a9b6d2;font-size:12px;line-height:1.6}
+.verification-readonly,.verification-note-v41,.verification-final-check{margin-top:12px;padding:12px 13px;border-radius:13px;background:rgba(91,124,255,.08);border:1px solid rgba(112,145,255,.12);font-size:11px}
+.verification-readonly{display:flex;justify-content:space-between;gap:10px}
+.verification-readonly span{color:#8797bb}.verification-readonly b{color:#cbd7f3}
+.verification-note-v41{color:#9db8ff}
+.verification-price-v41{color:#f2d477}
+.verification-payments-v41{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:13px 0}
+.verification-payments-v41 button{padding:14px;border-radius:15px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.035);color:inherit;text-align:left}
+.verification-payments-v41 button.active{border-color:rgba(112,151,255,.65);background:rgba(72,117,255,.12);box-shadow:0 0 0 1px rgba(72,117,255,.18)}
+.verification-payments-v41 b,.verification-payments-v41 small{display:block}.verification-payments-v41 small{margin-top:3px;color:#8595b9}
+.verification-upload-v41{display:block;padding:16px;border:1px dashed rgba(129,158,255,.3);border-radius:15px;text-align:center}
+.verification-upload-v41 span{display:block;font-weight:800;color:#b9c8ee}.verification-upload-v41 input{display:block;width:100%;margin:12px 0}.verification-upload-v41 small{color:#8595b9}
+.verification-wizard-actions-v41{display:flex;justify-content:flex-end;gap:10px;padding:14px 18px 18px;border-top:1px solid rgba(255,255,255,.06)}
+@media(max-width:600px){.verification-payments-v41{grid-template-columns:1fr}.verification-step-v41{margin-inline:12px}.verification-progress-v41{padding-inline:10px}.verification-progress-v41 small{font-size:8px}}
