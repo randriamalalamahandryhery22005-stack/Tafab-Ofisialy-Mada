@@ -7489,4 +7489,99 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   window.__tafassV65PageSwitch = oldPageSwitchHandler;
 })();
 
+
+  /* ============================================================
+     TAFAß V66 — PAGE NAVIGATION / MENU SINGLE VERSION
+     Page mode has no Friends. The Menu occupies that navigation slot.
+     The account navigation remains unchanged outside Page mode.
+  ============================================================ */
+  (() => {
+    const pageBottomNav = () => `
+      ${navButton("home","home","Actualités",true)}
+      ${navButton("messages","messages","Messages",true)}
+      ${navButton("notifications","notifications","Alertes",true)}
+      ${navButton("reels","reels","Reels",true)}
+      ${navButton("pages","pages","Pages",true)}
+      ${navButton("menu","settings","Menu",true)}
+    `;
+    const pageSideNav = () => `
+      <button data-route="profile" class="profile-shortcut"><span id="sideAvatar" class="avatar">▣</span><span><b id="sideName">Page</b><small>Centre de la Page</small></span></button>
+      ${navButton("home","home","Actualités")}
+      ${navButton("messages","messages","Messages")}
+      ${navButton("notifications","notifications","Alertes")}
+      ${navButton("reels","reels","Reels")}
+      ${navButton("pages","pages","Pages")}
+      ${navButton("menu","settings","Menu")}
+    `;
+    const accountBottomNav = () => `
+      ${navButton("home","home","Actualités",true)}
+      ${navButton("friends","friends","Amis",true)}
+      ${navButton("messages","messages","Messages",true)}
+      ${navButton("pages","pages","Pages",true)}
+      ${navButton("groups","groups","Groupes",true)}
+      ${navButton("reels","reels","Reels",true)}
+    `;
+    const accountSideNav = () => `
+      <button data-route="profile" class="profile-shortcut"><span id="sideAvatar" class="avatar">T</span><span><b id="sideName">Mon profil</b><small>Voir mon profil</small></span></button>
+      ${navButton("home","home","Actualités")}
+      ${navButton("friends","friends","Amis")}
+      ${navButton("messages","messages","Messages")}
+      ${navButton("notifications","notifications","Notifications")}
+      ${navButton("pages","pages","Pages")}
+      ${navButton("groups","groups","Groupes")}
+      ${navButton("reels","reels","Reels")}
+      ${navButton("tafab","tafab","Tafaß")}
+      ${navButton("saved","saved","Enregistrements")}
+      ${navButton("menu","settings","Menu")}
+    `;
+
+    const syncPageNavigationV66 = () => {
+      const left=document.querySelector('.left-sidebar');
+      const bottom=document.querySelector('.bottom-nav');
+      if(pageModeActive()){
+        if(left && left.dataset.navMode !== 'page-v66'){
+          left.innerHTML=pageSideNav();
+          left.dataset.navMode='page-v66';
+        }
+        if(bottom && bottom.dataset.navMode !== 'page-v66'){
+          bottom.innerHTML=pageBottomNav();
+          bottom.dataset.navMode='page-v66';
+        }
+        document.querySelectorAll('.tafa-premium-nav-item[data-route="friends"], .bottom-nav button[data-route="friends"], .left-sidebar button[data-route="friends"]').forEach(el=>el.remove());
+      } else {
+        if(left && left.dataset.navMode === 'page-v66'){
+          left.innerHTML=accountSideNav();
+          left.dataset.navMode='account-v66';
+        }
+        if(bottom && bottom.dataset.navMode === 'page-v66'){
+          bottom.innerHTML=accountBottomNav();
+          bottom.dataset.navMode='account-v66';
+        }
+      }
+    };
+
+    const previousSyncIdentityUI_V66 = syncIdentityUI;
+    syncIdentityUI = function(...args){
+      previousSyncIdentityUI_V66.apply(this,args);
+      syncPageNavigationV66();
+      const p=pageModeActive()?state.activePage:state.profile;
+      const nameEl=$("sideName"), avatarEl=$("sideAvatar");
+      if(nameEl) nameEl.textContent=pageModeActive()?(p?.name||'Page'):nameOf(p);
+      if(avatarEl && p){
+        const html=pageModeActive()
+          ? entityAvatarHTML(p,'page','avatar').replace('<div ','<span id="sideAvatar" ').replace('</div>','</span>')
+          : avatarHTML(p,'avatar').replace('<span ','<span id="sideAvatar" ');
+        if(avatarEl.outerHTML !== html) avatarEl.outerHTML=html;
+      }
+    };
+
+    // Keep Page navigation authoritative after render/realtime UI refreshes.
+    const observer=new MutationObserver(()=>{
+      if(!state.user) return;
+      if(pageModeActive()) syncPageNavigationV66();
+    });
+    observer.observe(document.body,{childList:true,subtree:true});
+    requestAnimationFrame(syncPageNavigationV66);
+  })();
+
 })();
