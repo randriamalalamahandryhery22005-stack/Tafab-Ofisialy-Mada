@@ -3876,7 +3876,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     const [walletR,profileR,methodsR,withdrawR,ledgerR]=await Promise.all([
       sb.from('tafab_wallets').select('coins,earnings_mga,pending_earnings_mga,lifetime_earnings_mga,total_withdrawn_mga,updated_at').eq('user_id',uid).maybeSingle(),
       sb.from('tafab_creator_monetization').select('*').eq('user_id',uid).maybeSingle(),
-      sb.from('tafab_creator_payout_methods').select('id,provider,phone,account_name,is_default,status,created_at').eq('user_id',uid).order('is_default',{ascending:false}).order('created_at',{ascending:false}),
+      sb.from('tafab_creator_payout_methods').select('id,provider,phone,account_name,bank_name,bank_account,is_default,status,created_at').eq('user_id',uid).order('is_default',{ascending:false}).order('created_at',{ascending:false}),
       sb.from('tafab_withdrawal_requests').select('id,amount_mga,method,destination_hint,status,created_at,processed_at,admin_note').eq('user_id',uid).order('created_at',{ascending:false}).limit(30),
       sb.from('tafab_creator_earnings').select('id,source_type,gross_mga,platform_fee_mga,net_mga,status,description,created_at').eq('creator_id',uid).order('created_at',{ascending:false}).limit(30)
     ]);
@@ -3884,10 +3884,10 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     const mp=profileR.data||{status:'not_requested',enabled:false,min_withdrawal_mga:1000,revenue_share_percent:70,coins_to_mga:10};
     const methods=methodsR.data||[], withdrawals=withdrawR.data||[], ledger=ledgerR.data||[];
     const statusLabel={not_requested:'Non activé',pending:'En cours de vérification',approved:'Monétisation active',suspended:'Suspendue'}[mp.status]||mp.status||'Non activé';
-    const providerLabel={mvola:'MVola',orange_money:'Orange Money',airtel_money:'Airtel Money'};
+    const providerLabel={mvola:'MVola',orange_money:'Orange Money',airtel_money:'Airtel Money',bank:'Banque'};
     const available=Number(w.earnings_mga||0), pending=Number(w.pending_earnings_mga||0), lifetime=Number(w.lifetime_earnings_mga||0), withdrawn=Number(w.total_withdrawn_mga||0), coins=Number(w.coins||0);
     const conversionCoins=Math.max(1,Number(mp.coins_to_mga||10));
-    const methodRows=methods.map(m=>`<div class="monet-row"><div><b>${esc(providerLabel[m.provider]||m.provider)}</b><small>${esc(m.phone||'')} · ${esc(m.account_name||'')}</small></div><span class="monet-pill ${m.status==='active'?'ok':''}">${m.status==='active'?'Actif':'Désactivé'}</span></div>`).join('')||'<div class="empty">Aucun moyen de retrait enregistré.</div>';
+    const methodRows=methods.map(m=>`<div class="monet-row"><div><b>${esc(providerLabel[m.provider]||m.provider)}</b><small>${m.provider==='bank'?esc(m.bank_name||'Banque')+' · '+esc(m.bank_account||''):esc(m.phone||'')} · ${esc(m.account_name||'')}</small></div><span class="monet-pill ${m.status==='active'?'ok':''}">${m.status==='active'?'Actif':'Désactivé'}</span></div>`).join('')||'<div class="empty">Aucun moyen de retrait enregistré.</div>';
     const earningRows=ledger.map(x=>`<div class="monet-row"><div><b>${esc(x.description||x.source_type||'Revenu')}</b><small>${timeAgo(x.created_at)} · ${esc(x.status||'available')}</small></div><strong>+${Number(x.net_mga||0).toLocaleString('fr-FR')} Ar</strong></div>`).join('')||'<div class="empty">Aucun revenu enregistré pour le moment.</div>';
     const withdrawalRows=withdrawals.map(x=>{const st=x.status==='paid'?'Payé':x.status==='approved'?'Validé':x.status==='rejected'?'Refusé':'En attente'; return `<div class="monet-row"><div><b>${Number(x.amount_mga||0).toLocaleString('fr-FR')} Ar · ${esc(providerLabel[x.method]||x.method||'Mobile Money')}</b><small>${esc(x.destination_hint||'')} · ${timeAgo(x.created_at)}${x.admin_note?' · '+esc(x.admin_note):''}</small></div><span class="monet-pill ${x.status==='paid'?'ok':x.status==='rejected'?'bad':''}">${st}</span></div>`;}).join('')||'<div class="empty">Aucune demande de retrait.</div>';
     const actions=mp.status==='approved'
@@ -3909,7 +3909,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       </div></section>
       <section class="monet-panel"><div class="monet-panel-head"><div><span class="eyebrow">PROGRAMME CRÉATEUR</span><h3>${esc(statusLabel)}</h3><p>${mp.status==='approved'?'Votre compte est éligible aux revenus configurés par Tafaß.':'Demandez l’accès au programme. L’administration vérifie votre compte avant activation.'}</p></div>${actions}</div><div class="monet-info-grid"><div><b>Part créateur</b><span>${Number(mp.revenue_share_percent||70)} %</span></div><div><b>Seuil de retrait</b><span>${Number(mp.min_withdrawal_mga||1000).toLocaleString('fr-FR')} Ar</span></div><div><b>Conversion</b><span>🪙 ${conversionCoins.toLocaleString('fr-FR')} coins = 1 Ar brut</span></div></div></section>
       <section class="monet-panel"><div class="monet-section-title"><div><h3>🪙 Vos coins</h3><small class="admin-section-note">${coins.toLocaleString('fr-FR')} coins actuellement disponibles pour soutenir les créateurs.</small></div></div><div class="monet-coin-callout-v2"><strong>${coins.toLocaleString('fr-FR')} 🪙</strong><span>Les coins servent au soutien et aux cadeaux. Ils deviennent un revenu créateur lorsqu’ils sont reçus dans une opération éligible.</span></div></section>
-      <section class="monet-panel"><div class="monet-section-title"><div><h3>Moyens de retrait</h3><small class="admin-section-note">MVola, Orange Money ou Airtel Money.</small></div><button class="ghost-action" data-action="add-payout-method">Ajouter</button></div><div class="monet-list">${methodRows}</div></section>
+      <section class="monet-panel"><div class="monet-section-title"><div><h3>Moyens de retrait</h3><small class="admin-section-note">MVola, Orange Money, Airtel Money ou Banque.</small></div><button class="ghost-action" data-action="add-payout-method">Ajouter</button></div><div class="monet-list">${methodRows}</div></section>
       <section class="monet-panel"><div class="monet-section-title"><div><h3>Revenus récents</h3><small class="admin-section-note">Chaque revenu validé est inscrit dans votre registre.</small></div></div><div class="monet-list">${earningRows}</div></section>
       <section class="monet-panel"><div class="monet-section-title"><div><h3>Demandes de retrait</h3><small class="admin-section-note">En attente → Payé ou Refusé. Un retrait payé correspond à un paiement réel effectué par l’administration.</small></div></div><div class="monet-list">${withdrawalRows}</div></section>`);
   }
@@ -3924,19 +3924,27 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     closeModal(); toast('Demande de monétisation envoyée.'); return creatorMonetisationPage();
   }
   function openPayoutMethod(){
-    openModal(`<div class="modal-box monet-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • RETRAIT</span><h3>Nouveau moyen de retrait</h3><label>Opérateur<select id="payoutProvider" class="premium-input"><option value="mvola">MVola</option><option value="orange_money">Orange Money</option><option value="airtel_money">Airtel Money</option></select></label><label>Numéro<input id="payoutPhone" class="premium-input" maxlength="30" inputmode="tel" placeholder="Ex. 034 00 000 00"></label><label>Nom du titulaire<input id="payoutName" class="premium-input" maxlength="120" placeholder="Nom associé au compte Mobile Money"></label><label class="check-row"><input id="payoutDefault" type="checkbox" checked> Utiliser comme moyen principal</label><button class="primary big" data-action="save-payout-method">Enregistrer</button></div>`);
+    openModal(`<div class="modal-box monet-modal monet-payout-v3"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • RETRAIT PREMIUM</span><h3>Choisissez où recevoir votre argent</h3><div class="payout-choice-grid"><button type="button" class="payment-method active" data-action="select-payout-provider" data-provider="mvola">🟢 <b>MVola</b><small>Compte Mobile Money</small></button><button type="button" class="payment-method" data-action="select-payout-provider" data-provider="orange_money">🟠 <b>Orange Money</b><small>Compte Mobile Money</small></button><button type="button" class="payment-method" data-action="select-payout-provider" data-provider="airtel_money">🔴 <b>Airtel Money</b><small>Compte Mobile Money</small></button><button type="button" class="payment-method" data-action="select-payout-provider" data-provider="bank">🏦 <b>Banque</b><small>Virement bancaire</small></button></div><input type="hidden" id="payoutProvider" value="mvola"><div id="payoutMobileFields"><label>Numéro Mobile Money<input id="payoutPhone" class="premium-input" maxlength="30" inputmode="tel" placeholder="Ex. 034 00 000 00"></label></div><div id="payoutBankFields" style="display:none"><label>Nom de la banque<input id="payoutBankName" class="premium-input" maxlength="120" placeholder="Ex. BNI, BOA, BRED…"></label><label>Numéro de compte / RIB<input id="payoutBankAccount" class="premium-input" maxlength="80" inputmode="text" placeholder="RIB / numéro de compte"></label></div><label>Nom du titulaire<input id="payoutName" class="premium-input" maxlength="120" placeholder="Nom exactement associé au compte"></label><label class="check-row"><input id="payoutDefault" type="checkbox" checked> Utiliser comme moyen principal</label><div class="payment-secure-note"><span>🔐</span><div><b>Paiement réel</b><small>Le retrait sera envoyé uniquement au moyen enregistré. Les API de paiement doivent être activées côté serveur.</small></div></div><button class="primary big" data-action="save-payout-method">Enregistrer ce moyen</button></div>`);
+  }
+  function selectPayoutProvider(provider){
+    const input=$('payoutProvider'); if(input) input.value=provider;
+    document.querySelectorAll('[data-action="select-payout-provider"]').forEach(x=>x.classList.toggle('active',x.dataset.provider===provider));
+    const mobile=$('payoutMobileFields'), bank=$('payoutBankFields');
+    if(mobile) mobile.style.display=provider==='bank'?'none':'block';
+    if(bank) bank.style.display=provider==='bank'?'block':'none';
   }
   async function savePayoutMethod(){
-    const provider=$('payoutProvider')?.value||'mvola', phone=$('payoutPhone')?.value.trim()||'', name=$('payoutName')?.value.trim()||'', def=!!$('payoutDefault')?.checked;
-    if(!phone||phone.replace(/\D/g,'').length<9)return toast('Numéro Mobile Money invalide.');
-    const r=await sb.rpc('tafab_save_payout_method',{p_provider:provider,p_phone:phone,p_account_name:name,p_is_default:def});
+    const provider=$('payoutProvider')?.value||'mvola', phone=$('payoutPhone')?.value.trim()||'', name=$('payoutName')?.value.trim()||'', def=!!$('payoutDefault')?.checked, bankName=$('payoutBankName')?.value.trim()||'', bankAccount=$('payoutBankAccount')?.value.trim()||'';
+    if(provider==='bank'){ if(!bankName||!bankAccount||!name)return toast('Complétez la banque, le compte/RIB et le titulaire.'); }
+    else if(!phone||phone.replace(/\D/g,'').length<9)return toast('Numéro Mobile Money invalide.');
+    const r=await sb.rpc('tafab_save_payout_method_v3',{p_provider:provider,p_phone:phone,p_account_name:name,p_is_default:def,p_bank_name:bankName,p_bank_account:bankAccount});
     if(r.error)return toast(r.error.message); closeModal(); toast('Moyen de retrait enregistré.'); return creatorMonetisationPage();
   }
   async function openWithdrawalRequest(){
     openModal(`<div class="modal-box monet-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • RETRAIT</span><h3>Retirer vos revenus</h3><p class="muted">Minimum de retrait : <strong>1 000 Ar</strong>, soit <strong>10 000 coins</strong> de valeur brute selon le barème actuel. Le montant est réservé immédiatement puis payé après vérification réelle par l’administration.</p><label>Montant (Ar)<input id="withdrawAmount" type="number" min="1000" step="100" inputmode="numeric" placeholder="Ex. 10000"><small class="monet-method-hint">Seuil : 1 000 Ar minimum. 10 000 coins = 1 000 Ar brut.</small></label><label>Moyen<select id="withdrawMethod" class="premium-input"><option value="">Sélectionnez un moyen</option></select></label><div id="withdrawMethodHint" class="monet-method-hint"></div><button class="primary big" data-action="submit-withdrawal">Demander le retrait</button></div>`);
-    const r=await sb.from('tafab_creator_payout_methods').select('id,provider,phone,account_name,status').eq('user_id',state.user.id).eq('status','active').order('is_default',{ascending:false});
+    const r=await sb.from('tafab_creator_payout_methods').select('id,provider,phone,account_name,bank_name,bank_account,status').eq('user_id',state.user.id).eq('status','active').order('is_default',{ascending:false});
     const sel=$('withdrawMethod'); if(!sel)return;
-    (r.data||[]).forEach(m=>{const o=document.createElement('option');o.value=m.id;o.textContent=`${({mvola:'MVola',orange_money:'Orange Money',airtel_money:'Airtel Money'})[m.provider]||m.provider} · ${m.phone}`;o.dataset.provider=m.provider;o.dataset.phone=m.phone;sel.appendChild(o);});
+    (r.data||[]).forEach(m=>{const o=document.createElement('option');o.value=m.id;o.textContent=`${({mvola:'MVola',orange_money:'Orange Money',airtel_money:'Airtel Money',bank:'Banque'})[m.provider]||m.provider} · ${m.provider==='bank'?(m.bank_name||'Banque')+' · '+(m.bank_account||''):m.phone}`;o.dataset.provider=m.provider;o.dataset.phone=m.phone;sel.appendChild(o);});
     sel.addEventListener('change',()=>{const o=sel.options[sel.selectedIndex];$('withdrawMethodHint').textContent=o?.dataset?.phone?`Paiement vers ${o.textContent}`:'';});
   }
   async function submitWithdrawal(){
@@ -6221,6 +6229,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if (action === "request-monetization") return openMonetizationRequest();
     if (action === "submit-monetization-request") return submitMonetizationRequest();
     if (action === "add-payout-method") return openPayoutMethod();
+    if (action === "select-payout-provider") return selectPayoutProvider(actionEl.dataset.provider||'mvola');
     if (action === "save-payout-method") return savePayoutMethod();
     if (action === "request-withdrawal") return openWithdrawalRequest();
     if (action === "submit-withdrawal") return submitWithdrawal();
