@@ -4256,7 +4256,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     const boostCampaignRows=boostCampaigns.map(x=>`<div class="admin-data-row boost-admin-campaign-row"><div class="grow"><b>✦ ${esc(x.name||'Campagne')}</b><small>${esc(x.owner_name||'Compte')} · ${esc(x.ad_type||x.objective||'BOOST')} · ${adminMoney(x.spent_amount_mga)} / ${adminMoney(x.total_budget_mga)} · ${esc(x.audience_location||'Madagascar')}</small></div><span class="admin-status ${x.status==='active'?'paid':x.status==='rejected'?'rejected':x.status==='paused'?'':'pending'}">${esc(adStatusLabel(x.status))}</span><button class="ghost-action" data-action="admin-boost-campaign-control" data-id="${esc(x.id)}" data-status="active">▶ Activer</button><button class="ghost-action" data-action="admin-boost-campaign-control" data-id="${esc(x.id)}" data-status="paused">⏸ Pause</button>${x.status!=='rejected'?`<button class="ghost-action danger-history-action" data-action="admin-boost-campaign-control" data-id="${esc(x.id)}" data-status="rejected">Refuser</button>`:''}</div>`).join('')||'<div class="empty">Aucune campagne publicitaire.</div>';
     const reportRows=reports.map(x=>`<div class="admin-data-row tafa-v51-report-row" data-v51-report-id="${esc(x.id)}" data-v51-reason="${esc(x.reason||'Signalement')}" data-v51-status="${esc(x.status||'pending')}" data-v51-created="${esc(x.created_at||'')}"><div class="grow"><b>${esc(x.reporter_name||'Compte')} → ${esc(x.reported_name||'Compte')}</b><small>${esc(x.reason||'Signalement')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${x.status==='resolved'?'paid':''}">${esc(x.status||'pending')}</span><button class="ghost-action" data-v51-report-open="1">Détails</button>${x.status==='pending'?`<button class="ghost-action" data-action="admin-report-status" data-id="${esc(x.id)}" data-status="resolved">Traiter</button>`:''}</div>`).join('')||'<div class="empty">Aucun signalement.</div>';
     const appealRows=appeals.map(x=>`<article class="admin-appeal-card ${x.status==='pending'?'is-pending':''}" data-action="admin-open-appeal" data-id="${esc(x.id)}"><div class="admin-appeal-avatar">♻</div><div class="admin-appeal-main"><div class="admin-appeal-top"><div><b>${esc(x.display_name||x.identity_name||x.reason||'Compte')}</b><small>${esc(x.email||'')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${x.status==='approved'?'paid':x.status==='rejected'?'rejected':'pending'}">${x.status==='pending'?'En attente':x.status==='approved'?'Approuvée':'Refusée'}</span></div><p>${esc(x.reason||'Demande de réactivation')}</p><div class="admin-appeal-footer"><small>${x.status==='pending'?'Examen administratif requis':'Traitée par l’administration'}</small>${x.status==='pending'?'<span class="admin-appeal-review">Ouvrir l’examen →</span>':''}</div></div></article>`).join('')||'<div class="empty">Aucune demande de réactivation.</div>';
-    const verificationRows=verifications.map(x=>`<div class="admin-data-row"><div class="grow"><b>${esc(x.display_name||x.identity_name||x.reason||'Compte')}</b><small>${esc(x.email||'')} · ${esc(x.reason||'Demande de vérification')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${x.status==='approved'?'paid':x.status==='rejected'?'rejected':''}">${esc(x.status||'pending')}</span>${x.status==='pending'?`<button class="ghost-action" data-action="admin-verification-status" data-id="${esc(x.id)}" data-status="approved">Approuver</button><button class="ghost-action danger-history-action" data-action="admin-verification-status" data-id="${esc(x.id)}" data-status="rejected">Refuser</button>`:''}</div>`).join('')||'<div class="empty">Aucune demande de vérification.</div>';
+    const verificationRows=verifications.map(x=>{const ps=String(x.papi_payment?.payment_status||'').toUpperCase();const payLabel=ps==='SUCCESS'?` · Paiement Papi confirmé (${adminMoney(x.papi_payment?.amount_mga||25000)})`:ps==='PENDING'?' · Paiement Papi en attente':ps==='FAILED'?' · Paiement Papi échoué':' · Paiement non confirmé';const canApprove=x.status==='pending'&&ps==='SUCCESS';return `<div class="admin-data-row"><div class="grow"><b>${esc(x.display_name||x.identity_name||x.reason||'Compte')}</b><small>${esc(x.email||'')} · ${esc(x.reason||'Demande de vérification')}${payLabel} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${x.status==='approved'?'paid':x.status==='rejected'?'rejected':''}">${esc(x.status||'pending')}</span>${x.status==='pending'?`${canApprove?`<button class="ghost-action" data-action="admin-verification-status" data-id="${esc(x.id)}" data-status="approved">Approuver</button>`:`<button class="ghost-action" disabled title="Paiement Papi requis">Payer d’abord</button>`}<button class="ghost-action danger-history-action" data-action="admin-verification-status" data-id="${esc(x.id)}" data-status="rejected">Refuser</button>`:''}</div>`}).join('')||'<div class="empty">Aucune demande de vérification.</div>';
 
     const maxDaily=Math.max(1,...daily.map(x=>Number(x.new_accounts||0)));
     const trendRows=daily.map(x=>{const n=Number(x.new_accounts||0),w=Math.max(3,Math.round((n/maxDaily)*100));return `<div class="admin-trend-row"><span>${esc(x.day_label||x.day||'')}</span><div class="admin-trend-track"><i style="width:${w}%"></i></div><b>${n}</b></div>`}).join('');
@@ -7244,6 +7244,142 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
 
 
   /* ============================================================
+     TAFAß V69 — BADGE BLEU PAYÉ PAR PAPI
+     Le paiement est créé côté serveur et la validation admin est
+     impossible tant que Papi n'a pas confirmé SUCCESS.
+     ============================================================ */
+  (() => {
+    const BADGE_PRICE_MGA = 25000;
+
+    loadVerificationRequests = async function(){
+      if(!state.user) return [];
+      const result=await tafaV59LoadRows(state.user.id);
+      state.verificationRequests=result.rows.map(r=>({...r,
+        identity_name:r.identity_name||r.reason||'',
+        category:r.category||r.badge_type||'Autre',
+        proof_path:r.proof_path||r.document_url||'',
+        payment_method:r.payment_method||r.provider||'',
+        payment_reference:r.payment_reference||r.provider_payment_id||'',
+        papi_payment:(r.payment_reference||r.papi_payment_link||r.payment_status)?{reference:r.payment_reference,payment_link:r.papi_payment_link,payment_status:r.payment_status,paid_at:r.paid_at,provider:r.payment_method,merchant_reference:r.papi_merchant_payment_reference,amount_mga:r.fee_mga||25000}:null
+      }));
+      return state.verificationRequests;
+    };
+
+    async function openPapiBadgePaymentForRequest(requestId,provider='MVOLA'){
+      const r=await tafaV59Race(sb.functions.invoke('tafa-papi-badge-payment',{body:{request_id:requestId,provider:String(provider||'MVOLA').toUpperCase()}}),20000,'Le service Papi ne répond pas.');
+      if(r.error) throw new Error(r.error.message||'Impossible de créer le paiement Papi.');
+      if(!r.data?.ok||!r.data?.paymentLink) throw new Error(r.data?.error||'Papi n’a pas retourné le lien de paiement.');
+      const w=window.open(r.data.paymentLink,'_blank','noopener,noreferrer');
+      if(!w) window.location.href=r.data.paymentLink;
+      return r.data;
+    }
+
+    async function submitVerificationRequestV69(data,proofFile){
+      if(!state.user) throw new Error('Connexion requise.');
+      const uid=state.user.id;
+      const loaded=await tafaV59LoadRows(uid);
+      const pending=loaded.rows.find(x=>String(x.status).toLowerCase()==='pending');
+      if(pending) throw new Error('Une demande de badge est déjà en attente de validation.');
+      let proofPath='';
+      let createdRequestId='';
+      if(proofFile){
+        if(proofFile.size>15*1024*1024) throw new Error('Le justificatif dépasse 15 Mo.');
+        const ext=(proofFile.name.split('.').pop()||'bin').toLowerCase().replace(/[^a-z0-9]/g,'')||'bin';
+        proofPath=`${uid}/${crypto.randomUUID()}.${ext}`;
+        const up=await tafaV59Race(sb.storage.from('badge-proofs').upload(proofPath,proofFile,{upsert:false,contentType:proofFile.type||undefined}),15000,'Le stockage du justificatif ne répond pas.');
+        if(up.error) throw new Error('Justificatif : '+up.error.message);
+      }
+      const reference=`TAFASS-BADGE-${uid.slice(0,8)}-${crypto.randomUUID().replaceAll('-','').slice(0,16)}`;
+      try{
+        const rpc=await tafaV59Race(sb.rpc('tafa_create_badge_request',{
+          p_category:String(data.category||'Autre'),
+          p_identity_name:String(data.identity||''),
+          p_proof_path:proofPath||'',
+          p_payment_method:'Papi',
+          p_payment_reference:reference
+        }),12000,'Le serveur de vérification ne répond pas.');
+        if(rpc.error) throw rpc.error;
+        const requestId=rpc.data?.id||rpc.data?.request_id||rpc.data;
+        createdRequestId=String(requestId||'');
+        if(!requestId) throw new Error('La demande de vérification n’a pas retourné son identifiant.');
+        const payment=await tafaV59Race(sb.functions.invoke('tafa-papi-badge-payment',{body:{request_id:requestId,provider:String(data.method||'')}}),20000,'Le service Papi ne répond pas.');
+        if(payment.error) throw new Error(payment.error.message||'Impossible de créer le paiement Papi.');
+        if(!payment.data?.ok || !payment.data?.paymentLink) throw new Error(payment.data?.error||'Papi n’a pas retourné le lien de paiement.');
+        return {request_id:requestId, ...payment.data};
+      }catch(e){
+        if(proofPath && !createdRequestId) try{await sb.storage.from('badge-proofs').remove([proofPath]);}catch(_){ }
+        throw e;
+      }
+    }
+
+    openVerificationRequest = async function(){
+      if(isAdminProfile(state.profile)) return toast("L’administrateur possède automatiquement son badge rouge.");
+      await loadVerificationRequests();
+      const latest=(state.verificationRequests||[])[0];
+      if(latest?.status==='pending'){
+        if(latest?.papi_payment?.payment_status==='PENDING' && latest.papi_payment.payment_link){
+          return openModal(`<div class="modal-box v69-payment-modal"><div class="v69-payment-head"><span class="v69-payment-mark">💳</span><div><span class="eyebrow">TAFAß · PAPI</span><h3>Paiement du badge bleu</h3><p>Votre dossier existe déjà. Finalisez le paiement de <b>${BADGE_PRICE_MGA.toLocaleString('fr-FR')} Ar</b>.</p></div><button class="modal-close" data-action="close-modal">×</button></div><div class="v69-payment-card"><div><b>Paiement sécurisé</b><small>MVola · Orange Money · Airtel Money</small></div><button class="primary big wide" id="v69PayAgain">Ouvrir le paiement Papi</button><small class="v69-payment-note">Après le paiement, revenez dans Tafaß. La confirmation sera reçue automatiquement.</small></div></div>`),setTimeout(()=>{const b=$('v69PayAgain');if(b)b.onclick=()=>{const u=latest.papi_payment.payment_link;const w=window.open(u,'_blank','noopener,noreferrer');if(!w)window.location.href=u;}},0);
+        }
+        return openModal(`<div class="modal-box v69-payment-modal"><div class="v69-payment-head"><span class="v69-payment-mark">💳</span><div><span class="eyebrow">TAFAß · PAPI</span><h3>Relancer le paiement</h3><p>Le dossier est enregistré. Choisissez un moyen de paiement pour régler <b>${BADGE_PRICE_MGA.toLocaleString('fr-FR')} Ar</b>.</p></div><button class="modal-close" data-action="close-modal">×</button></div><div class="verification-payments-v41 v69-retry-providers">${[['MVOLA','MVola'],['ORANGE_MONEY','Orange Money'],['AIRTEL_MONEY','Airtel Money']].map(([v,l])=>`<button type="button" data-v69-provider="${v}"><b>${l}</b><small>Paiement via Papi</small></button>`).join('')}</div><button class="primary big wide" id="v69RetryPay">Continuer vers Papi</button></div>`),setTimeout(()=>{let selected='MVOLA';document.querySelectorAll('[data-v69-provider]').forEach(b=>b.onclick=()=>{selected=b.dataset.v69Provider;document.querySelectorAll('[data-v69-provider]').forEach(x=>x.classList.toggle('active',x===b));});const first=document.querySelector('[data-v69-provider]');if(first)first.classList.add('active');const b=$('v69RetryPay');if(b)b.onclick=async()=>{b.disabled=true;b.textContent='Création du paiement…';try{await openPapiBadgePaymentForRequest(latest.id,selected);closeModal();toast('Paiement Papi ouvert.');}catch(e){b.disabled=false;b.textContent='Continuer vers Papi';toast(e?.message||'Impossible de créer le paiement.');}}},0);
+      }
+      if(latest?.status==='approved') return verificationPage(false);
+      let step=1;
+      const data={identity:displayName(state.profile||state.user)||'',category:'',method:'MVOLA'};
+      let proofFile=null;
+      const titles=['Profil','Éligibilité','Justificatif','Paiement Papi'];
+      const categories=['Personnalité publique','Créateur de contenu','Artiste','Entreprise','Marque','Média','Journaliste','Sportif','Institution','Organisation','Professionnel','Autre'];
+      const providers=[['MVOLA','MVola'],['ORANGE_MONEY','Orange Money'],['AIRTEL_MONEY','Airtel Money']];
+      const show=()=>{
+        let body='';
+        if(step===1) body=`<div class="verification-step-v41"><div class="verification-step-icon-v41">01</div><span class="verification-kicker">PROFIL OFFICIEL</span><h3>Confirmez votre identité publique</h3><p>Le nom fourni sera comparé aux éléments de votre dossier.</p><label>Nom légal<input id="vIdentity" class="premium-input" maxlength="160" value="${esc(data.identity)}" placeholder="Nom complet"></label><div class="verification-readonly"><span>Nom d’utilisateur</span><b>@${esc(state.profile?.username||'—')}</b></div></div>`;
+        if(step===2) body=`<div class="verification-step-v41"><div class="verification-step-icon-v41">02</div><span class="verification-kicker">ÉLIGIBILITÉ</span><h3>Choisissez votre catégorie</h3><p>Sélectionnez le motif qui décrit le mieux votre présence publique.</p><label>Catégorie<select id="vCategory" class="premium-input">${categories.map(x=>`<option ${x===data.category?'selected':''}>${x}</option>`).join('')}</select></label><div class="verification-note-v41">✓ Le dossier sera contrôlé par l’administration avant activation du badge.</div></div>`;
+        if(step===3) body=`<div class="verification-step-v41"><div class="verification-step-icon-v41">03</div><span class="verification-kicker">JUSTIFICATIF</span><h3>Ajoutez une preuve vérifiable</h3><p>Importez une pièce pertinente au dossier. Elle reste réservée au processus de vérification.</p><label class="verification-upload-v41"><span>Choisir un document</span><input id="vProof" type="file" accept="image/*,.pdf"><small>${proofFile?`✓ ${esc(proofFile.name)}`:'Image ou PDF · 15 Mo maximum'}</small></label><div class="verification-note-v41">🔒 Stockage privé dédié aux vérifications.</div></div>`;
+        if(step===4) body=`<div class="verification-step-v41 v69-papi-step"><div class="verification-step-icon-v41">04</div><span class="verification-kicker">PAIEMENT SÉCURISÉ PAPI</span><h3>Payez votre badge bleu</h3><p>Frais de vérification : <strong class="verification-price-v41">${BADGE_PRICE_MGA.toLocaleString('fr-FR')} Ar / mois</strong>.</p><div class="verification-payments-v41">${providers.map(([v,l])=>`<button type="button" class="${data.method===v?'active':''}" data-vmethod="${v}"><b>${l}</b><small>Paiement via Papi</small></button>`).join('')}</div><div class="v69-papi-secure"><b>🔐 Paiement réel via Papi</b><small>Le montant est envoyé au compte marchand/règlement configuré dans votre application Papi. Tafaß ne valide le dossier qu’après confirmation SUCCESS.</small></div><div class="verification-final-check">✓ Après validation, vous serez redirigé vers le paiement Papi. Aucun numéro Mobile Money ni API key n’est demandé à Tafaß.</div></div>`;
+        openModal(`<div class="modal-box verification-wizard-v41"><div class="verification-v41-head"><div><span class="eyebrow">TAFAß · BADGE OFFICIEL</span><h3>Demande de badge bleu</h3><small>Étape ${step} sur 4 · ${titles[step-1]}</small></div><button class="modal-close" data-action="close-modal">×</button></div><div class="verification-progress-v41">${titles.map((t,i)=>`<span class="${i+1<=step?'active':''}"><b>${i+1}</b><small>${t}</small></span>`).join('')}</div>${body}<div class="verification-wizard-actions-v41"><button type="button" class="ghost-action" id="verificationBack">${step===1?'Annuler':'Retour'}</button><button type="button" class="primary big" id="verificationNext">${step===4?'Payer avec Papi':'Continuer'}</button></div></div>`);
+        document.querySelectorAll('[data-vmethod]').forEach(b=>b.addEventListener('click',()=>{data.method=b.dataset.vmethod;document.querySelectorAll('[data-vmethod]').forEach(x=>x.classList.toggle('active',x===b));}));
+        const back=$('verificationBack'),next=$('verificationNext');
+        if(back)back.onclick=()=>{if(step===1)closeModal();else{step--;show();}};
+        if(next)next.onclick=async()=>{
+          if(next.disabled)return;
+          if(step===1){data.identity=$('vIdentity')?.value.trim()||'';if(data.identity.length<2)return toast('Indiquez votre nom légal.');}
+          if(step===2){data.category=$('vCategory')?.value||'';if(!data.category)return toast('Choisissez une catégorie.');}
+          if(step===3){const f=$('vProof')?.files?.[0];if(f)proofFile=f;if(!proofFile)return toast('Ajoutez votre justificatif.');if(proofFile.size>15*1024*1024)return toast('Le justificatif dépasse 15 Mo.');}
+          if(step===4){next.disabled=true;next.textContent='Création du paiement…';try{const result=await submitVerificationRequestV69(data,proofFile);closeModal();toast('Dossier créé ✓ · Ouverture de Papi…');const w=window.open(result.paymentLink,'_blank','noopener,noreferrer');if(!w)window.location.href=result.paymentLink;setTimeout(()=>{navigate('verification');},800);}catch(e){next.disabled=false;next.textContent='Payer avec Papi';toast(e?.message||'Impossible de créer le paiement Papi.');}return;}
+          step++;show();
+        };
+      };
+      show();
+    };
+
+    verificationPage = async function(){
+      const token=++state.verificationRenderToken;
+      simplePage('Vérification',`<section class="verification-page-premium verification-page-v69"><section class="verification-hero verification-hero-v2"><div><span class="eyebrow">TAFAß · VÉRIFICATION OFFICIELLE</span><h3>Badge bleu vérifié</h3><p>Demande, paiement sécurisé Papi et validation administrative dans un seul parcours.</p></div><span class="verification-mark">✓</span></section><section id="v69VerificationBody"><section class="v59-status v59-status-ready"><div class="v59-status-main"><small>VOTRE ESPACE</small><b>Vérification prête</b><p>Chargement de votre dossier…</p></div><span class="v59-status-dot"></span></section></section></section>`);
+      try{
+        const rows=await loadVerificationRequests();
+        if(token!==state.verificationRenderToken||state.route!=='verification')return;
+        const latest=rows?.[0], status=String(latest?.status||'none').toLowerCase(), pay=latest?.papi_payment;
+        const paid=String(pay?.payment_status||latest?.payment_status||'').toUpperCase()==='SUCCESS';
+        const action=status==='pending'&&pay?.payment_status==='PENDING'&&pay?.payment_link?'Payer maintenant':status==='pending'&&pay?.payment_status!=='SUCCESS'?'Relancer le paiement':status==='pending'?'Voir le suivi':status==='approved'?'Voir mon statut':'Commencer la vérification';
+        const body=$('v69VerificationBody');if(!body)return;
+        const paymentText=paid?'Paiement confirmé par Papi ✓':pay?.payment_status==='FAILED'?'Paiement échoué · vous pouvez recommencer.':pay?.payment_status==='PENDING'?'Paiement en attente de confirmation Papi.':'Paiement non effectué';
+        body.innerHTML=`${latest?`<section class="v59-status"><div class="v59-status-main"><small>STATUT DU DOSSIER</small><b>${esc(verificationStatusLabel(status))}</b><p>${esc(status==='approved'?'Votre badge bleu est actif.':status==='rejected'?'Votre demande a été refusée. Vous pouvez constituer un nouveau dossier.':paymentText+' · Après paiement, l’administration examine votre dossier.')}</p><small>${latest.created_at?new Date(latest.created_at).toLocaleString('fr-FR'):'—'} · ${BADGE_PRICE_MGA.toLocaleString('fr-FR')} Ar</small></div><span class="v59-status-dot ${status==='approved'?'approved':status==='rejected'?'rejected':'pending'}"></span></section>`:`<section class="v59-status v59-status-ready"><div class="v59-status-main"><small>VOTRE DOSSIER</small><b>Aucune demande en cours</b><p>Commencez votre demande de badge officiel.</p></div><span class="v59-status-dot empty"></span></section>`}${latest?verificationTimeline(status):verificationTimeline('pending')}<section class="v59-action"><div class="v59-action-copy"><b>${esc(action)}</b><small>${esc(status==='approved'?'Votre compte est actuellement vérifié.':paid?'Paiement reçu · décision administrative à venir.':status==='pending'?'Finalisez le paiement Papi pour permettre le traitement du dossier.':`Frais de vérification : ${BADGE_PRICE_MGA.toLocaleString('fr-FR')} Ar / mois.`)}</small></div><button class="primary big" data-action="verification-start">${esc(action)}</button></section>`;
+        const btn=body.querySelector('[data-action="verification-start"]');
+        if(btn&&status==='pending'){if(pay?.payment_link&&pay?.payment_status==='PENDING')btn.onclick=()=>{const w=window.open(pay.payment_link,'_blank','noopener,noreferrer');if(!w)window.location.href=pay.payment_link;};else if(pay?.payment_status!=='SUCCESS')btn.onclick=()=>openVerificationRequest();}
+      }catch(e){const body=$('v69VerificationBody');if(body)body.innerHTML=`<section class="v59-status v59-status-error"><div class="v59-status-main"><small>CONNEXION AU DOSSIER</small><b>Votre espace reste disponible</b><p>Le serveur met plus de temps que prévu. Vous pouvez réessayer.</p></div><button class="ghost-action" data-action="verification">Réessayer</button></section>`;}
+    };
+
+    // L’admin ne peut approuver un badge que si Papi a confirmé le paiement.
+    adminSetVerificationStatus = async function(id,status){
+      if(!['approved','rejected'].includes(String(status)))return toast('Statut de vérification invalide.');
+      if(!(await premiumConfirm(status==='approved'?'Approuver la vérification':'Refuser la vérification',status==='approved'?'Le badge bleu sera activé uniquement si le paiement Papi est confirmé.':'La demande sera refusée.',status==='approved'?'Approuver':'Refuser',status!=='approved')))return;
+      const r=await sb.rpc('tafa_admin_set_verification_status',{p_id:id,p_status:status});
+      if(r.error)return toast(r.error.message);
+      toast(status==='approved'?'Badge bleu activé.':'Demande refusée.');
+      return adminTotalPage();
+    };
+  })();
+
+  /* ============================================================
      TAFAß V61 — SINGLE PARA & CONF / NO LEGACY DUPLICATE
      ============================================================ */
   (() => {
@@ -7620,5 +7756,173 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     observer.observe(document.body,{childList:true,subtree:true});
     requestAnimationFrame(syncPageNavigationV66);
   })();
+
+
+  /* ============================================================
+     TAFAß V69 — BADGE BLEU PAYÉ PAR PAPI
+     Paiement réel côté serveur. Aucun numéro Mobile Money ni clé API
+     n'est stocké dans le frontend. La demande reste pending jusqu'à
+     validation admin, mais l'approbation est impossible avant SUCCESS Papi.
+  ============================================================ */
+  const TAFASS_BADGE_FEE_MGA = 25000;
+  const TAFASS_BADGE_PROVIDERS = Object.freeze([
+    ['MVOLA','🟢 MVola'],
+    ['ORANGE_MONEY','🟠 Orange Money'],
+    ['AIRTEL_MONEY','🔴 Airtel Money']
+  ]);
+
+  function verificationPaymentLabel(row){
+    const ps=String(row?.payment_status||'').toUpperCase();
+    if(ps==='SUCCESS') return 'Paiement Papi confirmé';
+    if(ps==='FAILED') return 'Paiement Papi échoué';
+    if(ps==='PENDING') return 'Paiement Papi en attente';
+    return 'Paiement à effectuer';
+  }
+
+  async function waitForBadgePayment(requestId, timeoutMs=180000){
+    const started=Date.now();
+    while(Date.now()-started<timeoutMs){
+      const r=await sb.from('tafa_verification_requests')
+        .select('id,status,payment_status,payment_method,payment_reference,papi_payment_link,paid_at')
+        .eq('id',requestId).eq('user_id',state.user.id).maybeSingle();
+      if(!r.error && r.data){
+        const ps=String(r.data.payment_status||'').toUpperCase();
+        if(ps==='SUCCESS') return r.data;
+        if(ps==='FAILED') return r.data;
+      }
+      await new Promise(resolve=>setTimeout(resolve,3000));
+    }
+    return null;
+  }
+
+  async function startPapiBadgePayment(requestId, provider){
+    const {data,error}=await sb.functions.invoke('tafa-papi-badge-payment',{body:{request_id:requestId,provider}});
+    if(error){
+      const msg=String(error.message||'');
+      throw new Error(/failed to fetch|fetch failed|network/i.test(msg)
+        ? 'Impossible de joindre Papi. Vérifiez que l’Edge Function « tafa-papi-badge-payment » est déployée.'
+        : msg);
+    }
+    if(!data?.ok || !data?.paymentLink) throw new Error(data?.error||'Papi n’a pas retourné le lien de paiement.');
+    return data;
+  }
+
+  openVerificationRequest = async function(){
+    if(isAdminProfile(state.profile)) return toast("L’administrateur possède automatiquement son badge rouge.");
+    await loadVerificationRequests();
+    const latest=(state.verificationRequests||[])[0];
+    if(latest?.status==='approved') return verificationPage(false);
+    if(latest?.status==='pending' && String(latest?.payment_status||'').toUpperCase()==='SUCCESS') return verificationPage(false);
+    let step=1;
+    const data={identity:displayName(state.profile||state.user)||'',category:'',method:'MVOLA',ref:''};
+    let proofFile=null;
+    let requestId=latest?.status==='pending'?latest.id:null;
+    const titles=['Profil','Éligibilité','Justificatif','Paiement Papi'];
+    const categories=['Personnalité publique','Créateur de contenu','Artiste','Entreprise','Marque','Média','Journaliste','Sportif','Institution','Organisation','Professionnel','Autre'];
+    const show=()=>{
+      let body='';
+      if(step===1) body=`<div class="verification-step-v41"><div class="verification-step-icon-v41">01</div><span class="verification-kicker">PROFIL OFFICIEL</span><h3>Confirmez votre identité publique</h3><p>Le nom fourni sera comparé aux éléments de votre dossier. Utilisez une identité réelle et cohérente.</p><label>Nom légal<input id="vIdentity" class="premium-input" maxlength="160" value="${esc(data.identity)}" placeholder="Nom complet"></label><div class="verification-readonly"><span>Nom d’utilisateur</span><b>@${esc(state.profile?.username||'—')}</b></div></div>`;
+      if(step===2) body=`<div class="verification-step-v41"><div class="verification-step-icon-v41">02</div><span class="verification-kicker">ÉLIGIBILITÉ</span><h3>Choisissez votre catégorie</h3><p>Sélectionnez le motif qui décrit le mieux votre présence publique. L’administration examinera votre dossier après confirmation du paiement.</p><label>Catégorie<select id="vCategory" class="premium-input">${categories.map(x=>`<option ${x===data.category?'selected':''}>${x}</option>`).join('')}</select></label><div class="verification-note-v41">✓ Le paiement est traité sur la page sécurisée Papi.</div></div>`;
+      if(step===3) body=`<div class="verification-step-v41"><div class="verification-step-icon-v41">03</div><span class="verification-kicker">JUSTIFICATIF</span><h3>Ajoutez une preuve vérifiable</h3><p>Importez une pièce pertinente au dossier. Elle reste réservée au processus de vérification.</p><label class="verification-upload-v41"><span>Choisir un document</span><input id="vProof" type="file" accept="image/*,.pdf"><small>${proofFile?`✓ ${esc(proofFile.name)}`:'Image ou PDF · 15 Mo maximum'}</small></label><div class="verification-note-v41">🔒 Le fichier est envoyé dans l’espace privé dédié aux vérifications.</div></div>`;
+      if(step===4) body=`<div class="verification-step-v41"><div class="verification-step-icon-v41">04</div><span class="verification-kicker">TAFAß × PAPI</span><h3>Paiement sécurisé</h3><p>Frais de vérification : <strong class="verification-price-v41">${TAFASS_BADGE_FEE_MGA.toLocaleString('fr-FR')} Ar / mois</strong>. Vous serez redirigé vers Papi pour effectuer le paiement réel.</p><div class="verification-payments-v41 verification-papi-payments-v69">${TAFASS_BADGE_PROVIDERS.map(([value,label])=>`<button type="button" class="${data.method===value?'active':''}" data-vmethod="${value}"><b>${label}</b><small>Paiement sécurisé Papi</small></button>`).join('')}</div><div class="verification-final-check">🔐 Aucun numéro Mobile Money n’est saisi dans Tafaß. Papi traite directement le paiement et Tafaß attend sa confirmation serveur.</div></div>`;
+      openModal(`<div class="modal-box verification-wizard-v41 verification-wizard-v69"><div class="verification-v41-head"><div><span class="eyebrow">TAFAß · BADGE OFFICIEL</span><h3>Demande de badge bleu</h3><small>Étape ${step} sur 4 · ${titles[step-1]}</small></div><button class="modal-close" data-action="close-modal">×</button></div><div class="verification-progress-v41">${titles.map((t,i)=>`<span class="${i+1<=step?'active':''}"><b>${i+1}</b><small>${t}</small></span>`).join('')}</div>${body}<div class="verification-wizard-actions-v41"><button type="button" class="ghost-action" id="verificationBack">${step===1?'Annuler':'Retour'}</button><button type="button" class="primary big" id="verificationNext">${step===4?'Payer 25 000 Ar avec Papi':'Continuer'}</button></div></div>`);
+      document.querySelectorAll('[data-vmethod]').forEach(b=>b.addEventListener('click',()=>{data.method=b.dataset.vmethod;document.querySelectorAll('[data-vmethod]').forEach(x=>x.classList.toggle('active',x===b));}));
+      const back=$('verificationBack'), next=$('verificationNext');
+      if(back) back.onclick=()=>{if(step===1)closeModal();else{step--;show();}};
+      if(next) next.onclick=async()=>{
+        if(next.disabled)return;
+        if(step===1){data.identity=$('vIdentity')?.value.trim()||'';if(data.identity.length<2)return toast('Indiquez votre nom légal.');}
+        if(step===2){data.category=$('vCategory')?.value||'';if(!data.category)return toast('Choisissez une catégorie.');}
+        if(step===3){const f=$('vProof')?.files?.[0];if(f)proofFile=f;if(!proofFile)return toast('Ajoutez votre justificatif.');if(proofFile.size>15*1024*1024)return toast('Le justificatif dépasse 15 Mo.');}
+        if(step===4){
+          next.disabled=true; next.textContent='Création du paiement…';
+          try{
+            if(!requestId){
+              const created=await submitVerificationRequest({identity:data.identity,category:data.category,method:data.method,ref:''},proofFile);
+              requestId=created?.id||created?.request_id||created;
+            }
+            if(!requestId) throw new Error('Demande de vérification introuvable.');
+            const payment=await startPapiBadgePayment(requestId,data.method);
+            closeModal();
+            openModal(`<div class="modal-box verification-payment-wait-v69"><div class="payment-success-mark">✓</div><span class="eyebrow">TAFAß × PAPI</span><h3>Paiement sécurisé prêt</h3><p class="muted">Vous allez être redirigé vers Papi pour payer <b>${TAFASS_BADGE_FEE_MGA.toLocaleString('fr-FR')} Ar</b> avec <b>${esc(data.method)}</b>.</p><div class="verification-papi-ref-v69"><span>Référence</span><b>${esc(payment.reference||'—')}</b></div><button class="primary big" id="openBadgePapiPayment">Ouvrir Papi et payer</button><button class="ghost-action wide" data-action="close-modal">Annuler</button></div>`);
+            const openBtn=$('openBadgePapiPayment');
+            if(openBtn) openBtn.onclick=()=>{openBtn.disabled=true;openBtn.textContent='Ouverture de Papi…';window.location.assign(payment.paymentLink);};
+          }catch(e){next.disabled=false;next.textContent='Payer 25 000 Ar avec Papi';toast(e?.message||'Impossible de créer le paiement Papi.');}
+          return;
+        }
+        step++;show();
+      };
+    };
+    show();
+  };
+
+  submitVerificationRequest = async function(data,proofFile){
+    if(!state.user) throw new Error('Connexion requise.');
+    const uid=state.user.id;
+    const loaded=await tafaV59LoadRows(uid);
+    const pending=loaded.rows.find(x=>String(x.status).toLowerCase()==='pending');
+    if(pending){
+      const ps=String(pending.payment_status||'').toUpperCase();
+      if(ps==='SUCCESS') throw new Error('Votre paiement est déjà confirmé et le dossier attend l’administration.');
+      return pending;
+    }
+    let proofPath='';
+    if(proofFile){
+      if(proofFile.size>15*1024*1024) throw new Error('Le justificatif dépasse 15 Mo.');
+      const ext=(proofFile.name.split('.').pop()||'bin').toLowerCase().replace(/[^a-z0-9]/g,'')||'bin';
+      proofPath=`${uid}/${crypto.randomUUID()}.${ext}`;
+      const up=await tafaV59Race(sb.storage.from('badge-proofs').upload(proofPath,proofFile,{upsert:false,contentType:proofFile.type||undefined}),15000,'Le stockage du justificatif ne répond pas.');
+      if(up.error) throw new Error('Justificatif : '+up.error.message);
+    }
+    try{
+      const rpc=await tafaV59Race(sb.rpc('tafa_create_badge_request',{p_category:String(data.category||'Autre'),p_identity_name:String(data.identity||''),p_proof_path:proofPath||'',p_payment_method:String(data.method||'MVOLA'),p_payment_reference:''}),12000,'Le serveur de vérification ne répond pas.');
+      if(!rpc.error) return {id:rpc.data};
+      if(proofPath)try{await sb.storage.from('badge-proofs').remove([proofPath]);}catch(_){}
+      throw rpc.error;
+    }catch(e){
+      if(proofPath)try{await sb.storage.from('badge-proofs').remove([proofPath]);}catch(_){}
+      throw e;
+    }
+  };
+
+  verificationPage = async function(){
+    const token=++state.verificationRenderToken;
+    simplePage('Vérification',`<section class="verification-page-v59 verification-page-v69"><section class="v59-hero"><div class="v59-brand"><span class="v59-mark">✓</span><div><span class="v59-kicker">TAFAß · BADGE OFFICIEL</span><h3>Badge bleu vérifié</h3><p>Demande, paiement réel via Papi et validation administrative dans un seul parcours sécurisé.</p></div></div></section><section id="v59VerificationBody"><section class="v59-status v59-status-ready"><div class="v59-status-main"><small>VOTRE ESPACE</small><b>Vérification prête</b><p>Nous vérifions votre dossier et votre paiement en arrière-plan.</p></div><span class="v59-status-dot"></span></section></section></section>`);
+    try{
+      const rows=await loadVerificationRequests();
+      if(token!==state.verificationRenderToken || state.route!=='verification')return;
+      const latest=(rows||[])[0];
+      const status=String(latest?.status||'none').toLowerCase();
+      const ps=String(latest?.payment_status||'').toUpperCase();
+      const statusLabel=status==='approved'?'Badge bleu actif':status==='rejected'?'Demande refusée':ps==='SUCCESS'?'Paiement confirmé · en attente de validation':ps==='FAILED'?'Paiement échoué · vous pouvez réessayer':'Paiement à effectuer';
+      const body=$('v59VerificationBody'); if(!body)return;
+      const action= status==='approved'?'Voir mon statut' : (ps==='SUCCESS'?'Voir le suivi':(ps==='FAILED'?'Payer à nouveau':'Commencer la vérification'));
+      body.innerHTML=`${latest?`<section class="v59-status"><div class="v59-status-main"><small>STATUT DU DOSSIER</small><b>${esc(statusLabel)}</b><p>${esc(status==='approved'?'Votre badge bleu est actif.':status==='rejected'?'Votre demande a été refusée. Vous pouvez constituer un nouveau dossier.':ps==='SUCCESS'?'Le paiement de 25 000 Ar a été confirmé par Papi. L’administration peut maintenant examiner votre dossier.':ps==='FAILED'?'Le paiement Papi n’a pas été confirmé. Vous pouvez relancer le paiement sans recréer le dossier.':'Votre dossier est prêt. Le paiement Papi est requis avant l’examen administratif.')}</p><small>${latest.payment_method?esc(latest.payment_method)+' · ':''}${latest.created_at?new Date(latest.created_at).toLocaleString('fr-FR'):''}</small></div><span class="v59-status-dot ${ps==='SUCCESS'?'approved':ps==='FAILED'?'rejected':status==='approved'?'approved':'pending'}"></span></section>`:`<section class="v59-status v59-status-ready"><div class="v59-status-main"><small>VOTRE DOSSIER</small><b>Aucune demande en cours</b><p>Vous pouvez commencer une nouvelle demande de badge officiel.</p></div><span class="v59-status-dot empty"></span></section>`}<section class="v59-grid"><article class="v59-mini"><span>🪪</span><b>Identité</b><small>Informations publiques cohérentes.</small></article><article class="v59-mini"><span>🔐</span><b>Justificatif</b><small>Document envoyé dans l’espace sécurisé.</small></article><article class="v59-mini"><span>💳</span><b>Paiement Papi</b><small>25 000 Ar · confirmation serveur.</small></article></section>${verificationTimeline(status==='approved'?'approved':status==='pending'?'pending':'pending')}<section class="v59-action"><div class="v59-action-copy"><b>${esc(status==='approved'?'Badge bleu actif':ps==='SUCCESS'?'Dossier payé · en attente admin':ps==='FAILED'?'Relancer le paiement':'Demander la vérification')}</b><small>${esc(ps==='SUCCESS'?'Le paiement est confirmé. La décision finale appartient à l’administration.':'Frais : 25 000 Ar / mois · paiement sécurisé par Papi.')}</small></div><button class="primary big" data-action="verification-start" ${status==='approved'?'disabled':''}>${esc(action)}</button></section>`;
+    }catch(error){
+      if(token!==state.verificationRenderToken || state.route!=='verification')return;
+      const body=$('v59VerificationBody'); if(!body)return;
+      body.innerHTML=`<section class="v59-status v59-status-error"><div class="v59-status-main"><small>CONNEXION AU DOSSIER</small><b>Votre espace reste disponible</b><p>Le serveur met plus de temps que prévu. Vous pouvez réessayer sans quitter cette page.</p></div><button class="ghost-action" data-action="verification">Réessayer</button></section>`;
+    }
+  };
+
+  // Badge payment status is realtime as soon as Papi confirms it.
+  const previousV69SetupRealtime = setupRealtime;
+  setupRealtime = async function(...args){
+    const result=await previousV69SetupRealtime.apply(this,args);
+    try{
+      if(state.user && !state.__badgePapiChannel){
+        const ch=sb.channel(`tafass-badge-papi:${state.user.id}`)
+          .on('postgres_changes',{event:'*',schema:'public',table:'tafa_verification_requests',filter:`user_id=eq.${state.user.id}`},payload=>{
+            const rec=payload?.new||payload?.record;
+            if(!rec)return;
+            if(String(rec.payment_status||'').toUpperCase()==='SUCCESS') toast('✓ Paiement du badge bleu confirmé par Papi.');
+            if(String(rec.payment_status||'').toUpperCase()==='FAILED') toast('Paiement Papi échoué. Vous pouvez réessayer.');
+            if(state.route==='verification') verificationPage();
+          }).subscribe();
+        state.__badgePapiChannel=ch;
+      }
+    }catch(_){}
+    return result;
+  };
 
 })();

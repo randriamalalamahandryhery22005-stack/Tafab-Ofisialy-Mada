@@ -1,7 +1,7 @@
 /* Tafaß V68 — single active navigation version */
-const CACHE = 'tafass-v68-papi-shell';
+const CACHE = 'tafass-v69-papi-shell';
 const ASSETS = [
-  './', './index.html', './style.css?v=168', './app.js?v=168',
+  './', './index.html', './style.css?v=169', './app.js?v=169',
   './manifest.webmanifest', './assets/tafass-logo-premium.svg'
 ];
 self.addEventListener('install', event => {

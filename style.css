@@ -5710,3 +5710,23 @@ body .tafa-v51-command-bar{
 .papi-secure-foot{display:block;margin-top:11px;text-align:center;color:#718178;font-size:9px;line-height:1.4}
 .papi-payment-row{border-color:rgba(0,230,118,.09)!important}
 @media(max-width:520px){.papi-pack-grid{grid-template-columns:1fr 1fr}.papi-buy-modal{width:min(96vw,620px)!important;padding:18px!important}}
+
+/* =========================================================
+   TAFAß V69 — PAPI BADGE PAYMENT
+   ========================================================= */
+.v69-payment-modal{max-width:560px}.v69-payment-head{display:flex;align-items:flex-start;gap:14px;padding:6px 0 18px}.v69-payment-head h3{margin:2px 0 6px}.v69-payment-head p{margin:0;line-height:1.5}.v69-payment-mark{width:48px;height:48px;display:grid;place-items:center;border-radius:16px;background:linear-gradient(135deg,#111827,#2563eb);font-size:23px;flex:none}.v69-payment-card{border:1px solid rgba(37,99,235,.18);border-radius:18px;padding:18px;background:linear-gradient(145deg,rgba(37,99,235,.07),rgba(16,185,129,.06));display:grid;gap:12px}.v69-payment-card>div{display:grid;gap:4px}.v69-payment-card small{line-height:1.45}.v69-payment-note{opacity:.78}.v69-papi-step{display:grid;gap:12px}.v69-papi-secure{display:grid;gap:5px;border:1px solid rgba(16,185,129,.2);border-radius:14px;padding:13px;background:rgba(16,185,129,.06)}.v69-papi-secure small{line-height:1.45}.v69-payment-modal .primary{min-height:48px}.admin-data-row button[disabled]{opacity:.55;cursor:not-allowed}
+@media(max-width:600px){.v69-payment-modal{width:calc(100vw - 24px);max-width:none}.v69-payment-head{padding-right:4px}.v69-payment-card{padding:15px}}
+
+/* TAFAß V69 — Badge bleu × Papi */
+.verification-wizard-v69{max-width:640px!important}
+.verification-papi-payments-v69{grid-template-columns:repeat(3,1fr)!important}
+.verification-papi-payments-v69 button{min-height:82px;cursor:pointer;transition:transform .16s ease,border-color .16s ease,background .16s ease}
+.verification-papi-payments-v69 button:active{transform:scale(.98)}
+.verification-papi-payments-v69 button.active{border-color:rgba(25,229,111,.75)!important;background:rgba(25,229,111,.10)!important;box-shadow:0 0 0 1px rgba(25,229,111,.18),0 8px 24px rgba(0,0,0,.18)}
+.verification-papi-payments-v69 small{display:block;margin-top:5px;color:#8fa19a}
+.verification-payment-wait-v69{max-width:470px!important;text-align:center}
+.verification-payment-wait-v69 .payment-success-mark{margin:0 auto 12px}
+.verification-papi-ref-v69{display:grid;gap:5px;margin:16px 0;padding:13px;border:1px solid rgba(25,229,111,.18);border-radius:15px;background:rgba(25,229,111,.06);text-align:left}
+.verification-papi-ref-v69 span{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+.verification-papi-ref-v69 b{font-size:12px;overflow-wrap:anywhere}
+@media(max-width:600px){.verification-papi-payments-v69{grid-template-columns:1fr!important}.verification-papi-payments-v69 button{min-height:70px}.verification-wizard-v69{width:min(96vw,640px)!important}}
