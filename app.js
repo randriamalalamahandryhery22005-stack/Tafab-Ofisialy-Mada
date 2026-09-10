@@ -7,7 +7,7 @@
 ============================================================ */
 (() => {
   "use strict";
-  const BUILD_ID = "TAFAß-V70";
+  const BUILD_ID = "TAFAß-V71";
   const BUILD_KEY = "tafa_active_build";
   const previous = String(localStorage.getItem(BUILD_KEY) || "");
   if (previous !== BUILD_ID) {
@@ -2142,79 +2142,120 @@ function publisherBackgrounds(){
     state.profileTab = "posts";
     state.renderToken++;
     const token = state.renderToken;
-    const { data: p, error } = await sb.from("profiles").select("*").eq("id", userId).maybeSingle();
-    if (error || !p || token !== state.renderToken) {
+
+    // V71: public profile is built from one parallel read batch so opening a
+    // profile never waits through a chain of independent Supabase requests.
+    const [profileR, privacyR, blockedR, liveR, friendR, sentR, receivedR, postsR, friendsR, followersR, ownFriendsR, targetFriendsR] = await Promise.all([
+      sb.from("profiles").select("*").eq("id", userId).maybeSingle(),
+      sb.from("user_settings").select("profile_visibility,allow_messages,allow_friend_requests").eq("user_id", userId).maybeSingle(),
+      userId !== state.user.id ? getBlockedIds() : Promise.resolve(new Set()),
+      sb.from("live_sessions").select("id,title,status,started_at").eq("user_id", userId).eq("status", "live").order("started_at", {ascending:false}).limit(1).maybeSingle(),
+      userId !== state.user.id ? sb.from("friendships").select("id").or(`and(user_id.eq.${state.user.id},friend_id.eq.${userId}),and(user_id.eq.${userId},friend_id.eq.${state.user.id})`).limit(1).maybeSingle() : Promise.resolve({data:null}),
+      userId !== state.user.id ? sb.from("friend_requests").select("id,status").eq("sender_id",state.user.id).eq("receiver_id",userId).eq("status","pending").limit(1).maybeSingle() : Promise.resolve({data:null}),
+      userId !== state.user.id ? sb.from("friend_requests").select("id,status").eq("sender_id",userId).eq("receiver_id",state.user.id).eq("status","pending").limit(1).maybeSingle() : Promise.resolve({data:null}),
+      sb.from("posts").select("*").eq("user_id", userId).order("created_at", {ascending:false}).limit(100),
+      sb.from("friendships").select("user_id,friend_id").or(`user_id.eq.${userId},friend_id.eq.${userId}`).limit(12),
+      sb.from("follows").select("id", {count:"exact",head:true}).eq("following_id", userId),
+      sb.from("friendships").select("user_id,friend_id").or(`user_id.eq.${state.user.id},friend_id.eq.${state.user.id}`).limit(200),
+      sb.from("friendships").select("user_id,friend_id").or(`user_id.eq.${userId},friend_id.eq.${userId}`).limit(200)
+    ]);
+
+    const p = profileR.data;
+    if (profileR.error || !p || token !== state.renderToken) {
       if (token !== state.renderToken) return;
       $("content").innerHTML = `<section class="profile-unavailable premium-unavailable" data-page-route="profile"><div class="profile-unavailable-icon"><span>◌</span></div><span class="eyebrow">TAFAß • PROFIL</span><h2>Profil indisponible</h2><p>Ce profil n’est pas accessible actuellement. Il peut avoir été supprimé ou désactivé.</p><div class="unavailable-actions"><button class="primary" data-route="home">Retour</button><button class="ghost-action" data-route="search">Rechercher</button></div></section>`;
       return;
     }
 
     const isMe = userId === state.user.id;
-    const liveQ = await sb.from("live_sessions").select("id,title,status,started_at").eq("user_id",userId).eq("status","live").order("started_at",{ascending:false}).limit(1).maybeSingle();
-    const activeProfileLive = liveQ.data || null;
-    if(!isMe && await isBlockedBetween(userId)){ $("content").innerHTML=`<section class="profile-locked-screen profile-blocked-screen" data-page-route="profile"><div class="profile-lock-orbit"><div class="profile-lock-icon">⊘</div></div><span class="eyebrow">TAFAß • BLOCAGE</span><h2>Compte inaccessible</h2><h3>Profil masqué</h3><p class="profile-lock-message-fr">Ce compte et votre compte sont bloqués l’un pour l’autre. Les profils, publications, relations et interactions ne sont pas accessibles.</p><div class="profile-lock-status"><span>🔒</span><div><b>Accès totalement bloqué</b><small>Vous ne pouvez ni voir ni contacter ce compte tant que le blocage est actif.</small></div></div><div class="unavailable-actions"><button class="ghost-action" data-route="home">Retour à l’accueil</button></div></section>`; return; }
-    const privacy = await getProfilePrivacy(userId);
-    // Le propriétaire voit toujours son propre profil, même lorsqu'il est verrouillé.
-    if (!isMe) {
-      if (privacy.locked) {
-        $("content").innerHTML = lockedProfileScreen(p, false);
-        return;
-      }
-      if (privacy.visibility === "friends") {
-        const fr=(await sb.from("friendships").select("id").eq("user_id",state.user.id).eq("friend_id",userId).maybeSingle()).data;
-        if(!fr) {
-          $("content").innerHTML = `<section class="profile-locked-screen" data-page-route="profile"><div class="profile-lock-orbit"><div class="profile-lock-icon">🔐</div></div>${avatarHTML(p,"avatar profile-lock-avatar")}<span class="eyebrow">TAFAß • CONFIDENTIALITÉ</span><h2>Profil réservé aux amis</h2><h3>${esc(nameOf(p))}</h3><p class="profile-lock-message-fr">Ce profil est visible uniquement par les amis du propriétaire.</p><div class="profile-lock-status"><span>👥</span><div><b>Accès limité</b><small>Ajoutez cette personne comme ami pour demander l’accès.</small></div></div><div class="unavailable-actions"><button class="primary" data-action="add-friend" data-id="${esc(userId)}">Ajouter</button><button class="ghost-action" data-route="friends">Retour</button></div></section>`;
-          return;
-        }
-      }
+    const isBlocked = !isMe && blockedR instanceof Set && blockedR.has(String(userId));
+    const privacy = {locked: privacyR.data?.profile_visibility === "private", visibility: privacyR.data?.profile_visibility || "public", settings: privacyR.data || {}};
+    const activeProfileLive = liveR.data || null;
+    const isFriend = !!friendR.data;
+
+    if (!isMe && isBlocked) {
+      $("content").innerHTML = `<section class="profile-locked-screen profile-blocked-screen" data-page-route="profile"><div class="profile-lock-orbit"><div class="profile-lock-icon">⊘</div></div><span class="eyebrow">TAFAß • BLOCAGE</span><h2>Compte inaccessible</h2><h3>Profil masqué</h3><p class="profile-lock-message-fr">Ce compte et votre compte sont bloqués l’un pour l’autre. Les profils, publications, relations et interactions ne sont pas accessibles.</p><div class="profile-lock-status"><span>🔒</span><div><b>Accès totalement bloqué</b><small>Vous ne pouvez ni voir ni contacter ce compte tant que le blocage est actif.</small></div></div><div class="unavailable-actions"><button class="ghost-action" data-route="home">Retour à l’accueil</button></div></section>`;
+      return;
+    }
+    if (!isMe && privacy.locked) {
+      $("content").innerHTML = lockedProfileScreen(p, false);
+      return;
+    }
+    if (!isMe && privacy.visibility === "friends" && !isFriend) {
+      $("content").innerHTML = `<section class="profile-locked-screen" data-page-route="profile"><div class="profile-lock-orbit"><div class="profile-lock-icon">🔐</div></div>${avatarHTML(p,"avatar profile-lock-avatar")}<span class="eyebrow">TAFAß • CONFIDENTIALITÉ</span><h2>Profil réservé aux amis</h2><h3>${esc(nameOf(p))}</h3><p class="profile-lock-message-fr">Ce profil est visible uniquement par les amis du propriétaire.</p><div class="profile-lock-status"><span>👥</span><div><b>Accès limité</b><small>Ajoutez cette personne comme ami pour demander l’accès.</small></div></div><div class="unavailable-actions"><button class="primary" data-action="add-friend" data-id="${esc(userId)}">Ajouter</button><button class="ghost-action" data-route="friends">Retour</button></div></section>`;
+      return;
     }
 
-    const { data: mine } = await sb.from("posts").select("*").eq("user_id", userId).order("created_at", { ascending:false }).limit(100);
-    const postRows = mine || [];
-    const friendsR = await sb.from("friendships").select("id", { count:"exact", head:true }).eq("user_id", userId);
-    const followersR = await sb.from("follows").select("id", { count:"exact", head:true }).eq("following_id", userId);
-    const cover = p.cover_url ? `style="background-image:url('${esc(p.cover_url)}')"` : "";
-    const isLockedProfile = isMe && privacy.locked;
-    if(isMe) { const pp=(await sb.from("privacy_protection_settings").select("capture_protection").eq("user_id",userId).maybeSingle()).data; applyNativeCaptureProtection(pp?.capture_protection !== false); }
-    const [friendR, sentR, receivedR] = isMe ? [{data:null},{data:null},{data:null}] : await Promise.all([
-      sb.from("friendships").select("id").eq("user_id",state.user.id).eq("friend_id",userId).maybeSingle(),
-      sb.from("friend_requests").select("id,status").eq("sender_id",state.user.id).eq("receiver_id",userId).eq("status","pending").maybeSingle(),
-      sb.from("friend_requests").select("id,status").eq("sender_id",userId).eq("receiver_id",state.user.id).eq("status","pending").maybeSingle()
-    ]);
-    const relationAction = isMe ? `<div class="profile-action-slot profile-action-left"><button class="primary" data-action="edit-profile">Modifier le profil</button></div>` : friendR.data ? `<div class="profile-action-slot profile-action-left"><button class="ghost-action" data-action="remove-friend" data-id="${esc(userId)}">Retirer des amis</button></div>` : receivedR.data ? `<div class="profile-action-slot profile-action-left"><button class="small-action" data-action="accept-friend" data-id="${esc(userId)}">Confirmer</button><button class="ghost-action" data-action="decline-friend" data-id="${esc(userId)}">Refuser</button></div>` : sentR.data ? `<div class="profile-action-slot profile-action-left"><button class="ghost-action" disabled>Demande envoyée</button></div>` : `<div class="profile-action-slot profile-action-left"><button class="primary" data-action="add-friend" data-id="${esc(userId)}">Ajouter</button></div>`;
-    const actions = isMe ? relationAction : `${relationAction}<div class="profile-action-slot profile-action-center"><button class="ghost-action" data-action="message-user" data-id="${esc(userId)}">Messages</button></div><div class="profile-action-slot profile-action-right"><button class="round-button profile-more-button" data-action="profile-more" data-id="${esc(userId)}" aria-label="Plus d’options"><span aria-hidden="true">⋯</span></button></div>`;
-
-    let body = "";
-    for (const post of postRows) body += await postHTML({ ...post, author:p });
-    if (!body) body = `<div class="empty profile-empty">Aucune publication pour le moment.</div>`;
-
-    const ownerDetails = isMe ? `<div class="profile-owner-details"><div class="profile-owner-detail-head"><span class="eyebrow">MON PROFIL • INFORMATIONS</span><span class="profile-owner-lock-state">${isLockedProfile?'🔒 Verrouillé':'✓ Visible'}</span></div><div class="profile-owner-grid">
-      <div><span>Nom complet</span><b>${esc(nameOf(p))}</b></div>
-      ${p.username?`<div><span>Nom d’utilisateur</span><b>@${esc(p.username)}</b></div>`:""}
-      ${p.email?`<div><span>E-mail</span><b>${esc(p.email)}</b></div>`:""}
-      ${p.phone?`<div><span>Téléphone</span><b>${esc(p.phone)}</b></div>`:""}
-      ${p.country?`<div><span>Pays</span><b>${esc(p.country)}</b></div>`:""}
-      ${p.city_current?`<div><span>Ville actuelle</span><b>${esc(p.city_current)}</b></div>`:""}
-      ${p.city_origin?`<div><span>Ville d’origine</span><b>${esc(p.city_origin)}</b></div>`:""}
-      ${p.birth_date?`<div><span>Date de naissance</span><b>${esc(p.birth_date)}</b></div>`:""}
-      ${p.gender?`<div><span>Genre</span><b>${esc(p.gender)}</b></div>`:""}
-      ${p.created_at?`<div><span>Membre depuis</span><b>${new Date(p.created_at).toLocaleDateString("fr-FR",{month:"long",year:"numeric"})}</b></div>`:""}
-    </div></div>` : "";
-
+    const postRows = postsR.data || [];
+    const targetFriendIds = (targetFriendsR.data || []).map(x => x.user_id === userId ? x.friend_id : x.user_id).filter(Boolean);
+    const ownFriendIds = new Set((ownFriendsR.data || []).map(x => x.user_id === state.user.id ? x.friend_id : x.user_id).filter(Boolean).map(String));
+    const mutualIds = targetFriendIds.filter(id => ownFriendIds.has(String(id))).slice(0, 5);
+    const previewIds = (friendsR.data || []).map(x => x.user_id === userId ? x.friend_id : x.user_id).filter(Boolean).slice(0, 8);
+    const profileFriendIds = [...new Set([...mutualIds, ...previewIds])].slice(0, 8);
+    const friendsPreviewR = profileFriendIds.length ? await sb.from("profiles").select("*").in("id", profileFriendIds) : {data:[]};
     if (token !== state.renderToken) return;
-    $("content").innerHTML = `<section class="profile-page-premium public-profile-page" data-page-route="profile">
-      <div class="profile-cover-wrap"><div class="profile-cover" ${cover}></div></div>
-      <div class="profile-main-premium">
-        <div class="profile-identity-row">${avatarHTML(p,"avatar profile-avatar")}</div>
-        <div class="profile-name-block"><h2 class="profile-name">${esc(nameOf(p))}${activeProfileLive ? ` <button class="profile-live-badge" data-action="watch-live" data-id="${esc(activeProfileLive.id)}">● EN DIRECT</button>` : ""}${isLockedProfile ? ' <span class="profile-locked-badge profile-locked-badge-centered" title="Profil verrouillé">🔒 Profil verrouillé</span>' : ''}</h2>${isLockedProfile ? '<small class="profile-protection-note">🔐 Ny profil ankehitriny dia voasakan’ny tompony ny hiditra • Seul vous pouvez voir le contenu complet.</small>' : ''}</div>
-        <p class="profile-bio">${esc(p.bio || "")}</p>
-        <div class="profile-actions">${actions}</div>
-        <div class="profile-stats"><div class="profile-stat"><b>${postRows.length}</b><small>Publications</small></div><div class="profile-stat"><b>${friendsR.count || 0}</b><small>Amis</small></div><div class="profile-stat"><b>${followersR.count || 0}</b><small>Abonnés</small></div></div>
-        ${ownerDetails}
-        <div class="profile-info profile-info-v23"><div class="profile-info-title-v23">Présentation</div>${p.country ? `<div>🌍 Pays : ${esc(p.country)}</div>` : ""}${p.city_current ? `<div>⌖ Ville actuelle : ${esc(p.city_current)}</div>` : ""}${p.city_origin ? `<div>⌂ Ville d’origine : ${esc(p.city_origin)}</div>` : ""}${p.created_at ? `<div class="profile-member-v23">◷ Membre depuis ${new Date(p.created_at).toLocaleDateString("fr-FR", {month:"long", year:"numeric"})}</div>` : ""}</div>
-        <div class="profile-tabs">${[["posts","Publications"],["photos","Photos"],["videos","Vidéos"],["friends","Amis"]].map(([k,v])=>`<button class="${k==="posts"?"active":""}" data-action="public-profile-tab" data-id="${esc(userId)}" data-tab="${k}">${v}</button>`).join("")}</div>
-        <section class="profile-content-section profile-publications-section">${body}</section>
-      </div>
+    const friendsPreview = (friendsPreviewR.data || []).slice(0, 6);
+    const mutualProfiles = friendsPreview.filter(x => mutualIds.map(String).includes(String(x.id))).slice(0,3);
+
+    // Facebook-like relationship actions from the supplied references:
+    // friend => Ami(e)s + blue Message; non-friend => blue Ajouter + neutral Message.
+    const relationAction = isMe
+      ? `<button type="button" class="tfa-public-action tfa-public-action-primary" data-action="edit-profile">✎ Modifier le profil</button>`
+      : isFriend
+        ? `<button type="button" class="tfa-public-action tfa-public-action-neutral" data-action="remove-friend" data-id="${esc(userId)}">♟ Ami(e)s</button>`
+        : receivedR.data
+          ? `<button type="button" class="tfa-public-action tfa-public-action-primary" data-action="accept-friend" data-id="${esc(userId)}">✓ Confirmer</button>`
+          : sentR.data
+            ? `<button type="button" class="tfa-public-action tfa-public-action-neutral" disabled>Demande envoyée</button>`
+            : `<button type="button" class="tfa-public-action tfa-public-action-primary" data-action="add-friend" data-id="${esc(userId)}">♟ Ajouter comme ami(e)</button>`;
+    const messageAction = !isMe ? `<button type="button" class="tfa-public-action ${isFriend ? "tfa-public-action-primary" : "tfa-public-action-neutral"}" data-action="message-user" data-id="${esc(userId)}">● Message</button>` : "";
+    const moreAction = !isMe && isFriend ? `<button type="button" class="tfa-public-more" data-action="profile-more" data-id="${esc(userId)}" aria-label="Plus d’options">•••</button>` : "";
+
+    const relationship = p.relationship_status || p.relationship || "";
+    const languages = Array.isArray(p.languages) ? p.languages.join(" · ") : String(p.languages || "");
+    const birth = p.birth_date || p.birth || "";
+    const location = [p.city_current || p.city, p.country].filter(Boolean).join(", ");
+    const personalRows = [
+      location ? `<div><span>⌖</span><b>${esc(location)}</b></div>` : "",
+      birth ? `<div><span>♨</span><b>${esc(new Date(birth).toLocaleDateString("fr-FR", {day:"numeric", month:"long", year:"numeric"}))}</b></div>` : "",
+      relationship ? `<div><span>♡</span><b>${esc(relationship)}</b></div>` : "",
+      p.gender ? `<div><span>◉</span><b>${esc(p.gender)}</b></div>` : "",
+      languages ? `<div><span>文</span><b>${esc(languages)}</b></div>` : ""
+    ].filter(Boolean).join("");
+
+    const cover = p.cover_url ? `style="background-image:url('${esc(p.cover_url)}')"` : "";
+    const mutualNames = mutualProfiles.map(x => nameOf(x).split(" ")[0]).filter(Boolean).slice(0,3).join(", ");
+    const extraMutual = mutualIds.length > 3 ? " et " + (mutualIds.length - 3) + " autre(s) personne(s)" : "";
+    const mutualText = mutualProfiles.length > 1 ? "Ami(e) avec " + mutualNames + extraMutual : (mutualNames ? mutualNames + " est votre ami(e)" : "");
+    const friendStrip = friendsPreview.map(x => `<button type="button" class="tfa-public-friend-card" data-action="view-profile" data-id="${esc(x.id)}">${avatarHTML(x,"avatar")}<b>${esc(nameOf(x).split(" ")[0])}</b><small>${ownFriendIds.has(String(x.id)) ? "ami(e) en commun" : "ami(e)"}</small></button>`).join("");
+    const publicPostsAllowed = isMe || isFriend;
+    let body = "";
+    if (publicPostsAllowed) {
+      const renderedPosts = await Promise.all(postRows.map(post => postHTML({...post, author:p})));
+      body = renderedPosts.join("");
+      if (!body) body = `<div class="tfa-public-empty">Aucune publication pour le moment.</div>`;
+    } else {
+      body = `<div class="tfa-public-private-posts"><div class="tfa-public-private-icon">🔒</div><h3>Ajoutez ${esc(nameOf(p).split(" ")[0])} à vos ami(e)s</h3><p>Ajoutez cette personne à vos ami(e)s pour voir ses publications.</p><button type="button" class="tfa-public-action tfa-public-action-primary" data-action="add-friend" data-id="${esc(userId)}">♟ Ajouter comme ami(e)</button></div>`;
+    }
+
+    $("content").innerHTML = `<section class="tfa-public-profile-v71" data-page-route="profile">
+      <div class="tfa-public-cover-v71"><div class="tfa-public-cover-image-v71" ${cover}></div><div class="tfa-public-cover-shade-v71"></div></div>
+      <main class="tfa-public-main-v71">
+        <div class="tfa-public-avatar-row-v71"><div class="tfa-public-avatar-ring-v71">${avatarHTML(p,"avatar profile-avatar")}</div>${isMe ? `<button type="button" class="tfa-public-avatar-camera-v71" data-action="edit-profile" aria-label="Modifier la photo de profil">▣</button>` : ""}</div>
+        <header class="tfa-public-head-v71">
+          <h1>${displayNameHTML(p)}</h1>
+          <div class="tfa-public-counts-v71"><b>${friendsR.count || 0} ami(e)s</b>${mutualIds.length ? `<span>·</span><b>${mutualIds.length} en commun</b>` : ""}</div>
+          ${relationship ? `<p class="tfa-public-relationship-v71">${esc(relationship)}</p>` : ""}
+          ${p.bio ? `<p class="tfa-public-bio-v71">${esc(p.bio)}</p>` : ""}
+          ${location ? `<p class="tfa-public-location-v71">⌖ ${esc(location)}</p>` : ""}
+        </header>
+        ${mutualText ? `<div class="tfa-public-mutual-v71"><div>${mutualProfiles.map(x=>avatarHTML(x,"avatar")).join("")}</div><span>${esc(mutualText)}</span></div>` : ""}
+        <div class="tfa-public-actions-v71">${relationAction}${messageAction}${moreAction}</div>
+        <nav class="tfa-public-tabs-v71" role="tablist"><button class="active" type="button">Tous</button><button type="button" data-action="public-profile-tab" data-id="${esc(userId)}" data-tab="photos">Photos</button><button type="button" data-action="public-profile-tab" data-id="${esc(userId)}" data-tab="videos">Reels</button></nav>
+        ${personalRows ? `<section class="tfa-public-info-v71"><h2>Informations personnelles</h2>${personalRows}</section>` : ""}
+        ${friendStrip ? `<section class="tfa-public-friends-v71"><div class="tfa-public-section-head-v71"><h2>Amis</h2><button type="button" data-route="friends">Voir tout</button></div><div class="tfa-public-friend-strip-v71">${friendStrip}</div></section>` : ""}
+        <section class="tfa-public-posts-v71"><h2>Toutes les publications</h2>${isFriend || isMe ? `<div class="tfa-public-composer-v71">${avatarHTML(state.profile || p,"avatar")}<span>Écrivez quelque chose à ${isMe ? "vous-même" : esc(nameOf(p).split(" ")[0])}...</span></div>` : ""}<div class="tfa-public-post-list-v71">${body}</div></section>
+      </main>
     </section>`;
   }
 
@@ -2351,8 +2392,7 @@ function publisherBackgrounds(){
         `<button type="button" class="tfa-profile-friend-card-v70" data-action="view-profile" data-id="${esc(x.id)}">${avatarHTML(x,"avatar")}<span><b>${esc(nameOf(x))}${verifiedBadgeHTML(x)}</b><small>${window.tafaOnlineIds?.has?.(String(x.id)) ? "En ligne" : "Ami(e)"}</small></span></button>`
       ).join("") || `<div class="tfa-profile-empty-v70">Aucun ami à afficher.</div>`}</div><button class="tfa-profile-more-friends-v70" data-route="friends">Voir tous les amis</button></section>`;
     } else {
-      const renderedMine = [];
-      for (const x of mine) renderedMine.push(await postHTML(x));
+      const renderedMine = await Promise.all(mine.map(x => postHTML(x)));
       tabBody = `<section class="tfa-profile-feed-v70">${renderedMine.length ? renderedMine.join("") : `<div class="tfa-profile-empty-v70">Aucune publication pour le moment.</div>`}</section>`;
     }
 

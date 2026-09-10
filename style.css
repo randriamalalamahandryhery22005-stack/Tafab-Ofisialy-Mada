@@ -5909,3 +5909,145 @@ body:not(.light) .msg-call-btn-v15,.body:not(.light) .msg-settings-btn-v15{borde
   .tfa-profile-actions-v70{grid-template-columns:1fr!important}
   .tfa-profile-tabs-v70 button{font-size:10px!important}
 }
+
+/* ============================================================
+   TAFAß V71 — PUBLIC PROFILE + FLUID NAVIGATION
+   Reference structure: friend / non-friend profile states.
+   Premium dark Green × Orange skin.
+   ============================================================ */
+body.page-loading [data-route],
+body.page-loading #content,
+body.page-loading .page-loader{pointer-events:auto!important}
+body.page-loading .page-loader{background:transparent!important}
+
+/* Every profile/avatar is a true circle. */
+.avatar,
+.avatar img,
+.default-avatar-image,
+.default-avatar-image img,
+.profile-avatar,
+.profile-avatar img,
+.editor-avatar-image-v3,
+.editor-avatar-image-v3 img,
+.editor-avatar-image-v3-img,
+.menu-profile-avatar .avatar,
+.menu-profile-avatar .avatar img,
+.composer-launcher-avatar,
+.composer-launcher-avatar img,
+.conversation-avatar,
+.conversation-avatar img,
+.admin-user-avatar,
+.admin-user-avatar img,
+.page-context-avatar,
+.page-context-avatar img,
+.page-feed-avatar,
+.page-feed-avatar img,
+.page-post-avatar,
+.page-post-avatar img,
+.page-comment-avatar,
+.page-comment-avatar img,
+.page-team-avatar,
+.page-team-avatar img,
+.page-msg-avatar,
+.page-msg-avatar img,
+.tfa-public-friend-card .avatar,
+.tfa-public-friend-card .avatar img,
+.tfa-public-mutual-v71 .avatar,
+.tfa-public-mutual-v71 .avatar img,
+.tfa-public-composer-v71 .avatar,
+.tfa-public-composer-v71 .avatar img{
+  border-radius:50%!important;
+  overflow:hidden!important;
+  object-fit:cover!important;
+}
+.avatar img,
+.default-avatar-image img,
+.profile-avatar img,
+.editor-avatar-image-v3 img,
+.editor-avatar-image-v3-img,
+.menu-profile-avatar .avatar img,
+.composer-launcher-avatar img,
+.conversation-avatar img,
+.admin-user-avatar img,
+.page-context-avatar img,
+.page-feed-avatar img,
+.page-post-avatar img,
+.page-comment-avatar img,
+.page-team-avatar img,
+.page-msg-avatar img{
+  width:100%!important;height:100%!important;display:block!important;
+}
+
+.tfa-public-profile-v71{width:100%;max-width:920px;margin:0 auto;padding:0 0 105px;color:#eef8f2}
+.tfa-public-cover-v71{height:245px;position:relative;overflow:hidden;background:linear-gradient(145deg,#101813,#222722 58%,#2a1808);border-radius:0 0 25px 25px}
+.tfa-public-cover-image-v71{position:absolute;inset:0;background-position:center;background-size:cover;background-repeat:no-repeat}
+.tfa-public-cover-shade-v71{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.03),rgba(2,9,5,.74));pointer-events:none}
+.tfa-public-main-v71{position:relative;padding:0 18px}
+.tfa-public-avatar-row-v71{height:112px;margin-top:-58px;position:relative;z-index:5;display:flex;align-items:flex-end}
+.tfa-public-avatar-ring-v71{width:112px;height:112px;padding:5px;border-radius:50%;background:linear-gradient(135deg,#19f58a,#d9a83d,#ff8f1c);box-shadow:0 17px 42px rgba(0,0,0,.48)}
+.tfa-public-avatar-ring-v71 .avatar{width:100%!important;height:100%!important;border:4px solid #06110a!important;background:#08140d!important}
+.tfa-public-avatar-ring-v71 .avatar img{width:100%!important;height:100%!important;border-radius:50%!important;object-fit:cover!important}
+.tfa-public-avatar-camera-v71{position:absolute;left:82px;bottom:1px;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:#09170f;color:#fff;border:2px solid #06110a;box-shadow:0 8px 20px rgba(0,0,0,.42);cursor:pointer}
+.tfa-public-head-v71{padding-top:11px}
+.tfa-public-head-v71 h1{margin:0;font-size:26px;line-height:1.12;letter-spacing:-.5px;color:#f7fbf8}
+.tfa-public-head-v71 h1 .tafa-display-name{display:inline-flex;align-items:center;gap:7px;flex-wrap:wrap}
+.tfa-public-counts-v71{display:flex;gap:7px;align-items:center;margin-top:5px;color:#a7b9b0;font-size:12px}
+.tfa-public-counts-v71 b{font-weight:600}
+.tfa-public-relationship-v71{margin:17px 0 0;color:#aebdb5;font-size:12px}
+.tfa-public-bio-v71{margin:10px 0 0;color:#e0e9e4;line-height:1.55;font-size:13px}
+.tfa-public-location-v71{margin:9px 0 0;color:#91eab2;font-size:12px}
+.tfa-public-mutual-v71{display:flex;align-items:center;gap:9px;margin:13px 0 3px;color:#a9b8b0;font-size:11px;line-height:1.35}
+.tfa-public-mutual-v71>div{display:flex;padding-left:8px;flex:0 0 auto}
+.tfa-public-mutual-v71 .avatar{width:31px!important;height:31px!important;margin-left:-8px;border:2px solid #06110a!important}
+.tfa-public-actions-v71{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:9px;margin:14px 0 12px}
+.tfa-public-action{min-width:0;min-height:44px;padding:0 14px;border-radius:13px;border:1px solid rgba(255,255,255,.08);font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;transition:transform .14s ease,filter .14s ease}
+.tfa-public-action:active{transform:scale(.985)}
+.tfa-public-action-primary{background:linear-gradient(135deg,#0fce68,#18df80 54%,#ff9b1c)!important;color:#06120b!important;border-color:transparent!important}
+.tfa-public-action-neutral{background:rgba(255,255,255,.08)!important;color:#edf6f1!important;border-color:rgba(255,255,255,.09)!important}
+.tfa-public-more{width:48px;height:44px;border-radius:13px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.08);color:#eef7f2;font-weight:900;letter-spacing:2px;cursor:pointer}
+.tfa-public-tabs-v71{display:grid;grid-template-columns:repeat(3,1fr);margin:2px -18px 15px;border-top:1px solid rgba(255,255,255,.07);border-bottom:1px solid rgba(255,255,255,.07);background:rgba(3,11,7,.72)}
+.tfa-public-tabs-v71 button{min-height:49px;border:0;background:transparent;color:#8ea199;font-size:12px;font-weight:700;cursor:pointer;position:relative}
+.tfa-public-tabs-v71 button.active{color:#72f3a5}
+.tfa-public-tabs-v71 button.active:after{content:"";position:absolute;left:25%;right:25%;bottom:0;height:3px;border-radius:99px;background:linear-gradient(90deg,#19f58a,#ff9f1c)}
+.tfa-public-info-v71,.tfa-public-friends-v71{padding:14px;border:1px solid rgba(25,245,138,.10);border-radius:17px;background:linear-gradient(145deg,rgba(8,24,15,.84),rgba(4,13,8,.96));margin-bottom:12px}
+.tfa-public-info-v71 h2,.tfa-public-friends-v71 h2,.tfa-public-posts-v71>h2{font-size:15px;color:#f1f8f4;margin:0 0 12px}
+.tfa-public-info-v71>div{display:flex;align-items:center;gap:10px;min-height:37px;color:#d9e5df;font-size:11px}
+.tfa-public-info-v71>div>span{width:29px;height:29px;display:grid;place-items:center;border-radius:9px;background:rgba(25,245,138,.08);color:#75f3a5;flex:0 0 29px}
+.tfa-public-section-head-v71{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.tfa-public-section-head-v71 h2{margin:0}
+.tfa-public-section-head-v71 button{border:0;background:transparent;color:#77f4a8;font-size:11px;font-weight:700;cursor:pointer}
+.tfa-public-friend-strip-v71{display:flex;gap:10px;overflow-x:auto;scrollbar-width:none;padding:2px 0 3px}
+.tfa-public-friend-strip-v71::-webkit-scrollbar{display:none}
+.tfa-public-friend-card{min-width:76px;width:76px;display:flex;flex-direction:column;align-items:center;gap:4px;background:transparent;border:0;color:#edf6f1;cursor:pointer}
+.tfa-public-friend-card .avatar{width:58px!important;height:58px!important;border:2px solid rgba(25,245,138,.32)!important}
+.tfa-public-friend-card b{max-width:76px;font-size:9px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tfa-public-friend-card small{max-width:76px;font-size:8px;color:#829a8f;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tfa-public-posts-v71{padding-top:2px}
+.tfa-public-composer-v71{display:flex;align-items:center;gap:10px;padding:11px 12px;margin:0 0 11px;border:1px solid rgba(255,255,255,.07);border-radius:15px;background:rgba(255,255,255,.045);color:#899c93;font-size:11px}
+.tfa-public-composer-v71 .avatar{width:36px!important;height:36px!important;flex:0 0 36px}
+.tfa-public-post-list-v71{display:grid;gap:11px}
+.tfa-public-private-posts{padding:34px 18px;text-align:center;border:1px solid rgba(255,255,255,.08);border-radius:18px;background:linear-gradient(145deg,rgba(9,24,16,.85),rgba(3,12,8,.98))}
+.tfa-public-private-icon{width:48px;height:48px;margin:0 auto 10px;border-radius:50%;display:grid;place-items:center;background:rgba(25,245,138,.08);border:1px solid rgba(25,245,138,.14)}
+.tfa-public-private-posts h3{margin:0;color:#f0f7f3;font-size:15px}
+.tfa-public-private-posts p{margin:7px auto 15px;max-width:380px;color:#899d93;font-size:11px;line-height:1.5}
+.tfa-public-private-posts .tfa-public-action{max-width:290px;width:100%}
+.tfa-public-empty{padding:28px 14px;text-align:center;border:1px solid rgba(255,255,255,.07);border-radius:17px;color:#8da198;background:rgba(255,255,255,.025);font-size:11px}
+
+@media(max-width:720px){
+  .tfa-public-profile-v71{padding-bottom:92px}
+  .tfa-public-cover-v71{height:205px;border-radius:0 0 20px 20px}
+  .tfa-public-main-v71{padding:0 12px}
+  .tfa-public-avatar-row-v71{height:96px;margin-top:-48px}
+  .tfa-public-avatar-ring-v71{width:96px;height:96px}
+  .tfa-public-avatar-camera-v71{left:70px;width:31px;height:31px}
+  .tfa-public-head-v71 h1{font-size:22px}
+  .tfa-public-actions-v71{gap:7px;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 44px}
+  .tfa-public-action{font-size:10px;padding:0 8px}
+  .tfa-public-more{width:44px}
+  .tfa-public-tabs-v71{margin-left:-12px;margin-right:-12px}
+  .tfa-public-info-v71,.tfa-public-friends-v71{padding:12px}
+}
+@media(max-width:410px){
+  .tfa-public-actions-v71{grid-template-columns:1fr 1fr}
+  .tfa-public-more{grid-column:1 / -1;width:100%;height:38px}
+}
