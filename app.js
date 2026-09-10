@@ -3873,22 +3873,24 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
 
   async function creatorMonetisationPage(){
     const uid=state.user.id;
-    const [walletR,profileR,methodsR,withdrawR,ledgerR]=await Promise.all([
+    const [walletR,profileR,methodsR,withdrawR,ledgerR,papiR]=await Promise.all([
       sb.from('tafab_wallets').select('coins,earnings_mga,pending_earnings_mga,lifetime_earnings_mga,total_withdrawn_mga,updated_at').eq('user_id',uid).maybeSingle(),
       sb.from('tafab_creator_monetization').select('*').eq('user_id',uid).maybeSingle(),
       sb.from('tafab_creator_payout_methods').select('id,provider,phone,account_name,is_default,status,created_at').eq('user_id',uid).order('is_default',{ascending:false}).order('created_at',{ascending:false}),
       sb.from('tafab_withdrawal_requests').select('id,amount_mga,method,destination_hint,status,created_at,processed_at,admin_note').eq('user_id',uid).order('created_at',{ascending:false}).limit(30),
-      sb.from('tafab_creator_earnings').select('id,source_type,gross_mga,platform_fee_mga,net_mga,status,description,created_at').eq('creator_id',uid).order('created_at',{ascending:false}).limit(30)
+      sb.from('tafab_creator_earnings').select('id,source_type,gross_mga,platform_fee_mga,net_mga,status,description,created_at').eq('creator_id',uid).order('created_at',{ascending:false}).limit(30),
+      sb.from('tafab_papi_payments').select('id,reference,amount_mga,coins,provider,payment_method,payment_status,created_at,paid_at').eq('user_id',uid).order('created_at',{ascending:false}).limit(20)
     ]);
     const w=walletR.data||{coins:0,earnings_mga:0,pending_earnings_mga:0,lifetime_earnings_mga:0,total_withdrawn_mga:0};
     const mp=profileR.data||{status:'not_requested',enabled:false,min_withdrawal_mga:1000,revenue_share_percent:70,coins_to_mga:10};
-    const methods=methodsR.data||[], withdrawals=withdrawR.data||[], ledger=ledgerR.data||[];
+    const methods=methodsR.data||[], withdrawals=withdrawR.data||[], ledger=ledgerR.data||[], papiPayments=papiR.error?[]:(papiR.data||[]);
     const statusLabel={not_requested:'Non activé',pending:'En cours de vérification',approved:'Monétisation active',suspended:'Suspendue'}[mp.status]||mp.status||'Non activé';
     const providerLabel={mvola:'MVola',orange_money:'Orange Money',airtel_money:'Airtel Money',bank:'Banque'};
     const available=Number(w.earnings_mga||0), pending=Number(w.pending_earnings_mga||0), lifetime=Number(w.lifetime_earnings_mga||0), withdrawn=Number(w.total_withdrawn_mga||0), coins=Number(w.coins||0);
     const conversionCoins=Math.max(1,Number(mp.coins_to_mga||10));
     const methodRows=methods.map(m=>`<div class="monet-row"><div><b>${esc(providerLabel[m.provider]||m.provider)}</b><small>${m.provider==='bank'?esc((m.bank_name||'Banque')+' · '+(m.bank_account||'')):esc(m.phone||'')} · ${esc(m.account_name||'')}</small></div><span class="monet-pill ${m.status==='active'?'ok':''}">${m.status==='active'?'Actif':'Désactivé'}</span></div>`).join('')||'<div class="empty">Aucun moyen de retrait enregistré.</div>';
     const earningRows=ledger.map(x=>`<div class="monet-row"><div><b>${esc(x.description||x.source_type||'Revenu')}</b><small>${timeAgo(x.created_at)} · ${esc(x.status||'available')}</small></div><strong>+${Number(x.net_mga||0).toLocaleString('fr-FR')} Ar</strong></div>`).join('')||'<div class="empty">Aucun revenu enregistré pour le moment.</div>';
+    const papiRows=papiPayments.map(x=>{const st=x.payment_status==='SUCCESS'?'Payé':x.payment_status==='FAILED'?'Échec':'En attente'; return `<div class="monet-row papi-payment-row"><div><b>🟢 ${Number(x.coins||0).toLocaleString('fr-FR')} coins · ${Number(x.amount_mga||0).toLocaleString('fr-FR')} Ar</b><small>${esc(x.payment_method||x.provider||'Papi')} · ${timeAgo(x.created_at)}</small></div><span class="monet-pill ${x.payment_status==='SUCCESS'?'ok':x.payment_status==='FAILED'?'bad':''}">${st}</span></div>`;}).join('')||'<div class="empty">Aucun achat Papi.</div>';
     const withdrawalRows=withdrawals.map(x=>{const st=x.status==='paid'?'Payé':x.status==='approved'?'Validé':x.status==='rejected'?'Refusé':'En attente'; return `<div class="monet-row"><div><b>${Number(x.amount_mga||0).toLocaleString('fr-FR')} Ar · ${esc(providerLabel[x.method]||x.method||'Mobile Money')}</b><small>${esc(x.destination_hint||'')} · ${timeAgo(x.created_at)}${x.admin_note?' · '+esc(x.admin_note):''}</small></div><span class="monet-pill ${x.status==='paid'?'ok':x.status==='rejected'?'bad':''}">${st}</span></div>`;}).join('')||'<div class="empty">Aucune demande de retrait.</div>';
     const actions=mp.status==='approved'
       ? `<button class="primary" data-action="request-withdrawal">💸 Retirer mes revenus</button><button class="secondary-action" data-action="add-payout-method">＋ Moyen de retrait</button>`
@@ -3908,9 +3910,10 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
         <p><b>8. Sécurité.</b> Le portefeuille, les crédits de revenus, les réservations de retrait et les conversions importantes sont traités côté serveur. Le navigateur ne doit jamais pouvoir augmenter lui-même son solde. Conservez toujours vos références de paiement et utilisez uniquement vos propres moyens de paiement.</p>
       </div></section>
       <section class="monet-panel"><div class="monet-panel-head"><div><span class="eyebrow">PROGRAMME CRÉATEUR</span><h3>${esc(statusLabel)}</h3><p>${mp.status==='approved'?'Votre compte est éligible aux revenus configurés par Tafaß.':'Demandez l’accès au programme. L’administration vérifie votre compte avant activation.'}</p></div>${actions}</div><div class="monet-info-grid"><div><b>Part créateur</b><span>${Number(mp.revenue_share_percent||70)} %</span></div><div><b>Seuil de retrait</b><span>${Number(mp.min_withdrawal_mga||1000).toLocaleString('fr-FR')} Ar</span></div><div><b>Conversion</b><span>🪙 ${conversionCoins.toLocaleString('fr-FR')} coins = 1 Ar brut</span></div></div></section>
-      <section class="monet-panel"><div class="monet-section-title"><div><h3>🪙 Vos coins</h3><small class="admin-section-note">${coins.toLocaleString('fr-FR')} coins actuellement disponibles pour soutenir les créateurs.</small></div></div><div class="monet-coin-callout-v2"><strong>${coins.toLocaleString('fr-FR')} 🪙</strong><span>Les coins servent au soutien et aux cadeaux. Ils deviennent un revenu créateur lorsqu’ils sont reçus dans une opération éligible.</span></div></section>
+      <section class="monet-panel papi-coins-panel"><div class="monet-section-title"><div><span class="eyebrow">TAFAß × PAPI</span><h3>🪙 Vos coins</h3><small class="admin-section-note">${coins.toLocaleString('fr-FR')} coins actuellement disponibles pour soutenir les créateurs.</small></div><button class="primary" data-action="papi-buy-coins">＋ Acheter des coins</button></div><div class="monet-coin-callout-v2"><strong>${coins.toLocaleString('fr-FR')} 🪙</strong><span>Achat sécurisé via Papi. Le solde est crédité uniquement après la notification serveur confirmant le paiement.</span></div></section>
       <section class="monet-panel"><div class="monet-section-title"><div><h3>Moyens de retrait</h3><small class="admin-section-note">MVola, Orange Money, Airtel Money ou Banque.</small></div><button class="ghost-action" data-action="add-payout-method">Ajouter</button></div><div class="monet-list">${methodRows}</div></section>
       <section class="monet-panel"><div class="monet-section-title"><div><h3>Revenus récents</h3><small class="admin-section-note">Chaque revenu validé est inscrit dans votre registre.</small></div></div><div class="monet-list">${earningRows}</div></section>
+      <section class="monet-panel papi-history-panel"><div class="monet-section-title"><div><span class="eyebrow">PAIEMENTS SÉCURISÉS</span><h3>Achats via Papi</h3><small class="admin-section-note">Statut confirmé par le serveur Tafaß.</small></div></div><div class="monet-list">${papiRows}</div></section>
       <section class="monet-panel"><div class="monet-section-title"><div><h3>Demandes de retrait</h3><small class="admin-section-note">En attente → Payé ou Refusé. Un retrait payé correspond à un paiement réel effectué par l’administration.</small></div></div><div class="monet-list">${withdrawalRows}</div></section>`);
   }
 
@@ -3923,6 +3926,26 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if(r.error)return toast(r.error.message);
     closeModal(); toast('Demande de monétisation envoyée.'); return creatorMonetisationPage();
   }
+  function openPapiCoinsPurchase(){
+    openModal(`<div class="modal-box monet-modal papi-buy-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß × PAPI</span><h3>Acheter des coins</h3><p class="muted">Le paiement est effectué sur la page sécurisée Papi. Tafaß n'affiche les coins qu'après confirmation serveur du paiement.</p><div class="papi-pack-grid"><button class="papi-pack active" data-papi-amount="1000"><b>1 000 Ar</b><span>10 000 🪙</span></button><button class="papi-pack" data-papi-amount="5000"><b>5 000 Ar</b><span>50 000 🪙</span></button><button class="papi-pack" data-papi-amount="10000"><b>10 000 Ar</b><span>100 000 🪙</span></button><button class="papi-pack" data-papi-amount="25000"><b>25 000 Ar</b><span>250 000 🪙</span></button></div><label>Moyen de paiement<select id="papiProvider" class="premium-input"><option value="">Choisir sur Papi</option><option value="MVOLA">🟢 MVola</option><option value="ORANGE_MONEY">🟠 Orange Money</option><option value="AIRTEL_MONEY">🔴 Airtel Money</option></select></label><input id="papiAmount" type="hidden" value="1000"><button class="primary big" data-action="papi-create-payment">Continuer vers Papi</button><small class="papi-secure-foot">🔐 API key conservée uniquement dans Supabase Edge Functions.</small></div>`);
+    document.querySelectorAll('.papi-pack').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('.papi-pack').forEach(x=>x.classList.remove('active'));btn.classList.add('active');const i=$('papiAmount');if(i)i.value=btn.dataset.papiAmount||'1000';}));
+  }
+
+  async function createPapiCoinPayment(){
+    const amount=Math.round(Number($('papiAmount')?.value||0));
+    const provider=String($('papiProvider')?.value||'');
+    if(![1000,5000,10000,25000].includes(amount)) return toast('Pack de coins invalide.');
+    const {data,error}=await sb.functions.invoke('tafa-papi-payment',{body:{amount,provider}});
+    if(error){
+      const msg=String(error.message||'');
+      return toast(/failed to fetch|fetch failed|network/i.test(msg)?'Impossible de joindre le paiement Papi. Vérifiez que l’Edge Function « tafa-papi-payment » est déployée.':msg);
+    }
+    if(!data?.ok||!data?.paymentLink)return toast(data?.error||'Papi n’a pas retourné de lien de paiement.');
+    closeModal();
+    toast('Redirection vers Papi…');
+    window.location.assign(data.paymentLink);
+  }
+
   function openPayoutMethod(){
     openModal(`<div class="modal-box monet-modal payout-premium-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • RETRAIT SÉCURISÉ</span><h3>Ajouter un moyen de retrait</h3><p class="muted">Choisissez où Tafaß doit envoyer votre paiement. Les coordonnées sont enregistrées côté serveur et utilisées uniquement pour les retraits.</p><label>Moyen de paiement<select id="payoutProvider" class="premium-input"><option value="mvola">🟢 MVola</option><option value="orange_money">🟠 Orange Money</option><option value="airtel_money">🔴 Airtel Money</option><option value="bank">🏦 Banque</option></select></label><div id="payoutMobileFields"><label>Numéro Mobile Money<input id="payoutPhone" class="premium-input" maxlength="30" inputmode="tel" placeholder="Ex. 034 00 000 00"></label><label>Nom du titulaire<input id="payoutName" class="premium-input" maxlength="120" placeholder="Nom associé au compte Mobile Money"></label></div><div id="payoutBankFields" style="display:none"><label>Nom de la banque<input id="payoutBankName" class="premium-input" maxlength="120" placeholder="Ex. BNI, BOA, BMOI..."></label><label>Numéro de compte / RIB<input id="payoutBankAccount" class="premium-input" maxlength="80" placeholder="RIB ou numéro de compte"></label><label>Nom du titulaire<input id="payoutBankHolder" class="premium-input" maxlength="120" placeholder="Nom exact du titulaire"></label></div><label class="check-row"><input id="payoutDefault" type="checkbox" checked> Utiliser comme moyen principal</label><button class="primary big" data-action="save-payout-method">Enregistrer</button></div>`);
     const sel=$('payoutProvider');
@@ -6231,6 +6254,8 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if (action === "music-create-playlist") return openMusicPlaylist();
     if (action === "save-music-playlist") return saveMusicPlaylist();
     if (action === "request-monetization") return openMonetizationRequest();
+    if (action === "papi-buy-coins") return openPapiCoinsPurchase();
+    if (action === "papi-create-payment") return createPapiCoinPayment();
     if (action === "submit-monetization-request") return submitMonetizationRequest();
     if (action === "add-payout-method") return openPayoutMethod();
     if (action === "save-payout-method") return savePayoutMethod();
