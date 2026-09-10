@@ -7,7 +7,7 @@
 ============================================================ */
 (() => {
   "use strict";
-  const BUILD_ID = "TAFAß-V53.1";
+  const BUILD_ID = "TAFAß-V70";
   const BUILD_KEY = "tafa_active_build";
   const previous = String(localStorage.getItem(BUILD_KEY) || "");
   if (previous !== BUILD_ID) {
@@ -15,7 +15,7 @@
     // Remove legacy app caches left by older service-worker builds.
     if (window.caches?.keys) {
       caches.keys().then(keys => Promise.all(
-        keys.filter(k => /^tafass-v/i.test(k) && k !== "tafass-v53-1-shell").map(k => caches.delete(k))
+        keys.filter(k => /^tafass-v/i.test(k) && k !== "tafass-v70-premium-shell").map(k => caches.delete(k))
       )).catch(() => {});
     }
   }
@@ -125,7 +125,7 @@ document.documentElement.classList.add("app-boot");
     }, 350);
   });
 
-  const DEFAULT_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop stop-color='%232d7cff'/%3E%3Cstop offset='.55' stop-color='%23745cff'/%3E%3Cstop offset='1' stop-color='%2310b8a6'/%3E%3C/linearGradient%3E%3ClinearGradient id='h' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop stop-color='%23ffffff' stop-opacity='.9'/%3E%3Cstop offset='1' stop-color='%23dce8ff' stop-opacity='.7'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='256' height='256' rx='128' fill='url(%23g)'/%3E%3Ccircle cx='128' cy='101' r='47' fill='url(%23h)'/%3E%3Cpath d='M52 218c10-47 38-70 76-70s66 23 76 70' fill='url(%23h)'/%3E%3Ccircle cx='128' cy='128' r='112' fill='none' stroke='%23ffffff' stroke-opacity='.22' stroke-width='5'/%3E%3C/svg%3E";
+  const DEFAULT_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop stop-color='%2319f58a'/%3E%3Cstop offset='.55' stop-color='%23088f52'/%3E%3Cstop offset='1' stop-color='%23ff9f1c'/%3E%3C/linearGradient%3E%3ClinearGradient id='h' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop stop-color='%23ffffff' stop-opacity='.9'/%3E%3Cstop offset='1' stop-color='%23dce8ff' stop-opacity='.7'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='256' height='256' rx='128' fill='url(%23g)'/%3E%3Ccircle cx='128' cy='101' r='47' fill='url(%23h)'/%3E%3Cpath d='M52 218c10-47 38-70 76-70s66 23 76 70' fill='url(%23h)'/%3E%3Ccircle cx='128' cy='128' r='112' fill='none' stroke='%23ffffff' stroke-opacity='.22' stroke-width='5'/%3E%3C/svg%3E";
   function avatarHTML(p, cls = "avatar") {
     const url = p?.avatar_url || DEFAULT_AVATAR;
     return `<span class="${cls} default-avatar-image"><img src="${esc(url)}" alt="Avatar"></span>`;
@@ -1711,6 +1711,40 @@ function publisherBackgrounds(){
     if (add.error) return toast(add.error.message);
     closeModal(); await openConversation(conv.id);
   }
+  const TAFASS_MESSAGE_THEMES = Object.freeze([
+    {key:"emerald", label:"Émeraude", icon:"✦", desc:"Vert premium + or"},
+    {key:"sunset", label:"Sunset", icon:"◒", desc:"Orange profond + or"},
+    {key:"gold", label:"Gold", icon:"◆", desc:"Noir + doré premium"},
+    {key:"forest", label:"Forêt", icon:"◈", desc:"Vert sombre élégant"},
+    {key:"rose", label:"Amour", icon:"♥", desc:"Rose chaud premium"},
+    {key:"midnight", label:"Minuit", icon:"●", desc:"Noir graphite"}
+  ]);
+  async function getConversationTheme(conversationId){
+    if(!conversationId || !state.user) return "emerald";
+    try{
+      const r=await sb.from("tafa_message_themes").select("theme_key").eq("conversation_id",conversationId).eq("user_id",state.user.id).maybeSingle();
+      return r.data?.theme_key || "emerald";
+    }catch(_){ return "emerald"; }
+  }
+  async function openMessageTheme(conversationId){
+    if(!conversationId) return toast("Conversation introuvable.");
+    const current=await getConversationTheme(conversationId);
+    openModal(`<div class="modal-box tfa-message-theme-modal-v70"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß · CONVERSATION</span><h3>Thème de la conversation</h3><p class="muted">Le thème choisi est synchronisé pour les deux membres de cette conversation.</p><div class="tfa-message-theme-grid-v70">${TAFASS_MESSAGE_THEMES.map(t=>`<button type="button" class="tfa-message-theme-option-v70 ${t.key===current?'active':''}" data-theme-key="${t.key}" data-conversation-id="${esc(conversationId)}"><span class="tfa-message-theme-preview-v70 theme-${t.key}">${t.icon}</span><span><b>${esc(t.label)}</b><small>${esc(t.desc)}</small></span><i>${t.key===current?'✓':'›'}</i></button>`).join('')}</div><div class="tfa-message-theme-footer-v70"><button class="ghost-action" data-action="close-modal">Annuler</button><button class="primary big" data-action="save-message-theme" data-id="${esc(conversationId)}">Appliquer</button></div></div>`);
+    document.querySelectorAll("[data-theme-key]").forEach(btn=>btn.addEventListener("click",()=>{
+      document.querySelectorAll("[data-theme-key]").forEach(x=>x.classList.toggle("active",x===btn));
+      document.querySelectorAll("[data-theme-key] i").forEach(x=>x.textContent="›");
+      const check=btn.querySelector("i"); if(check) check.textContent="✓";
+    }));
+  }
+  async function saveMessageTheme(conversationId){
+    const selected=document.querySelector("[data-theme-key].active")?.dataset.themeKey || "emerald";
+    const r=await sb.rpc("tafa_set_conversation_theme",{p_conversation_id:conversationId,p_theme_key:selected});
+    if(r.error) return toast(r.error.message || "Impossible d'appliquer le thème.");
+    closeModal();
+    toast("Thème appliqué aux deux comptes.");
+    return openConversation(conversationId);
+  }
+
   async function openConversation(id) {
     document.body.classList.add("tafa-conversation-active");
     const token = state.renderToken;
@@ -1748,7 +1782,8 @@ function publisherBackgrounds(){
     const aliasRows=(await sb.from("tafab_conversation_aliases").select("target_user_id,nickname").eq("conversation_id",id)).data||[];
     const aliasMap=new Map(aliasRows.map(x=>[String(x.target_user_id),x.nickname]));
     const displayOtherName=otherProfile ? (aliasMap.get(String(otherProfile.id))||nameOf(otherProfile)) : "Discussion";
-    $("content").innerHTML = `<section class="clean-page messages-page conversation-page conversation-page-clean"><header class="conversation-clean-topbar"><button class="conversation-back" data-action="page-back" type="button" aria-label="Retour">‹</button><button class="conversation-person" data-action="view-profile" data-id="${esc(otherId||"")}" type="button">${avatarHTML(otherProfile || state.profile,"avatar conversation-avatar")}<span><b>${esc(displayOtherName)}</b><small id="conversationPresence" class="conversation-presence">Actif</small></span></button><div class="conversation-head-actions"><button type="button" aria-label="Rechercher dans la conversation" title="Rechercher" data-action="conversation-search"><span>⌕</span></button><button type="button" aria-label="Appel Premium" title="Appel Premium" data-action="conversation-call"><span>⌕</span></button><button type="button" aria-label="Vidéo Premium" title="Vidéo Premium" data-action="conversation-video"><span>▣</span></button><button type="button" aria-label="Options" title="Options" data-action="conversation-menu" data-id="${esc(id)}">⚙</button></div></header><div id="conversationSearchBar" class="conversation-search-bar" hidden><span>⌕</span><input id="conversationSearchInput" type="search" placeholder="Rechercher dans les messages…" autocomplete="off"><b id="conversationSearchCount">0</b><button type="button" data-action="conversation-search-close" aria-label="Fermer">×</button></div><div id="typingIndicator" class="typing-indicator" hidden>écrit…</div><div class="message-list clean-message-list">${(msgs||[]).map(m=>conversationMessageHTML(m,map,reactionMap)).join("")||renderFirstContactGreetings(otherProfile||{})}</div><form id="messageForm" class="comment-form clean-message-form"><button type="button" class="message-tool" data-action="message-attachment" title="Photo ou fichier" aria-label="Photo ou fichier">▧</button><button type="button" class="message-tool" data-action="message-voice" title="Message vocal" aria-label="Message vocal">●</button><input id="messageAttachment" type="file" hidden accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip,.apk"><div class="message-input-shell"><input id="messageText" autocomplete="off" placeholder="Message"><button type="button" class="message-emoji-button" data-action="message-emoji" title="Emoji" aria-label="Emoji">☺</button></div><button type="submit" class="message-send-button" aria-label="Envoyer">➤</button></form></section>`;
+    const conversationTheme=await getConversationTheme(id);
+    $("content").innerHTML = `<section class="clean-page messages-page conversation-page conversation-page-clean tfa-message-theme-${esc(conversationTheme)}" data-message-theme="${esc(conversationTheme)}"><header class="conversation-clean-topbar"><button class="conversation-back" data-action="page-back" type="button" aria-label="Retour">‹</button><button class="conversation-person" data-action="view-profile" data-id="${esc(otherId||"")}" type="button">${avatarHTML(otherProfile || state.profile,"avatar conversation-avatar")}<span><b>${esc(displayOtherName)}</b><small id="conversationPresence" class="conversation-presence">Actif</small></span></button><div class="conversation-head-actions"><button type="button" aria-label="Rechercher dans la conversation" title="Rechercher" data-action="conversation-search"><span>⌕</span></button><button type="button" aria-label="Options" title="Options" data-action="conversation-menu" data-id="${esc(id)}">⚙</button></div></header><div id="conversationSearchBar" class="conversation-search-bar" hidden><span>⌕</span><input id="conversationSearchInput" type="search" placeholder="Rechercher dans les messages…" autocomplete="off"><b id="conversationSearchCount">0</b><button type="button" data-action="conversation-search-close" aria-label="Fermer">×</button></div><div id="typingIndicator" class="typing-indicator" hidden>écrit…</div><div class="message-list clean-message-list">${(msgs||[]).map(m=>conversationMessageHTML(m,map,reactionMap)).join("")||renderFirstContactGreetings(otherProfile||{})}</div><form id="messageForm" class="comment-form clean-message-form"><button type="button" class="message-tool" data-action="message-attachment" title="Photo ou fichier" aria-label="Photo ou fichier">▧</button><button type="button" class="message-tool" data-action="message-voice" title="Message vocal" aria-label="Message vocal">●</button><input id="messageAttachment" type="file" hidden accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip,.apk"><div class="message-input-shell"><input id="messageText" autocomplete="off" placeholder="Message"><button type="button" class="message-emoji-button" data-action="message-emoji" title="Emoji" aria-label="Emoji">☺</button></div><button type="submit" class="message-send-button" aria-label="Envoyer">➤</button></form></section>`;
 
     // Conversation-level Realtime: typing + online presence without storing ephemeral state in SQL.
     if(state.conversationChannel){ try{ await sb.removeChannel(state.conversationChannel); }catch(_){} state.conversationChannel=null; }
@@ -2276,46 +2311,106 @@ function publisherBackgrounds(){
 
   async function profilePage(tab = state.profileTab) {
     const token = state.renderToken;
-    state.profileTab = ["posts","photos","friends"].includes(tab) ? tab : "posts";
+    const allowedTabs = ["posts","photos","videos","friends"];
+    state.profileTab = allowedTabs.includes(tab) ? tab : "posts";
     tab = state.profileTab;
     const p = state.profile || {};
     const privacy = await getProfilePrivacy(state.user.id);
     const isLockedProfile = privacy.locked === true;
+
     const mine = await loadMyPosts();
-    const photos = mine.filter(x => x.media_url && x.media_type === "image");
-    const cover = p.cover_url ? `style="background-image:url('${esc(p.cover_url)}')"` : "";
-    const [friendsCountR, followersCountR] = await Promise.all([
+    const photos = mine.filter(x => x.media_url && String(x.media_type || "").toLowerCase().startsWith("image/"));
+    const videos = mine.filter(x => ["video","reel"].includes(String(x.media_type || "").toLowerCase()) || x.video_url || x.reel_url);
+
+    const [friendsCountR, followersCountR, friendsRowsR] = await Promise.all([
       sb.from("friendships").select("id", { count:"exact", head:true }).eq("user_id", state.user.id),
-      sb.from("follows").select("id", { count:"exact", head:true }).eq("following_id", state.user.id)
+      sb.from("follows").select("id", { count:"exact", head:true }).eq("following_id", state.user.id),
+      sb.from("friendships").select("friend_id").eq("user_id", state.user.id).limit(8)
     ]);
-    const friendsCount = friendsCountR.count || 0, followersCount = followersCountR.count || 0;
+    const friendsCount = friendsCountR.count || 0;
+    const followersCount = followersCountR.count || 0;
+    const friendIds = (friendsRowsR.data || []).map(x => x.friend_id).filter(Boolean).slice(0,8);
+    const friendsPreviewR = friendIds.length
+      ? await sb.from("profiles").select("*").in("id", friendIds)
+      : { data: [] };
+    const friendsPreview = (friendsPreviewR.data || []).slice(0,6);
+
     if (token !== state.renderToken || state.route !== "profile") return;
 
     let tabBody = "";
     if (tab === "photos") {
-      tabBody = `<section class="profile-content-section"><div class="photo-grid">${photos.map(x => `<img class="protected-media" src="${esc(x.media_url)}" alt="Photo publiée" loading="lazy">`).join("") || `<div class="empty profile-empty">Aucune photo publiée.</div>`}</div></section>`;
+      tabBody = `<section class="tfa-profile-feed-v70"><div class="tfa-profile-photo-grid-v70">${photos.map(x =>
+        `<button type="button" class="tfa-profile-photo-v70" data-action="search-post" data-id="${esc(x.id)}"><img class="protected-media" src="${esc(x.media_url)}" alt="Photo publiée" loading="lazy"></button>`
+      ).join("") || `<div class="tfa-profile-empty-v70">Aucune photo publiée.</div>`}</div></section>`;
     } else if (tab === "videos") {
-      const videos = mine.filter(x => x.media_type === "video" || x.media_type === "reel");
-      tabBody = `<section class="profile-content-section"><div class="profile-video-list">${videos.map(x => `<article class="profile-publication"><div class="profile-publication-head">${avatarHTML(p)}<div class="grow"><b>${esc(nameOf(p))}</b><small>${timeAgo(x.created_at)} · ${x.media_type === "reel" ? "Reel" : "Vidéo"}</small></div></div>${x.content ? `<p>${esc(x.content)}</p>` : ""}<video class="post-media protected-media" src="${esc(x.media_url)}" controls preload="metadata"></video></article>`).join("") || `<div class="empty profile-empty">Aucune vidéo publiée.</div>`}</div></section>`;
+      tabBody = `<section class="tfa-profile-feed-v70"><div class="tfa-profile-reels-v70">${videos.map(x =>
+        `<article class="tfa-profile-reel-card-v70"><div class="tfa-profile-post-head-v70">${avatarHTML(p,"avatar sm")}<div><b>${esc(nameOf(p))}${verifiedBadgeHTML(p)}</b><small>${timeAgo(x.created_at)} · ${String(x.media_type||"").toLowerCase()==="reel" ? "Reel" : "Vidéo"}</small></div></div>${x.content ? `<p>${esc(x.content)}</p>` : ""}<video class="protected-media" src="${esc(x.media_url || x.video_url || x.reel_url)}" controls playsinline preload="metadata"></video></article>`
+      ).join("") || `<div class="tfa-profile-empty-v70">Aucun Reel ou vidéo publié.</div>`}</div></section>`;
     } else if (tab === "friends") {
-      tabBody = `<section class="profile-content-section profile-network-section"><div class="profile-network-stat"><b>${friendsCount}</b><span>amis</span></div><p>Votre réseau Tafaß et vos relations réelles.</p><button class="primary big" data-route="friends">Voir mes amis</button></section>`;
+      tabBody = `<section class="tfa-profile-feed-v70"><div class="tfa-profile-friends-full-v70">${friendsPreview.map(x =>
+        `<button type="button" class="tfa-profile-friend-card-v70" data-action="view-profile" data-id="${esc(x.id)}">${avatarHTML(x,"avatar")}<span><b>${esc(nameOf(x))}${verifiedBadgeHTML(x)}</b><small>${window.tafaOnlineIds?.has?.(String(x.id)) ? "En ligne" : "Ami(e)"}</small></span></button>`
+      ).join("") || `<div class="tfa-profile-empty-v70">Aucun ami à afficher.</div>`}</div><button class="tfa-profile-more-friends-v70" data-route="friends">Voir tous les amis</button></section>`;
     } else {
       const renderedMine = [];
       for (const x of mine) renderedMine.push(await postHTML(x));
-      tabBody = `<section class="profile-content-section profile-publications-section">${renderedMine.length ? renderedMine.join("") : `<div class="empty profile-empty">Aucune publication pour le moment.</div>`}</section>`;
+      tabBody = `<section class="tfa-profile-feed-v70">${renderedMine.length ? renderedMine.join("") : `<div class="tfa-profile-empty-v70">Aucune publication pour le moment.</div>`}</section>`;
     }
 
-    $("content").innerHTML = `<section class="profile-page-premium">
-      <div class="profile-cover-wrap"><div class="profile-cover" ${cover}></div></div>
-      <div class="profile-main-premium">
-        <div class="profile-identity-row">${avatarHTML(p,"avatar profile-avatar")}</div>
-        <div class="profile-name-block"><h2 class="profile-name">${displayNameHTML(p)}${isLockedProfile ? ' <span class="profile-locked-badge" title="Profil verrouillé">🔒 Profil verrouillé</span>' : ''}</h2>${isLockedProfile ? '<small class="profile-protection-note">🔐 Contenu protégé par les paramètres de confidentialité Tafaß</small>' : ''}</div>
-        <p class="profile-bio">${esc(p.bio || "")}</p>
-        <div class="profile-actions"><button class="primary" data-action="edit-profile">Modifier le profil</button></div>
-        <div class="profile-stats"><div class="profile-stat"><b>${mine.length}</b><small>Publications</small></div><div class="profile-stat"><b>${friendsCount}</b><small>Amis</small></div><div class="profile-stat"><b>${followersCount}</b><small>Abonnés</small></div></div>
-        <div class="profile-info profile-info-v23"><div class="profile-info-title-v23">Lieu</div>${p.country ? `<div>🌍 Pays : ${esc(p.country)}</div>` : ""}${p.city_current ? `<div>⌖ Ville actuelle : ${esc(p.city_current)}</div>` : ""}${p.city_origin ? `<div>⌂ Ville d’origine : ${esc(p.city_origin)}</div>` : ""}${p.created_at ? `<div class="profile-member-v23">◷ Membre depuis ${new Date(p.created_at).toLocaleDateString("fr-FR", {month:"long", year:"numeric"})}</div>` : ""}</div>
-        <div class="profile-tabs">${[["posts","Publications"],["photos","Photos"],["friends","Amis"]].map(([k,v])=>`<button class="${tab===k?"active":""}" data-action="profile-tab" data-tab="${k}">${v}</button>`).join("")}</div>
-      </div>${tabBody}
+    const cover = p.cover_url ? `style="background-image:url('${esc(p.cover_url)}')"` : "";
+    const location = [p.city_current, p.country].filter(Boolean).join(", ");
+    const relationship = p.relationship_status || p.relationship || "";
+    const languages = Array.isArray(p.languages) ? p.languages.join(" · ") : String(p.languages || "");
+    const hobbies = Array.isArray(p.hobbies) ? p.hobbies.join(" · ") : String(p.hobbies || p.interests || "");
+    const mutual = Math.min(friendsPreview.length, 3);
+    const mutualNames = friendsPreview.slice(0,3).map(x => nameOf(x).split(" ")[0]).filter(Boolean).join(", ");
+    const personalRows = [
+      location ? `<div><span>⌖</span><b>${esc(location)}</b></div>` : "",
+      relationship ? `<div><span>♡</span><b>${esc(relationship)}</b></div>` : "",
+      p.gender ? `<div><span>◉</span><b>${esc(p.gender)}</b></div>` : "",
+      languages ? `<div><span>文</span><b>${esc(languages)}</b></div>` : ""
+    ].filter(Boolean).join("");
+
+    const friendsPreviewHtml = friendsPreview.map(x =>
+      `<button type="button" class="tfa-profile-friend-mini-v70" data-action="view-profile" data-id="${esc(x.id)}">${avatarHTML(x,"avatar")}<span>${esc(nameOf(x).split(" ")[0])}</span></button>`
+    ).join("");
+
+    $("content").innerHTML = `<section class="profile-page-premium tfa-profile-v70" data-page-route="profile">
+      <div class="tfa-profile-cover-v70">
+        <div class="profile-cover" ${cover}></div>
+        <div class="tfa-profile-cover-shade-v70"></div>
+        <button type="button" class="tfa-profile-cover-camera-v70" data-action="edit-profile" aria-label="Modifier la photo de couverture">▣</button>
+      </div>
+      <div class="tfa-profile-main-v70">
+        <div class="tfa-profile-avatar-row-v70">
+          <div class="tfa-profile-avatar-ring-v70">${avatarHTML(p,"avatar profile-avatar")}</div>
+          <button type="button" class="tfa-profile-avatar-camera-v70" data-action="edit-profile" aria-label="Modifier la photo de profil">▣</button>
+        </div>
+        <div class="tfa-profile-heading-v70">
+          <h1>${displayNameHTML(p)}</h1>
+          <p class="tfa-profile-handle-v70">${p.username ? `@${esc(p.username)} · ` : ""}${friendsCount} ami(e)s</p>
+          ${location ? `<p class="tfa-profile-location-v70">⌖ ${esc(location)}</p>` : ""}
+          ${p.bio ? `<p class="tfa-profile-bio-v70">${esc(p.bio)}</p>` : ""}
+        </div>
+        <div class="tfa-profile-actions-v70">
+          <button type="button" class="tfa-profile-story-btn-v70" data-action="story-create">＋ Ajouter à la story</button>
+          <button type="button" class="tfa-profile-edit-btn-v70" data-action="edit-profile">✎ Modifier le profil</button>
+        </div>
+        ${isLockedProfile ? `<div class="tfa-profile-lock-card-v70"><span>🔒</span><div><b>Vous avez verrouillé votre profil</b><small>Seul vous pouvez voir le contenu complet de votre profil.</small></div></div>` : ""}
+        ${mutual ? `<div class="tfa-profile-mutual-v70"><div class="tfa-profile-mutual-avatars-v70">${friendsPreview.slice(0,3).map(x => avatarHTML(x,"avatar")).join("")}</div><span>${mutual > 1 ? `${mutual} ami(e)s avec des points communs` : `${mutualNames} est votre ami(e)`}</span></div>` : ""}
+        <div class="tfa-profile-tabs-v70" role="tablist">
+          ${[["posts","Tous"],["photos","Photos"],["videos","Reels"],["friends","Amis"]].map(([k,v]) =>
+            `<button type="button" role="tab" class="${tab===k?"active":""}" data-action="profile-tab" data-tab="${k}">${v}</button>`
+          ).join("")}
+        </div>
+        <section class="tfa-profile-info-v70">
+          <div class="tfa-profile-section-head-v70"><h2>Informations personnelles</h2><button type="button" data-action="account-settings" aria-label="Modifier les informations">✎</button></div>
+          ${personalRows || `<div class="tfa-profile-empty-line-v70">Ajoutez votre lieu et votre présentation depuis Modifier le profil.</div>`}
+        </section>
+        
+        ${friendsPreview.length ? `<section class="tfa-profile-friends-v70"><div class="tfa-profile-section-head-v70"><h2>Amis</h2><button type="button" data-route="friends">Voir tout</button></div><div class="tfa-profile-friend-strip-v70">${friendsPreviewHtml}</div></section>` : ""}
+        <section class="tfa-profile-publications-head-v70"><div><h2>Toutes les publications</h2><small>${mine.length} publication${mine.length===1?"":"s"}</small></div><button type="button" data-action="profile-tab" data-tab="posts">Tout voir</button></section>
+      </div>
+      ${tabBody}
     </section>`;
   }
 
@@ -4718,6 +4813,13 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
         if(rec.status==='approved') toast('✓ Votre badge bleu est maintenant actif.');
         if(rec.status==='rejected') toast('La demande de vérification a été refusée.');
       },
+      tafa_message_themes: async payload => {
+        const rec=payload?.new||payload?.record||payload;
+        if(rec?.user_id && String(rec.user_id)!==String(state.user.id)) return;
+        if(state.route==='messages' && state.selectedConversation && (!rec?.conversation_id || String(rec.conversation_id)===String(state.selectedConversation))) {
+          await openConversation(state.selectedConversation);
+        }
+      },
       tafa_account_appeals: async payload => {
         const rec=payload?.new||payload?.record||payload;
         if(rec?.user_id===state.user.id && state.profile?.account_status!=='active' && state.route!=='admin') {
@@ -6142,6 +6244,8 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if (action === "send-greeting") return sendGreeting(actionEl.dataset.index);
     if (action === "confirm-delete-conversation") return confirmDeleteConversation(id);
     if (action === "message-aliases") return messageAliases(id);
+    if (action === "message-theme") return openMessageTheme(id);
+    if (action === "save-message-theme") return saveMessageTheme(id);
     if (action === "copy-message") return copyMessage(id);
     if (action === "react-message") return reactToMessage(id, actionEl.dataset.reaction||"👍");
     if (action === "download-message-file") return downloadMessageFile(actionEl.dataset.url, actionEl.dataset.name);
