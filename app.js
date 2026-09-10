@@ -7,7 +7,7 @@
 ============================================================ */
 (() => {
   "use strict";
-  const BUILD_ID = "TAFAß-V71";
+  const BUILD_ID = "TAFAß-V72";
   const BUILD_KEY = "tafa_active_build";
   const previous = String(localStorage.getItem(BUILD_KEY) || "");
   if (previous !== BUILD_ID) {
@@ -15,7 +15,7 @@
     // Remove legacy app caches left by older service-worker builds.
     if (window.caches?.keys) {
       caches.keys().then(keys => Promise.all(
-        keys.filter(k => /^tafass-v/i.test(k) && k !== "tafass-v70-premium-shell").map(k => caches.delete(k))
+        keys.filter(k => /^tafass-v/i.test(k) && k !== "tafass-v72-premium-shell").map(k => caches.delete(k))
       )).catch(() => {});
     }
   }
@@ -68,7 +68,7 @@ document.documentElement.classList.add("app-boot");
     voicePreviewUrl: null,
     user: null, profile: null, route: "home", navStack: ["home"], backOverride: null, posts: [], friends: [], stories: [],
     channel: null, theme: "dark", entering: false, loggingOut: false, composerOpen: false, composerBackground: "plain", composerLocation: "",
-    composerDraftText: "", composerFile: null, composerVisibility: "public", composerMeta: {},
+    composerDraftText: "", composerFile: null, composerVisibility: "public", composerMeta: {}, profileWallOwnerId:null, profileWallRequireApproval:true, profileWallRows:[],
     liveFeedChannel: null, conversationChannel: null, presenceChannel: null, activeLive: null, adminDashboardChannel:null, adminDashboardTimer:null, adminDashboardRefreshing:false, adminDashboardRefreshTimer:null,
     profileTab: "posts", reactionSettingsCache:new Map(), locationWatchId:null, timeLimitRuntime:null, timeLimitTimer:null, timeLimitOverlay:null, friendsTab: "suggestions", pagesTab: "mine", groupsTab: "mine", groupSort: "recent", selectedConversation: null, viewingProfileId: null, renderToken: 0, activePage: null, entityBackRoute: null
   };
@@ -84,7 +84,7 @@ document.documentElement.classList.add("app-boot");
     if(!state.user || realtimeRuntime.retryTimer)return;
     const delay=Math.min(30000,1000*Math.pow(2,Math.min(realtimeRuntime.retryCount,5)));
     realtimeRuntime.retryCount++; realtimeRuntime.reconnecting=true;
-    networkBanner("Connexion temps réel…", "reconnecting");
+    networkBanner("");
     realtimeRuntime.retryTimer=setTimeout(async()=>{
       realtimeRuntime.retryTimer=null;
       try{ await setupRealtime(); realtimeRuntime.retryCount=0; realtimeRuntime.reconnecting=false; networkBanner(""); }
@@ -96,12 +96,13 @@ document.documentElement.classList.add("app-boot");
     if(state.user){ scheduleRealtimeReconnect(); } else networkBanner("");
   }
   window.addEventListener("offline",handleConnectivity);
-  window.addEventListener("online",()=>{ networkBanner("Réseau retrouvé — synchronisation…","reconnecting"); realtimeRuntime.retryCount=0; realtimeRuntime.reconnecting=false; if(state.user) setupRealtime().finally(()=>setTimeout(()=>networkBanner(""),700)); else networkBanner(""); });
+  window.addEventListener("online",()=>{ networkBanner(""); realtimeRuntime.retryCount=0; realtimeRuntime.reconnecting=false; if(state.user) setupRealtime().catch(()=>{}); });
 
   // Mobile/PWA foreground recovery: Android may suspend sockets while the app is
   // backgrounded. On return, verify the session and rebuild realtime channels
   // without forcing a logout or resetting the current route/conversation.
   let foregroundRecoveryTimer = null;
+  let presenceHeartbeatTimer = null;
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState !== "visible" || !state.user) return;
     if (foregroundRecoveryTimer) clearTimeout(foregroundRecoveryTimer);
@@ -146,6 +147,15 @@ document.documentElement.classList.add("app-boot");
   function isAdminProfile(p){ return p?.is_admin===true || p?.admin_badge===true; }
   function verifiedBadgeHTML(p){ if(!p || (!p.is_verified && !isAdminProfile(p))) return ""; const admin=isAdminProfile(p); return `<span class="tafa-verified-badge ${admin?"tafa-admin-badge":""}" title="${admin?"Administrateur officiel Tafaß":"Compte vérifié"}">✓</span>`; }
   function displayNameHTML(p){ return `<span class="tafa-display-name"><span>${esc(nameOf(p))}</span>${verifiedBadgeHTML(p)}</span>`; }
+  function presenceBadgeHTML(p, extraClass=""){
+    if(!p?.id || String(p.id)===String(state.user?.id)) return "";
+    const online=window.tafaOnlineIds?.has?.(String(p.id));
+    const seen=p.last_seen_at||p.lastSeenAt||null;
+    if(online) return `<span class="tafa-presence-dot online ${extraClass}" title="En ligne" aria-label="En ligne"></span>`;
+    if(!seen) return "";
+    return `<span class="tafa-presence-offline ${extraClass}" title="Dernière activité : ${esc(timeAgo(seen))}">il y a ${esc(timeAgo(seen))}</span>`;
+  }
+  function profilePresenceHTML(p){ return presenceBadgeHTML(p,"profile-presence"); }
   async function sha256File(file){ const b=await file.arrayBuffer(),h=await crypto.subtle.digest("SHA-256",b); return Array.from(new Uint8Array(h)).map(x=>x.toString(16).padStart(2,"0")).join(""); }
   async function moderationCheckMedia(file,kind){
     if(!file) return {ok:true,hash:null};
@@ -1338,7 +1348,7 @@ function publisherBackgrounds(){
     const sharedMeta = p.publication_meta && typeof p.publication_meta === "object" && p.publication_meta.shared_from_post_id ? p.publication_meta : null;
     const sharedBanner = sharedMeta ? `<div class="shared-post-banner"><span>↗</span><div><b>${esc(nameOf(p.author||state.profile))} a partagé cette publication</b><small>Publication originale de ${esc(sharedMeta.shared_from_user_name||"un membre Tafaß")}${sharedMeta.shared_from_group_name?` · ${esc(sharedMeta.shared_from_group_name)}`:""}</small></div></div>` : "";
     return `<article class="post post-premium" id="post-${esc(p.id)}" data-post-id="${esc(p.id)}" data-post-bg="${esc(p.background_style || "plain")}" data-media-type="${esc(p.media_type || "")}">
-      <div class="post-head">${profileLink(p.author, avatarHTML(p.author), "profile-link profile-avatar-link")}<div class="meta">${profileLink(p.author, `<span class="post-author-name">${displayNameHTML(p.author)}</span>`, "profile-link profile-meta-link")}<span class="post-time"><small>${timeAgo(p.created_at)} · ${esc(p.visibility || "public")}</small></span></div><button class="post-menu" data-action="post-menu" data-id="${esc(p.id)}">⋯</button></div>${sharedBanner}
+      <div class="post-head">${profileLink(p.author, avatarHTML(p.author), "profile-link profile-avatar-link")}<div class="meta">${profileLink(p.author, `<span class="post-author-name">${displayNameHTML(p.author)}${presenceBadgeHTML(p.author)}</span>`, "profile-link profile-meta-link")}<span class="post-time"><small>${timeAgo(p.created_at)} · ${esc(p.visibility || "public")}</small></span></div><button class="post-menu" data-action="post-menu" data-id="${esc(p.id)}">⋯</button></div>${sharedBanner}
       ${p.content ? `<div class="post-body ${p.background_style && p.background_style !== "plain" ? "post-body-has-bg" : ""}">${captionHTML(p.content)}</div>` : ""}${media}
       ${p.publication_meta && typeof p.publication_meta === "object" ? (()=>{const m=p.publication_meta||{};const chips=[];if(m.music)chips.push(`<button type="button" class="post-music-chip" data-action="play-post-music" data-music-id="${esc(m.music_id||'ai-1')}" data-music-seed="${esc(m.music_seed||1)}">♫ ${esc(m.music)} · Écouter</button>`);if(m.tag)chips.push(`<span>👥 ${esc(m.tag)}</span>`);if(m.location)chips.push(`<span>📍 ${esc(m.location)}</span>`);if(m.event)chips.push(`<span>📅 ${esc(m.event)}</span>`);if(m.mood)chips.push(`<span>☺ ${esc(m.mood)}</span>`);return chips.length?`<div class="post-meta-chips">${chips.join('')}</div>`:''})() : ""}
       ${p.publication_meta?.receive_messages && p.user_id !== state.user.id ? `<div class="post-message-cta"><div><b>Messages ouverts</b><small>Envoyez un message privé directement à ${esc(nameOf(p.author||{}))}.</small></div><button type="button" data-action="post-receive-message" data-owner-id="${esc(p.user_id)}">💬 Message</button></div>` : ""}
@@ -1571,7 +1581,8 @@ function publisherBackgrounds(){
     // A search screen must stay clean until the user actually searches.
     // Search history is intentionally kept in the dedicated History table.
     if (term) {
-      const safe = term.replace(/[%_]/g, "");
+      const safe = term.replace(/[%_]/g, "").trim();
+      if (!safe) return searchPage("", searchCategory);
       const [pr, por, pgr, gr] = await Promise.all([
         sb.from("profiles").select("*").or(`first_name.ilike.%${safe}%,last_name.ilike.%${safe}%,username.ilike.%${safe}%`).limit(30),
         sb.from("posts").select("*").or(`content.ilike.%${safe}%`).order("created_at", {ascending:false}).limit(30),
@@ -1608,11 +1619,11 @@ function publisherBackgrounds(){
       const [label, html] = map[searchCategory] || map.accounts;
       activeResults = `<div class="search-active-result"><div class="search-result-heading"><div><span class="eyebrow">TAFAß • RECHERCHE</span><h3>${label}</h3><p>${html.includes("Aucun") ? "Aucun résultat pour cette catégorie." : "Résultats correspondant à votre recherche."}</p></div><span class="search-result-count">${categories.find(x=>x[0]===searchCategory)?.[3] || 0}</span></div><div class="clean-list search-results-list">${html}</div></div>`;
     } else {
-      activeResults = `<div class="search-idle-card search-idle-card-v2"><div class="search-idle-icon">⌕</div><span class="eyebrow">TAFAß • EXPLORER</span><h3>Recherchez ce que vous voulez</h3><p>Entrez un nom, une publication, une Page ou un groupe. Les résultats sont chargés uniquement après votre recherche.</p><button class="ghost-action" data-action="menu-service" data-service="activity" data-name="Historique de recherche">Voir l’historique</button></div>`;
+      activeResults = `<div class="search-ready-hint"><span>⌕</span><div><b>Commencez votre recherche</b><small>Entrez votre recherche puis validez avec le bouton ou la touche Entrée.</small></div></div>`;
     }
 
-    $("content").innerHTML = `<section class="clean-page search-page-premium"><div class="page-header clean-page-header"><div><span class="eyebrow">TAFAß • EXPLORER</span><h2>Rechercher</h2><p class="page-kicker">Une recherche rapide, claire et privée.</p></div></div><div class="clean-search searchbox premium-searchbox"><span class="icon">⌕</span><input id="searchInput" value="${esc(term)}" placeholder="Rechercher un compte, une publication, une Page ou un groupe…" autocomplete="off"></div>${categoryTabs}${activeResults}</section>`;
-    $("searchInput")?.addEventListener("input", e=>{ clearTimeout(searchTimer); searchTimer=setTimeout(()=>searchPage(e.target.value, searchCategory),220); });
+    $("content").innerHTML = `<section class="clean-page search-page-premium"><div class="page-header clean-page-header"><div><span class="eyebrow">TAFAß • EXPLORER</span><h2>Rechercher</h2><p class="page-kicker">Les résultats apparaissent uniquement après validation de votre recherche.</p></div></div><form id="tafaSearchForm" class="clean-search searchbox premium-searchbox"><span class="icon">⌕</span><input id="searchInput" value="${esc(term)}" placeholder="Rechercher un compte, une publication, une Page ou un groupe…" autocomplete="off"><button type="submit" aria-label="Lancer la recherche">→</button></form>${categoryTabs}${activeResults}</section>`;
+    $("tafaSearchForm")?.addEventListener("submit", e=>{e.preventDefault();const v=$("searchInput")?.value?.trim()||""; if(v) searchPage(v, searchCategory);});
   }
 
   async function pageMessagesHub(){
@@ -2096,9 +2107,11 @@ function publisherBackgrounds(){
   }
 
   function isUserOnline(userId){
-    if(!state.presenceChannel || !userId) return false;
+    if(!userId) return false;
+    if(window.tafaOnlineIds?.has?.(String(userId))) return true;
+    if(!state.presenceChannel) return false;
     const present=state.presenceChannel.presenceState();
-    return Object.prototype.hasOwnProperty.call(present||{}, userId);
+    return Object.prototype.hasOwnProperty.call(present||{}, String(userId));
   }
   async function refreshPresenceLabels(){
     const id=state.selectedConversation; if(!id || state.route!=="messages") return;
@@ -2107,6 +2120,9 @@ function publisherBackgrounds(){
   }
   window.addEventListener("tafass:presence-sync", refreshPresenceLabels);
   window.addEventListener("tafass:presence-change", refreshPresenceLabels);
+  window.addEventListener("tafass:presence-change", ()=>{
+    if(state.route==="profile" && state.viewingProfileId) { clearTimeout(window.__tafaPresenceRenderTimer); window.__tafaPresenceRenderTimer=setTimeout(()=>openUserProfile(state.viewingProfileId),120); }
+  });
 
   async function getProfilePrivacy(userId) {
     if (!userId) return { locked:false, visibility:"public" };
@@ -2133,6 +2149,58 @@ function publisherBackgrounds(){
     </section>`;
   }
 
+  async function loadProfileWallSettings(ownerId){
+    const {data,error}=await sb.from("tafa_profile_wall_settings").select("allow_friend_posts,require_approval").eq("profile_owner_id",ownerId).maybeSingle();
+    if(error) console.warn("Tafaß profile wall settings:",error.message);
+    return {allow_friend_posts:data?.allow_friend_posts!==false,require_approval:data?.require_approval!==false};
+  }
+  function profileWallPostHTML(row, ownerProfile){
+    const author=row.author||{}; const owner=ownerProfile||{};
+    const media=row.media_url ? (String(row.media_type||"").startsWith("video") ? `<video class="profile-wall-media" src="${esc(row.media_url)}" controls playsinline preload="metadata"></video>` : `<img class="profile-wall-media" src="${esc(row.media_url)}" alt="Publication" loading="lazy">`) : "";
+    const mine=String(row.author_id)===String(state.user?.id); const ownerMe=String(row.profile_owner_id)===String(state.user?.id);
+    return `<article class="profile-wall-post-v72" data-wall-post-id="${esc(row.id)}"><header><div class="profile-wall-author">${avatarHTML(author,"avatar sm")}<div><b>${displayNameHTML(author)}</b><small>${timeAgo(row.created_at)} · ${row.status==="pending"?"En attente d’approbation":"Publié"}</small></div></div>${mine||ownerMe?`<button type="button" class="profile-wall-more" data-action="profile-wall-menu" data-id="${esc(row.id)}">•••</button>`:""}</header><div class="profile-wall-target"><span>↳</span><span>sur le profil de <b>${esc(nameOf(owner))}</b></span></div>${row.content?`<p>${esc(row.content)}</p>`:""}${media}${row.status==="pending"?`<div class="profile-wall-pending">⏳ Cette publication attend l’approbation du propriétaire du profil.</div>`:""}</article>`;
+  }
+  async function openProfileWallComposer(ownerId, ownerName){
+    if(!ownerId||!state.user?.id) return;
+    const settings=await loadProfileWallSettings(ownerId);
+    if(ownerId!==state.user.id && !settings.allow_friend_posts) return toast("Le propriétaire n’autorise pas les publications de ses amis.");
+    state.profileWallOwnerId=ownerId; state.profileWallRequireApproval=settings.require_approval;
+    openModal(`<div class="modal-box profile-wall-composer-v72"><button class="modal-close" data-action="close-profile-wall-composer">×</button><span class="eyebrow">TAFAß · PROFIL</span><h3>Écrire sur le profil de ${esc(ownerName||"ce membre")}</h3><p class="muted">Votre publication sera affichée sur son profil${settings.require_approval&&ownerId!==state.user.id?" après approbation":" immédiatement"}.</p><textarea id="profileWallText" class="premium-textarea" maxlength="5000" placeholder="Écrivez quelque chose…"></textarea><div id="profileWallMediaPreview" class="profile-wall-media-preview"></div><input id="profileWallFile" type="file" accept="image/*,video/*" hidden><div class="profile-wall-compose-tools"><button type="button" data-action="profile-wall-photo">▣ <span>Photo/Vidéo</span></button><button type="button" data-action="profile-wall-publish" class="primary">PUBLIER</button></div></div>`);
+    const file=$("profileWallFile"); file?.addEventListener("change",()=>{const f=file.files?.[0]; const box=$("profileWallMediaPreview"); if(!box)return; if(!f){box.innerHTML="";return;} const u=URL.createObjectURL(f); box.innerHTML=f.type.startsWith("video/")?`<video src="${u}" controls playsinline></video>`:`<img src="${u}" alt="Aperçu">`;});
+  }
+  async function publishProfileWallPost(){
+    const ownerId=state.profileWallOwnerId; if(!ownerId||!state.user?.id)return;
+    const text=$("profileWallText")?.value?.trim()||""; const file=$("profileWallFile")?.files?.[0]||null;
+    if(!text&&!file)return toast("Écrivez quelque chose ou ajoutez un média.");
+    if(file){const check=validateMediaFile(file); if(!check.ok)return toast(check.message);}
+    let media_url=null,media_type=null;
+    if(file){const ext=(file.name.split(".").pop()||"bin").toLowerCase(); const path=`${state.user.id}/profile-wall/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`; const up=await uploadPostMedia(path,file); if(up.error)return toast(up.error.message); media_url=sb.storage.from("posts").getPublicUrl(path).data.publicUrl; media_type=file.type||"application/octet-stream";}
+    const {data,error}=await sb.rpc("tafa_create_profile_wall_post",{p_profile_owner_id:ownerId,p_content:text,p_media_url:media_url,p_media_type:media_type});
+    if(error)return toast(error.message);
+    closeModal(); toast(data?.status==="pending"?"✓ Publication envoyée : en attente d’approbation.":"✓ Publication publiée sur le profil.");
+    const id=state.viewingProfileId; if(id) await openUserProfile(id);
+  }
+  async function profileWallMenu(id){
+    const {data,error}=await sb.from("tafa_profile_wall_posts").select("id,author_id,profile_owner_id,status").eq("id",id).maybeSingle(); if(error||!data)return;
+    const owner=String(data.profile_owner_id)===String(state.user.id), author=String(data.author_id)===String(state.user.id);
+    const buttons=[];
+    if(owner&&data.status==="pending") buttons.push(`<button class="menu-card" data-action="profile-wall-approve" data-id="${esc(id)}"><span class="menu-icon">✓</span><span><b>Approuver et publier</b><small>Cette publication apparaîtra immédiatement sur votre profil.</small></span></button>`);
+    if(owner&&data.status==="pending") buttons.push(`<button class="menu-card danger-card" data-action="profile-wall-reject" data-id="${esc(id)}"><span class="menu-icon">×</span><span><b>Refuser</b><small>Supprimer cette demande de publication.</small></span></button>`);
+    if(owner||author) buttons.push(`<button class="menu-card danger-card" data-action="profile-wall-delete" data-id="${esc(id)}"><span class="menu-icon">⌫</span><span><b>Supprimer</b><small>Retirer cette publication du profil.</small></span></button>`);
+    if(owner) buttons.push(`<button class="menu-card" data-action="profile-wall-settings"><span class="menu-icon">⚙</span><span><b>Paramètres des publications</b><small>Choisir si les publications des amis doivent être approuvées.</small></span></button>`);
+    if(!buttons.length)return; openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">PUBLICATIONS DU PROFIL</span><h3>Options</h3><div class="menu-grid">${buttons.join("")}</div></div>`);
+  }
+  async function setProfileWallSettings(){
+    const cfg=await loadProfileWallSettings(state.user.id);
+    openModal(`<div class="modal-box profile-wall-settings-v72"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß · PROFIL</span><h3>Publications sur votre profil</h3><label class="profile-wall-setting"><input id="profileWallAllow" type="checkbox" ${cfg.allow_friend_posts?"checked":""}><span><b>Autoriser les amis à publier</b><small>Les amis peuvent écrire une publication sur votre profil.</small></span></label><label class="profile-wall-setting"><input id="profileWallApprove" type="checkbox" ${cfg.require_approval?"checked":""}><span><b>Approuver avant publication</b><small>Les publications des amis restent en attente jusqu’à votre validation.</small></span></label><button class="primary big" data-action="profile-wall-save-settings">Enregistrer</button></div>`);
+  }
+  async function saveProfileWallSettings(){
+    const allow=!!$("profileWallAllow")?.checked, approve=!!$("profileWallApprove")?.checked;
+    const {error}=await sb.rpc("tafa_set_profile_wall_settings",{p_allow_friend_posts:allow,p_require_approval:approve}); if(error)return toast(error.message); closeModal(); toast("✓ Paramètres des publications enregistrés"); if(state.viewingProfileId) await openUserProfile(state.viewingProfileId);
+  }
+  async function moderateProfileWall(id,status){
+    const {error}=await sb.rpc("tafa_moderate_profile_wall_post",{p_post_id:id,p_status:status}); if(error)return toast(error.message); closeModal(); toast(status==="approved"?"✓ Publication approuvée.":"Publication refusée."); if(state.viewingProfileId) await openUserProfile(state.viewingProfileId);
+  }
   async function openUserProfile(userId) {
     if (!userId || !state.user) return;
     state.viewingProfileId = userId;
@@ -2145,7 +2213,7 @@ function publisherBackgrounds(){
 
     // V71: public profile is built from one parallel read batch so opening a
     // profile never waits through a chain of independent Supabase requests.
-    const [profileR, privacyR, blockedR, liveR, friendR, sentR, receivedR, postsR, friendsR, followersR, ownFriendsR, targetFriendsR] = await Promise.all([
+    const [profileR, privacyR, blockedR, liveR, friendR, sentR, receivedR, postsR, friendsR, followersR, ownFriendsR, targetFriendsR, wallSettingsR, wallPostsR] = await Promise.all([
       sb.from("profiles").select("*").eq("id", userId).maybeSingle(),
       sb.from("user_settings").select("profile_visibility,allow_messages,allow_friend_requests").eq("user_id", userId).maybeSingle(),
       userId !== state.user.id ? getBlockedIds() : Promise.resolve(new Set()),
@@ -2157,7 +2225,9 @@ function publisherBackgrounds(){
       sb.from("friendships").select("user_id,friend_id").or(`user_id.eq.${userId},friend_id.eq.${userId}`).limit(12),
       sb.from("follows").select("id", {count:"exact",head:true}).eq("following_id", userId),
       sb.from("friendships").select("user_id,friend_id").or(`user_id.eq.${state.user.id},friend_id.eq.${state.user.id}`).limit(200),
-      sb.from("friendships").select("user_id,friend_id").or(`user_id.eq.${userId},friend_id.eq.${userId}`).limit(200)
+      sb.from("friendships").select("user_id,friend_id").or(`user_id.eq.${userId},friend_id.eq.${userId}`).limit(200),
+      loadProfileWallSettings(userId),
+      sb.from("tafa_profile_wall_posts").select("*").eq("profile_owner_id",userId).order("created_at",{ascending:false}).limit(50)
     ]);
 
     const p = profileR.data;
@@ -2196,6 +2266,11 @@ function publisherBackgrounds(){
     if (token !== state.renderToken) return;
     const friendsPreview = (friendsPreviewR.data || []).slice(0, 6);
     const mutualProfiles = friendsPreview.filter(x => mutualIds.map(String).includes(String(x.id))).slice(0,3);
+    const wallRowsRaw=(wallPostsR.data||[]).filter(x=>(isMe||isFriend) && (x.status==="approved"||String(x.profile_owner_id)===String(state.user.id)||String(x.author_id)===String(state.user.id)));
+    const wallAuthorIds=[...new Set(wallRowsRaw.map(x=>x.author_id).filter(Boolean))];
+    const wallProfilesR=wallAuthorIds.length?await sb.from("profiles").select("*").in("id",wallAuthorIds):{data:[]};
+    const wallMap=new Map((wallProfilesR.data||[]).map(x=>[String(x.id),x]));
+    const wallRows=wallRowsRaw.map(x=>({...x,author:wallMap.get(String(x.author_id))||{id:x.author_id}}));
 
     // Facebook-like relationship actions from the supplied references:
     // friend => Ami(e)s + blue Message; non-friend => blue Ajouter + neutral Message.
@@ -2243,7 +2318,7 @@ function publisherBackgrounds(){
       <main class="tfa-public-main-v71">
         <div class="tfa-public-avatar-row-v71"><div class="tfa-public-avatar-ring-v71">${avatarHTML(p,"avatar profile-avatar")}</div>${isMe ? `<button type="button" class="tfa-public-avatar-camera-v71" data-action="edit-profile" aria-label="Modifier la photo de profil">▣</button>` : ""}</div>
         <header class="tfa-public-head-v71">
-          <h1>${displayNameHTML(p)}</h1>
+          <h1>${displayNameHTML(p)}${profilePresenceHTML(p)}</h1>
           <div class="tfa-public-counts-v71"><b>${friendsR.count || 0} ami(e)s</b>${mutualIds.length ? `<span>·</span><b>${mutualIds.length} en commun</b>` : ""}</div>
           ${relationship ? `<p class="tfa-public-relationship-v71">${esc(relationship)}</p>` : ""}
           ${p.bio ? `<p class="tfa-public-bio-v71">${esc(p.bio)}</p>` : ""}
@@ -2254,7 +2329,7 @@ function publisherBackgrounds(){
         <nav class="tfa-public-tabs-v71" role="tablist"><button class="active" type="button">Tous</button><button type="button" data-action="public-profile-tab" data-id="${esc(userId)}" data-tab="photos">Photos</button><button type="button" data-action="public-profile-tab" data-id="${esc(userId)}" data-tab="videos">Reels</button></nav>
         ${personalRows ? `<section class="tfa-public-info-v71"><h2>Informations personnelles</h2>${personalRows}</section>` : ""}
         ${friendStrip ? `<section class="tfa-public-friends-v71"><div class="tfa-public-section-head-v71"><h2>Amis</h2><button type="button" data-route="friends">Voir tout</button></div><div class="tfa-public-friend-strip-v71">${friendStrip}</div></section>` : ""}
-        <section class="tfa-public-posts-v71"><h2>Toutes les publications</h2>${isFriend || isMe ? `<div class="tfa-public-composer-v71">${avatarHTML(state.profile || p,"avatar")}<span>Écrivez quelque chose à ${isMe ? "vous-même" : esc(nameOf(p).split(" ")[0])}...</span></div>` : ""}<div class="tfa-public-post-list-v71">${body}</div></section>
+        <section class="tfa-public-posts-v71"><h2>Toutes les publications</h2>${isFriend || isMe ? `<button type="button" class="tfa-public-composer-v72" data-action="profile-wall-composer" data-id="${esc(userId)}">${avatarHTML(state.profile || p,"avatar")}<span>Écrivez quelque chose à ${isMe ? "vous-même" : esc(nameOf(p).split(" ")[0])}...</span><b>＋</b></button>` : ""}<div class="tfa-public-post-list-v71">${wallRows.map(x=>profileWallPostHTML(x,p)).join("")}${body}</div></section>
       </main>
     </section>`;
   }
@@ -2360,6 +2435,12 @@ function publisherBackgrounds(){
     const isLockedProfile = privacy.locked === true;
 
     const mine = await loadMyPosts();
+    const wallR = await sb.from("tafa_profile_wall_posts").select("*").eq("profile_owner_id",state.user.id).order("created_at",{ascending:false}).limit(50);
+    const wallRows = wallR.data||[];
+    const wallAuthorIds=[...new Set(wallRows.map(x=>x.author_id).filter(Boolean))];
+    const wallProfilesR=wallAuthorIds.length?await sb.from("profiles").select("*").in("id",wallAuthorIds):{data:[]};
+    const wallMap=new Map((wallProfilesR.data||[]).map(x=>[String(x.id),x]));
+    const wallRendered=wallRows.map(x=>profileWallPostHTML({...x,author:wallMap.get(String(x.author_id))||{id:x.author_id}},p)).join("");
     const photos = mine.filter(x => x.media_url && String(x.media_type || "").toLowerCase().startsWith("image/"));
     const videos = mine.filter(x => ["video","reel"].includes(String(x.media_type || "").toLowerCase()) || x.video_url || x.reel_url);
 
@@ -2393,7 +2474,8 @@ function publisherBackgrounds(){
       ).join("") || `<div class="tfa-profile-empty-v70">Aucun ami à afficher.</div>`}</div><button class="tfa-profile-more-friends-v70" data-route="friends">Voir tous les amis</button></section>`;
     } else {
       const renderedMine = await Promise.all(mine.map(x => postHTML(x)));
-      tabBody = `<section class="tfa-profile-feed-v70">${renderedMine.length ? renderedMine.join("") : `<div class="tfa-profile-empty-v70">Aucune publication pour le moment.</div>`}</section>`;
+      const allFeed = wallRendered + renderedMine.join("");
+      tabBody = `<section class="tfa-profile-feed-v70">${allFeed || `<div class="tfa-profile-empty-v70">Aucune publication pour le moment.</div>`}</section>`;
     }
 
     const cover = p.cover_url ? `style="background-image:url('${esc(p.cover_url)}')"` : "";
@@ -2448,7 +2530,7 @@ function publisherBackgrounds(){
         </section>
         
         ${friendsPreview.length ? `<section class="tfa-profile-friends-v70"><div class="tfa-profile-section-head-v70"><h2>Amis</h2><button type="button" data-route="friends">Voir tout</button></div><div class="tfa-profile-friend-strip-v70">${friendsPreviewHtml}</div></section>` : ""}
-        <section class="tfa-profile-publications-head-v70"><div><h2>Toutes les publications</h2><small>${mine.length} publication${mine.length===1?"":"s"}</small></div><button type="button" data-action="profile-tab" data-tab="posts">Tout voir</button></section>
+        <section class="tfa-profile-publications-head-v70"><div><h2>Toutes les publications</h2><small>${mine.length + wallRows.length} publication${mine.length + wallRows.length===1?"":"s"}</small></div><div class="tfa-profile-publication-actions-v72"><button type="button" data-action="profile-wall-settings">⚙</button><button type="button" data-action="profile-tab" data-tab="posts">Tout voir</button></div></section><button type="button" class="tfa-own-profile-composer-v72" data-action="profile-wall-composer" data-id="${esc(state.user.id)}">${avatarHTML(p,"avatar")}<span>Écrivez quelque chose...</span><b>＋</b></button>
       </div>
       ${tabBody}
     </section>`;
@@ -4783,6 +4865,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       if(state.liveFeedChannel){try{await sb.removeChannel(state.liveFeedChannel);}catch(_){} state.liveFeedChannel=null;}
       if(state.conversationChannel){try{await sb.removeChannel(state.conversationChannel);}catch(_){} state.conversationChannel=null;}
       if(state.presenceChannel){try{await sb.removeChannel(state.presenceChannel);}catch(_){} state.presenceChannel=null;}
+      if(presenceHeartbeatTimer){clearInterval(presenceHeartbeatTimer);presenceHeartbeatTimer=null;}
       if(state.adminDashboardChannel){try{await sb.removeChannel(state.adminDashboardChannel);}catch(_){} state.adminDashboardChannel=null;}
       if(state.adminDashboardTimer){clearInterval(state.adminDashboardTimer);state.adminDashboardTimer=null;}
       if(state.adminDashboardRefreshTimer){clearTimeout(state.adminDashboardRefreshTimer);state.adminDashboardRefreshTimer=null;}
@@ -4807,17 +4890,24 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   }
   async function setupRealtime() {
     if (!state.user || !navigator.onLine) return;
+    if(presenceHeartbeatTimer) clearInterval(presenceHeartbeatTimer);
+    const touchPresence=()=>sb.rpc("tafa_touch_presence").then(({error})=>{if(error)console.warn("Tafaß presence heartbeat:",error.message);});
+    touchPresence();
+    presenceHeartbeatTimer=setInterval(touchPresence,45000);
     // Global Presence channel: ephemeral online state, never persisted to SQL.
     if(state.presenceChannel){ try{ await sb.removeChannel(state.presenceChannel); }catch(_){} state.presenceChannel=null; }
-    const presence=sb.channel(`tafass-presence:${state.user.id}`, { config:{ presence:{ key:state.user.id } } });
+    const presence=sb.channel("tafass-presence-global", { config:{ presence:{ key:state.user.id } } });
     state.presenceChannel=presence;
     presence.on("presence", {event:"sync"}, ()=>{
+      const ps=presence.presenceState(); window.tafaOnlineIds=new Set(Object.keys(ps).map(String));
       window.dispatchEvent(new CustomEvent("tafass:presence-sync"));
     });
     presence.on("presence", {event:"join"}, ({key})=>{
+      window.tafaOnlineIds=window.tafaOnlineIds||new Set(); window.tafaOnlineIds.add(String(key));
       window.dispatchEvent(new CustomEvent("tafass:presence-change", {detail:{key,online:true}}));
     });
     presence.on("presence", {event:"leave"}, ({key})=>{
+      window.tafaOnlineIds=window.tafaOnlineIds||new Set(); window.tafaOnlineIds.delete(String(key));
       window.dispatchEvent(new CustomEvent("tafass:presence-change", {detail:{key,online:false}}));
     });
     presence.subscribe(async status=>{
@@ -4967,7 +5057,9 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       tafab_music_playlists: () => { if (state.route==="music") musicHubPage(); },
       tafab_business_profiles: () => { if (state.route==="business") businessAdsPage(); },
       tafab_ad_campaigns: () => { if (state.route==="business") businessAdsPage(); },
-      tafab_ad_events: () => { if (state.route==="business") businessAdsPage(); }
+      tafab_ad_events: () => { if (state.route==="business") businessAdsPage(); },
+      tafa_profile_wall_posts: () => { if(state.route==="profile" && state.viewingProfileId) openUserProfile(state.viewingProfileId); },
+      tafa_profile_wall_settings: () => { if(state.route==="profile" && state.viewingProfileId) openUserProfile(state.viewingProfileId); }
     };
 
     Object.keys(refresh).forEach(table => {
@@ -5925,7 +6017,9 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     const actionEl = e.target.closest("[data-action]");
     if (actionEl) {
       e.preventDefault();
-      if (pageLoading && !["close-modal","new-logout"].includes(actionEl.dataset.action)) return;
+      // Route rendering is asynchronous, but taps must remain usable while the
+      // tiny loader is visible. Only explicitly busy actions may opt out.
+      if (actionEl.dataset.action === "navigation-busy") return;
     } else {
       const routeEl = e.target.closest("[data-route]");
       if (routeEl) { e.preventDefault(); navigate(routeEl.dataset.route); return; }
@@ -6060,6 +6154,16 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if (action === "confirm-boost-admin") return confirmBoostAdminAction(actionEl.dataset.kind||"payment",id,actionEl.dataset.status||"rejected");
     if (action === "admin-report-status") return adminSetReportStatus(id,actionEl.dataset.status||'resolved');
     if (action === "search-category") { searchCategory = actionEl.dataset.category || "accounts"; return searchPage($("searchInput")?.value || "", searchCategory); }
+    if (action === "profile-wall-composer") { const owner=actionEl.dataset.id||state.viewingProfileId||state.user.id; const prof=owner===state.user.id?state.profile:((state.users||[]).find(x=>String(x.id)===String(owner))||{}); return openProfileWallComposer(owner,nameOf(prof)); }
+    if (action === "close-profile-wall-composer") { closeModal(); return; }
+    if (action === "profile-wall-photo") { return $("profileWallFile")?.click(); }
+    if (action === "profile-wall-publish") { return publishProfileWallPost(); }
+    if (action === "profile-wall-menu") { return profileWallMenu(id); }
+    if (action === "profile-wall-approve") { return moderateProfileWall(id,"approved"); }
+    if (action === "profile-wall-reject") { return moderateProfileWall(id,"rejected"); }
+    if (action === "profile-wall-delete") { return moderateProfileWall(id,"deleted"); }
+    if (action === "profile-wall-settings") { return setProfileWallSettings(); }
+    if (action === "profile-wall-save-settings") { return saveProfileWallSettings(); }
     if (action === "select-mood") { document.querySelectorAll(".mood-choice").forEach(x=>x.classList.remove("selected")); actionEl.classList.add("selected"); return; }
     if (action === "select-payment-method") { document.querySelectorAll(".payment-method").forEach(x=>x.classList.remove("active")); actionEl.classList.add("active"); return; }
     if (action === "apply-mood") { const v=document.querySelector(".mood-choice.selected")?.dataset.moodValue||""; const extra=$("moodExtra")?.value.trim()||""; if(!v&&!extra)return toast("Choisissez une humeur ou écrivez un message."); state.composerMeta={...(state.composerMeta||{}),mood:[v,extra].filter(Boolean).join(" — ").trim()}; const t=$("postText"); if(t)t.value=[v,extra].filter(Boolean).join(" — ").trim(); closeModal(); if(state.composerOpen) setTimeout(openPublisher,40); t?.focus(); return toast("Humeur ajoutée à votre publication"); }
