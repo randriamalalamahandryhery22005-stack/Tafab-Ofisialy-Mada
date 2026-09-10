@@ -5690,5 +5690,9 @@ body .tafa-v51-command-bar{
 }
 @media(max-width:370px){.tafa-v65-page-grid{grid-template-columns:1fr}.tafa-v65-page-brand{align-items:flex-start}.tafa-v65-live{display:none}}
 
-/* TAFAß V67.2 — premium payout selector */
-.monet-payout-v3 .payout-choice-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:16px 0}.monet-payout-v3 .payment-method{min-height:78px;text-align:left;border:1px solid rgba(255,255,255,.12);border-radius:18px;padding:14px;background:rgba(255,255,255,.035)}.monet-payout-v3 .payment-method b,.monet-payout-v3 .payment-method small{display:block}.monet-payout-v3 .payment-method small{margin-top:5px;opacity:.7}.monet-payout-v3 .payment-method.active{border-color:#d8ad4a;box-shadow:0 0 0 1px rgba(216,173,74,.2),0 10px 30px rgba(0,0,0,.18)}@media(max-width:560px){.monet-payout-v3 .payout-choice-grid{grid-template-columns:1fr 1fr}.monet-payout-v3 .payment-method{min-height:70px;padding:11px;font-size:13px}}
+/* V67.3 — Retraits réels / premium */
+.payout-premium-modal{max-width:620px!important;background:linear-gradient(145deg,rgba(11,18,15,.98),rgba(12,14,18,.98))!important;border:1px solid rgba(0,230,118,.15)!important;box-shadow:0 28px 90px rgba(0,0,0,.42)!important}
+.payout-premium-modal .premium-input{min-height:48px;border-radius:15px!important}
+.payout-premium-modal label{margin-top:12px}.payout-premium-modal .check-row{margin-top:16px;padding:12px 14px;border:1px solid rgba(255,255,255,.07);border-radius:15px;background:rgba(255,255,255,.025)}
+.monet-row .monet-pill.ok{color:#71eaa1}.monet-row .monet-pill{font-size:10px}
+@media(max-width:680px){.payout-premium-modal{width:min(96vw,620px)!important;padding:18px!important}}
