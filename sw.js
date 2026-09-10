@@ -1,7 +1,7 @@
-/* Tafaß V66 — single active navigation version */
-const CACHE = 'tafass-v66-shell';
+/* Tafaß V67 — single active shell */
+const CACHE = 'tafass-v67-shell';
 const ASSETS = [
-  './', './index.html', './style.css?v=166', './app.js?v=166',
+  './', './index.html', './style.css?v=167', './app.js?v=167',
   './manifest.webmanifest', './assets/tafass-logo-premium.svg'
 ];
 self.addEventListener('install', event => {

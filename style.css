@@ -5689,3 +5689,50 @@ body .tafa-v51-command-bar{
   .tafa-v65-page-summary{align-items:stretch;flex-direction:column}.tafa-v65-profile-btn{width:100%}.tafa-v65-section-heading{align-items:flex-start;flex-direction:column;gap:3px}.tafa-v65-section-heading>small{white-space:normal}.tafa-v65-page-footer{align-items:stretch;flex-direction:column}.tafa-v65-exit{width:100%}
 }
 @media(max-width:370px){.tafa-v65-page-grid{grid-template-columns:1fr}.tafa-v65-page-brand{align-items:flex-start}.tafa-v65-live{display:none}}
+
+/* =========================================================
+   TAFAß V67 — MONÉTISATION PRO / TABLEAU DE BORD HORIZONTAL
+   Une seule présentation active pour la page Monétisation.
+   ========================================================= */
+.monet-v67-dashboard{width:100%;max-width:1380px;margin:0 auto;padding:8px 0 42px;display:grid;gap:14px}
+.monet-v67-hero{display:flex;justify-content:space-between;gap:18px;align-items:center;padding:22px;border-radius:26px;border:1px solid rgba(0,230,118,.18);background:radial-gradient(circle at 92% 0,rgba(255,159,26,.16),transparent 31%),radial-gradient(circle at 0 100%,rgba(0,230,118,.11),transparent 38%),linear-gradient(135deg,#08150f,#111913 55%,#17130d);box-shadow:0 24px 70px rgba(0,0,0,.24),inset 0 1px rgba(255,255,255,.06)}
+.monet-v67-hero h2{margin:5px 0 6px;font-size:clamp(25px,3vw,35px);letter-spacing:-.7px}
+.monet-v67-hero p{margin:0;max-width:780px;color:#9aaca1;font-size:12px;line-height:1.6}
+.monet-v67-hero-side{display:flex;align-items:center;justify-content:flex-end;gap:9px;flex-wrap:wrap;min-width:245px}
+.monet-v67-hero-side .primary,.monet-v67-hero-side .secondary-action{min-height:42px}
+.monet-v67-wallet{display:grid;grid-template-columns:1.35fr 1fr 1fr 1fr 1fr;gap:10px}
+.monet-v67-wallet-card{min-width:0;padding:16px;border-radius:19px;border:1px solid rgba(255,255,255,.07);background:linear-gradient(145deg,rgba(255,255,255,.045),rgba(255,255,255,.018));box-shadow:inset 0 1px rgba(255,255,255,.035)}
+.monet-v67-wallet-card.main{border-color:rgba(0,230,118,.18);background:linear-gradient(145deg,rgba(0,230,118,.10),rgba(255,255,255,.02))}
+.monet-v67-wallet-card.coins{border-color:rgba(241,183,63,.16);background:linear-gradient(145deg,rgba(241,183,63,.09),rgba(255,255,255,.02))}
+.monet-v67-wallet-card span{display:block;color:#82938a;font-size:9px;text-transform:uppercase;letter-spacing:.08em}
+.monet-v67-wallet-card strong{display:block;margin-top:8px;color:#f3faf6;font-size:22px;line-height:1.05;white-space:nowrap}
+.monet-v67-wallet-card small{display:block;margin-top:7px;color:#75867d;font-size:9px;line-height:1.35}
+.monet-v67-panel{min-width:0;padding:16px;border-radius:22px;border:1px solid rgba(255,255,255,.065);background:radial-gradient(circle at 100% 0,rgba(255,159,26,.055),transparent 30%),radial-gradient(circle at 0 100%,rgba(0,230,118,.045),transparent 34%),linear-gradient(145deg,rgba(18,24,22,.97),rgba(10,14,18,.97));box-shadow:0 18px 48px rgba(0,0,0,.14),inset 0 1px rgba(255,255,255,.03)}
+.monet-v67-title{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:13px}
+.monet-v67-title h3{margin:5px 0 3px;font-size:16px;color:#edf5f0}
+.monet-v67-title p{margin:0;color:#7f9086;font-size:10px;line-height:1.45}
+.monet-v67-server{padding:7px 10px;border-radius:999px;border:1px solid rgba(0,230,118,.14);background:rgba(0,230,118,.045);color:#67e9a0;font-size:9px;white-space:nowrap}
+.monet-v67-source-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}
+.monet-v67-source{min-width:0;padding:12px;border-radius:17px;border:1px solid rgba(255,255,255,.055);background:rgba(255,255,255,.025)}
+.monet-v67-source-top{display:grid;grid-template-columns:34px minmax(0,1fr) auto;align-items:center;gap:8px}
+.monet-v67-icon{display:grid;place-items:center;width:34px;height:34px;border-radius:12px;background:rgba(0,230,118,.07);font-size:16px}
+.monet-v67-source-top b{display:block;color:#edf5f0;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.monet-v67-source-top small{display:block;margin-top:3px;color:#718178;font-size:8px}
+.monet-v67-source-top>strong{color:#7bf0ac;font-size:10px;white-space:nowrap}
+.monet-v67-progress{height:5px;margin-top:11px;border-radius:999px;background:rgba(255,255,255,.06);overflow:hidden}
+.monet-v67-progress span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#00d978,#ff9f1a)}
+.monet-v67-source-foot{margin-top:7px;color:#7e8f86;font-size:8px;line-height:1.35}
+.monet-v67-note{margin-top:11px;padding:10px 12px;border-radius:13px;background:rgba(255,255,255,.022);color:#718178;font-size:9px;line-height:1.45}
+.monet-v67-rule-strip{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+.monet-v67-rule-strip>div{padding:12px 13px;border-radius:15px;background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.05)}
+.monet-v67-rule-strip b{display:block;color:#819188;font-size:9px;text-transform:uppercase}
+.monet-v67-rule-strip span{display:block;margin-top:5px;color:#edf5f0;font-size:14px}
+.monet-v67-two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.monet-v67-info{display:flex;gap:12px;align-items:flex-start;padding:14px 16px;border-radius:18px;border:1px solid rgba(241,183,63,.14);background:rgba(241,183,63,.045)}
+.monet-v67-info b{color:#f1c75f;font-size:11px;white-space:nowrap}
+.monet-v67-info span{color:#8b988f;font-size:9px;line-height:1.55}
+.monet-v67-info strong{color:#e9f4ed}
+.monet-v67-sync-warning{padding:10px 12px;border-radius:13px;background:rgba(255,86,104,.07);border:1px solid rgba(255,86,104,.16);color:#ff9aa5;font-size:9px}
+@media(max-width:1050px){.monet-v67-wallet{grid-template-columns:repeat(3,minmax(0,1fr))}.monet-v67-source-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:760px){.monet-v67-dashboard{gap:10px;padding:4px 0 28px}.monet-v67-hero{align-items:flex-start;flex-direction:column;padding:17px;border-radius:21px}.monet-v67-hero-side{width:100%;justify-content:flex-start;min-width:0}.monet-v67-hero-side .primary,.monet-v67-hero-side .secondary-action{flex:1;min-width:145px}.monet-v67-wallet{grid-template-columns:repeat(2,minmax(0,1fr))}.monet-v67-wallet-card.main{grid-column:1/-1}.monet-v67-source-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.monet-v67-two{grid-template-columns:1fr}.monet-v67-panel{padding:12px;border-radius:18px}.monet-v67-title{align-items:center}.monet-v67-rule-strip{grid-template-columns:1fr}.monet-v67-info{flex-direction:column;gap:5px}}
+@media(max-width:390px){.monet-v67-source-grid{grid-template-columns:1fr}.monet-v67-wallet-card strong{font-size:19px}.monet-v67-source-top>strong{font-size:9px}}
