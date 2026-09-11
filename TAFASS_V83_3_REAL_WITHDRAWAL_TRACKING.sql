@@ -283,3 +283,68 @@ end $$;
 
 notify pgrst,'reload schema';
 select 'TAFAß V83.3 REAL WITHDRAWAL TRACKING READY' as status;
+
+-- V83.4: safe reconciliation for legacy platform withdrawals created by the old V74 flow.
+-- It is deliberately explicit: an admin must confirm that the pending request was never paid.
+create or replace function public.tafa_reconcile_legacy_platform_withdrawal(
+  p_request_id uuid,
+  p_confirm boolean default false
+) returns boolean
+language plpgsql security definer set search_path=public as $$
+declare
+  v_req public.tafa_admin_withdrawals_v74%rowtype;
+  v_wallet public.tafa_platform_wallets_v74%rowtype;
+  v_role text := coalesce(current_setting('request.jwt.claim.role', true),'');
+begin
+  if v_role <> 'service_role' and not public.tafa_v74_is_admin(auth.uid()) then
+    raise exception 'Accès administrateur requis';
+  end if;
+  if not coalesce(p_confirm,false) then
+    raise exception 'Confirmation requise';
+  end if;
+
+  select * into v_req
+  from public.tafa_admin_withdrawals_v74
+  where id=p_request_id and admin_user_id=auth.uid()
+  for update;
+
+  if v_req.id is null then raise exception 'Retrait plateforme introuvable'; end if;
+  if v_req.status <> 'pending' then raise exception 'Seuls les retraits encore en attente peuvent être corrigés'; end if;
+  if nullif(trim(coalesce(v_req.provider_reference,'')),'') is not null then
+    raise exception 'Une référence prestataire existe déjà : vérifiez le paiement avant toute correction';
+  end if;
+  if coalesce(v_req.payout_attempts,0) > 0 then
+    raise exception 'Ce retrait a déjà fait l’objet d’une tentative de paiement';
+  end if;
+  if v_req.processed_at is not null or v_req.paid_at is not null then
+    raise exception 'Ce retrait possède déjà une date de traitement';
+  end if;
+
+  select * into v_wallet
+  from public.tafa_platform_wallets_v74
+  where user_id=v_req.admin_user_id
+  for update;
+
+  if v_wallet.user_id is null then raise exception 'Portefeuille plateforme introuvable'; end if;
+  if coalesce(v_wallet.pending_earnings_mga,0) <> 0 then
+    raise exception 'Le portefeuille contient déjà un montant en traitement : vérification manuelle requise';
+  end if;
+  if coalesce(v_wallet.total_withdrawn_mga,0) < v_req.amount_mga then
+    raise exception 'Le total retiré ne contient pas ce montant : vérification manuelle requise';
+  end if;
+
+  update public.tafa_platform_wallets_v74
+     set total_withdrawn_mga=greatest(0,coalesce(total_withdrawn_mga,0)-v_req.amount_mga),
+         pending_earnings_mga=coalesce(pending_earnings_mga,0)+v_req.amount_mga,
+         updated_at=now()
+   where user_id=v_req.admin_user_id;
+
+  update public.tafa_admin_withdrawals_v74
+     set last_payout_error='Ancien retrait V74 corrigé : montant remis en traitement, paiement non confirmé.',
+         last_attempt_at=now()
+   where id=v_req.id;
+
+  return true;
+end $$;
+revoke all on function public.tafa_reconcile_legacy_platform_withdrawal(uuid,boolean) from public;
+grant execute on function public.tafa_reconcile_legacy_platform_withdrawal(uuid,boolean) to authenticated;
