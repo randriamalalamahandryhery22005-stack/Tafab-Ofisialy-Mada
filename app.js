@@ -797,24 +797,62 @@ function publisherBackgrounds(){
       ["pink","linear-gradient(135deg,#db2777,#9333ea)","Rose"]
     ];
   }
+  function publisherDraftStorageKey(){
+    return state.user?.id ? `tafass:publisher-draft:${state.user.id}` : '';
+  }
+  function persistPublisherDraft(){
+    const key=publisherDraftStorageKey();
+    if(!key) return;
+    try{
+      const text=$('postText')?.value ?? state.composerDraftText ?? '';
+      const payload={
+        text:String(text).slice(0,5000),
+        background:state.composerBackground||'plain',
+        location:state.composerLocation||'',
+        visibility:state.composerVisibility||'public',
+        meta:state.composerMeta||{},
+        savedAt:Date.now()
+      };
+      if(payload.text.trim() || payload.location || payload.visibility!=='public' || Object.keys(payload.meta||{}).length){
+        localStorage.setItem(key,JSON.stringify(payload));
+      }else localStorage.removeItem(key);
+    }catch(_){}
+  }
+  function readPublisherDraft(){
+    const key=publisherDraftStorageKey();
+    if(!key) return null;
+    try{
+      const raw=localStorage.getItem(key); if(!raw) return null;
+      const d=JSON.parse(raw);
+      if(!d || Date.now()-Number(d.savedAt||0)>7*24*60*60*1000){ localStorage.removeItem(key); return null; }
+      return d;
+    }catch(_){ return null; }
+  }
+  function clearPublisherDraft(){
+    const key=publisherDraftStorageKey();
+    if(key) try{localStorage.removeItem(key);}catch(_){}
+  }
   function savePublisherDraft(){
-    if(!$("postText")) return;
-    state.composerDraftText=$("postText").value||"";
-    state.composerBackground=state.composerBackground||"plain";
-    state.composerLocation=state.composerLocation||"";
-    state.composerFile=$("postFile")?.files?.[0]||state.composerFile||null;
-    state.composerVisibility=state.composerVisibility||"public";
+    if(!$('postText')) return;
+    state.composerDraftText=$('postText').value||'';
+    state.composerBackground=state.composerBackground||'plain';
+    state.composerLocation=state.composerLocation||'';
+    state.composerFile=$('postFile')?.files?.[0]||state.composerFile||null;
+    state.composerVisibility=state.composerVisibility||'public';
     state.composerMeta=state.composerMeta||{};
+    persistPublisherDraft();
   }
   function openPublisher(){
     const restoring=!!state.composerOpen;
     if(!restoring){
-      state.composerBackground="plain";
-      state.composerLocation="";
-      state.composerDraftText="";
+      const draft=readPublisherDraft();
+      state.composerBackground=draft?.background||"plain";
+      state.composerLocation=draft?.location||"";
+      state.composerDraftText=draft?.text||"";
       state.composerFile=null;
-      state.composerVisibility="public";
-      state.composerMeta={};
+      state.composerVisibility=draft?.visibility||"public";
+      state.composerMeta=draft?.meta||{};
+      if(draft?.text?.trim()) toast("Brouillon restauré");
     }
     state.composerOpen=true;
     openModal(`<div class="publisher-modal publisher-modal-v2">
@@ -882,7 +920,11 @@ function publisherBackgrounds(){
         : `<div class="publisher-preview-frame"><img src="${url}" alt="Aperçu de la publication"><button class="publisher-preview-remove" data-action="publisher-clear-media" aria-label="Retirer le média">×</button></div>`;
     };
     pf?.addEventListener("change",()=>{state.composerFile=pf.files?.[0]||null;preview();});
-    $("postText")?.addEventListener("input",()=>{state.composerDraftText=$("postText").value;});
+    $("postText")?.addEventListener("input",()=>{
+      state.composerDraftText=$("postText").value;
+      clearTimeout(state.publisherDraftTimer);
+      state.publisherDraftTimer=setTimeout(persistPublisherDraft,450);
+    });
     preview();
     setTimeout(()=>$("postText")?.focus(),80);
   }
@@ -1546,7 +1588,10 @@ function publisherBackgrounds(){
       }
       const { error } = await sb.from("posts").insert({ user_id: state.user.id, content: text, media_url, media_type, visibility: "public" });
       if (error) throw new Error(error.message);
-      $("postText").value = ""; $("postFile").value = ""; toast("Publication publiée"); await loadPosts();
+      $("postText").value = ""; $("postFile").value = "";
+      clearPublisherDraft();
+      state.composerDraftText=""; state.composerFile=null;
+      toast("Publication publiée"); await loadPosts();
     } catch (e) { toast(e.message); }
     finally { setLoading(button, false, "Publier"); }
   }
