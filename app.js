@@ -4552,14 +4552,39 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     const r=await sb.rpc('tafa_create_boost_campaign',{p_post_id:postId,p_ad_type:adType,p_objective:objective,p_name:`Boost ${adType} · Tafaß`,p_daily_budget_mga:daily,p_total_budget_mga:total,p_audience_location:$('boostLocation')?.value.trim()||'Madagascar',p_age_min:min,p_age_max:max,p_gender:$('boostGender')?.value||'all',p_starts_at:start,p_ends_at:end});
     if(r.error)return toast(r.error.message); const id=r.data; closeModal(); return openBoostPayment(id,total);
   }
+  const tafaPaymentActionLocks = new Set();
+  async function withTafaPaymentLock(key, button, busyLabel, task){
+    if(tafaPaymentActionLocks.has(key)) return;
+    tafaPaymentActionLocks.add(key);
+    if(button){ button.disabled=true; button.dataset.originalText=button.textContent||''; if(busyLabel) button.textContent=busyLabel; }
+    try { return await task(); }
+    finally {
+      tafaPaymentActionLocks.delete(key);
+      if(button && document.body.contains(button)){ button.disabled=false; if(button.dataset.originalText!=null) button.textContent=button.dataset.originalText; }
+    }
+  }
+  function normalizePaymentReference(value){
+    return String(value||'').trim().replace(/\s+/g,' ').slice(0,160);
+  }
+  function validTafaPaymentMethod(method){
+    return ['Airtel Money','Yas Money','Orange Money'].includes(String(method||''));
+  }
   async function openBoostPayment(campaignId,total){
-    openModal(`<div class="modal-box boost-modal-premium"><button class="modal-close" data-action="close-modal">×</button><div class="boost-hero"><div class="boost-mark">₿</div><div><span class="eyebrow">TAFAß • PAIEMENT PUBLICITAIRE</span><h3>Finaliser le paiement</h3><p>Le budget sera vérifié par l'administration avant diffusion de la campagne.</p></div></div><div class="boost-total-card"><small>BUDGET TOTAL</small><strong>${Number(total).toLocaleString('fr-FR')} Ar</strong><span>Prépayé · diffusion après validation</span></div><div class="payment-choice-grid"><button class="payment-method active" data-action="select-boost-payment" data-method="Airtel Money">🔴 Airtel Money</button><button class="payment-method" data-action="select-boost-payment" data-method="Yas Money">🟡 Yas Money</button></div><input type="hidden" id="boostPaymentMethod" value="Airtel Money"><label>Référence de transaction<input id="boostPaymentRef" class="premium-input" maxlength="160" placeholder="Référence exacte de votre paiement"></label><small class="boost-note">Effectuez le paiement sur le moyen de paiement officiel indiqué par Tafaß, puis saisissez sa référence exacte. L'activation est impossible tant que le paiement n'est pas vérifié.</small><button class="primary big" data-action="submit-boost-payment" data-id="${esc(campaignId)}" data-amount="${esc(total)}">Envoyer le paiement à vérifier</button></div>`);
+    openModal(`<div class="modal-box boost-modal-premium"><button class="modal-close" data-action="close-modal">×</button><div class="boost-hero"><div class="boost-mark">₿</div><div><span class="eyebrow">TAFAß • PAIEMENT PUBLICITAIRE</span><h3>Finaliser le paiement</h3><p>Le budget sera vérifié par l'administration avant diffusion de la campagne.</p></div></div><div class="boost-total-card"><small>BUDGET TOTAL</small><strong>${Number(total).toLocaleString('fr-FR')} Ar</strong><span>Prépayé · diffusion après validation</span></div><div class="payment-choice-grid"><button class="payment-method active" data-action="select-boost-payment" data-method="Airtel Money">🔴 Airtel Money</button><button class="payment-method" data-action="select-boost-payment" data-method="Yas Money">🟡 Yas Money</button><button class="payment-method" data-action="select-boost-payment" data-method="Orange Money">🟠 Orange Money</button></div><input type="hidden" id="boostPaymentMethod" value="Airtel Money"><label>Référence de transaction<input id="boostPaymentRef" class="premium-input" maxlength="160" placeholder="Référence exacte de votre paiement"></label><small class="boost-note">Effectuez le paiement sur le moyen de paiement officiel indiqué par Tafaß, puis saisissez sa référence exacte. L'activation est impossible tant que le paiement n'est pas vérifié.</small><button class="primary big" data-action="submit-boost-payment" data-id="${esc(campaignId)}" data-amount="${esc(total)}">Envoyer le paiement à vérifier</button></div>`);
   }
   async function submitBoostPayment(id,amount){
-    const ref=$('boostPaymentRef')?.value.trim()||'', method=$('boostPaymentMethod')?.value||'Airtel Money';
-    if(!ref)return toast('Ajoutez la référence exacte de la transaction.');
-    const r=await sb.rpc('tafa_submit_boost_payment',{p_campaign_id:id,p_method:method,p_amount_mga:Number(amount),p_reference:ref});
-    if(r.error)return toast(r.error.message); closeModal(); toast('Paiement envoyé. Votre campagne est en attente de vérification.'); return businessAdsPage();
+    const btn=document.querySelector('[data-action="submit-boost-payment"]');
+    return withTafaPaymentLock(`boost:${id}`,btn,'Envoi en cours…',async()=>{
+      const ref=normalizePaymentReference($('boostPaymentRef')?.value), method=$('boostPaymentMethod')?.value||'Airtel Money';
+      const total=Math.floor(Number(amount));
+      if(!id)return toast('Campagne invalide.');
+      if(!Number.isFinite(total)||total<1000)return toast('Montant de paiement invalide.');
+      if(!validTafaPaymentMethod(method))return toast('Moyen de paiement non disponible.');
+      if(ref.length<3)return toast('Ajoutez une référence de transaction valide.');
+      const r=await sb.rpc('tafa_submit_boost_payment',{p_campaign_id:id,p_method:method,p_amount_mga:total,p_reference:ref});
+      if(r.error)return toast(r.error.message);
+      closeModal(); toast('Paiement envoyé. Votre campagne est en attente de vérification.'); return businessAdsPage();
+    });
   }
   async function openBoostPage(){
     const q=await sb.from('pages').select('id,name,username,logo_url').eq('owner_id',state.user.id).order('created_at',{ascending:false});
