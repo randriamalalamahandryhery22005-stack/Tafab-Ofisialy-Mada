@@ -6481,39 +6481,3 @@ body.modal-open{overflow:hidden!important;}
   .tafass-v82-page-modal{inset:4px!important;position:fixed!important}
   .tafass-v82-page-modal .v82-scroll{height:calc(100dvh - 66px);max-height:none}
 }
-
-/* ============================================================
-   TAFAß V84 — FINAL PREMIUM UX / PRODUCTION POLISH
-   Presentation-only layer: no data, schema, auth or realtime changes.
-============================================================ */
-:root{
-  --tafa-safe-top: env(safe-area-inset-top,0px);
-  --tafa-safe-bottom: env(safe-area-inset-bottom,0px);
-}
-html{scroll-behavior:smooth;scroll-padding-top:72px}
-body{-webkit-tap-highlight-color:transparent;text-rendering:optimizeLegibility}
-button,input,textarea,select{font:inherit}
-button{touch-action:manipulation}
-button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid rgba(255,177,62,.9);outline-offset:2px}
-button:disabled{cursor:not-allowed;opacity:.58}
-.main-layout{padding-bottom:calc(16px + var(--tafa-safe-bottom))}
-.bottom-nav,.mobile-nav,.tafa-premium-bottom-nav{padding-bottom:var(--tafa-safe-bottom)}
-.toast{z-index:10000;max-width:min(92vw,440px);padding:11px 15px;border:1px solid rgba(255,255,255,.1);box-shadow:0 14px 40px rgba(0,0,0,.35);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
-.modal-overlay{padding-top:max(12px,var(--tafa-safe-top));padding-bottom:max(12px,var(--tafa-safe-bottom))}
-.modal-box{max-width:min(720px,calc(100vw - 20px));max-height:calc(100dvh - 24px);overscroll-behavior:contain}
-.post,.card,.panel,.clean-page,.profile-page-premium,.tfa-v80-hub,.v81-friends-shell,.search-page-v81{contain:layout paint}
-img,video{content-visibility:auto}
-.post-media,.story-media{background:rgba(255,255,255,.035);object-fit:cover}
-.tafa-premium-nav-item{min-height:44px;transition:transform .16s ease,background .16s ease,opacity .16s ease}
-.tafa-premium-nav-item:active{transform:scale(.97)}
-.tafa-premium-nav-item:hover{background:rgba(255,255,255,.045)}
-.v82-detail-tabs,.v81-friends-tabs{scrollbar-width:none}
-.v82-detail-tabs::-webkit-scrollbar,.v81-friends-tabs::-webkit-scrollbar{display:none}
-@media(max-width:640px){
-  html{scroll-padding-top:60px}
-  .modal-box{width:calc(100vw - 12px);max-width:none;max-height:calc(100dvh - 12px);border-radius:18px}
-  .tafa-premium-nav-item{min-height:46px}
-}
-@media(prefers-reduced-motion:reduce){
-  *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
-}

@@ -322,28 +322,6 @@ document.documentElement.classList.add("app-boot");
     if (h < 24) return `${h} h`;
     return `${Math.floor(h / 24)} j`;
   }
-  let notificationAudioContext = null;
-  function playNotificationSound() {
-    try {
-      const AC = window.AudioContext || window.webkitAudioContext;
-      if (!AC) return;
-      notificationAudioContext ||= new AC();
-      const ctx = notificationAudioContext;
-      if (ctx.state === "suspended") ctx.resume().catch(()=>{});
-      if (ctx.state !== "running") return;
-      const now = ctx.currentTime;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = "sine";
-      osc.frequency.setValueAtTime(880, now);
-      osc.frequency.exponentialRampToValueAtTime(660, now + 0.11);
-      gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.exponentialRampToValueAtTime(0.055, now + 0.012);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
-      osc.connect(gain).connect(ctx.destination);
-      osc.start(now); osc.stop(now + 0.19);
-    } catch (_) {}
-  }
   function toast(msg) {
     const el = $("toast"); if (!el) return;
     el.textContent = msg; el.classList.add("show");
@@ -797,62 +775,24 @@ function publisherBackgrounds(){
       ["pink","linear-gradient(135deg,#db2777,#9333ea)","Rose"]
     ];
   }
-  function publisherDraftStorageKey(){
-    return state.user?.id ? `tafass:publisher-draft:${state.user.id}` : '';
-  }
-  function persistPublisherDraft(){
-    const key=publisherDraftStorageKey();
-    if(!key) return;
-    try{
-      const text=$('postText')?.value ?? state.composerDraftText ?? '';
-      const payload={
-        text:String(text).slice(0,5000),
-        background:state.composerBackground||'plain',
-        location:state.composerLocation||'',
-        visibility:state.composerVisibility||'public',
-        meta:state.composerMeta||{},
-        savedAt:Date.now()
-      };
-      if(payload.text.trim() || payload.location || payload.visibility!=='public' || Object.keys(payload.meta||{}).length){
-        localStorage.setItem(key,JSON.stringify(payload));
-      }else localStorage.removeItem(key);
-    }catch(_){}
-  }
-  function readPublisherDraft(){
-    const key=publisherDraftStorageKey();
-    if(!key) return null;
-    try{
-      const raw=localStorage.getItem(key); if(!raw) return null;
-      const d=JSON.parse(raw);
-      if(!d || Date.now()-Number(d.savedAt||0)>7*24*60*60*1000){ localStorage.removeItem(key); return null; }
-      return d;
-    }catch(_){ return null; }
-  }
-  function clearPublisherDraft(){
-    const key=publisherDraftStorageKey();
-    if(key) try{localStorage.removeItem(key);}catch(_){}
-  }
   function savePublisherDraft(){
-    if(!$('postText')) return;
-    state.composerDraftText=$('postText').value||'';
-    state.composerBackground=state.composerBackground||'plain';
-    state.composerLocation=state.composerLocation||'';
-    state.composerFile=$('postFile')?.files?.[0]||state.composerFile||null;
-    state.composerVisibility=state.composerVisibility||'public';
+    if(!$("postText")) return;
+    state.composerDraftText=$("postText").value||"";
+    state.composerBackground=state.composerBackground||"plain";
+    state.composerLocation=state.composerLocation||"";
+    state.composerFile=$("postFile")?.files?.[0]||state.composerFile||null;
+    state.composerVisibility=state.composerVisibility||"public";
     state.composerMeta=state.composerMeta||{};
-    persistPublisherDraft();
   }
   function openPublisher(){
     const restoring=!!state.composerOpen;
     if(!restoring){
-      const draft=readPublisherDraft();
-      state.composerBackground=draft?.background||"plain";
-      state.composerLocation=draft?.location||"";
-      state.composerDraftText=draft?.text||"";
+      state.composerBackground="plain";
+      state.composerLocation="";
+      state.composerDraftText="";
       state.composerFile=null;
-      state.composerVisibility=draft?.visibility||"public";
-      state.composerMeta=draft?.meta||{};
-      if(draft?.text?.trim()) toast("Brouillon restauré");
+      state.composerVisibility="public";
+      state.composerMeta={};
     }
     state.composerOpen=true;
     openModal(`<div class="publisher-modal publisher-modal-v2">
@@ -920,11 +860,7 @@ function publisherBackgrounds(){
         : `<div class="publisher-preview-frame"><img src="${url}" alt="Aperçu de la publication"><button class="publisher-preview-remove" data-action="publisher-clear-media" aria-label="Retirer le média">×</button></div>`;
     };
     pf?.addEventListener("change",()=>{state.composerFile=pf.files?.[0]||null;preview();});
-    $("postText")?.addEventListener("input",()=>{
-      state.composerDraftText=$("postText").value;
-      clearTimeout(state.publisherDraftTimer);
-      state.publisherDraftTimer=setTimeout(persistPublisherDraft,450);
-    });
+    $("postText")?.addEventListener("input",()=>{state.composerDraftText=$("postText").value;});
     preview();
     setTimeout(()=>$("postText")?.focus(),80);
   }
@@ -1588,10 +1524,7 @@ function publisherBackgrounds(){
       }
       const { error } = await sb.from("posts").insert({ user_id: state.user.id, content: text, media_url, media_type, visibility: "public" });
       if (error) throw new Error(error.message);
-      $("postText").value = ""; $("postFile").value = "";
-      clearPublisherDraft();
-      state.composerDraftText=""; state.composerFile=null;
-      toast("Publication publiée"); await loadPosts();
+      $("postText").value = ""; $("postFile").value = ""; toast("Publication publiée"); await loadPosts();
     } catch (e) { toast(e.message); }
     finally { setLoading(button, false, "Publier"); }
   }
@@ -1986,7 +1919,7 @@ function publisherBackgrounds(){
       if(mt.startsWith('audio/')) body=`<div class="message-audio-wrap"><audio controls preload="metadata" src="${esc(m.media_url)}"></audio><button class="message-download" data-action="download-message-file" data-url="${esc(m.media_url)}" data-name="${esc(m.content||'message-vocal.webm')}">⬇</button></div>`;
       else if(mt.startsWith('video/')) body=`<div class="message-media-wrap"><video class="message-media" controls playsinline preload="metadata" src="${esc(m.media_url)}"></video><button class="message-download" data-action="download-message-file" data-url="${esc(m.media_url)}" data-name="${esc(m.content||'video')}">⬇ Télécharger</button></div>`;
       else if(mt.startsWith('image/')) body=`<div class="message-media-wrap"><img class="message-media" src="${esc(m.media_url)}" alt="${esc(m.content||'Image')}" loading="lazy"><button class="message-download" data-action="download-message-file" data-url="${esc(m.media_url)}" data-name="${esc(m.content||'image')}">⬇ Télécharger</button></div>`;
-      else body=`<div class="message-file-wrap"><a class="message-file" href="${esc(safeHttpUrl(m.media_url))}" target="_blank" rel="noopener">📎 ${esc(m.content||'Fichier')}</a><button class="message-download" data-action="download-message-file" data-url="${esc(m.media_url)}" data-name="${esc(m.content||'Fichier')}">⬇ Télécharger</button></div>`;
+      else body=`<div class="message-file-wrap"><a class="message-file" href="${esc(m.media_url)}" target="_blank" rel="noopener">📎 ${esc(m.content||'Fichier')}</a><button class="message-download" data-action="download-message-file" data-url="${esc(m.media_url)}" data-name="${esc(m.content||'Fichier')}">⬇ Télécharger</button></div>`;
     } else body=esc(m.content||'');
     const replyPreview = m.reply_to_content ? `<div class="message-reply-preview"><span class="message-reply-line"></span><div><b>Message</b><span>${esc(String(m.reply_to_content).slice(0,180))}</span></div></div>` : '';
     const edited = m.updated_at && m.updated_at !== m.created_at ? ` · <button type="button" class="message-edited-link" data-action="message-history" data-id="${esc(m.id)}">modifié</button>` : '';
@@ -3930,7 +3863,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
         };
         const d=docs[action];
         const body=d.sections.map(s=>`<article class="legal-long-block"><h4>${esc(s[0])}</h4><p>${esc(s[1])}</p></article>`).join("");
-        settingsDetail(d.title,"TAFAß • DOCUMENT OFFICIEL",d.intro,`<div class="settings-legal-long">${body}</div><div class="legal-document-actions"><a class="primary big legal-open-link" href="${esc(safeHttpUrl(d.file))}" target="_blank" rel="noopener">Ouvrir le document complet ↗</a><button class="secondary-action big" data-route="settings">Retour aux paramètres</button></div>`);
+        settingsDetail(d.title,"TAFAß • DOCUMENT OFFICIEL",d.intro,`<div class="settings-legal-long">${body}</div><div class="legal-document-actions"><a class="primary big legal-open-link" href="${esc(d.file)}" target="_blank" rel="noopener">Ouvrir le document complet ↗</a><button class="secondary-action big" data-route="settings">Retour aux paramètres</button></div>`);
         return;
       }
 
@@ -5210,48 +5143,6 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       hideAppTransition();
     }
   }
-  // V84: coalesce bursty social realtime events so one database change
-  // does not trigger several overlapping feed queries/renders. The database
-  // remains authoritative; this only controls client-side refresh cadence.
-  let socialFeedRefreshTimer = null;
-  let socialFeedRefreshInFlight = false;
-  let socialFeedRefreshQueued = false;
-  function scheduleSocialFeedRefresh() {
-    socialFeedRefreshQueued = true;
-    if (socialFeedRefreshTimer) clearTimeout(socialFeedRefreshTimer);
-    socialFeedRefreshTimer = setTimeout(async () => {
-      socialFeedRefreshTimer = null;
-      if (!state.user || !navigator.onLine || !socialFeedRefreshQueued) return;
-      socialFeedRefreshQueued = false;
-      if (socialFeedRefreshInFlight) {
-        socialFeedRefreshQueued = true;
-        return;
-      }
-      if (!['home','profile','reels','saved'].includes(state.route)) return;
-      socialFeedRefreshInFlight = true;
-      try {
-        await loadPosts();
-        if (['home','profile','reels','saved'].includes(state.route)) await render();
-      } catch (e) {
-        console.warn('Tafaß social realtime refresh:', e);
-      } finally {
-        socialFeedRefreshInFlight = false;
-        if (socialFeedRefreshQueued) scheduleSocialFeedRefresh();
-      }
-    }, 250);
-  }
-
-  let messageRefreshTimer = null;
-  function scheduleMessageRefresh() {
-    if (messageRefreshTimer) clearTimeout(messageRefreshTimer);
-    messageRefreshTimer = setTimeout(() => {
-      messageRefreshTimer = null;
-      if (state.route === 'messages') {
-        (state.selectedConversation ? openConversation(state.selectedConversation) : messagesPage()).catch?.(()=>{});
-      }
-    }, 150);
-  }
-
   async function setupRealtime() {
     if (!state.user || !navigator.onLine) return;
     if(presenceHeartbeatTimer) clearInterval(presenceHeartbeatTimer);
@@ -5326,24 +5217,23 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
           if(before!==state.profile?.account_status) await render();
         }
       },
-      posts: () => scheduleSocialFeedRefresh(),
-      comments: () => scheduleSocialFeedRefresh(),
-      comment_likes: () => scheduleSocialFeedRefresh(),
-      comment_reactions: () => scheduleSocialFeedRefresh(),
-      post_reactions: () => scheduleSocialFeedRefresh(),
-      post_shares: () => scheduleSocialFeedRefresh(),
+      posts: async () => { await loadPosts(); if (["home","profile","reels","saved"].includes(state.route)) render(); },
+      comments: async () => { await loadPosts(); if (["home","profile"].includes(state.route)) render(); },
+      comment_likes: () => { if (["home","profile"].includes(state.route)) render(); },
+      comment_reactions: () => { if (["home","profile"].includes(state.route)) render(); },
+      post_reactions: async () => { await loadPosts(); if (["home","profile"].includes(state.route)) render(); },
+      post_shares: async () => { await loadPosts(); if (["home","profile"].includes(state.route)) render(); },
       notifications: payload => {
         const rec=payload?.new || payload?.record || payload;
         if(rec?.user_id && rec.user_id!==state.user.id) return;
         updateBadges();
         if(rec?.user_id===state.user.id && rec?.actor_id!==state.user.id && rec?.is_read===false && state.route!=="notifications") {
           const title=rec.title || "Nouvelle notification";
-          playNotificationSound();
           toast(title);
         }
         if (state.route==="notifications") notificationsPage();
       },
-      messages: () => { updateBadges(); scheduleMessageRefresh(); },
+      messages: payload => { updateBadges(); if (state.route==="messages") state.selectedConversation ? openConversation(state.selectedConversation) : messagesPage(); },
       friend_requests: () => { updateBadges(); if (state.route==="friends") friendsPage(); if (state.viewingProfileId && state.route==="profile") openUserProfile(state.viewingProfileId); },
       friendships: () => { if (state.route==="friends") friendsPage(); if (state.viewingProfileId && state.route==="profile") openUserProfile(state.viewingProfileId); },
       follows: () => { if (state.route==="profile") state.viewingProfileId ? openUserProfile(state.viewingProfileId) : profilePage(state.profileTab); },
@@ -6875,7 +6765,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       const r = await sb.from("tafab_ads").select("*").eq("id",id).maybeSingle();
       if (r.error || !r.data) return toast(r.error?.message || "Publicité introuvable.");
       const a = r.data;
-      return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • PUBLICITÉ</span><h3>${esc(a.title)}</h3>${a.image_url?`<img class="post-media" src="${esc(a.image_url)}" alt="Publicité" loading="lazy">`:""}<p>${esc(a.description||"")}</p>${a.target_url?`<a class="primary big" href="${esc(safeHttpUrl(a.target_url))}" target="_blank" rel="noopener noreferrer">Ouvrir le lien</a>`:""}</div>`);
+      return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • PUBLICITÉ</span><h3>${esc(a.title)}</h3>${a.image_url?`<img class="post-media" src="${esc(a.image_url)}" alt="Publicité" loading="lazy">`:""}<p>${esc(a.description||"")}</p>${a.target_url?`<a class="primary big" href="${esc(a.target_url)}" target="_blank" rel="noopener noreferrer">Ouvrir le lien</a>`:""}</div>`);
     }
     if (action === "save-tafab-ad") return saveTafabAd();
     if (action === "tafab-message") return contactTafabListing(id);
