@@ -6521,3 +6521,43 @@ body.tafa-conversation-active .content{height:100%!important;min-height:0!import
 @keyframes splashAmbientTwo{50%{transform:translate(35px,-25px) scale(1.08)}}
 @media(max-width:820px){body.tafa-conversation-active .main-layout{height:calc(100dvh - 68px)!important}.conversation-page-clean .clean-message-form{padding-left:6px!important;padding-right:6px!important}}
 @media(max-width:480px){.conversation-page-clean .conversation-clean-topbar{flex-basis:58px!important;min-height:58px!important}.conversation-page-clean .clean-message-list{padding-left:5px!important;padding-right:5px!important}.conversation-page-clean .message-tool{width:31px!important;flex-basis:31px!important}.conversation-page-clean .message-send-button{width:38px!important;height:38px!important}}
+
+/* TAFAß V81 — Conversation composer fixed above the bottom navigation.
+   Only the message history scrolls; the composer stays in the orange-zone
+   at the bottom of the viewport and never moves with the conversation. */
+body.tafa-conversation-active .clean-message-form{
+  position:fixed!important;
+  left:50%!important;
+  right:auto!important;
+  bottom:calc(72px + env(safe-area-inset-bottom))!important;
+  transform:translateX(-50%)!important;
+  width:min(820px,100vw)!important;
+  margin:0!important;
+  box-sizing:border-box!important;
+  z-index:1000!important;
+  flex:none!important;
+  background:var(--bg)!important;
+  border-top:1px solid var(--line)!important;
+  border-bottom:0!important;
+  padding:8px 8px 9px!important;
+  isolation:isolate!important;
+}
+
+body.tafa-conversation-active .conversation-page-clean{
+  overflow:visible!important;
+}
+
+body.tafa-conversation-active .conversation-page-clean .clean-message-list{
+  padding-bottom:120px!important;
+}
+
+@media (max-width:600px){
+  body.tafa-conversation-active .clean-message-form{
+    bottom:calc(72px + env(safe-area-inset-bottom))!important;
+    width:100vw!important;
+    padding:8px 8px 10px!important;
+  }
+  body.tafa-conversation-active .conversation-page-clean .clean-message-list{
+    padding-bottom:125px!important;
+  }
+}
