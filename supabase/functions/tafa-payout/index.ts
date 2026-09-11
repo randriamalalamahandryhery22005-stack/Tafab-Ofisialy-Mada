@@ -54,8 +54,11 @@ Deno.serve(async req => {
     if(!['pending','approved','failed','processing'].includes(String(row.status)))
       return json({ok:false,error:`Retrait déjà traité: ${row.status}`},409);
 
+    // Creator payout methods belong to the creator, not the admin who triggers the payout.
+    // Platform payout methods belong to the authenticated admin account.
+    const methodOwnerId = kind==='platform' ? user.id : String(row.user_id||'');
     const {data:pm,error:pmError}=await admin.from('tafab_creator_payout_methods')
-      .select('provider,phone,account_name').eq('id',row.payout_method_id).eq('user_id',user.id).maybeSingle();
+      .select('provider,phone,account_name').eq('id',row.payout_method_id).eq('user_id',methodOwnerId).maybeSingle();
     if(pmError || !pm) return json({ok:false,error:'Moyen Mobile Money introuvable'},400);
     const provider=String(pm.provider) as Provider;
     if(!['mvola','orange_money','airtel_money'].includes(provider))
@@ -63,10 +66,10 @@ Deno.serve(async req => {
 
     const c=cfg[provider];
     if(!c?.url || !c?.token){
-      const err=`Provider ${providerName(provider)} non configuré en production.`;
+      const err=`Provider ${providerName(provider)} non configuré en production. Le montant reste réservé en attente de configuration.`;
       const table=kind==='platform'?'tafa_admin_withdrawals_v74':'tafab_withdrawal_requests';
-      await admin.from(table).update({status:'failed',last_payout_error:err,last_attempt_at:new Date().toISOString(),payout_attempts:(row.payout_attempts||0)+1}).eq('id',requestId);
-      return json({ok:false,status:'failed',error:err,provider},503);
+      await admin.from(table).update({status:'pending',last_payout_error:err,last_attempt_at:new Date().toISOString()}).eq('id',requestId);
+      return json({ok:false,status:'pending',error:err,provider},503);
     }
 
     const markRpc=kind==='platform'?'tafa_mark_platform_payout_processing':'tafa_mark_creator_payout_processing';
