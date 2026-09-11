@@ -5827,6 +5827,9 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       await splashReady;
       $("auth").classList.add("hidden"); $("app").classList.remove("hidden");
       await loadPosts(); await setupRealtime(); ensureLiveFeedRealtime();
+      // V85: register the Web Push subscription for existing/logged-in accounts too.
+      // Without this call, only newly completed registrations were subscribed.
+      await setupTafaPushNotifications();
       await render();
       await startTimeLimitGuard();
       hideAppTransition();
