@@ -1338,7 +1338,7 @@ function publisherBackgrounds(){
     const sharedMeta = p.publication_meta && typeof p.publication_meta === "object" && p.publication_meta.shared_from_post_id ? p.publication_meta : null;
     const sharedBanner = sharedMeta ? `<div class="shared-post-banner"><span>↗</span><div><b>${esc(nameOf(p.author||state.profile))} a partagé cette publication</b><small>Publication originale de ${esc(sharedMeta.shared_from_user_name||"un membre Tafaß")}${sharedMeta.shared_from_group_name?` · ${esc(sharedMeta.shared_from_group_name)}`:""}</small></div></div>` : "";
     return `<article class="post post-premium" id="post-${esc(p.id)}" data-post-id="${esc(p.id)}" data-post-bg="${esc(p.background_style || "plain")}" data-media-type="${esc(p.media_type || "")}">
-      <div class="post-head">${profileLink(p.author, avatarHTML(p.author), "profile-link profile-avatar-link")}<div class="meta">${profileLink(p.author, `<span class="post-author-name">${displayNameHTML(p.author)}${presenceBadgeHTML(p.author)}</span>`, "profile-link profile-meta-link")}<span class="post-time"><small>${timeAgo(p.created_at)} · ${esc(p.visibility || "public")}</small></span></div><button class="post-menu" data-action="post-menu" data-id="${esc(p.id)}">⋯</button></div>${sharedBanner}
+      <div class="post-head">${profileLink(p.author, avatarHTML(p.author), "profile-link profile-avatar-link")}<div class="meta">${profileLink(p.author, `<span class="post-author-name">${displayNameHTML(p.author)}</span>`, "profile-link profile-meta-link")}<span class="post-time"><small>${timeAgo(p.created_at)} · ${esc(p.visibility || "public")}</small></span></div><button class="post-menu" data-action="post-menu" data-id="${esc(p.id)}">⋯</button></div>${sharedBanner}
       ${p.content ? `<div class="post-body ${p.background_style && p.background_style !== "plain" ? "post-body-has-bg" : ""}">${captionHTML(p.content)}</div>` : ""}${media}
       ${p.publication_meta && typeof p.publication_meta === "object" ? (()=>{const m=p.publication_meta||{};const chips=[];if(m.music)chips.push(`<button type="button" class="post-music-chip" data-action="play-post-music" data-music-id="${esc(m.music_id||'ai-1')}" data-music-seed="${esc(m.music_seed||1)}">♫ ${esc(m.music)} · Écouter</button>`);if(m.tag)chips.push(`<span>👥 ${esc(m.tag)}</span>`);if(m.location)chips.push(`<span>📍 ${esc(m.location)}</span>`);if(m.event)chips.push(`<span>📅 ${esc(m.event)}</span>`);if(m.mood)chips.push(`<span>☺ ${esc(m.mood)}</span>`);return chips.length?`<div class="post-meta-chips">${chips.join('')}</div>`:''})() : ""}
       ${p.publication_meta?.receive_messages && p.user_id !== state.user.id ? `<div class="post-message-cta"><div><b>Messages ouverts</b><small>Envoyez un message privé directement à ${esc(nameOf(p.author||{}))}.</small></div><button type="button" data-action="post-receive-message" data-owner-id="${esc(p.user_id)}">💬 Message</button></div>` : ""}
@@ -2308,7 +2308,7 @@ function publisherBackgrounds(){
       <main class="tfa-public-main-v71">
         <div class="tfa-public-avatar-row-v71"><div class="tfa-public-avatar-ring-v71">${avatarHTML(p,"avatar profile-avatar")}</div>${isMe ? `<button type="button" class="tfa-public-avatar-camera-v71" data-action="edit-profile" aria-label="Modifier la photo de profil">▣</button>` : ""}</div>
         <header class="tfa-public-head-v71">
-          <h1>${displayNameHTML(p)}${profilePresenceHTML(p)}</h1>
+          <h1>${displayNameHTML(p)}</h1>${profilePresenceHTML(p) ? `<div class="tfa-profile-presence-v74">${profilePresenceHTML(p)}</div>` : ""}
           <div class="tfa-public-counts-v71"><b>${friendsR.count || 0} ami(e)s</b>${mutualIds.length ? `<span>·</span><b>${mutualIds.length} en commun</b>` : ""}</div>
           ${relationship ? `<p class="tfa-public-relationship-v71">${esc(relationship)}</p>` : ""}
           ${p.bio ? `<p class="tfa-public-bio-v71">${esc(p.bio)}</p>` : ""}
@@ -4078,19 +4078,49 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   }
 
 
+  async function tafaV74IsAdmin(){
+    try{ if(state.__isAdmin===true)return true; const {data}=await sb.from('profiles').select('role,is_admin').eq('id',state.user?.id||'').maybeSingle(); const ok=data?.role==='admin'||data?.is_admin===true; if(ok)state.__isAdmin=true; return !!ok; }catch(_){return false;}
+  }
+  async function tafaV74LoadPlatformWallet(){
+    if(!state.user?.id)return null;
+    const r=await sb.from('tafa_platform_wallets_v74').select('coins,earnings_mga,lifetime_earnings_mga,total_withdrawn_mga,referral_code,referral_uses').eq('user_id',state.user.id).maybeSingle();
+    return r.data||null;
+  }
+  async function tafaV74OpenAdminWithdrawal(){
+    const ok=await tafaV74IsAdmin(); if(!ok)return toast('Accès réservé à l’administration.');
+    const w=await tafaV74LoadPlatformWallet(); const available=Number(w?.earnings_mga||0);
+    if(available<1000)return toast('Solde disponible insuffisant : minimum 1 000 Ar.');
+    const methods=await sb.from('tafab_creator_payout_methods').select('id,provider,phone,account_name,bank_name,bank_account,status').eq('user_id',state.user.id).eq('status','active').order('is_default',{ascending:false});
+    const rows=(methods.data||[]).map(m=>`<option value="${esc(m.id)}">${esc(({mvola:'MVola',orange_money:'Orange Money',airtel_money:'Airtel Money',bank:'Banque'})[m.provider]||m.provider)} · ${esc(m.provider==='bank'?(m.bank_name||'Banque'):m.phone||'')}</option>`).join('');
+    openModal(`<div class="modal-box monet-modal tafa-v74-admin-withdraw"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß · ADMIN</span><h3>Retrait prioritaire</h3><p class="muted">Solde disponible : <b>${available.toLocaleString('fr-FR')} Ar</b>. Le retrait admin est disponible dès que le solde atteint 1 000 Ar.</p><label>Montant (Ar)<input id="v74AdminWithdrawAmount" type="number" min="1000" max="${available}" step="100" value="${Math.max(1000,Math.floor(available))}"></label><label>Moyen<select id="v74AdminWithdrawMethod" class="premium-input">${rows||'<option value="">Aucun moyen actif</option>'}</select></label><button class="primary big" data-action="v74-admin-withdraw">Retirer maintenant</button></div>`);
+  }
+  async function tafaV74SubmitAdminWithdrawal(){
+    const amount=Math.floor(Number($('v74AdminWithdrawAmount')?.value||0)), method=$('v74AdminWithdrawMethod')?.value||'';
+    if(amount<1000)return toast('Minimum : 1 000 Ar.'); if(!method)return toast('Ajoutez un moyen de retrait actif.');
+    const r=await sb.rpc('tafa_admin_request_platform_withdrawal_v74',{p_amount_mga:amount,p_payout_method_id:method});
+    if(r.error)return toast(r.error.message); closeModal(); toast('Retrait admin enregistré.'); return creatorMonetisationPage();
+  }
+  async function tafaV74ShowAdminUsers(){
+    if(!(await tafaV74IsAdmin()))return toast('Accès réservé à l’administration.');
+    const r=await sb.rpc('tafa_admin_list_users',{p_limit:200,p_offset:0}); if(r.error)return toast(r.error.message);
+    const rows=(r.data||[]).map(u=>`<div class="v74-admin-user-item">${avatarHTML(u,'avatar')}<div><b>${esc(([u.first_name,u.last_name].filter(Boolean).join(' ')||u.username||u.email||'Compte'))}</b><small>${esc(u.email||'')} · @${esc(u.username||'')}</small></div><span class="admin-status ${u.account_status==='blocked'?'blocked':'paid'}">${u.account_status==='blocked'?'Bloqué':'Actif'}</span></div>`).join('')||'<div class="empty">Aucun compte.</div>';
+    openModal(`<div class="modal-box v74-admin-users-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß · COMPTES</span><h3>Tous les comptes utilisateurs</h3><div class="v74-admin-user-list">${rows}</div></div>`);
+  }
+
   async function creatorMonetisationPage(){
     const uid=state.user.id;
-    const [walletR,profileR,methodsR,withdrawR,ledgerR,papiR]=await Promise.all([
+    const [walletR,profileR,methodsR,withdrawR,ledgerR,papiR,platformR]=await Promise.all([
       sb.from('tafab_wallets').select('coins,earnings_mga,pending_earnings_mga,lifetime_earnings_mga,total_withdrawn_mga,updated_at').eq('user_id',uid).maybeSingle(),
       sb.from('tafab_creator_monetization').select('*').eq('user_id',uid).maybeSingle(),
       sb.from('tafab_creator_payout_methods').select('id,provider,phone,account_name,is_default,status,created_at').eq('user_id',uid).order('is_default',{ascending:false}).order('created_at',{ascending:false}),
       sb.from('tafab_withdrawal_requests').select('id,amount_mga,method,destination_hint,status,created_at,processed_at,admin_note').eq('user_id',uid).order('created_at',{ascending:false}).limit(30),
       sb.from('tafab_creator_earnings').select('id,source_type,gross_mga,platform_fee_mga,net_mga,status,description,created_at').eq('creator_id',uid).order('created_at',{ascending:false}).limit(30),
-      sb.from('tafab_papi_payments').select('id,reference,amount_mga,coins,provider,payment_method,payment_status,created_at,paid_at').eq('user_id',uid).order('created_at',{ascending:false}).limit(20)
+      sb.from('tafab_papi_payments').select('id,reference,amount_mga,coins,provider,payment_method,payment_status,created_at,paid_at').eq('user_id',uid).order('created_at',{ascending:false}).limit(20),
+      sb.from('tafa_platform_wallets_v74').select('coins,earnings_mga,lifetime_earnings_mga,total_withdrawn_mga,referral_code,referral_uses').eq('user_id',uid).maybeSingle()
     ]);
     const w=walletR.data||{coins:0,earnings_mga:0,pending_earnings_mga:0,lifetime_earnings_mga:0,total_withdrawn_mga:0};
     const mp=profileR.data||{status:'not_requested',enabled:false,min_withdrawal_mga:1000,revenue_share_percent:70,coins_to_mga:10};
-    const methods=methodsR.data||[], withdrawals=withdrawR.data||[], ledger=ledgerR.data||[], papiPayments=papiR.error?[]:(papiR.data||[]);
+    const methods=methodsR.data||[], withdrawals=withdrawR.data||[], ledger=ledgerR.data||[], papiPayments=papiR.error?[]:(papiR.data||[]), platform=platformR.data||null;
     const statusLabel={not_requested:'Non activé',pending:'En cours de vérification',approved:'Monétisation active',suspended:'Suspendue'}[mp.status]||mp.status||'Non activé';
     const providerLabel={mvola:'MVola',orange_money:'Orange Money',airtel_money:'Airtel Money',bank:'Banque'};
     const available=Number(w.earnings_mga||0), pending=Number(w.pending_earnings_mga||0), lifetime=Number(w.lifetime_earnings_mga||0), withdrawn=Number(w.total_withdrawn_mga||0), coins=Number(w.coins||0);
@@ -4104,8 +4134,9 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       : mp.status==='pending'
         ? `<button class="secondary-action" disabled>⏳ Vérification en cours</button>`
         : `<button class="primary" data-action="request-monetization">🚀 Demander l’activation</button>`;
+    const adminPlatform = (await tafaV74IsAdmin()) && platform ? `<section class="monet-panel tafa-v74-admin-wallet"><div class="monet-section-title"><div><span class="eyebrow">TAFAß · ADMIN</span><h3>Mon portefeuille plateforme</h3><small class="admin-section-note">Coins et revenus générés par l’activité globale, calculés côté serveur.</small></div><button class="primary" data-action="v74-admin-open-withdraw">💸 Retrait</button></div><div class="monet-kpis"><div><span>Coins</span><b>${Number(platform.coins||0).toLocaleString('fr-FR')} 🪙</b></div><div><span>Disponible</span><b>${Number(platform.earnings_mga||0).toLocaleString('fr-FR')} Ar</b></div><div><span>Total gagné</span><b>${Number(platform.lifetime_earnings_mga||0).toLocaleString('fr-FR')} Ar</b></div><div><span>Parrainage</span><b>${Number(platform.referral_uses||0).toLocaleString('fr-FR')}</b><small>${esc(platform.referral_code||'')}</small></div></div></section>` : '';
     simplePage('Monétisation',`<section class="monet-hero monet-hero-v2"><div><span class="eyebrow">TAFAß • CREATOR MONETIZATION</span><h2>Transformez votre audience en revenus.</h2><p>Créez, développez votre communauté, recevez des cadeaux et convertissez les revenus éligibles en argent retirable.</p></div><span class="monet-status ${mp.status==='approved'?'active':''}">● ${esc(statusLabel)}</span></section>
-      <div class="monet-kpis"><div><span>Disponible</span><b>${available.toLocaleString('fr-FR')} Ar</b><small>Retirable maintenant</small></div><div><span>En attente</span><b>${pending.toLocaleString('fr-FR')} Ar</b><small>Retraits en cours</small></div><div><span>Total gagné</span><b>${lifetime.toLocaleString('fr-FR')} Ar</b><small>Depuis l’activation</small></div><div><span>Total retiré</span><b>${withdrawn.toLocaleString('fr-FR')} Ar</b><small>Paiements finalisés</small></div></div>
+      ${adminPlatform}<div class="monet-kpis"><div><span>Disponible</span><b>${available.toLocaleString('fr-FR')} Ar</b><small>Retirable maintenant</small></div><div><span>En attente</span><b>${pending.toLocaleString('fr-FR')} Ar</b><small>Retraits en cours</small></div><div><span>Total gagné</span><b>${lifetime.toLocaleString('fr-FR')} Ar</b><small>Depuis l’activation</small></div><div><span>Total retiré</span><b>${withdrawn.toLocaleString('fr-FR')} Ar</b><small>Paiements finalisés</small></div></div>
       <section class="monet-panel monet-explainer-v2"><div class="monet-section-title"><div><span class="eyebrow">COMMENT ÇA MARCHE ?</span><h3>Monétisation Tafaß, de A à Z</h3></div></div><div class="monet-longtext-v2">
         <p><b>1. Devenir créateur éligible.</b> Vous demandez l’accès au programme. L’administration vérifie le compte, l’activité, le respect des règles et les conditions de monétisation. L’activation est une autorisation de participer au programme, pas une promesse de revenu automatique.</p>
         <p><b>2. Créer du contenu utile.</b> Les publications, vidéos, Reels et directs peuvent développer votre audience. Une audience réelle, active et engagée augmente les possibilités de revenus. Les vues artificielles, le spam, les manipulations ou les activités frauduleuses ne doivent pas être utilisés pour générer des gains.</p>
@@ -4474,6 +4505,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     return simplePage('Admin Total',`<section class="admin-total-page admin-dashboard-premium">
       <div class="admin-total-hero admin-dashboard-hero"><div><span class="eyebrow">TAFAß · ADMINISTRATION TOTALE</span><h2>Tableau de bord</h2><p>Vue globale et temps réel de l’activité Tafaß, des comptes, du contenu et de la sécurité.</p></div><div class="admin-live-indicator"><span></span> EN DIRECT</div></div>
       <div class="admin-dashboard-toolbar"><span>Dernière synchronisation : <b>${new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</b></span><button class="ghost-action" data-action="admin-refresh">↻ Actualiser maintenant</button></div>
+      <nav class="tafa-v74-admin-tabs" aria-label="Administration"><button class="active" data-v74-admin-jump="Évolution des comptes">📈 Évolutions des comptes</button><button data-v74-admin-jump="Comptes utilisateurs">👥 Comptes d'utilisateurs</button><button data-v74-admin-jump="Monétisation">💰 Monétisations</button><button data-v74-admin-jump="Signalements">🚨 Signalements & Réactivations</button></nav>
       <div class="admin-total-grid admin-dashboard-kpis">${cards.map(c=>`<div class="admin-stat"><span>${c[0]}</span><b>${c[2]}</b><small>${esc(c[1])}</small></div>`).join('')}</div>
       <div class="admin-dashboard-columns">
         <section class="admin-total-section"><div class="admin-section-head"><div class="admin-section-title"><h3>📈 Évolution des comptes</h3><small class="admin-section-note">Nouveaux comptes sur les 30 derniers jours · croissance ${growthSign}${growth}%</small></div></div><div class="admin-trend-chart">${trendRows||'<div class="empty">Pas encore de données d’évolution.</div>'}</div></section>
@@ -4483,7 +4515,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
         <section class="admin-total-section"><div class="admin-section-head"><div class="admin-section-title"><h3>📱 Santé de l’application</h3><small class="admin-section-note">Volume actuel des principaux espaces.</small></div></div><div class="admin-health-grid"><div><b>${Number(st.total_posts||0).toLocaleString('fr-FR')}</b><span>Publications</span></div><div><b>${Number(st.total_stories||0).toLocaleString('fr-FR')}</b><span>Stories</span></div><div><b>${Number(st.total_reels||0).toLocaleString('fr-FR')}</b><span>Reels</span></div><div><b>${Number(st.total_videos||0).toLocaleString('fr-FR')}</b><span>Vidéos</span></div><div><b>${Number(st.total_groups||0).toLocaleString('fr-FR')}</b><span>Groupes</span></div><div><b>${Number(st.total_pages||0).toLocaleString('fr-FR')}</b><span>Pages</span></div></div></section>
         <section class="admin-total-section"><div class="admin-section-head"><div class="admin-section-title"><h3>🛡️ Sécurité</h3><small class="admin-section-note">Éléments nécessitant une intervention.</small></div></div><div class="admin-health-grid admin-security-grid"><div><b>${Number(st.blocked_accounts||0).toLocaleString('fr-FR')}</b><span>Comptes bloqués</span></div><div><b>${Number(st.pending_reports||0).toLocaleString('fr-FR')}</b><span>Signalements</span></div><div><b>${Number(st.pending_verifications||0).toLocaleString('fr-FR')}</b><span>Vérifications</span></div><div><b>${Number(st.pending_appeals||0).toLocaleString('fr-FR')}</b><span>Réactivations</span></div></div></section>
       </div>
-      <div class="admin-total-section"><div class="admin-section-head"><div class="admin-section-title"><h3>👥 Comptes utilisateurs</h3><small class="admin-section-note">Gestion administrative contrôlée côté serveur.</small></div></div><div class="admin-users">${rows}</div></div>
+      <div class="admin-total-section"><div class="admin-section-head"><div class="admin-section-title"><h3>👥 Comptes utilisateurs</h3><small class="admin-section-note">8 comptes visibles · les autres sont disponibles via « Voir plus ».</small></div></div><div class="admin-users v74-admin-users-grid">${rows}</div><button class="ghost-action v74-see-more" data-action="v74-admin-users-more">Voir plus</button></div>
       <div class="admin-total-section monet-admin-section"><div class="admin-section-head"><div class="admin-section-title"><h3>💰 Monétisation</h3><small class="admin-section-note">${adminMoney(st.total_creator_earnings_mga)} de revenus créateurs · ${Number(st.total_coins||0).toLocaleString('fr-FR')} coins.</small></div></div><div class="admin-subsection"><h4>Demandes d'activation</h4><div class="admin-data-list">${creatorMonetRows}</div></div><div class="admin-subsection"><h4>Retraits créateurs</h4><div class="admin-data-list">${creatorPayoutRows}</div></div></div>
       <div class="admin-total-section"><div class="admin-section-head"><div class="admin-section-title"><h3>💳 Paiements</h3><small class="admin-section-note">Validation administrative des paiements.</small></div></div><div class="admin-data-list">${paymentRows}</div></div>
       <div class="admin-total-section"><div class="admin-section-head"><div class="admin-section-title"><h3>✦ Publicités sponsorisées</h3><small class="admin-section-note">Paiements publicitaires à vérifier avant diffusion</small></div><span class="admin-live-indicator"><span></span> EN DIRECT</span></div><div class="admin-data-list">${boostPaymentRows}</div></div>
@@ -6132,6 +6164,9 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if (action === "admin-verification-status") return adminSetVerificationStatus(id, actionEl.dataset.status);
     if (action === "admin-open-appeal") return adminOpenAppeal(id);
     if (action === "admin-appeal-status") return adminSetAppealStatus(id, actionEl.dataset.status);
+    if (action === "v74-admin-open-withdraw") return tafaV74OpenAdminWithdrawal();
+    if (action === "v74-admin-withdraw") return tafaV74SubmitAdminWithdrawal();
+    if (action === "v74-admin-users-more") return tafaV74ShowAdminUsers();
     if (action === "admin-refresh") return adminTotalPage();
     if (action === "admin-toggle-user") return adminToggleUser(id,actionEl.dataset.status||'active');
     if (action === "admin-withdrawal-status") return adminSetWithdrawalStatus(id,actionEl.dataset.status||'rejected');
@@ -6669,7 +6704,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
         const signupCountry=$("country")?.value||signupMeta.name;
         const btn=signupForm.querySelector('button[type="submit"]');setLoading(btn,true,"Créer mon compte");$("signupMsg").textContent="Création du compte…";
         try{
-          const meta={first_name:first,last_name:last,phone,phone_code:signupMeta.code,country:signupCountry,birth:$("birth")?.value||null};
+          const meta={first_name:first,last_name:last,phone,phone_code:signupMeta.code,country:signupCountry,birth:$("birth")?.value||null,referral_code:$("referralCode")?.value.trim().toUpperCase()||null};
           const {data,error}=await sb.auth.signUp({email,password,data:meta});
           if(error)throw error;
           if(data.session){
@@ -6694,6 +6729,12 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     document.querySelectorAll(".signup-prev").forEach(btn=>{if(btn.dataset.bound)return;btn.dataset.bound="1";btn.addEventListener("click",()=>setSignupStep(Number(btn.dataset.prevStep)));});
     document.querySelectorAll("[data-oauth]").forEach(btn=>{ if(btn.dataset.oauth==="apple"){ btn.remove(); return; } if(btn.dataset.bound)return; btn.dataset.bound="1"; btn.addEventListener("click",()=>signInWithProvider(btn.dataset.oauth)); });
   };
+  document.addEventListener('click',e=>{
+    const b=e.target.closest('[data-v74-admin-jump]'); if(!b)return;
+    const title=b.dataset.v74AdminJump||''; const section=[...document.querySelectorAll('.admin-total-section')].find(x=>(x.querySelector('h3')?.textContent||'').includes(title));
+    document.querySelectorAll('.tafa-v74-admin-tabs button').forEach(x=>x.classList.toggle('active',x===b));
+    if(section)section.scrollIntoView({behavior:'smooth',block:'start'});
+  },{passive:true});
   bindAuthUI();
   // Tafaß utilise désormais uniquement Google pour la connexion sociale.
   document.querySelectorAll("[data-oauth=apple]").forEach(el=>el.remove());

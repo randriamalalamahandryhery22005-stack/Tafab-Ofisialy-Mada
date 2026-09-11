@@ -6206,3 +6206,26 @@ button,[role="button"],[data-action],[data-route],a{touch-action:manipulation;-w
 /* Clean search: no remote/suggestion interface before explicit validation. */
 .tafa-v49-search-suggestions{display:none!important}
 .search-page-premium .search-ready-hint{display:flex!important}
+
+
+/* ============================================================
+   TAFAß V74 — PLATFORM / PROFILE / ADMIN STABLE SKIN
+   ============================================================ */
+.avatar,.avatar img,.default-avatar-image,.default-avatar-image img,.menu-profile-avatar,.menu-profile-avatar .avatar,.menu-profile-avatar .avatar img,.profile-avatar,.profile-avatar img,.profile-avatar-wrap-v5,.profile-avatar-wrap-v5>.avatar,.profile-avatar-wrap-v5>.avatar>img,.story-ring .avatar,.story-ring .avatar>img,.comment .avatar,.live-card-avatar .avatar,.live-card-avatar .avatar>img{
+  border-radius:50%!important;overflow:hidden!important;aspect-ratio:1/1!important;box-sizing:border-box!important;
+}
+.avatar{display:block!important;contain:paint!important;position:relative!important;}
+.avatar img,.default-avatar-image img,.profile-avatar img,.profile-avatar-wrap-v5>.avatar>img,.profile-avatar-wrap-v5>.avatar img{display:block!important;width:100%!important;height:100%!important;object-fit:cover!important;object-position:center!important;max-width:none!important;max-height:none!important;}
+.profile-link.profile-avatar-link,.post-head .profile-avatar-link{border-radius:50%!important;overflow:hidden!important;display:block!important;flex:0 0 auto!important;}
+.post-author-name{display:block!important;}
+.tafa-v74-admin-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:12px 0 16px;padding:8px;border:1px solid rgba(255,170,55,.16);border-radius:16px;background:linear-gradient(145deg,rgba(10,35,25,.88),rgba(26,20,9,.72));position:sticky;top:66px;z-index:20;backdrop-filter:blur(14px)}
+.tafa-v74-admin-tabs button{min-height:48px;border:1px solid rgba(60,220,140,.12);border-radius:12px;background:rgba(255,255,255,.025);color:#b9c9c1;font-size:11px;font-weight:700;padding:8px}.tafa-v74-admin-tabs button.active{background:linear-gradient(135deg,rgba(20,205,118,.18),rgba(255,164,40,.16));border-color:rgba(255,174,58,.35);color:#fff}
+.v74-admin-users-grid{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}.v74-admin-users-grid .admin-user-row{min-width:0}.v74-admin-users-grid .admin-user-row:nth-child(n+9){display:none!important}.v74-see-more{margin:12px auto 0;display:block}
+.v74-admin-user-list{display:grid;gap:8px;max-height:70vh;overflow:auto;padding-right:2px}.v74-admin-user-item{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.025)}.v74-admin-user-item .avatar{width:42px;height:42px;flex:0 0 42px}.v74-admin-user-item>div{flex:1;min-width:0}.v74-admin-user-item b,.v74-admin-user-item small{display:block;overflow-wrap:anywhere}.v74-admin-user-item small{color:var(--muted);font-size:9px;margin-top:3px}
+.tafa-v74-admin-wallet{border-color:rgba(255,170,50,.28)!important;background:linear-gradient(145deg,rgba(10,38,25,.9),rgba(38,25,8,.8))!important}.tafa-v74-admin-wallet .monet-kpis{margin-top:12px}.tafa-v74-admin-withdraw .primary{background:linear-gradient(135deg,#18d77b,#ff9d25)!important;color:#06100b!important}
+.optional-label{font-size:9px;color:var(--muted);font-weight:500}
+@media(max-width:720px){.tafa-v74-admin-tabs{grid-template-columns:repeat(2,minmax(0,1fr));top:58px}.v74-admin-users-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.v74-admin-users-grid .admin-user-row{display:flex}.v74-admin-users-grid .admin-user-row:nth-child(n+9){display:none!important}.v74-admin-users-grid .admin-user-row{padding:9px}.v74-admin-users-grid .admin-user-main img,.v74-admin-users-grid .admin-user-avatar{width:38px;height:38px}.v74-admin-users-grid .ghost-action{font-size:9px;padding:7px}.tafa-v74-admin-wallet .monet-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* V74 presence: never inline with the name; hidden from Actualités post headers. */
+.tfa-profile-presence-v74{display:flex!important;align-items:center!important;gap:6px!important;margin-top:4px!important;min-height:18px!important}
+.tfa-profile-presence-v74 .tafa-presence-dot.online{width:9px!important;height:9px!important;min-width:9px!important;background:#ffd23f!important;border:2px solid rgba(255,210,63,.16)!important;box-shadow:0 0 0 3px rgba(255,210,63,.07),0 0 12px rgba(255,210,63,.35)!important;border-radius:50%!important;display:inline-block!important}
+.tfa-profile-presence-v74 .tafa-presence-offline{display:inline-flex!important;align-items:center!important;padding:3px 8px!important;border-radius:999px!important;background:rgba(160,170,185,.10)!important;border:1px solid rgba(160,170,185,.16)!important;color:#aeb9c6!important;font-size:9px!important;font-weight:600!important}
