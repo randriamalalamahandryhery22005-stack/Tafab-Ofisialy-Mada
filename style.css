@@ -4464,6 +4464,49 @@ body.light body.light
 }
 
 
+/* V79 — definitive profile avatar clipping for every account */
+.tfa-public-avatar-ring-v71,
+.tfa-public-avatar-ring-v71 > .avatar,
+.tfa-public-avatar-ring-v71 > .avatar > img,
+.tfa-profile-avatar-ring-v70,
+.tfa-profile-avatar-ring-v70 > .avatar,
+.tfa-profile-avatar-ring-v70 > .avatar > img {
+  box-sizing:border-box!important;
+  width:100%;
+  height:100%;
+  min-width:0!important;
+  min-height:0!important;
+  max-width:100%!important;
+  max-height:100%!important;
+  overflow:hidden!important;
+  border-radius:50%!important;
+}
+.tfa-public-avatar-ring-v71,
+.tfa-profile-avatar-ring-v70 {
+  flex:0 0 auto!important;
+  display:grid!important;
+  place-items:center!important;
+  aspect-ratio:1/1!important;
+  clip-path:circle(50% at 50% 50%)!important;
+}
+.tfa-public-avatar-ring-v71 > .avatar,
+.tfa-profile-avatar-ring-v70 > .avatar {
+  position:relative!important;
+  display:block!important;
+}
+.tfa-public-avatar-ring-v71 > .avatar > img,
+.tfa-profile-avatar-ring-v70 > .avatar > img {
+  position:absolute!important;
+  inset:0!important;
+  display:block!important;
+  object-fit:cover!important;
+  object-position:center!important;
+  margin:0!important;
+  padding:0!important;
+  border:0!important;
+  clip-path:circle(50% at 50% 50%)!important;
+}
+
 /* =========================================================
    TAFAß — FINAL CIRCLE FIX (AVATARS / PDP / STORIES)
    Aucun avatar ne doit être étiré ou devenir ovale.

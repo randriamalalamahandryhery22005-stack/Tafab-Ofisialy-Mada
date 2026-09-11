@@ -2636,47 +2636,87 @@ function publisherBackgrounds(){
 
   async function saveProfile() {
     const p = state.profile || {};
+    const currentInput = $("pfCityCurrent");
+    const originInput = $("pfCityOrigin");
+    const currentCity = currentInput?.value.trim() || "";
+    const originCity = originInput?.value.trim() || "";
+    const bio = $("pfBio")?.value.trim() || "";
+
+    // La ville d'origine est facultative. Une modification de profil ne doit
+    // jamais être bloquée simplement parce que ce champ est vide.
+    if (currentCity && currentInput?.dataset.placeValid !== "true") {
+      return toast('Sélectionnez la ville actuelle dans la liste proposée.');
+    }
+    if (originCity && originInput?.dataset.placeValid !== "true") {
+      return toast("Sélectionnez la ville d'origine dans la liste proposée.");
+    }
+
     const patch = {
-      country: phoneMeta().name,
-      city_current: $('pfCityCurrent')?.value.trim() || "",
-      city_origin: $('pfCityOrigin')?.value.trim() || "",
-      bio: $('pfBio')?.value.trim() || "",
-      location: $('pfCityCurrent')?.value.trim() || "",
+      country: p.country || "Madagascar",
+      city_current: currentCity,
+      city_origin: originCity,
+      bio,
+      location: currentCity
     };
-    const currentInput=$("pfCityCurrent"), originInput=$("pfCityOrigin");
-    if (!patch.city_current || currentInput?.dataset.placeValid !== "true") return toast('Recherchez puis sélectionnez une ville actuelle réelle dans la liste.');
-    if (!patch.city_origin || originInput?.dataset.placeValid !== "true") return toast('Recherchez puis sélectionnez une ville d’origine réelle dans la liste.');
-    const btn=document.querySelector('[data-action="save-profile"]');
-    setLoading(btn,true,'Enregistrer');
+    const btn = document.querySelector('[data-action="save-profile"]');
+    setLoading(btn, true, 'Enregistrer');
+
     try {
-      for (const [file,key] of [[$('pfAvatar')?.files?.[0],"avatar_url"],[$('pfCover')?.files?.[0],"cover_url"]]) {
+      // Uploads are completed before the database update so that the profile
+      // row always points to a real public media URL.
+      for (const [file, key] of [[$('pfAvatar')?.files?.[0], "avatar_url"], [$('pfCover')?.files?.[0], "cover_url"]]) {
         if (!file) continue;
         if (!file.type.startsWith('image/')) throw new Error('Choisissez uniquement une image.');
-        if (file.size > 8*1024*1024) throw new Error('Image trop volumineuse (maximum 8 Mo).');
-        const moderation=await moderationCheckMedia(file,key==='avatar_url'?'profile_avatar':'profile_cover');
-        if(!moderation.ok) throw new Error('Image protégée de l’administration Tafaß.');
-        const identity=await identityProtectionCheck({first_name:p.first_name,last_name:p.last_name,username:p.username||"",mediaHash:moderation.hash||"",context:key==='avatar_url'?'profile_avatar':'profile_cover'});
-        if(!identity.allowed) throw new Error(identity.message||'Image protégée : compte suspendu.');
-        const ext=(file.name.split('.').pop()||'jpg').toLowerCase();
-        const path=`${state.user.id}/${key.replace('_url','')}-${crypto.randomUUID()}.${ext}`;
-        const up=await uploadPostMedia(path,file,{upsert:false,contentType:file.type||'image/jpeg'});
-        if(up.error) throw new Error('Upload : '+up.error.message);
-        patch[key]=sb.storage.from('posts').getPublicUrl(path).data.publicUrl;
-        if(moderation?.hash){ await registerAdminMediaHash(moderation.hash,key==='avatar_url'?'profile_avatar':'profile_cover',patch[key]); }
+        if (file.size > 8 * 1024 * 1024) throw new Error('Image trop volumineuse (maximum 8 Mo).');
+        const moderation = await moderationCheckMedia(file, key === 'avatar_url' ? 'profile_avatar' : 'profile_cover');
+        if (!moderation.ok) throw new Error('Image protégée de l’administration Tafaß.');
+        const identity = await identityProtectionCheck({
+          first_name: p.first_name,
+          last_name: p.last_name,
+          username: p.username || "",
+          mediaHash: moderation.hash || "",
+          context: key === 'avatar_url' ? 'profile_avatar' : 'profile_cover'
+        });
+        if (!identity.allowed) throw new Error(identity.message || 'Image protégée : compte suspendu.');
+        const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+        const path = `${state.user.id}/${key.replace('_url','')}-${crypto.randomUUID()}.${ext}`;
+        const up = await uploadPostMedia(path, file, { upsert: false, contentType: file.type || 'image/jpeg' });
+        if (up.error) throw new Error('Upload : ' + up.error.message);
+        patch[key] = sb.storage.from('posts').getPublicUrl(path).data.publicUrl;
+        if (moderation?.hash) await registerAdminMediaHash(moderation.hash, key === 'avatar_url' ? 'profile_avatar' : 'profile_cover', patch[key]);
       }
-      const r=await sb.from('profiles').update(patch).eq('id',state.user.id);
-      if(r.error) throw new Error(r.error.message);
-      const verify=await sb.from('profiles').select('bio,city_current,city_origin,avatar_url,cover_url').eq('id',state.user.id).maybeSingle();
-      if(verify.error) throw new Error('Vérification : '+verify.error.message);
-      if(!verify.data) throw new Error('Le profil n’a pas pu être vérifié après l’enregistrement.');
-      setLoading(btn,false,'Enregistrer');
+
+      // One atomic profile update. select(*) lets us verify exactly what the
+      // database accepted instead of closing the modal after an unconfirmed write.
+      const updated = await sb.from('profiles')
+        .update({...patch, updated_at: new Date().toISOString()})
+        .eq('id', state.user.id)
+        .select('*')
+        .maybeSingle();
+      if (updated.error) throw new Error(updated.error.message);
+      if (!updated.data) throw new Error("Le profil n'a pas été enregistré. Vérifiez les droits de modification du profil.");
+
+      // Optimistic + server-confirmed state: every visible profile component
+      // immediately receives the exact saved values, while Realtime will also
+      // propagate the change to other open sessions.
+      state.profile = {...state.profile, ...updated.data};
+      const sideName = $("sideName");
+      if (sideName) sideName.textContent = nameOf(state.profile);
+      const sideAvatar = $("sideAvatar");
+      if (sideAvatar) sideAvatar.outerHTML = avatarHTML(state.profile, "avatar").replace("<span ", '<span id="sideAvatar" ');
+
+      setLoading(btn, false, 'Enregistrer');
       closeModal();
-      await loadProfile();
-      toast('Profil mis à jour avec succès');
-      if (state.route === "profile") await profilePage(state.profileTab);
-    } catch(e) {
-      setLoading(btn,false,'Enregistrer');
-      toast(e?.message || 'Impossible d’enregistrer le profil.');
+      if (state.route === "profile") {
+        state.viewingProfileId = state.user.id;
+        await profilePage(state.profileTab || "posts");
+      } else {
+        await loadProfile();
+      }
+      toast('✓ Profil enregistré et synchronisé.');
+    } catch (e) {
+      setLoading(btn, false, 'Enregistrer');
+      toast(e?.message || "Impossible d'enregistrer le profil.");
     }
   }
 
