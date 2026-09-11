@@ -322,6 +322,28 @@ document.documentElement.classList.add("app-boot");
     if (h < 24) return `${h} h`;
     return `${Math.floor(h / 24)} j`;
   }
+  let notificationAudioContext = null;
+  function playNotificationSound() {
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      notificationAudioContext ||= new AC();
+      const ctx = notificationAudioContext;
+      if (ctx.state === "suspended") ctx.resume().catch(()=>{});
+      if (ctx.state !== "running") return;
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(880, now);
+      osc.frequency.exponentialRampToValueAtTime(660, now + 0.11);
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(0.055, now + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(now); osc.stop(now + 0.19);
+    } catch (_) {}
+  }
   function toast(msg) {
     const el = $("toast"); if (!el) return;
     el.textContent = msg; el.classList.add("show");
@@ -5229,6 +5251,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
         updateBadges();
         if(rec?.user_id===state.user.id && rec?.actor_id!==state.user.id && rec?.is_read===false && state.route!=="notifications") {
           const title=rec.title || "Nouvelle notification";
+          playNotificationSound();
           toast(title);
         }
         if (state.route==="notifications") notificationsPage();
