@@ -76,6 +76,56 @@ document.documentElement.classList.add("app-boot");
   // Production network/realtime guard: keeps the UI honest when connectivity changes.
   const realtimeRuntime = { retryTimer:null, retryCount:0, lastStatus:"", reconnecting:false };
 
+
+  // Tafaß V85 — Push notifications for Android/PWA when the app is closed.
+  // Existing Realtime/audio behavior is preserved; this only registers a
+  // browser Push subscription and stores it in public.push_subscriptions.
+  const TAFA_PUSH_VAPID_PUBLIC_KEY = "BKjAYjSCDFeaAczxzQg_ua_9cL9V3fzCU_3lpncLZ1oCQBjV3t91Y8oKSX4Mpk7SLxQXx4qdLsZ73w9mUGOpDbo";
+  function tafaBase64ToUint8Array(base64String){
+    const padding="=".repeat((4-(base64String.length%4))%4);
+    const base64=(base64String+padding).replace(/-/g,"+").replace(/_/g,"/");
+    const raw=atob(base64);
+    return Uint8Array.from([...raw].map(c=>c.charCodeAt(0)));
+  }
+  async function setupTafaPushNotifications(){
+    try{
+      if(!state.user || !("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) return;
+      if(location.protocol!=="https:" && location.hostname!=="localhost") return;
+      const permission = Notification.permission==="default"
+        ? await Notification.requestPermission()
+        : Notification.permission;
+      if(permission!=="granted") return;
+      const registration=await navigator.serviceWorker.ready;
+      let subscription=await registration.pushManager.getSubscription();
+      if(!subscription){
+        subscription=await registration.pushManager.subscribe({
+          userVisibleOnly:true,
+          applicationServerKey:tafaBase64ToUint8Array(TAFA_PUSH_VAPID_PUBLIC_KEY)
+        });
+      }
+      const j=subscription.toJSON();
+      if(!j.endpoint || !j.keys?.p256dh || !j.keys?.auth) return;
+      const {error}=await sb.from("push_subscriptions").upsert({
+        user_id:state.user.id,
+        endpoint:j.endpoint,
+        p256dh:j.keys.p256dh,
+        auth:j.keys.auth,
+        user_agent:navigator.userAgent.slice(0,500),
+        updated_at:new Date().toISOString()
+      },{onConflict:"user_id,endpoint"});
+      if(error) console.warn("Tafaß push subscription:",error.message);
+    }catch(e){
+      console.warn("Tafaß push setup:",e?.message||e);
+    }
+  }
+  async function removeTafaPushSubscription(){
+    try{
+      if(!state.user || !("serviceWorker" in navigator)) return;
+      const registration=await navigator.serviceWorker.ready;
+      const subscription=await registration.pushManager.getSubscription();
+      if(subscription?.endpoint) await sb.from("push_subscriptions").delete().eq("user_id",state.user.id).eq("endpoint",subscription.endpoint);
+    }catch(_){}
+  }
   // Tafaß V84 notification audio: robust mobile/WebView sound engine.
   // Client-side only: no Supabase schema/backend changes.
   const notificationSound = {
@@ -5292,6 +5342,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       if(realtimeRuntime.retryTimer){clearTimeout(realtimeRuntime.retryTimer);realtimeRuntime.retryTimer=null;}
       if(notificationSound.pollTimer){clearInterval(notificationSound.pollTimer);notificationSound.pollTimer=null;}
       notificationSound.lastNotificationId=null; notificationSound.lastMessageId=null; notificationSound.lastNotificationCreatedAt=null; notificationSound.lastMessageCreatedAt=null; notificationSound.initialized=false;
+      await removeTafaPushSubscription();
       const {error}=await sb.auth.signOut();
       if(error)throw error;
       state.user=null; state.profile=null; state.posts=[]; state.friends=[]; state.stories=[];
@@ -5619,7 +5670,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       const complete=Boolean(state.profile&&String(state.user.email||state.profile.email||'').trim()&&String(state.profile.first_name||'').trim()&&String(state.profile.last_name||'').trim()&&state.profile.birth&&String(state.profile.gender||'').trim()&&String(state.profile.phone||'').trim()&&String(state.profile.country||'').trim()&&String(state.profile.city_current||'').trim()&&String(state.profile.city_origin||'').trim());
       if(!complete){ setLoading(btn,false,'Déverrouiller Tafaß'); return toast('Le profil n’a pas été enregistré complètement. Réessayez.'); }
       $('oauthOnboardingView')?.remove(); $('auth')?.classList.add('hidden'); $('app')?.classList.remove('hidden'); state.entering=false;
-      await loadPosts(); await setupRealtime(); ensureLiveFeedRealtime(); await render(); toast('Compte complété. Bienvenue sur Tafaß.');
+      await loadPosts(); await setupRealtime(); ensureLiveFeedRealtime(); setupTafaPushNotifications(); await render(); toast('Compte complété. Bienvenue sur Tafaß.');
     } catch(e){ setLoading(btn,false,'Déverrouiller Tafaß'); toast(e?.message||'Impossible de valider le compte.'); }
   }
 
