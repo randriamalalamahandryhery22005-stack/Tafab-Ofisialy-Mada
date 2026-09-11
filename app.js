@@ -5165,6 +5165,48 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       hideAppTransition();
     }
   }
+  // V84: coalesce bursty social realtime events so one database change
+  // does not trigger several overlapping feed queries/renders. The database
+  // remains authoritative; this only controls client-side refresh cadence.
+  let socialFeedRefreshTimer = null;
+  let socialFeedRefreshInFlight = false;
+  let socialFeedRefreshQueued = false;
+  function scheduleSocialFeedRefresh() {
+    socialFeedRefreshQueued = true;
+    if (socialFeedRefreshTimer) clearTimeout(socialFeedRefreshTimer);
+    socialFeedRefreshTimer = setTimeout(async () => {
+      socialFeedRefreshTimer = null;
+      if (!state.user || !navigator.onLine || !socialFeedRefreshQueued) return;
+      socialFeedRefreshQueued = false;
+      if (socialFeedRefreshInFlight) {
+        socialFeedRefreshQueued = true;
+        return;
+      }
+      if (!['home','profile','reels','saved'].includes(state.route)) return;
+      socialFeedRefreshInFlight = true;
+      try {
+        await loadPosts();
+        if (['home','profile','reels','saved'].includes(state.route)) await render();
+      } catch (e) {
+        console.warn('Tafaß social realtime refresh:', e);
+      } finally {
+        socialFeedRefreshInFlight = false;
+        if (socialFeedRefreshQueued) scheduleSocialFeedRefresh();
+      }
+    }, 250);
+  }
+
+  let messageRefreshTimer = null;
+  function scheduleMessageRefresh() {
+    if (messageRefreshTimer) clearTimeout(messageRefreshTimer);
+    messageRefreshTimer = setTimeout(() => {
+      messageRefreshTimer = null;
+      if (state.route === 'messages') {
+        (state.selectedConversation ? openConversation(state.selectedConversation) : messagesPage()).catch?.(()=>{});
+      }
+    }, 150);
+  }
+
   async function setupRealtime() {
     if (!state.user || !navigator.onLine) return;
     if(presenceHeartbeatTimer) clearInterval(presenceHeartbeatTimer);
@@ -5239,12 +5281,12 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
           if(before!==state.profile?.account_status) await render();
         }
       },
-      posts: async () => { await loadPosts(); if (["home","profile","reels","saved"].includes(state.route)) render(); },
-      comments: async () => { await loadPosts(); if (["home","profile"].includes(state.route)) render(); },
-      comment_likes: () => { if (["home","profile"].includes(state.route)) render(); },
-      comment_reactions: () => { if (["home","profile"].includes(state.route)) render(); },
-      post_reactions: async () => { await loadPosts(); if (["home","profile"].includes(state.route)) render(); },
-      post_shares: async () => { await loadPosts(); if (["home","profile"].includes(state.route)) render(); },
+      posts: () => scheduleSocialFeedRefresh(),
+      comments: () => scheduleSocialFeedRefresh(),
+      comment_likes: () => scheduleSocialFeedRefresh(),
+      comment_reactions: () => scheduleSocialFeedRefresh(),
+      post_reactions: () => scheduleSocialFeedRefresh(),
+      post_shares: () => scheduleSocialFeedRefresh(),
       notifications: payload => {
         const rec=payload?.new || payload?.record || payload;
         if(rec?.user_id && rec.user_id!==state.user.id) return;
@@ -5256,7 +5298,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
         }
         if (state.route==="notifications") notificationsPage();
       },
-      messages: payload => { updateBadges(); if (state.route==="messages") state.selectedConversation ? openConversation(state.selectedConversation) : messagesPage(); },
+      messages: () => { updateBadges(); scheduleMessageRefresh(); },
       friend_requests: () => { updateBadges(); if (state.route==="friends") friendsPage(); if (state.viewingProfileId && state.route==="profile") openUserProfile(state.viewingProfileId); },
       friendships: () => { if (state.route==="friends") friendsPage(); if (state.viewingProfileId && state.route==="profile") openUserProfile(state.viewingProfileId); },
       follows: () => { if (state.route==="profile") state.viewingProfileId ? openUserProfile(state.viewingProfileId) : profilePage(state.profileTab); },
