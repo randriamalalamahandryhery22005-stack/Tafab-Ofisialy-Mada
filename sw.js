@@ -1,7 +1,7 @@
 /* Tafaß V73 — single active navigation version */
-const CACHE = 'tafass-v73-premium-shell';
+const CACHE = 'tafass-v76-premium-shell';
 const ASSETS = [
-  './', './index.html', './style.css?v=172', './app.js?v=172',
+  './', './index.html', './style.css?v=176', './app.js?v=176',
   './manifest.webmanifest', './assets/tafass-logo-premium.svg'
 ];
 self.addEventListener('install', event => {

@@ -6229,3 +6229,77 @@ button,[role="button"],[data-action],[data-route],a{touch-action:manipulation;-w
 .tfa-profile-presence-v74{display:flex!important;align-items:center!important;gap:6px!important;margin-top:4px!important;min-height:18px!important}
 .tfa-profile-presence-v74 .tafa-presence-dot.online{width:9px!important;height:9px!important;min-width:9px!important;background:#ffd23f!important;border:2px solid rgba(255,210,63,.16)!important;box-shadow:0 0 0 3px rgba(255,210,63,.07),0 0 12px rgba(255,210,63,.35)!important;border-radius:50%!important;display:inline-block!important}
 .tfa-profile-presence-v74 .tafa-presence-offline{display:inline-flex!important;align-items:center!important;padding:3px 8px!important;border-radius:999px!important;background:rgba(160,170,185,.10)!important;border:1px solid rgba(160,170,185,.16)!important;color:#aeb9c6!important;font-size:9px!important;font-weight:600!important}
+
+/* ============================================================
+   TAFAß V75 — ADMIN DASHBOARD / AVATAR / REFERRAL
+   ============================================================ */
+.v75-admin-user-table{width:100%;overflow:hidden;border:1px solid rgba(255,170,55,.12);border-radius:16px;background:rgba(5,12,9,.42)}
+.v75-admin-user-head,.v75-admin-user-row{display:grid;grid-template-columns:minmax(220px,1.5fr) minmax(180px,1.2fr) 110px 110px;align-items:center;gap:12px;padding:10px 12px}
+.v75-admin-user-head{background:linear-gradient(135deg,rgba(25,245,138,.08),rgba(255,159,28,.08));color:#91a79b;font-size:9px;text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid rgba(255,255,255,.07)}
+.v75-admin-user-row{min-height:66px;border-bottom:1px solid rgba(255,255,255,.055);color:#e7f1eb}
+.v75-admin-user-row:last-child{border-bottom:0}
+.v75-user-identity{display:flex;align-items:center;gap:10px;min-width:0}
+.v75-user-identity>.avatar{width:42px!important;height:42px!important;min-width:42px!important;max-width:42px!important;flex:0 0 42px!important}
+.v75-user-identity>div{min-width:0;overflow:hidden}
+.v75-user-identity b,.v75-user-identity small,.v75-user-email{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.v75-user-identity b{font-size:11px;color:#eef8f2}
+.v75-user-identity small,.v75-user-email{font-size:9px;color:#84988e;margin-top:3px}
+.v75-admin-user-row .admin-status{display:inline-flex;align-items:center;justify-content:center;min-width:62px;white-space:nowrap}
+.v75-admin-user-row .ghost-action{white-space:nowrap;min-width:78px}
+.v75-referral-code{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;padding:14px 16px;border:1px solid rgba(25,245,138,.13);border-radius:14px;background:rgba(255,255,255,.025)}
+.v75-referral-code strong{font-size:16px;letter-spacing:.08em;color:#f4c76d;overflow-wrap:anywhere}
+.v75-referral-code span{font-size:9px;color:#8ea197;white-space:nowrap}
+.tafa-referral-panel-v75 .monet-section-title{align-items:center}
+/* Hard clip every account avatar, including public-profile avatars loaded from other users. */
+.tfa-public-avatar-ring-v71,.tfa-profile-avatar-ring-v70{display:grid!important;place-items:center!important;overflow:hidden!important;border-radius:50%!important;isolation:isolate!important;contain:paint!important}
+.tfa-public-avatar-ring-v71>.avatar,.tfa-profile-avatar-ring-v70>.avatar{display:block!important;position:relative!important;width:100%!important;height:100%!important;min-width:0!important;min-height:0!important;max-width:none!important;max-height:none!important;overflow:hidden!important;border-radius:50%!important;aspect-ratio:1/1!important;contain:paint!important}
+.tfa-public-avatar-ring-v71>.avatar>img,.tfa-profile-avatar-ring-v70>.avatar>img{position:absolute!important;inset:0!important;display:block!important;width:100%!important;height:100%!important;min-width:0!important;min-height:0!important;max-width:none!important;max-height:none!important;object-fit:cover!important;object-position:50% 50%!important;border-radius:50%!important;margin:0!important}
+.profile-lock-avatar{display:block!important;width:100%!important;height:100%!important;overflow:hidden!important;border-radius:50%!important}
+.profile-lock-avatar img{width:100%!important;height:100%!important;object-fit:cover!important;border-radius:50%!important}
+
+/* The four admin tabs are a real dashboard switch, not only anchor links. */
+.admin-total-page [data-v75-admin-section][hidden]{display:none!important}
+.admin-total-page .v75-admin-section{scroll-margin-top:120px}
+
+@media(max-width:720px){
+  .v75-admin-user-head,.v75-admin-user-row{grid-template-columns:minmax(0,1fr) 90px 82px;gap:8px;padding:9px}
+  .v75-admin-user-head span:nth-child(2){display:none}
+  .v75-admin-user-row .v75-user-email{display:none}
+  .v75-admin-user-row{min-height:62px}
+  .v75-user-identity>.avatar{width:38px!important;height:38px!important;min-width:38px!important;max-width:38px!important;flex-basis:38px!important}
+  .v75-admin-user-row .ghost-action{min-width:0;padding:7px 8px;font-size:9px}
+  .v75-referral-code{align-items:flex-start;flex-direction:column}
+  .v75-referral-code strong{font-size:14px}
+}
+
+/* ============================================================
+   TAFAß V76 — Admin table + avatar hard clipping
+   ============================================================ */
+.v75-admin-user-table{width:100%!important;max-width:100%!important;overflow:hidden!important;box-sizing:border-box!important}
+.v75-admin-user-head,.v75-admin-user-row{box-sizing:border-box!important;width:100%!important;grid-template-columns:minmax(0,1.55fr) minmax(0,1.35fr) 92px 96px!important}
+.v75-admin-user-row{overflow:hidden!important}
+.v75-user-identity{min-width:0!important;overflow:hidden!important}
+.v75-user-identity>.avatar{box-sizing:border-box!important;overflow:hidden!important;border-radius:50%!important;flex:0 0 42px!important}
+.v75-user-identity>.avatar img{box-sizing:border-box!important;width:100%!important;height:100%!important;display:block!important;object-fit:cover!important;object-position:center!important;border-radius:50%!important}
+.v75-user-email,.v75-user-identity b,.v75-user-identity small{min-width:0!important;max-width:100%!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important}
+
+/* The profile ring and the actual avatar must share the same content box.
+   border-box prevents the avatar border/padding from making the image larger
+   than the circular frame. */
+.tfa-public-avatar-ring-v71,.tfa-profile-avatar-ring-v70{box-sizing:border-box!important;overflow:hidden!important;border-radius:50%!important;clip-path:circle(50% at 50% 50%)!important;contain:paint!important}
+.tfa-public-avatar-ring-v71>.avatar,.tfa-profile-avatar-ring-v70>.avatar{box-sizing:border-box!important;width:100%!important;height:100%!important;min-width:0!important;min-height:0!important;max-width:100%!important;max-height:100%!important;padding:0!important;margin:0!important;border-radius:50%!important;overflow:hidden!important;clip-path:circle(50% at 50% 50%)!important}
+.tfa-public-avatar-ring-v71>.avatar>img,.tfa-profile-avatar-ring-v70>.avatar>img{box-sizing:border-box!important;position:absolute!important;inset:0!important;width:100%!important;height:100%!important;min-width:0!important;min-height:0!important;max-width:100%!important;max-height:100%!important;margin:0!important;padding:0!important;border:0!important;border-radius:50%!important;object-fit:cover!important;object-position:center!important;clip-path:circle(50% at 50% 50%)!important}
+
+.tafa-admin-monetization-active{border-color:rgba(255,193,75,.25)!important;background:linear-gradient(135deg,rgba(25,245,138,.07),rgba(255,159,28,.06))!important}
+
+@media(max-width:720px){
+  .v75-admin-user-head{display:none!important}
+  .v75-admin-user-row{display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;grid-template-areas:"identity status" "identity action";gap:7px 9px!important;padding:10px!important;min-height:74px!important;align-items:center!important}
+  .v75-user-identity{grid-area:identity!important;min-width:0!important}
+  .v75-user-identity>.avatar{width:40px!important;height:40px!important;min-width:40px!important;flex-basis:40px!important}
+  .v75-user-email{display:none!important}
+  .v75-admin-user-row>div:nth-child(3){grid-area:status!important;justify-self:end!important}
+  .v75-admin-user-row>div:nth-child(4){grid-area:action!important;justify-self:end!important}
+  .v75-admin-user-row .ghost-action{min-width:82px!important;padding:7px 9px!important;font-size:9px!important}
+}
+.v75-referral-code .referral-active{color:#19f58a!important}.v75-referral-code .referral-inactive{color:#ffbf5a!important;white-space:normal!important}
