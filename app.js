@@ -76,10 +76,11 @@ document.documentElement.classList.add("app-boot");
   // Production network/realtime guard: keeps the UI honest when connectivity changes.
   const realtimeRuntime = { retryTimer:null, retryCount:0, lastStatus:"", reconnecting:false };
 
-  // Tafaß notification audio: one lightweight client-side sound engine for all
-  // realtime alerts. No database/schema/backend changes are required.
+  // Tafaß V84 notification audio: robust mobile/WebView sound engine.
+  // Client-side only: no Supabase schema/backend changes.
   const notificationSound = {
-    ctx:null, master:null, unlocked:false, lastAt:0, cooldown:260
+    ctx:null, master:null, unlocked:false, lastAt:0, cooldown:260, pending:[], pollTimer:null,
+    lastNotificationId:null, lastMessageId:null
   };
   function ensureNotificationAudio(){
     try{
@@ -88,26 +89,42 @@ document.documentElement.classList.add("app-boot");
       if(!notificationSound.ctx){
         notificationSound.ctx=new AC();
         notificationSound.master=notificationSound.ctx.createGain();
-        notificationSound.master.gain.value=.22;
+        notificationSound.master.gain.setValueAtTime(.28,notificationSound.ctx.currentTime);
         notificationSound.master.connect(notificationSound.ctx.destination);
       }
       if(notificationSound.ctx.state==='suspended') notificationSound.ctx.resume().catch(()=>{});
-      notificationSound.unlocked=true;
+      notificationSound.unlocked=notificationSound.ctx.state==='running';
       return notificationSound.ctx;
     }catch(_){ return null; }
   }
-  function unlockNotificationAudio(){ ensureNotificationAudio(); }
-  function playNotificationSound(kind='notification'){
-    const now=Date.now();
-    if(now-notificationSound.lastAt<notificationSound.cooldown) return;
+  function unlockNotificationAudio(){
     const ctx=ensureNotificationAudio();
-    if(!ctx || !notificationSound.master) return;
+    if(!ctx)return;
+    try{
+      // Tiny silent oscillator makes the first AudioContext usable on Android WebView.
+      const o=ctx.createOscillator(), g=ctx.createGain();
+      g.gain.setValueAtTime(.00001,ctx.currentTime); o.connect(g).connect(ctx.destination);
+      o.start(); o.stop(ctx.currentTime+.015);
+    }catch(_){ }
+    if(notificationSound.pending.length){
+      const q=notificationSound.pending.splice(0,notificationSound.pending.length);
+      q.forEach(k=>setTimeout(()=>playNotificationSound(k),20));
+    }
+  }
+  function playNotificationSound(kind='notification', force=false){
+    const now=Date.now();
+    if(!force && now-notificationSound.lastAt<notificationSound.cooldown)return;
+    const ctx=ensureNotificationAudio();
+    if(!ctx || !notificationSound.master || ctx.state!=='running'){
+      if(notificationSound.pending.length<2) notificationSound.pending.push(kind);
+      return;
+    }
     notificationSound.lastAt=now;
     const patterns={
-      message:[{f:740,t:0,d:.10},{f:988,t:.115,d:.13}],
-      call:[{f:660,t:0,d:.13},{f:880,t:.16,d:.13},{f:660,t:.34,d:.13}],
-      friend:[{f:520,t:0,d:.11},{f:740,t:.13,d:.16}],
-      notification:[{f:620,t:0,d:.10},{f:820,t:.12,d:.16}]
+      message:[{f:784,t:0,d:.12},{f:1046,t:.13,d:.18}],
+      call:[{f:659,t:0,d:.14},{f:880,t:.17,d:.14},{f:659,t:.35,d:.16},{f:880,t:.53,d:.14}],
+      friend:[{f:523,t:0,d:.12},{f:784,t:.14,d:.18}],
+      notification:[{f:659,t:0,d:.11},{f:880,t:.13,d:.18}]
     };
     const list=patterns[kind]||patterns.notification;
     const start=ctx.currentTime+.01;
@@ -115,16 +132,55 @@ document.documentElement.classList.add("app-boot");
       const o=ctx.createOscillator(), g=ctx.createGain();
       o.type='sine'; o.frequency.setValueAtTime(x.f,start+x.t);
       g.gain.setValueAtTime(.0001,start+x.t);
-      g.gain.exponentialRampToValueAtTime(.55,start+x.t+.018);
+      g.gain.exponentialRampToValueAtTime(.62,start+x.t+.018);
       g.gain.exponentialRampToValueAtTime(.0001,start+x.t+x.d);
       o.connect(g).connect(notificationSound.master);
-      o.start(start+x.t); o.stop(start+x.t+x.d+.02);
+      o.start(start+x.t); o.stop(start+x.t+x.d+.025);
     });
-    try{ if(navigator.vibrate) navigator.vibrate(kind==='call'?[80,45,80]:35); }catch(_){}
+    try{ if(navigator.vibrate) navigator.vibrate(kind==='call'?[90,50,90]:45); }catch(_){ }
   }
   if(!window.__tafaNotificationAudioBound){
     window.__tafaNotificationAudioBound=true;
-    ['pointerdown','touchstart','keydown'].forEach(ev=>window.addEventListener(ev,unlockNotificationAudio,{passive:true,once:true}));
+    ['pointerdown','touchstart','mousedown','keydown','click'].forEach(ev=>window.addEventListener(ev,unlockNotificationAudio,{passive:true}));
+    document.addEventListener('visibilitychange',()=>{
+      if(document.visibilityState==='visible')ensureNotificationAudio();
+    });
+  }
+  // Fallback watcher: protects notification sounds on installations where a
+  // Realtime postgres channel is delayed/suspended. It only reads the user's
+  // own rows and never changes the database.
+  function startNotificationSoundFallback(){
+    if(notificationSound.pollTimer || !state.user)return;
+    const check=async()=>{
+      if(!state.user || !navigator.onLine)return;
+      try{
+        const since=new Date(Date.now()-15000).toISOString();
+        const [nr,mr]=await Promise.all([
+          sb.from('notifications').select('id,type,actor_id,is_read,created_at').eq('user_id',state.user.id).eq('is_read',false).gte('created_at',since).order('created_at',{ascending:false}).limit(3),
+          sb.from('messages').select('id,sender_id,is_read,created_at').eq('recipient_id',state.user.id).eq('is_read',false).gte('created_at',since).order('created_at',{ascending:false}).limit(3)
+        ]);
+        const ns=(nr.data||[]).filter(x=>x.id && String(x.actor_id||'')!==String(state.user.id));
+        const ms=(mr.data||[]).filter(x=>x.id && String(x.sender_id||'')!==String(state.user.id));
+        if(ns.length){
+          const newest=String(ns[0].id);
+          if(notificationSound.lastNotificationId===null) notificationSound.lastNotificationId=newest;
+          else if(newest!==notificationSound.lastNotificationId){
+            notificationSound.lastNotificationId=newest;
+            playNotificationSound('notification');
+          }
+        }
+        if(ms.length){
+          const newest=String(ms[0].id);
+          if(notificationSound.lastMessageId===null) notificationSound.lastMessageId=newest;
+          else if(newest!==notificationSound.lastMessageId){
+            notificationSound.lastMessageId=newest;
+            playNotificationSound('message');
+          }
+        }
+      }catch(_){ }
+    };
+    check();
+    notificationSound.pollTimer=setInterval(check,5000);
   }
   function networkBanner(message, mode="") {
     // V73: no reconnect/offline banner is rendered over the application.
@@ -5222,6 +5278,8 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       if(state.adminDashboardTimer){clearInterval(state.adminDashboardTimer);state.adminDashboardTimer=null;}
       if(state.adminDashboardRefreshTimer){clearTimeout(state.adminDashboardRefreshTimer);state.adminDashboardRefreshTimer=null;}
       if(realtimeRuntime.retryTimer){clearTimeout(realtimeRuntime.retryTimer);realtimeRuntime.retryTimer=null;}
+      if(notificationSound.pollTimer){clearInterval(notificationSound.pollTimer);notificationSound.pollTimer=null;}
+      notificationSound.lastNotificationId=null; notificationSound.lastMessageId=null;
       const {error}=await sb.auth.signOut();
       if(error)throw error;
       state.user=null; state.profile=null; state.posts=[]; state.friends=[]; state.stories=[];
@@ -5242,6 +5300,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   }
   async function setupRealtime() {
     if (!state.user || !navigator.onLine) return;
+    startNotificationSoundFallback();
     if(presenceHeartbeatTimer) clearInterval(presenceHeartbeatTimer);
     const touchPresence=()=>sb.rpc("tafa_touch_presence").then(({error})=>{if(error)console.warn("Tafaß presence heartbeat:",error.message);});
     touchPresence();
@@ -5451,6 +5510,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
         realtimeRuntime.retryCount=0; realtimeRuntime.reconnecting=false; networkBanner("");
         updateBadges();
         console.info("Tafaß Realtime: connecté");
+        startNotificationSoundFallback();
       }
       if (["CHANNEL_ERROR","TIMED_OUT","CLOSED"].includes(status)) {
         console.warn("Tafaß Realtime:", status);
