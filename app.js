@@ -7,7 +7,7 @@
 ============================================================ */
 (() => {
   "use strict";
-  const BUILD_ID = "TAFAß-V83";
+  const BUILD_ID = "TAFAß-V85";
   const BUILD_KEY = "tafa_active_build";
   const previous = String(localStorage.getItem(BUILD_KEY) || "");
   if (previous !== BUILD_ID) {
@@ -80,7 +80,7 @@ document.documentElement.classList.add("app-boot");
   // Client-side only: no Supabase schema/backend changes.
   const notificationSound = {
     ctx:null, master:null, unlocked:false, lastAt:0, cooldown:260, pending:[], pollTimer:null,
-    lastNotificationId:null, lastMessageId:null
+    lastNotificationId:null, lastMessageId:null, initialized:false, lastNotificationCreatedAt:null, lastMessageCreatedAt:null
   };
   function ensureNotificationAudio(){
     try{
@@ -154,33 +154,45 @@ document.documentElement.classList.add("app-boot");
     const check=async()=>{
       if(!state.user || !navigator.onLine)return;
       try{
-        const since=new Date(Date.now()-15000).toISOString();
+        // Poll very frequently as a safety net for Android/WebView installs where
+        // Supabase Realtime can arrive late. Only the current user's rows are read.
+        const since=new Date(Date.now()-30000).toISOString();
         const [nr,mr]=await Promise.all([
-          sb.from('notifications').select('id,type,actor_id,is_read,created_at').eq('user_id',state.user.id).eq('is_read',false).gte('created_at',since).order('created_at',{ascending:false}).limit(3),
-          sb.from('messages').select('id,sender_id,is_read,created_at').eq('recipient_id',state.user.id).eq('is_read',false).gte('created_at',since).order('created_at',{ascending:false}).limit(3)
+          sb.from('notifications').select('id,type,actor_id,is_read,created_at,title,message,entity_type,entity_id').eq('user_id',state.user.id).gte('created_at',since).order('created_at',{ascending:false}).limit(10),
+          sb.from('messages').select('id,sender_id,recipient_id,is_read,created_at,conversation_id,content').eq('recipient_id',state.user.id).gte('created_at',since).order('created_at',{ascending:false}).limit(10)
         ]);
         const ns=(nr.data||[]).filter(x=>x.id && String(x.actor_id||'')!==String(state.user.id));
         const ms=(mr.data||[]).filter(x=>x.id && String(x.sender_id||'')!==String(state.user.id));
-        if(ns.length){
-          const newest=String(ns[0].id);
-          if(notificationSound.lastNotificationId===null) notificationSound.lastNotificationId=newest;
-          else if(newest!==notificationSound.lastNotificationId){
-            notificationSound.lastNotificationId=newest;
-            playNotificationSound('notification');
-          }
+        const newestN=ns[0]||null, newestM=ms[0]||null;
+        const firstRun=!notificationSound.initialized;
+        if(firstRun){
+          notificationSound.initialized=true;
+          notificationSound.lastNotificationId=newestN?String(newestN.id):null;
+          notificationSound.lastNotificationCreatedAt=newestN?.created_at||null;
+          notificationSound.lastMessageId=newestM?String(newestM.id):null;
+          notificationSound.lastMessageCreatedAt=newestM?.created_at||null;
+          return;
         }
-        if(ms.length){
-          const newest=String(ms[0].id);
-          if(notificationSound.lastMessageId===null) notificationSound.lastMessageId=newest;
-          else if(newest!==notificationSound.lastMessageId){
-            notificationSound.lastMessageId=newest;
-            playNotificationSound('message');
-          }
+        if(newestN && String(newestN.id)!==String(notificationSound.lastNotificationId||'')){
+          notificationSound.lastNotificationId=String(newestN.id);
+          notificationSound.lastNotificationCreatedAt=newestN.created_at||null;
+          const t=String(newestN.type||'').toLowerCase();
+          playNotificationSound(/call|appel/.test(t)?'call':/friend|follow|request/.test(t)?'friend':'notification');
+          updateBadges();
+          if(state.route==='notifications') notificationsPage();
+          else if(newestN.title) toast(newestN.title);
+        }
+        if(newestM && String(newestM.id)!==String(notificationSound.lastMessageId||'')){
+          notificationSound.lastMessageId=String(newestM.id);
+          notificationSound.lastMessageCreatedAt=newestM.created_at||null;
+          playNotificationSound('message');
+          updateBadges();
+          if(state.route==='messages') state.selectedConversation ? openConversation(state.selectedConversation) : messagesPage();
         }
       }catch(_){ }
     };
     check();
-    notificationSound.pollTimer=setInterval(check,5000);
+    notificationSound.pollTimer=setInterval(check,1200);
   }
   function networkBanner(message, mode="") {
     // V73: no reconnect/offline banner is rendered over the application.
@@ -5279,7 +5291,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       if(state.adminDashboardRefreshTimer){clearTimeout(state.adminDashboardRefreshTimer);state.adminDashboardRefreshTimer=null;}
       if(realtimeRuntime.retryTimer){clearTimeout(realtimeRuntime.retryTimer);realtimeRuntime.retryTimer=null;}
       if(notificationSound.pollTimer){clearInterval(notificationSound.pollTimer);notificationSound.pollTimer=null;}
-      notificationSound.lastNotificationId=null; notificationSound.lastMessageId=null;
+      notificationSound.lastNotificationId=null; notificationSound.lastMessageId=null; notificationSound.lastNotificationCreatedAt=null; notificationSound.lastMessageCreatedAt=null; notificationSound.initialized=false;
       const {error}=await sb.auth.signOut();
       if(error)throw error;
       state.user=null; state.profile=null; state.posts=[]; state.friends=[]; state.stories=[];
@@ -5387,11 +5399,14 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
         if(isNew && incoming){
           const t=String(rec.type||'').toLowerCase();
           playNotificationSound(/call|appel/.test(t)?'call':/friend|follow|request/.test(t)?'friend':'notification');
+          notificationSound.lastNotificationId=rec.id?String(rec.id):notificationSound.lastNotificationId;
+          notificationSound.lastNotificationCreatedAt=rec.created_at||notificationSound.lastNotificationCreatedAt;
           const title=rec.title || "Nouvelle notification";
           if(state.route!=="notifications") toast(title);
+          else setTimeout(()=>notificationsPage(),0);
         }
         updateBadges();
-        if (state.route==="notifications") notificationsPage();
+        if (state.route==="notifications") setTimeout(()=>notificationsPage(),0);
       },
       messages: payload => {
         const rec=payload?.new || payload?.record || payload;
