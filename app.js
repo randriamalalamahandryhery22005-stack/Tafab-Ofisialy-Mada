@@ -8807,4 +8807,115 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   /* Route handlers call these wrappers, so V80 buttons no longer enter broken legacy detail flows after a mutation. */
   window.__tafaV81Installed=true;
   try{ togglePageFollow=window.tafaV81TogglePageFollow; toggleGroupMember=window.tafaV81ToggleGroupMember; }catch(_e){}
+
+  /* ============================================================
+     TAFAß V82 — PAGES UI REBUILD
+     New mobile-first Page hub/detail. The old Page presentation is
+     no longer used. The detail view is a real scroll container so
+     touch/trackpad can move from top to bottom and back without the
+     modal locking the content.
+  ============================================================ */
+  async function pagesV82Hub(){
+    const token=state.renderToken;
+    const tab=state.pagesTab||"mine";
+    const q=sb.from('pages')
+      .select(`${PAGE_FIELDS},deletion_status,deletion_requested_at,deletion_scheduled_at`)
+      .neq('deletion_status','deleted')
+      .order('created_at',{ascending:false}).limit(100);
+    const {data,error}=tab==='mine'?await q.eq('owner_id',state.user.id):await q;
+    if(token!==state.renderToken||state.route!=='pages')return;
+    if(error)return simplePage('Pages',`<section class="tafass-v82-pages"><div class="v82-error"><b>Impossible de charger les Pages</b><span>${esc(error.message)}</span><button class="v82-primary" data-action="retry-route" data-route-target="pages">Réessayer</button></div></section>`);
+    const rows=data||[], ids=rows.map(x=>x.id);
+    let followerRows=[];
+    if(ids.length){const f=await sb.from('page_followers').select('page_id,user_id').in('page_id',ids);if(!f.error)followerRows=f.data||[];}
+    if(token!==state.renderToken||state.route!=='pages')return;
+    const followerCount=new Map(), following=new Set();
+    followerRows.forEach(x=>{followerCount.set(x.page_id,(followerCount.get(x.page_id)||0)+1);if(String(x.user_id)===String(state.user.id))following.add(x.page_id);});
+    const mine=rows.filter(x=>String(x.owner_id)===String(state.user.id));
+    const discover=rows.filter(x=>String(x.owner_id)!==String(state.user.id));
+    const list=tab==='mine'?mine:discover;
+    const cards=list.map(p=>{
+      const own=String(p.owner_id)===String(state.user.id), fol=following.has(p.id);
+      return `<article class="v82-page-card">
+        <button type="button" class="v82-page-main" data-action="page-open" data-id="${esc(p.id)}">
+          <span class="v82-page-avatar">${entityAvatarHTML(p,'page','v82-entity-avatar')}</span>
+          <span class="v82-page-copy"><strong>${esc(p.name)}</strong><small>${followerCount.get(p.id)||0} abonnés${p.category?` · ${esc(p.category)}`:''}</small><em>${esc(p.bio||'Page Tafaß')}</em></span>
+          <span class="v82-chevron">›</span>
+        </button>
+        <div class="v82-page-actions">
+          ${own?`<button type="button" class="v82-secondary" data-action="page-switch" data-id="${esc(p.id)}">⇄ Basculer</button><button type="button" class="v82-secondary icon" data-action="edit-page" data-id="${esc(p.id)}" aria-label="Gérer la Page">⚙</button>`:
+          `<button type="button" class="${fol?'v82-secondary':'v82-primary'}" data-action="toggle-page-follow" data-id="${esc(p.id)}">${fol?'✓ Suivie':'＋ Suivre'}</button><button type="button" class="v82-secondary icon" data-action="page-more" data-id="${esc(p.id)}" aria-label="Options">•••</button>`}
+        </div>
+      </article>`;
+    }).join('');
+    const empty=tab==='mine'?`<div class="v82-empty"><div class="v82-empty-mark">▣</div><strong>Aucune Page pour le moment</strong><span>Créez votre première Page et gérez-la avec la nouvelle interface Tafaß.</span><button type="button" class="v82-primary" data-action="create-page">＋ Créer une Page</button></div>`:`<div class="v82-empty"><div class="v82-empty-mark">⌕</div><strong>Aucune Page à découvrir</strong><span>Les Pages publiques disponibles apparaîtront ici.</span></div>`;
+    simplePage('Pages',`<section class="tafass-v82-pages">
+      <header class="v82-pages-head">
+        <div class="v82-brand-line"><span class="v82-mark">ß</span><div><span class="v82-eyebrow">TAFAß · PAGES</span><h2>Pages</h2></div></div>
+        <button type="button" class="v82-primary v82-create" data-action="create-page">＋ Créer</button>
+      </header>
+      <p class="v82-intro">Créez, suivez et gérez des Pages. Tout le contenu reste accessible dans un espace fluide et défilable.</p>
+      <div class="v82-tabs" role="tablist"><button type="button" class="${tab==='mine'?'active':''}" data-action="pages-tab" data-tab="mine">Mes Pages <b>${mine.length}</b></button><button type="button" class="${tab==='discover'?'active':''}" data-action="pages-tab" data-tab="discover">Découvrir <b>${discover.length}</b></button></div>
+      <div class="v82-section-head"><div><span>${tab==='mine'?'ESPACE PERSONNEL':'EXPLORATION'}</span><h3>${tab==='mine'?'Vos Pages':'Découvrir les Pages'}</h3></div><button type="button" class="v82-link" data-action="page-business">Business Suite</button></div>
+      <div class="v82-page-list">${cards||empty}</div>
+    </section>`);
+  }
+
+  async function openPageDetailV82(id){
+    const {data:x,error:xerr}=await fetchPageById(id);
+    if(xerr)return toast(xerr.message);
+    if(!x)return toast('Page introuvable.');
+    const [follow,followers,owner,members,posts]=await Promise.all([
+      sb.from('page_followers').select('id').eq('page_id',id).eq('user_id',state.user.id).maybeSingle(),
+      sb.from('page_followers').select('id',{count:'exact',head:true}).eq('page_id',id),
+      sb.from('profiles').select('first_name,last_name,username,avatar_url,email,phone,country,city_current,bio').eq('id',x.owner_id).maybeSingle(),
+      sb.from('page_members').select('user_id,role,profiles(first_name,last_name,username,avatar_url)').eq('page_id',id).order('created_at',{ascending:true}),
+      sb.from('page_posts').select('*,page_post_reactions(id,user_id,reaction_type),page_post_comments(id,user_id,content,created_at,profiles(first_name,last_name,username,avatar_url)),page_post_shares(id,user_id)').eq('page_id',id).order('created_at',{ascending:false}).limit(50)
+    ]);
+    if(posts.error)return toast(posts.error.message);
+    const ownerMe=String(x.owner_id)===String(state.user.id);
+    const myRole=(members.data||[]).find(m=>String(m.user_id)===String(state.user.id))?.role||null;
+    const canManage=ownerMe||['owner','admin'].includes(myRole);
+    const canPublish=ownerMe||['owner','admin','editor'].includes(myRole);
+    const followerCount=followers.count||0;
+    const postsRows=posts.data||[];
+    const postRows=postsRows.map(p=>{
+      const reactions=p.page_post_reactions||[], comments=p.page_post_comments||[], shares=p.page_post_shares||[];
+      const mine=reactions.some(r=>String(r.user_id)===String(state.user.id));
+      const preview=comments.slice(-2).map(c=>`<div class="v82-comment"><span>${avatarHTML(c.profiles||{},'avatar v82-comment-avatar')}</span><div><b>${esc(nameOf(c.profiles||{}))}</b><p>${esc(c.content||'')}</p><small>${timeAgo(c.created_at)}</small></div></div>`).join('');
+      return `<article class="v82-post" data-page-post="${esc(p.id)}">
+        <header class="v82-post-head"><div>${entityAvatarHTML(x,'page','v82-post-avatar')}<div><b>${esc(x.name)}</b><small>${timeAgo(p.created_at)} · Page</small></div></div>${(p.user_id===state.user.id||canManage)?`<button type="button" class="v82-icon" data-action="delete-page-post" data-id="${esc(p.id)}" data-entity-id="${esc(id)}" aria-label="Options">•••</button>`:''}</header>
+        ${p.content?`<div class="v82-post-text">${esc(p.content)}</div>`:''}
+        ${p.media_url?(String(p.media_type||'').startsWith('video')?`<video class="v82-post-media" src="${esc(p.media_url)}" controls playsinline preload="metadata"></video>`:`<img class="v82-post-media" src="${esc(p.media_url)}" alt="Publication" loading="lazy">`):''}
+        <div class="v82-post-stats"><span>${reactions.length} réaction${reactions.length===1?'':'s'}</span><span>${comments.length} commentaire${comments.length===1?'':'s'}</span><span>${shares.length} partage${shares.length===1?'':'s'}</span></div>
+        <div class="v82-post-actions"><button type="button" class="${mine?'active':''}" data-action="page-post-like" data-id="${esc(p.id)}" data-entity-id="${esc(id)}">${mine?'♥':'♡'} J’aime</button><button type="button" data-action="page-post-comment" data-id="${esc(p.id)}" data-entity-id="${esc(id)}">💬 Commenter</button><button type="button" data-action="share-page-post" data-id="${esc(p.id)}" data-entity-id="${esc(id)}">↗ Partager</button></div>
+        ${preview?`<div class="v82-comments">${preview}</div>`:''}
+      </article>`;
+    }).join('')||`<div class="v82-empty v82-empty-inline"><div class="v82-empty-mark">✦</div><strong>Aucune publication</strong><span>Les publications de cette Page apparaîtront ici.</span></div>`;
+    const team=(members.data||[]).map(m=>`<div class="v82-team-row">${avatarHTML(m.profiles||{},'avatar v82-team-avatar')}<div><b>${esc(nameOf(m.profiles||{}))}</b><small>${esc(m.role||'editor')}</small></div>${canManage&&String(m.user_id)!==String(state.user.id)?`<button type="button" class="v82-icon" data-action="page-member-menu" data-id="${esc(m.user_id)}" data-entity-id="${esc(id)}">•••</button>`:''}</div>`).join('')||`<div class="v82-muted">Aucun gestionnaire supplémentaire.</div>`;
+    const about=`<div class="v82-info-grid"><div><small>Catégorie</small><b>${esc(x.category||'Autre')}</b></div><div><small>Créée le</small><b>${new Date(x.created_at).toLocaleDateString('fr-FR')}</b></div><div><small>Responsable</small><b>${esc(owner.data?nameOf(owner.data):'Membre Tafaß')}</b></div><div><small>Adresse</small><b>${esc(x.address||owner.data?.city_current||'Non renseignée')}</b></div>${x.contact_email?`<div><small>E-mail</small><b>${esc(x.contact_email)}</b></div>`:''}${x.contact_phone?`<div><small>Téléphone</small><b>${esc(x.contact_phone)}</b></div>`:''}${x.website_url?`<div class="wide"><small>Site web</small><b>${esc(x.website_url)}</b></div>`:''}</div>`;
+    setupTafaV80Realtime('page',id);
+    openModal(`<div class="modal-box page-detail tafass-v82-page-modal" data-page-id="${esc(id)}">
+      <div class="v82-detail-topbar"><button type="button" class="v82-back" data-action="close-entity" data-route-back="${esc(state.entityBackRoute||'pages')}" aria-label="Retour"><span>‹</span><b>Pages</b></button><div class="v82-detail-title"><span class="v82-eyebrow">TAFAß · PAGE</span><strong>${esc(x.name)}</strong></div><button type="button" class="v82-icon v82-top-more" data-action="page-more" data-id="${esc(id)}" aria-label="Options">•••</button></div>
+      <div class="v82-scroll">
+        <section class="v82-cover" ${x.cover_url?`style="background-image:url('${esc(x.cover_url)}')"`:''}><div class="v82-cover-shade"></div></section>
+        <section class="v82-identity"><div class="v82-logo-wrap">${entityAvatarHTML(x,'page','v82-detail-avatar')}<span class="v82-check">✓</span></div><div class="v82-identity-copy"><h2>${esc(x.name)}</h2>${x.username?`<small class="v82-handle">@${esc(x.username)}</small>`:''}<p>${esc(x.bio||'Présentez votre activité, votre communauté et vos actualités.')}</p></div></section>
+        <div class="v82-stats"><span><b>${followerCount}</b><small>Abonnés</small></span><span><b>${postsRows.length}</b><small>Publications</small></span><span><b>${x.category||'Page'}</b><small>Catégorie</small></span></div>
+        <div class="v82-main-actions">${ownerMe?`<button type="button" class="v82-primary" data-action="page-switch" data-id="${esc(id)}">⇄ Basculer</button><button type="button" class="v82-secondary" data-action="edit-page" data-id="${esc(id)}">⚙ Gérer</button>`:`<button type="button" class="${follow.data?'v82-secondary':'v82-primary'}" data-action="toggle-page-follow" data-id="${esc(id)}">${follow.data?'✓ Suivie':'＋ Suivre'}</button><button type="button" class="v82-secondary" data-action="page-contact" data-id="${esc(id)}">💬 Messages</button>`}<button type="button" class="v82-secondary icon" data-action="page-profile" data-id="${esc(id)}" aria-label="Profil">◉</button></div>
+        <nav class="v82-detail-tabs page-tabs"><button type="button" class="active" data-action="page-tab" data-tab="posts" data-id="${esc(id)}">Publications</button><button type="button" data-action="page-tab" data-tab="about" data-id="${esc(id)}">À propos</button><button type="button" data-action="page-tab" data-tab="team" data-id="${esc(id)}">Équipe</button></nav>
+        ${canPublish?`<section class="v82-composer"><div class="v82-composer-head"><span class="v82-composer-mark">✦</span><div><b>Publier en tant que ${esc(x.name)}</b><small>${myRole==='editor'?'Éditeur':'Gestionnaire'}</small></div></div><textarea id="pagePostText" maxlength="5000" placeholder="Partagez une actualité avec vos abonnés…"></textarea><div class="v82-composer-bottom"><label class="v82-media">＋ Média<input id="pagePostMedia" type="file" accept="image/*,video/*" hidden></label><span id="pagePostMediaName">Aucun fichier</span><button type="button" class="v82-primary" data-action="page-publish" data-id="${esc(id)}">Publier</button></div></section>`:''}
+        <section class="v82-panel page-tab-panel" data-tab="posts"><div class="v82-panel-head"><div><span>ACTUALITÉ</span><h3>Publications</h3></div><small>● EN DIRECT</small></div><div class="v82-post-list">${postRows}</div></section>
+        <section class="v82-panel page-tab-panel hidden" data-tab="about"><div class="v82-panel-head"><div><span>INFORMATIONS</span><h3>À propos</h3></div></div>${about}</section>
+        <section class="v82-panel page-tab-panel hidden" data-tab="team"><div class="v82-panel-head"><div><span>GESTION</span><h3>Équipe</h3></div>${canManage?`<button type="button" class="v82-secondary" data-action="page-add-member" data-id="${esc(id)}">＋ Ajouter</button>`:''}</div><div class="v82-team-list">${team}</div></section>
+        <div class="v82-bottom-space"></div>
+      </div>
+    </div>`);
+    const media=$('pagePostMedia'); media?.addEventListener('change',()=>{const f=media.files?.[0];const el=$('pagePostMediaName');if(el)el.textContent=f?f.name:'Aucun fichier';});
+    requestAnimationFrame(()=>{const root=document.querySelector('.tafass-v82-page-modal .v82-scroll');if(root)root.scrollTop=0;});
+  }
+
+  // V82 becomes the only active Page hub/detail implementation.
+  pagesV80Hub=pagesV82Hub;
+  openPageDetail=openPageDetailV82;
+
 })();
