@@ -5,12 +5,10 @@ const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const papiApiKey = Deno.env.get('PAPI_API_KEY')!;
 const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 
-const PACKAGES: Record<string,{amount:number,coins:number}> = {
-  '2000': { amount: 2000, coins: 10000 },
-  '10000': { amount: 10000, coins: 50000 },
-  '20000': { amount: 20000, coins: 100000 },
-  '50000': { amount: 50000, coins: 250000 },
-};
+const COINS_PER_AR = 20;
+const MIN_COINS = 1000;
+const MAX_COINS = 10000000;
+
 const PROVIDERS = new Set(['MVOLA','AIRTEL_MONEY','ORANGE_MONEY']);
 
 const corsHeaders = {
@@ -36,9 +34,16 @@ Deno.serve(async req => {
     if(userError || !user) return json({ok:false,error:'Authentication required'},401);
 
     const body = await req.json().catch(()=>({}));
-    const amountKey = String(Math.round(Number(body.amount || 0)));
-    const pack = PACKAGES[amountKey];
-    if(!pack) return json({ok:false,error:'Pack de coins invalide.'},400);
+    const requestedCoins = Math.floor(Number(body.coins || 0));
+    if(!Number.isFinite(requestedCoins) || requestedCoins < MIN_COINS || requestedCoins > MAX_COINS || requestedCoins % MIN_COINS !== 0){
+      return json({ok:false,error:'Nombre de coins invalide. Utilisez un multiple de 1 000, entre 1 000 et 10 000 000 coins.'},400);
+    }
+    const calculatedAmount = Math.round(requestedCoins / COINS_PER_AR);
+    const requestedAmount = Math.round(Number(body.amount || 0));
+    if(requestedAmount !== calculatedAmount){
+      return json({ok:false,error:`Prix invalide. ${requestedCoins.toLocaleString('fr-FR')} coins = ${calculatedAmount.toLocaleString('fr-FR')} Ar.`},400);
+    }
+    const pack = { amount: calculatedAmount, coins: requestedCoins };
 
     const provider = String(body.provider || '').trim().toUpperCase();
     if(provider && !PROVIDERS.has(provider)) return json({ok:false,error:'Méthode Papi non disponible.'},400);
