@@ -6481,3 +6481,43 @@ body.modal-open{overflow:hidden!important;}
   .tafass-v82-page-modal{inset:4px!important;position:fixed!important}
   .tafass-v82-page-modal .v82-scroll{height:calc(100dvh - 66px);max-height:none}
 }
+
+/* TAFAß V80 — Messages viewport, mentions and new splash */
+html,body{overflow-x:hidden}
+body.tafa-conversation-active .main-layout{height:calc(100dvh - 72px)!important;min-height:0!important;padding:0!important}
+body.tafa-conversation-active .content{height:100%!important;min-height:0!important;padding:0!important;overflow:hidden!important}
+.conversation-page-clean{width:100%!important;max-width:820px!important;height:100%!important;min-height:0!important;max-height:none!important;margin:0 auto!important;padding:0!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;position:relative!important}
+.conversation-page-clean .conversation-clean-topbar{flex:0 0 62px!important;min-height:62px!important;position:relative!important;top:auto!important;z-index:20!important}
+.conversation-page-clean .conversation-search-bar,.conversation-page-clean .typing-indicator{flex:0 0 auto!important;position:relative!important;z-index:19!important}
+.conversation-page-clean .clean-message-list{flex:1 1 auto!important;min-height:0!important;height:auto!important;max-height:none!important;overflow-x:hidden!important;overflow-y:auto!important;padding:12px 8px 18px!important;scroll-behavior:smooth!important;overscroll-behavior:contain!important;-webkit-overflow-scrolling:touch!important}
+.conversation-page-clean .clean-message-form{flex:0 0 auto!important;position:relative!important;left:auto!important;right:auto!important;bottom:auto!important;width:100%!important;box-sizing:border-box!important;z-index:50!important;padding:8px 8px max(9px,env(safe-area-inset-bottom))!important;background:var(--bg)!important;border-top:1px solid var(--line)!important}
+.conversation-page-clean .message-input-shell{position:relative!important}
+.conversation-page-clean .message-mention-suggestions{position:absolute!important;left:0!important;right:0!important;bottom:calc(100% + 7px)!important;z-index:100!important;max-height:230px!important;overflow-y:auto!important;padding:6px!important;border:1px solid var(--border)!important;border-radius:16px!important;background:var(--surface)!important;box-shadow:0 16px 45px rgba(0,0,0,.28)!important}
+.message-mention-option{width:100%!important;display:flex!important;align-items:center!important;gap:9px!important;padding:8px!important;border:0!important;border-radius:12px!important;background:transparent!important;color:var(--text)!important;text-align:left!important;cursor:pointer!important}
+.message-mention-option:hover,.message-mention-option:focus-visible{background:rgba(47,128,255,.10)!important;outline:none!important}
+.message-mention-option>span:last-child{display:grid!important;gap:2px!important;min-width:0!important}
+.message-mention-option small{font-size:9px!important;color:var(--muted)!important}.mention-avatar{width:30px!important;height:30px!important;flex:0 0 30px!important}
+.message-mention{display:inline!important;border:0!important;padding:0!important;margin:0!important;background:transparent!important;color:#5d9dff!important;font:inherit!important;font-weight:800!important;cursor:pointer!important}
+.message-mention:hover{text-decoration:underline!important}
+.splash-screen{position:fixed!important;inset:0!important;z-index:10000!important;display:grid!important;place-items:center!important;overflow:hidden!important;background:radial-gradient(700px 520px at 50% 35%,rgba(78,105,255,.20),transparent 65%),radial-gradient(500px 420px at 15% 90%,rgba(0,205,170,.12),transparent 65%),#050812!important}
+.splash-content{position:relative!important;z-index:3!important;width:min(90vw,390px)!important;display:flex!important;flex-direction:column!important;align-items:center!important;text-align:center!important}
+.splash-kicker{margin-bottom:20px!important;font-size:9px!important;font-weight:900!important;letter-spacing:3px!important;color:rgba(180,198,255,.72)!important}
+.splash-mark-wrap{position:relative!important;width:126px!important;height:126px!important;display:grid!important;place-items:center!important}
+.splash-logo-image{position:relative!important;z-index:3!important;width:82px!important;height:82px!important;filter:drop-shadow(0 16px 36px rgba(68,112,255,.34))!important;animation:splashLogoFloat 2.4s ease-in-out infinite!important}
+.splash-halo{position:absolute!important;inset:4px!important;border-radius:50%!important;border:1px solid rgba(120,150,255,.25)!important;box-shadow:0 0 0 10px rgba(83,113,255,.035),0 0 70px rgba(66,104,255,.22)!important;animation:splashHalo 2.2s ease-out infinite!important}
+.splash-brand{margin-top:14px!important;font-size:38px!important;font-weight:900!important;letter-spacing:-1.8px!important;color:#fff!important}
+.splash-tagline{margin-top:6px!important;font-size:12px!important;color:rgba(210,220,242,.66)!important}
+.splash-loader{display:flex!important;align-items:center!important;gap:6px!important;margin-top:30px!important}
+.splash-loader span{width:6px!important;height:6px!important;border-radius:50%!important;background:#82a7ff!important;opacity:.35!important;animation:splashPulse 1.15s ease-in-out infinite!important}
+.splash-loader span:nth-child(2){animation-delay:.15s!important}.splash-loader span:nth-child(3){animation-delay:.30s!important}
+.splash-status{margin-top:12px!important;font-size:9px!important;letter-spacing:.7px!important;color:rgba(170,185,215,.45)!important}
+.splash-ambient{position:absolute!important;border-radius:50%!important;filter:blur(35px)!important;pointer-events:none!important}
+.splash-ambient-one{width:360px!important;height:360px!important;right:-170px!important;top:-100px!important;background:rgba(77,103,255,.15)!important;animation:splashAmbientOne 6s ease-in-out infinite!important}
+.splash-ambient-two{width:300px!important;height:300px!important;left:-160px!important;bottom:-110px!important;background:rgba(0,210,170,.10)!important;animation:splashAmbientTwo 7s ease-in-out infinite!important}
+@keyframes splashLogoFloat{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-5px) scale(1.025)}}
+@keyframes splashHalo{0%{transform:scale(.88);opacity:.35}70%,100%{transform:scale(1.12);opacity:0}}
+@keyframes splashPulse{0%,100%{opacity:.25;transform:scale(.8)}50%{opacity:1;transform:scale(1.15)}}
+@keyframes splashAmbientOne{50%{transform:translate(-30px,35px) scale(1.12)}}
+@keyframes splashAmbientTwo{50%{transform:translate(35px,-25px) scale(1.08)}}
+@media(max-width:820px){body.tafa-conversation-active .main-layout{height:calc(100dvh - 68px)!important}.conversation-page-clean .clean-message-form{padding-left:6px!important;padding-right:6px!important}}
+@media(max-width:480px){.conversation-page-clean .conversation-clean-topbar{flex-basis:58px!important;min-height:58px!important}.conversation-page-clean .clean-message-list{padding-left:5px!important;padding-right:5px!important}.conversation-page-clean .message-tool{width:31px!important;flex-basis:31px!important}.conversation-page-clean .message-send-button{width:38px!important;height:38px!important}}

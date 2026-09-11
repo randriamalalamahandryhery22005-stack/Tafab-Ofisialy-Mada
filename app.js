@@ -1821,7 +1821,7 @@ function publisherBackgrounds(){
     const aliasMap=new Map(aliasRows.map(x=>[String(x.target_user_id),x.nickname]));
     const displayOtherName=otherProfile ? (aliasMap.get(String(otherProfile.id))||nameOf(otherProfile)) : "Discussion";
     const conversationTheme=await getConversationTheme(id);
-    $("content").innerHTML = `<section class="clean-page messages-page conversation-page conversation-page-clean tfa-message-theme-${esc(conversationTheme)}" data-message-theme="${esc(conversationTheme)}"><header class="conversation-clean-topbar"><button class="conversation-back" data-action="page-back" type="button" aria-label="Retour">‹</button><button class="conversation-person" data-action="view-profile" data-id="${esc(otherId||"")}" type="button">${avatarHTML(otherProfile || state.profile,"avatar conversation-avatar")}<span><b>${esc(displayOtherName)}</b><small id="conversationPresence" class="conversation-presence">Actif</small></span></button><div class="conversation-head-actions"><button type="button" aria-label="Rechercher dans la conversation" title="Rechercher" data-action="conversation-search"><span>⌕</span></button><button type="button" aria-label="Options" title="Options" data-action="conversation-menu" data-id="${esc(id)}">⚙</button></div></header><div id="conversationSearchBar" class="conversation-search-bar" hidden><span>⌕</span><input id="conversationSearchInput" type="search" placeholder="Rechercher dans les messages…" autocomplete="off"><b id="conversationSearchCount">0</b><button type="button" data-action="conversation-search-close" aria-label="Fermer">×</button></div><div id="typingIndicator" class="typing-indicator" hidden>écrit…</div><div class="message-list clean-message-list">${(msgs||[]).map(m=>conversationMessageHTML(m,map,reactionMap)).join("")||renderFirstContactGreetings(otherProfile||{})}</div><form id="messageForm" class="comment-form clean-message-form"><button type="button" class="message-tool" data-action="message-attachment" title="Photo ou fichier" aria-label="Photo ou fichier">▧</button><button type="button" class="message-tool" data-action="message-voice" title="Message vocal" aria-label="Message vocal">●</button><input id="messageAttachment" type="file" hidden accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip,.apk"><div class="message-input-shell"><input id="messageText" autocomplete="off" placeholder="Message"><button type="button" class="message-emoji-button" data-action="message-emoji" title="Emoji" aria-label="Emoji">☺</button></div><button type="submit" class="message-send-button" aria-label="Envoyer">➤</button></form></section>`;
+    $("content").innerHTML = `<section class="clean-page messages-page conversation-page conversation-page-clean tfa-message-theme-${esc(conversationTheme)}" data-message-theme="${esc(conversationTheme)}"><header class="conversation-clean-topbar"><button class="conversation-back" data-action="page-back" type="button" aria-label="Retour">‹</button><button class="conversation-person" data-action="view-profile" data-id="${esc(otherId||"")}" type="button">${avatarHTML(otherProfile || state.profile,"avatar conversation-avatar")}<span><b>${esc(displayOtherName)}</b><small id="conversationPresence" class="conversation-presence">Actif</small></span></button><div class="conversation-head-actions"><button type="button" aria-label="Rechercher dans la conversation" title="Rechercher" data-action="conversation-search"><span>⌕</span></button><button type="button" aria-label="Options" title="Options" data-action="conversation-menu" data-id="${esc(id)}">⚙</button></div></header><div id="conversationSearchBar" class="conversation-search-bar" hidden><span>⌕</span><input id="conversationSearchInput" type="search" placeholder="Rechercher dans les messages…" autocomplete="off"><b id="conversationSearchCount">0</b><button type="button" data-action="conversation-search-close" aria-label="Fermer">×</button></div><div id="typingIndicator" class="typing-indicator" hidden>écrit…</div><div class="message-list clean-message-list">${(msgs||[]).map(m=>conversationMessageHTML(m,map,reactionMap)).join("")||renderFirstContactGreetings(otherProfile||{})}</div><form id="messageForm" class="comment-form clean-message-form"><button type="button" class="message-tool" data-action="message-attachment" title="Photo ou fichier" aria-label="Photo ou fichier">▧</button><button type="button" class="message-tool" data-action="message-voice" title="Message vocal" aria-label="Message vocal">●</button><input id="messageAttachment" type="file" hidden accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip,.apk"><div class="message-input-shell"><input id="messageText" autocomplete="off" placeholder="Message — utilisez @ pour mentionner"><button type="button" class="message-emoji-button" data-action="message-emoji" title="Emoji" aria-label="Emoji">☺</button><div id="messageMentionSuggestions" class="message-mention-suggestions" hidden></div></div><button type="submit" class="message-send-button" aria-label="Envoyer">➤</button></form></section>`;
 
     // Conversation-level Realtime: typing + online presence without storing ephemeral state in SQL.
     if(state.conversationChannel){ try{ await sb.removeChannel(state.conversationChannel); }catch(_){} state.conversationChannel=null; }
@@ -1853,6 +1853,10 @@ function publisherBackgrounds(){
     const input=$("messageText");
     input?.addEventListener("input",()=>{
       setTyping(true); clearTimeout(typingTimer); typingTimer=setTimeout(()=>setTyping(false),1200);
+      updateMessageMentionSuggestions();
+    });
+    input?.addEventListener("keydown",e=>{
+      if(e.key==="Escape"){ const box=$("messageMentionSuggestions"); if(box){box.hidden=true;box.innerHTML="";} }
     });
     $("conversationSearchInput")?.addEventListener("input",e=>filterConversationMessages(e.target.value));
     $("messageAttachment")?.addEventListener("change", sendMessageAttachment);
@@ -1910,6 +1914,48 @@ function publisherBackgrounds(){
   }
 
 
+  function messageContentHTML(text){
+    const value=String(text||"");
+    return esc(value).replace(/(^|[\\s(])@([a-zA-Z0-9_.-]{2,40})/g,
+      (_,prefix,username)=>`${prefix}<button type="button" class="message-mention" data-action="message-mention" data-username="${esc(username)}">@${esc(username)}</button>`);
+  }
+
+  let messageMentionTimer=null;
+  async function updateMessageMentionSuggestions(){
+    const input=$("messageText"), box=$("messageMentionSuggestions");
+    if(!input || !box)return;
+    const value=input.value||"", caret=input.selectionStart ?? value.length;
+    const before=value.slice(0,caret);
+    const match=before.match(/(?:^|\\s)@([a-zA-Z0-9_.-]{0,40})$/);
+    if(!match){ box.hidden=true; box.innerHTML=""; return; }
+    const query=match[1]||"";
+    clearTimeout(messageMentionTimer);
+    messageMentionTimer=setTimeout(async()=>{
+      const r=await sb.from("profiles").select("id,first_name,last_name,username,avatar_url")
+        .neq("id",state.user.id).ilike("username",`${query}%`).limit(6);
+      if(r.error || !r.data?.length){ box.hidden=true; box.innerHTML=""; return; }
+      box.innerHTML=r.data.map(p=>`<button type="button" class="message-mention-option" data-action="message-mention-select" data-username="${esc(p.username||"")}">
+        ${avatarHTML(p,"avatar mention-avatar")}<span><b>${esc(nameOf(p))}</b><small>@${esc(p.username||"")}</small></span>
+      </button>`).join("");
+      box.hidden=false;
+    },120);
+  }
+
+  function selectMessageMention(username){
+    const input=$("messageText"), box=$("messageMentionSuggestions");
+    if(!input || !username)return;
+    const value=input.value||"", caret=input.selectionStart ?? value.length;
+    const before=value.slice(0,caret), after=value.slice(caret);
+    const replaced=before.replace(/(?:^|\\s)@[a-zA-Z0-9_.-]{0,40}$/,m=>{
+      const leading=m.match(/^\\s*/)?.[0]||"";
+      return `${leading}@${username} `;
+    });
+    input.value=replaced+after;
+    const pos=replaced.length;
+    input.focus(); input.setSelectionRange(pos,pos);
+    if(box){box.hidden=true;box.innerHTML="";}
+  }
+
   function conversationMessageHTML(m, map, reactionMap=new Map()){
     const mine=m.sender_id===state.user.id;
     const author=map.get(m.sender_id);
@@ -1920,7 +1966,7 @@ function publisherBackgrounds(){
       else if(mt.startsWith('video/')) body=`<div class="message-media-wrap"><video class="message-media" controls playsinline preload="metadata" src="${esc(m.media_url)}"></video><button class="message-download" data-action="download-message-file" data-url="${esc(m.media_url)}" data-name="${esc(m.content||'video')}">⬇ Télécharger</button></div>`;
       else if(mt.startsWith('image/')) body=`<div class="message-media-wrap"><img class="message-media" src="${esc(m.media_url)}" alt="${esc(m.content||'Image')}" loading="lazy"><button class="message-download" data-action="download-message-file" data-url="${esc(m.media_url)}" data-name="${esc(m.content||'image')}">⬇ Télécharger</button></div>`;
       else body=`<div class="message-file-wrap"><a class="message-file" href="${esc(m.media_url)}" target="_blank" rel="noopener">📎 ${esc(m.content||'Fichier')}</a><button class="message-download" data-action="download-message-file" data-url="${esc(m.media_url)}" data-name="${esc(m.content||'Fichier')}">⬇ Télécharger</button></div>`;
-    } else body=esc(m.content||'');
+    } else body=messageContentHTML(m.content||'');
     const replyPreview = m.reply_to_content ? `<div class="message-reply-preview"><span class="message-reply-line"></span><div><b>Message</b><span>${esc(String(m.reply_to_content).slice(0,180))}</span></div></div>` : '';
     const edited = m.updated_at && m.updated_at !== m.created_at ? ` · <button type="button" class="message-edited-link" data-action="message-history" data-id="${esc(m.id)}">modifié</button>` : '';
     const deleted = !!m.deleted_for_everyone;
@@ -6658,6 +6704,8 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if (action === "reply-message") { closeModal(); return replyConversationMessage(id); }
     if (action === "cancel-message-reply") return cancelMessageReply();
     if (action === "message-menu") return messageActionMenu(id);
+    if (action === "message-mention") return openSocialMention(actionEl.dataset.username || "");
+    if (action === "message-mention-select") return selectMessageMention(actionEl.dataset.username || "");
     if (action === "conversation-search") return openConversationSearch();
     if (action === "conversation-search-close") return closeConversationSearch();
     if (action === "toggle-message-reactions") return toggleMessageReactionPicker(id);
