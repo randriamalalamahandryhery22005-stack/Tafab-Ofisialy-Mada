@@ -1,121 +1,104 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const vapidPublicKey = Deno.env.get("VAPID_PUBLIC_KEY")!;
-const vapidPrivateKey = Deno.env.get("VAPID_PRIVATE_KEY")!;
-const vapidSubject = Deno.env.get("VAPID_SUBJECT") || "mailto:your-email@example.com";
-const webhookSecret = Deno.env.get("TAFA_PUSH_WEBHOOK_SECRET") || "";
+const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const vapidPublicKey = Deno.env.get("TAFASS_VAPID_PUBLIC_KEY")!;
+const vapidPrivateKey = Deno.env.get("TAFASS_VAPID_PRIVATE_KEY")!;
+const vapidSubject = Deno.env.get("TAFASS_VAPID_SUBJECT") || "mailto:admin@tafass.com";
 
-const admin = createClient(supabaseUrl, serviceRoleKey);
-webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
-
-const actionByType: Record<string,string> = {
-  reaction: "a réagi à votre publication.",
-  comment: "a commenté votre publication.",
-  post_share: "a partagé votre publication.",
-  share: "a partagé votre publication.",
-  friend_request: "vous a envoyé une demande d’amitié.",
-  friendship: "est maintenant votre ami(e).",
-  follow: "a commencé à vous suivre.",
-  message: "vous a envoyé un message.",
-  call: "vous appelle.",
-  marketplace_order: "a passé une commande.",
-  group_invite: "vous a invité dans un groupe.",
-  group_join: "a rejoint votre groupe.",
-  page_follow: "a commencé à suivre votre page.",
-  general: "vous a envoyé une nouvelle notification."
+const admin = createClient(supabaseUrl, serviceRole, { auth: { persistSession: false } });
+const cors = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-webhook-secret",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-function actorName(p: any) {
-  const full = [p?.first_name, p?.last_name].filter(Boolean).join(" ").trim();
-  return full || p?.username || p?.email?.split("@")[0] || "Quelqu’un";
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), { status, headers: { ...cors, "content-type": "application/json" } });
+}
+
+function actorName(profile: any) {
+  const full = [profile?.first_name, profile?.last_name].filter(Boolean).join(" ").trim();
+  return full || profile?.username || "Un membre de Tafaß";
+}
+
+function routeFor(n: any) {
+  const type = String(n?.type || "").toLowerCase();
+  const entity = String(n?.entity_type || "").toLowerCase();
+  if (type.includes("message") || entity === "conversation") return "#messages";
+  if (entity === "post" || n?.post_id) return "#home";
+  if (type.includes("friend") || type.includes("follow") || type.includes("request")) return "#friends";
+  return "#notifications";
 }
 
 Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
+  if (req.method !== "POST") return json({ error: "POST required" }, 405);
   try {
-    if (req.method !== "POST") {
-      return new Response(JSON.stringify({error:"POST required"}), {status:405, headers:{"content-type":"application/json"}});
+    if (!supabaseUrl || !serviceRole || !vapidPublicKey || !vapidPrivateKey) {
+      return json({ error: "Push server configuration is incomplete." }, 500);
     }
 
-    const incomingSecret = req.headers.get("x-tafa-push-secret") || "";
-    if (!webhookSecret || incomingSecret !== webhookSecret) {
-      return new Response(JSON.stringify({error:"Unauthorized"}), {status:401, headers:{"content-type":"application/json"}});
-    }
-    const payload = await req.json();
-    const rec = payload?.record || payload?.new || payload;
-    if (!rec?.user_id || rec?.is_read === true) {
-      return new Response(JSON.stringify({ok:true, skipped:true}), {headers:{"content-type":"application/json"}});
+    const expectedSecret = Deno.env.get("TAFA_PUSH_WEBHOOK_SECRET") || "";
+    if (expectedSecret) {
+      const supplied = req.headers.get("x-webhook-secret") || "";
+      if (supplied !== expectedSecret) return json({ error: "Invalid webhook secret." }, 401);
     }
 
-    const { data: subscriptions, error: subError } = await admin
-      .from("push_subscriptions")
-      .select("id,endpoint,p256dh,auth")
-      .eq("user_id", rec.user_id);
+    webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
+    const payload = await req.json().catch(() => ({}));
+    const record = payload?.record || payload?.new || payload;
+    const userId = String(record?.user_id || "").trim();
+    if (!userId) return json({ error: "record.user_id is required." }, 400);
 
-    if (subError) throw subError;
-    if (!subscriptions?.length) {
-      return new Response(JSON.stringify({ok:true, sent:0}), {headers:{"content-type":"application/json"}});
-    }
+    const [{ data: subscriptions }, { data: actor }] = await Promise.all([
+      admin.from("push_subscriptions").select("id,endpoint,p256dh,auth").eq("user_id", userId),
+      record?.actor_id
+        ? admin.from("profiles").select("first_name,last_name,username").eq("id", record.actor_id).maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]);
 
-    let actor: any = null;
-    if (rec.actor_id) {
-      const q = await admin
-        .from("profiles")
-        .select("id,first_name,last_name,username,email")
-        .eq("id", rec.actor_id)
-        .maybeSingle();
-      actor = q.data || null;
-    }
+    if (!subscriptions?.length) return json({ ok: true, sent: 0, reason: "no_subscription" });
 
-    const type = String(rec.type || "general").toLowerCase();
-    const action = actionByType[type] || actionByType.general;
     const name = actorName(actor);
-    const body = actor ? `${name} ${action}` : String(rec.message || action);
-    const title = "Tafaß";
-    const origin = supabaseUrl.replace(/\/$/, "");
-    const notification = JSON.stringify({
-      title,
-      body,
-      icon: `${origin}/assets/tafass-logo-premium.svg`,
-      badge: `${origin}/assets/tafass-logo-premium.svg`,
-      url: "./",
-      tag: `tafass-${String(rec.id || Date.now())}`,
-      notification_id: rec.id || null,
-      type
-    });
-
-    let sent = 0;
-    const stale: string[] = [];
-
-    for (const sub of subscriptions) {
-      const subscription = {
-        endpoint: sub.endpoint,
-        keys: { p256dh: sub.p256dh, auth: sub.auth }
-      };
-      try {
-        await webpush.sendNotification(subscription, notification, { TTL: 60 * 60 });
-        sent++;
-      } catch (e) {
-        const status = Number((e as any)?.statusCode || 0);
-        if (status === 404 || status === 410) stale.push(sub.id);
-        console.warn("Tafaß push send failed:", status, (e as any)?.message || e);
+    const rawTitle = String(record?.title || "Nouvelle notification").trim();
+    let action = String(record?.message || "Vous avez une nouvelle notification.").trim();
+    if (record?.actor_id && actor) {
+      const stripped = action.replace(/^un membre\s+/i, "").replace(/^une personne\s+/i, "");
+      if (!action.toLowerCase().startsWith(name.toLowerCase())) {
+        const lower = stripped.charAt(0).toLowerCase() + stripped.slice(1);
+        action = `${name} ${lower}`.trim();
       }
     }
 
-    if (stale.length) {
-      await admin.from("push_subscriptions").delete().in("id", stale);
-    }
+    const body = JSON.stringify({
+      title: "Tafaß",
+      body: action || rawTitle,
+      icon: `${supabaseUrl.replace(/\/$/, "")}/storage/v1/object/public/tafass-assets/tafass-logo-premium.svg`,
+      badge: `${supabaseUrl.replace(/\/$/, "")}/storage/v1/object/public/tafass-assets/tafass-logo-premium.svg`,
+      url: routeFor(record),
+      tag: `tafass-${record?.id || crypto.randomUUID()}`,
+      notification_id: record?.id || null,
+    });
 
-    return new Response(JSON.stringify({ok:true, sent, removed:stale.length}), {
-      headers: {"content-type":"application/json"}
-    });
+    let sent = 0;
+    for (const sub of subscriptions) {
+      const pushSub = { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } };
+      try {
+        await webpush.sendNotification(pushSub, body, { TTL: 120, urgency: "high" });
+        sent++;
+      } catch (e) {
+        const status = Number((e as any)?.statusCode || 0);
+        if (status === 404 || status === 410) {
+          await admin.from("push_subscriptions").delete().eq("id", sub.id);
+        }
+        console.error("Tafaß push send failed", status, String((e as any)?.message || e).slice(0, 500));
+      }
+    }
+    return json({ ok: true, sent, total: subscriptions.length });
   } catch (e) {
-    console.error("Tafaß push notification:", e);
-    return new Response(JSON.stringify({ok:false,error:String((e as any)?.message || e)}), {
-      status:500,
-      headers: {"content-type":"application/json"}
-    });
+    console.error("Tafaß push function error", e);
+    return json({ error: e instanceof Error ? e.message : "Internal error" }, 500);
   }
 });
