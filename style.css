@@ -6303,3 +6303,14 @@ button,[role="button"],[data-action],[data-route],a{touch-action:manipulation;-w
   .v75-admin-user-row .ghost-action{min-width:82px!important;padding:7px 9px!important;font-size:9px!important}
 }
 .v75-referral-code .referral-active{color:#19f58a!important}.v75-referral-code .referral-inactive{color:#ffbf5a!important;white-space:normal!important}
+
+/* TAFAß V77 — Coins: packs + personnalisation */
+.papi-custom-box{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(150px,.7fr);gap:12px;align-items:end;margin:4px 0 14px;padding:15px;border-radius:18px;border:1px solid rgba(241,183,63,.18);background:linear-gradient(145deg,rgba(241,183,63,.07),rgba(25,229,111,.035))}
+.papi-custom-box>div:first-child{display:grid;gap:5px;min-width:0}
+.papi-custom-box>div:first-child b{font-size:13px}
+.papi-custom-box>div:first-child small{font-size:10px;color:var(--muted);line-height:1.45}
+.papi-custom-box label{margin:0!important}
+.papi-custom-price{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,.07)}
+.papi-custom-price span{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+.papi-custom-price strong{font-size:18px}
+@media(max-width:560px){.papi-custom-box{grid-template-columns:1fr}.papi-custom-price{grid-column:auto}}

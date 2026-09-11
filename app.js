@@ -4179,15 +4179,24 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     closeModal(); toast('Demande de monétisation envoyée.'); return creatorMonetisationPage();
   }
   function openPapiCoinsPurchase(){
-    openModal(`<div class="modal-box monet-modal papi-buy-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß × PAPI</span><h3>Acheter des coins</h3><p class="muted">Le paiement est effectué sur la page sécurisée Papi. Tafaß n'affiche les coins qu'après confirmation serveur du paiement.</p><div class="papi-pack-grid"><button class="papi-pack active" data-papi-amount="2000"><b>2 000 Ar</b><span>10 000 🪙</span></button><button class="papi-pack" data-papi-amount="10000"><b>10 000 Ar</b><span>50 000 🪙</span></button><button class="papi-pack" data-papi-amount="20000"><b>20 000 Ar</b><span>100 000 🪙</span></button><button class="papi-pack" data-papi-amount="50000"><b>50 000 Ar</b><span>250 000 🪙</span></button></div><label>Moyen de paiement<select id="papiProvider" class="premium-input"><option value="">Choisir sur Papi</option><option value="MVOLA">🟢 MVola</option><option value="ORANGE_MONEY">🟠 Orange Money</option><option value="AIRTEL_MONEY">🔴 Airtel Money</option></select></label><input id="papiAmount" type="hidden" value="2000"><button class="primary big" data-action="papi-create-payment">Continuer vers Papi</button><small class="papi-secure-foot">🔐 API key conservée uniquement dans Supabase Edge Functions.</small></div>`);
-    document.querySelectorAll('.papi-pack').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('.papi-pack').forEach(x=>x.classList.remove('active'));btn.classList.add('active');const i=$('papiAmount');if(i)i.value=btn.dataset.papiAmount||'2000';}));
+    openModal(`<div class="modal-box monet-modal papi-buy-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß × PAPI</span><h3>Acheter des coins</h3><p class="muted">Choisissez un pack ou personnalisez le nombre de coins. Le tarif est fixe : <strong>20 coins = 1 Ar</strong>, soit <strong>0,05 Ar par coin</strong>. Le paiement est effectué sur la page sécurisée Papi.</p><div class="papi-pack-grid"><button class="papi-pack active" data-papi-coins="10000"><b>500 Ar</b><span>10 000 🪙</span></button><button class="papi-pack" data-papi-coins="50000"><b>2 500 Ar</b><span>50 000 🪙</span></button><button class="papi-pack" data-papi-coins="100000"><b>5 000 Ar</b><span>100 000 🪙</span></button><button class="papi-pack" data-papi-coins="250000"><b>12 500 Ar</b><span>250 000 🪙</span></button></div><div class="papi-custom-box"><div><b>Personnaliser votre achat</b><small>Entrez le nombre de coins souhaité. Le prix s'adapte automatiquement.</small></div><label>Nombre de coins<input id="papiCustomCoins" class="premium-input" type="number" min="1000" step="1000" inputmode="numeric" value="10000" placeholder="Ex. 30000"></label><div class="papi-custom-price"><span>Prix</span><strong id="papiCalculatedPrice">500 Ar</strong></div></div><label>Moyen de paiement<select id="papiProvider" class="premium-input"><option value="">Choisir sur Papi</option><option value="MVOLA">🟢 MVola</option><option value="ORANGE_MONEY">🟠 Orange Money</option><option value="AIRTEL_MONEY">🔴 Airtel Money</option></select></label><input id="papiAmount" type="hidden" value="500"><input id="papiCoins" type="hidden" value="10000"><button class="primary big" data-action="papi-create-payment">Continuer vers Papi</button><small class="papi-secure-foot">🔐 API key conservée uniquement dans Supabase Edge Functions. Le solde est crédité après confirmation serveur.</small></div>`);
+    const sync=coins=>{
+      const c=Math.max(1000,Math.floor(Number(coins||0)/1000)*1000);
+      const amount=Math.round(c/20);
+      const ci=$('papiCustomCoins'),ai=$('papiAmount'),coin=$('papiCoins'),price=$('papiCalculatedPrice');
+      if(ci)ci.value=String(c); if(ai)ai.value=String(amount); if(coin)coin.value=String(c); if(price)price.textContent=`${amount.toLocaleString('fr-FR')} Ar`;
+    };
+    document.querySelectorAll('.papi-pack').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('.papi-pack').forEach(x=>x.classList.remove('active'));btn.classList.add('active');sync(btn.dataset.papiCoins||'10000');}));
+    $('papiCustomCoins')?.addEventListener('input',e=>{document.querySelectorAll('.papi-pack').forEach(x=>x.classList.remove('active'));sync(e.target.value);});
+    sync(10000);
   }
 
   async function createPapiCoinPayment(){
+    const coins=Math.floor(Number($('papiCoins')?.value||$('papiCustomCoins')?.value||0));
     const amount=Math.round(Number($('papiAmount')?.value||0));
     const provider=String($('papiProvider')?.value||'');
-    if(![2000,10000,20000,50000].includes(amount)) return toast('Pack de coins invalide.');
-    const {data,error}=await sb.functions.invoke('tafa-papi-payment',{body:{amount,provider}});
+    if(coins<1000 || coins%1000!==0 || amount!==Math.round(coins/20)) return toast('Nombre de coins invalide. Choisissez un multiple de 1 000.');
+    const {data,error}=await sb.functions.invoke('tafa-papi-payment',{body:{amount,coins,provider}});
     if(error){
       const msg=String(error.message||'');
       return toast(/failed to fetch|fetch failed|network/i.test(msg)?'Impossible de joindre le paiement Papi. Vérifiez que l’Edge Function « tafa-papi-payment » est déployée.':msg);
