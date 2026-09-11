@@ -6314,3 +6314,33 @@ button,[role="button"],[data-action],[data-route],a{touch-action:manipulation;-w
 .papi-custom-price span{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
 .papi-custom-price strong{font-size:18px}
 @media(max-width:560px){.papi-custom-box{grid-template-columns:1fr}.papi-custom-price{grid-column:auto}}
+
+/* ============================================================
+   TAFAß V78 — ADMIN SINGLE AUTHORITATIVE UI
+============================================================ */
+.tafa-v78-authoritative .tafa-v50-command,
+.tafa-v78-authoritative .tafa-v51-command,
+.tafa-v78-authoritative .tafa-v51-command-bar{display:none!important}
+.tafa-v78-authoritative .v75-admin-user-table{width:100%;max-width:100%;overflow-x:auto;box-sizing:border-box;border-radius:18px}
+.tafa-v78-authoritative .v75-admin-user-head,
+.tafa-v78-authoritative .v75-admin-user-row{box-sizing:border-box;width:100%;grid-template-columns:minmax(220px,1.7fr) minmax(170px,1.25fr) 110px 96px;gap:14px;align-items:center}
+.tafa-v78-authoritative .v75-admin-user-row{min-height:72px;overflow:hidden}
+.tafa-v78-authoritative .v75-user-identity{min-width:0;display:flex;align-items:center;gap:10px;overflow:hidden}
+.tafa-v78-authoritative .v75-user-identity .avatar{width:46px!important;height:46px!important;min-width:46px!important;flex:0 0 46px!important;border-radius:50%!important;overflow:hidden!important;object-fit:cover!important}
+.tafa-v78-authoritative .v75-user-identity>div:last-child{min-width:0;overflow:hidden}
+.tafa-v78-authoritative .v75-user-identity b,.tafa-v78-authoritative .v75-user-identity small,.tafa-v78-authoritative .v75-user-email{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tafa-v78-authoritative .v75-user-email{min-width:0}
+.tafa-v78-authoritative .v75-admin-user-row .admin-status{max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.v78-admin-user-manage .menu-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.v78-admin-user-manage .menu-card{min-height:76px;text-align:left}
+@media(max-width:720px){
+  .tafa-v78-authoritative .v75-admin-user-table{overflow-x:hidden}
+  .tafa-v78-authoritative .v75-admin-user-head{display:none!important}
+  .tafa-v78-authoritative .v75-admin-user-row{display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;grid-template-areas:"identity status" "identity action";gap:7px 10px!important;padding:11px!important;min-height:78px!important}
+  .tafa-v78-authoritative .v75-user-identity{grid-area:identity}
+  .tafa-v78-authoritative .v75-user-email{display:none}
+  .tafa-v78-authoritative .v75-admin-user-row>div:nth-child(3){grid-area:status;justify-self:end}
+  .tafa-v78-authoritative .v75-admin-user-row>div:nth-child(4){grid-area:action;justify-self:end}
+  .tafa-v78-authoritative .v75-admin-user-row .ghost-action{min-width:76px;padding:7px 9px;font-size:10px}
+  .v78-admin-user-manage .menu-grid{grid-template-columns:1fr}
+}

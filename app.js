@@ -2196,7 +2196,12 @@ function publisherBackgrounds(){
     const {error}=await sb.rpc("tafa_set_profile_wall_settings",{p_allow_friend_posts:allow,p_require_approval:approve}); if(error)return toast(error.message); closeModal(); toast("✓ Paramètres des publications enregistrés"); if(state.viewingProfileId) await openUserProfile(state.viewingProfileId);
   }
   async function moderateProfileWall(id,status){
-    const {error}=await sb.rpc("tafa_moderate_profile_wall_post",{p_post_id:id,p_status:status}); if(error)return toast(error.message); closeModal(); toast(status==="approved"?"✓ Publication approuvée.":"Publication refusée."); if(state.viewingProfileId) await openUserProfile(state.viewingProfileId);
+    const {error}=await sb.rpc("tafa_moderate_profile_wall_post",{p_post_id:id,p_status:status});
+    if(error)return toast(error.message);
+    if(status==="deleted") document.querySelector(`[data-wall-post-id="${CSS.escape(String(id))}"]`)?.remove();
+    closeModal();
+    toast(status==="approved"?"✓ Publication approuvée.":status==="deleted"?"✓ Publication supprimée du profil.":"Publication refusée.");
+    if(state.viewingProfileId) await openUserProfile(state.viewingProfileId);
   }
   async function openUserProfile(userId) {
     if (!userId || !state.user) return;
@@ -2224,7 +2229,7 @@ function publisherBackgrounds(){
       sb.from("friendships").select("user_id,friend_id").or(`user_id.eq.${state.user.id},friend_id.eq.${state.user.id}`).limit(200),
       sb.from("friendships").select("user_id,friend_id").or(`user_id.eq.${userId},friend_id.eq.${userId}`).limit(200),
       loadProfileWallSettings(userId),
-      sb.from("tafa_profile_wall_posts").select("*").eq("profile_owner_id",userId).order("created_at",{ascending:false}).limit(50)
+      sb.from("tafa_profile_wall_posts").select("*").eq("profile_owner_id",userId).neq("status","deleted").order("created_at",{ascending:false}).limit(50)
     ]);
 
     const p = profileR.data;
@@ -4110,7 +4115,13 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   async function tafaV74ShowAdminUsers(){
     if(!(await tafaV74IsAdmin()))return toast('Accès réservé à l’administration.');
     const r=await sb.rpc('tafa_admin_list_users',{p_limit:200,p_offset:0}); if(r.error)return toast(r.error.message);
-    const rows=(r.data||[]).map(u=>{const nm=([u.first_name,u.last_name].filter(Boolean).join(' ')||u.username||u.email||'Compte');const status=u.account_status==='blocked'?'Bloqué':'Actif';return `<div class="v75-admin-user-row"><div class="v75-user-identity">${avatarHTML(u,'avatar')}<div><b>${esc(nm)}</b><small>${u.username?`@${esc(u.username)}`:'Compte Tafaß'}</small></div></div><div class="v75-user-email">${esc(u.email||'—')}</div><div><span class="admin-status ${u.account_status==='blocked'?'blocked':'paid'}">${status}</span></div><div><button class="ghost-action" data-action="admin-toggle-user" data-id="${esc(u.id)}" data-status="${esc(u.account_status||'active')}">${u.account_status==='blocked'?'Réactiver':'Gérer'}</button></div></div>`;}).join('')||'<div class="empty">Aucun compte.</div>';
+    const rows=(r.data||[]).map(u=>{
+      const nm=([u.first_name,u.last_name].filter(Boolean).join(' ')||u.username||u.email||'Compte');
+      const st=String(u.account_status||'active');
+      const label=st==='blocked'?'Bloqué':st==='restricted'?'Restreint':st==='deleted'?'Supprimé':'Actif';
+      const cls=st==='blocked'?'blocked':st==='restricted'?'pending':st==='deleted'?'rejected':'paid';
+      return `<div class="v75-admin-user-row"><div class="v75-user-identity">${avatarHTML(u,'avatar')}<div><b>${esc(nm)}</b><small>${u.username?`@${esc(u.username)}`:'Compte Tafaß'}</small></div></div><div class="v75-user-email">${esc(u.email||'—')}</div><div><span class="admin-status ${cls}">${label}</span></div><div><button class="ghost-action" data-action="admin-user-manage" data-id="${esc(u.id)}" data-status="${esc(st)}">Gérer</button></div></div>`;
+    }).join('')||'<div class="empty">Aucun compte.</div>';
     openModal(`<div class="modal-box v74-admin-users-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß · COMPTES</span><h3>Tous les comptes utilisateurs</h3><div class="v74-admin-user-list">${rows}</div></div>`);
   }
 
@@ -4509,7 +4520,13 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       ['🚨','Alertes',Number(st.pending_total||0).toLocaleString('fr-FR')]
     ];
     const usersPreview=users.slice(0,8);
-    const rows=usersPreview.map(u=>`<div class="admin-user-row"><div class="admin-user-main">${u.avatar_url?`<img src="${esc(u.avatar_url)}">`:'<div class="admin-user-avatar">👤</div>'}<div><b>${esc(([u.first_name,u.last_name].filter(Boolean).join(' ')||u.username||u.email||'Compte'))}</b><small>${esc(u.email||'')} · @${esc(u.username||'')}</small></div></div><span class="admin-status ${u.account_status==='blocked'?'blocked':''}">${u.account_status==='blocked'?'Bloqué':'Actif'}</span><button class="ghost-action" data-action="admin-toggle-user" data-id="${esc(u.id)}" data-status="${esc(u.account_status||'active')}">${u.account_status==='blocked'?'Réactiver':'Bloquer'}</button></div>`).join('')||'<div class="empty">Aucun compte.</div>';
+    const rows=usersPreview.map(u=>{
+      const nm=([u.first_name,u.last_name].filter(Boolean).join(' ')||u.username||u.email||'Compte');
+      const st=String(u.account_status||'active');
+      const label=st==='blocked'?'Bloqué':st==='restricted'?'Restreint':st==='deleted'?'Supprimé':'Actif';
+      const cls=st==='blocked'?'blocked':st==='restricted'?'pending':st==='deleted'?'rejected':'paid';
+      return `<div class="admin-user-row"><div class="admin-user-main">${u.avatar_url?`<img src="${esc(u.avatar_url)}" alt="">`:'<div class="admin-user-avatar">👤</div>'}<div><b>${esc(nm)}</b><small>${esc(u.email||'—')} · ${u.username?`@${esc(u.username)}`:'Compte Tafaß'}</small></div></div><span class="admin-status ${cls}">${label}</span><button class="ghost-action" data-action="admin-user-manage" data-id="${esc(u.id)}" data-status="${esc(st)}">Gérer</button></div>`;
+    }).join('')||'<div class="empty">Aucun compte.</div>';
     const withdrawalRows=withdrawals.map(x=>`<div class="admin-data-row"><div class="grow"><b>${esc(x.display_name||x.identity_name||x.reason||'Compte')}</b><small>${adminMoney(x.amount_mga)} · ${esc(x.method||'mobile_money')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${esc(x.status||'pending')}">${esc(x.status||'pending')}</span>${x.status==='pending'?`<button class="ghost-action" data-action="admin-withdrawal-status" data-id="${esc(x.id)}" data-status="approved">Approuver</button><button class="ghost-action danger-history-action" data-action="admin-withdrawal-status" data-id="${esc(x.id)}" data-status="rejected">Refuser</button>`:''}</div>`).join('')||'<div class="empty">Aucun retrait.</div>';
     const creatorPayoutRows=creatorPayouts.map(x=>`<div class="admin-data-row monet-admin-row"><div class="grow"><b>💸 ${esc(x.display_name||x.identity_name||x.reason||'Compte')}</b><small>${adminMoney(x.amount_mga)} · ${esc(x.method||'mobile_money')} · ${esc(x.destination_hint||'')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${x.status==='paid'?'paid':x.status==='rejected'?'rejected':'pending'}">${esc(x.status||'pending')}</span>${x.status==='pending'?`<button class="ghost-action" data-action="admin-creator-payout" data-id="${esc(x.id)}" data-status="paid">💸 Payer réellement</button><button class="ghost-action danger-history-action" data-action="admin-creator-payout" data-id="${esc(x.id)}" data-status="rejected">Refuser</button>`:''}</div>`).join('')||'<div class="empty">Aucun retrait créateur.</div>';
     const creatorMonetRows=creatorMonetization.map(x=>`<div class="admin-data-row monet-admin-row"><div class="grow"><b>◎ ${esc(x.display_name||x.identity_name||x.reason||'Compte')}</b><small>${esc(x.status||'pending')} · ${Number(x.lifetime_earnings_mga||0).toLocaleString('fr-FR')} Ar gagnés · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${x.status==='approved'?'paid':x.status==='suspended'?'rejected':'pending'}">${esc(x.status||'pending')}</span>${x.status==='pending'?`<button class="ghost-action" data-action="admin-creator-monetization" data-id="${esc(x.user_id)}" data-status="approved">✓ Activer</button><button class="ghost-action danger-history-action" data-action="admin-creator-monetization" data-id="${esc(x.user_id)}" data-status="rejected">Refuser</button>`:x.status==='approved'?`<button class="ghost-action danger-history-action" data-action="admin-creator-monetization" data-id="${esc(x.user_id)}" data-status="suspended">Suspendre</button>`:''}</div>`).join('')||'<div class="empty">Aucune demande de monétisation.</div>';
@@ -4562,6 +4579,26 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       });
       adminRoot.querySelectorAll('[data-v75-admin-section]').forEach(sec=>{sec.hidden=sec.dataset.v75AdminSection!=='evolution';});
     }
+  }
+  async function adminManageUser(id,status){
+    if(!(await tafaV74IsAdmin())) return toast('Accès réservé à l’administration.');
+    if(String(id)===String(state.user?.id)) return toast('L’administrateur ne peut pas gérer son propre compte depuis cette interface.');
+    const current=String(status||'active');
+    const title=current==='blocked'?'Gérer le compte bloqué':current==='restricted'?'Gérer le compte restreint':'Gérer le compte';
+    openModal(`<div class="modal-box v78-admin-user-manage"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß · ADMINISTRATION</span><h3>${esc(title)}</h3><p class="muted">Choisissez une action administrative. La modification est appliquée côté serveur.</p><div class="menu-grid"><button class="menu-card" data-action="admin-user-status" data-id="${esc(id)}" data-status="active"><span class="menu-icon">✓</span><span><b>Activer</b><small>Rétablir l’accès normal au compte.</small></span></button><button class="menu-card" data-action="admin-user-status" data-id="${esc(id)}" data-status="restricted"><span class="menu-icon">⚠</span><span><b>Restreindre</b><small>Bloquer les fonctions sensibles sans supprimer le compte.</small></span></button><button class="menu-card" data-action="admin-user-status" data-id="${esc(id)}" data-status="blocked"><span class="menu-icon">⛔</span><span><b>Bloquer</b><small>Empêcher l’utilisation normale du compte.</small></span></button><button class="menu-card danger-card" data-action="admin-user-delete" data-id="${esc(id)}"><span class="menu-icon">⌫</span><span><b>Supprimer définitivement</b><small>Supprimer le compte et ses données lorsque les contraintes de la base le permettent.</small></span></button></div></div>`);
+  }
+  async function adminSetUserStatusV78(id,status){
+    if(!(await premiumConfirm(status==='blocked'?'Bloquer le compte':status==='restricted'?'Restreindre le compte':'Réactiver le compte',status==='blocked'?'Le compte sera bloqué.':status==='restricted'?'Les fonctions sensibles seront bloquées.':'Le compte retrouvera son accès normal.',status==='blocked'?'Bloquer':status==='restricted'?'Restreindre':'Réactiver',status!=='active'))) return;
+    const r=await sb.rpc('tafa_admin_manage_user_v78',{p_user_id:id,p_action:status});
+    if(r.error)return toast(r.error.message);
+    closeModal(); toast(status==='blocked'?'Compte bloqué.':status==='restricted'?'Compte restreint.':'Compte réactivé.'); return adminTotalPage();
+  }
+  async function adminDeleteUserV78(id){
+    const ok=await premiumConfirm('Supprimer définitivement le compte','Cette action supprime le compte d’authentification et les données liées si les contraintes de la base l’autorisent. Elle est irréversible.','Supprimer définitivement',true);
+    if(!ok)return;
+    const r=await sb.rpc('tafa_admin_manage_user_v78',{p_user_id:id,p_action:'deleted'});
+    if(r.error)return toast(r.error.message);
+    closeModal(); toast('Compte supprimé.'); return adminTotalPage();
   }
   async function adminToggleUser(id,status){
     const next=status==='blocked'?'active':'blocked'; if(!(await premiumConfirm(next==='blocked'?'Bloquer le compte':'Réactiver le compte',next==='blocked'?'Le compte ne pourra plus utiliser normalement les fonctions protégées.':'Le compte sera à nouveau autorisé à utiliser l’application.',next==='blocked'?'Bloquer':'Réactiver',next==='blocked')))return;
@@ -6207,6 +6244,9 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if (action === "v74-admin-withdraw") return tafaV74SubmitAdminWithdrawal();
     if (action === "v74-admin-users-more") return tafaV74ShowAdminUsers();
     if (action === "admin-refresh") return adminTotalPage();
+    if (action === "admin-user-manage") return adminManageUser(id,actionEl.dataset.status||'active');
+    if (action === "admin-user-status") return adminSetUserStatusV78(id,actionEl.dataset.status||'active');
+    if (action === "admin-user-delete") return adminDeleteUserV78(id);
     if (action === "admin-toggle-user") return adminToggleUser(id,actionEl.dataset.status||'active');
     if (action === "admin-withdrawal-status") return adminSetWithdrawalStatus(id,actionEl.dataset.status||'rejected');
     if (action === "admin-creator-payout") return adminSetCreatorPayout(id,actionEl.dataset.status||'rejected');
@@ -8434,4 +8474,39 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     document.querySelectorAll('[data-ad-slot],.ad-slot,.advertisement-slot,.tafa-ad-slot').forEach(el=>el.remove());
   })();
 
+})();
+
+
+/* ============================================================
+   TAFAß V78 — ADMIN SINGLE AUTHORITATIVE VERSION
+   Supersedes legacy V50/V51/V63/V75 presentation layers.
+============================================================ */
+(() => {
+  const cleanupLegacyAdmin = () => {
+    document.querySelectorAll('.tafa-v50-command,.tafa-v51-command,.tafa-v51-command-bar').forEach(el=>el.remove());
+    document.querySelectorAll('.admin-total-page .tafa-v63-flatten').forEach(el=>el.classList.remove('tafa-v63-flatten'));
+    const root=document.querySelector('.admin-total-page');
+    if(!root)return;
+    root.classList.add('tafa-v78-authoritative');
+    root.querySelectorAll('.admin-total-section').forEach(sec=>sec.classList.add('tafa-v78-panel'));
+  };
+  const baseAdminV78=adminTotalPage;
+  adminTotalPage=async function(...args){
+    const result=await baseAdminV78.apply(this,args);
+    requestAnimationFrame(cleanupLegacyAdmin);
+    setTimeout(cleanupLegacyAdmin,40);
+    return result;
+  };
+  document.addEventListener('click',e=>{
+    const b=e.target.closest?.('[data-v74-admin-jump]');
+    if(!b)return;
+    e.preventDefault(); e.stopPropagation();
+    const root=document.querySelector('.admin-total-page'); if(!root)return;
+    const groups={'Évolution des comptes':'evolution','Comptes utilisateurs':'users','Monétisation':'monetization','Signalements':'reports'};
+    const group=groups[b.dataset.v74AdminJump]||'evolution';
+    root.querySelectorAll('[data-v75-admin-section]').forEach(sec=>sec.hidden=sec.dataset.v75AdminSection!==group);
+    root.querySelectorAll('.tafa-v74-admin-tabs button').forEach(x=>x.classList.toggle('active',x===b));
+    cleanupLegacyAdmin();
+  },true);
+  cleanupLegacyAdmin();
 })();
