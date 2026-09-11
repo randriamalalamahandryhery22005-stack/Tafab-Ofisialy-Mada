@@ -1,45 +1,62 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+const configuredOrigins = String(Deno.env.get("TAFASS_ALLOWED_ORIGINS") || "*")
+  .split(",")
+  .map(v => v.trim())
+  .filter(Boolean);
+
+function getCorsHeaders(req: Request) {
+  const origin = req.headers.get("Origin") || "";
+  const allowOrigin = configuredOrigins.includes("*")
+    ? "*"
+    : (configuredOrigins.includes(origin) ? origin : configuredOrigins[0] || "");
+  return {
+    "Access-Control-Allow-Origin": allowOrigin,
+    "Vary": "Origin",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+  };
+}
 
-const json = (body: unknown, status = 200) =>
+const json = (req: Request, body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, "Content-Type": "application/json; charset=utf-8" },
+    headers: { ...getCorsHeaders(req), "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" },
   });
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  if (req.method !== "POST") return json({ error: "Méthode non autorisée." }, 405);
+  if (req.method === "OPTIONS") return new Response("ok", { headers: getCorsHeaders(req) });
+  if (req.method !== "POST") return json(req, { error: "Méthode non autorisée." }, 405);
 
   try {
     const auth = req.headers.get("Authorization") || "";
-    if (!auth.startsWith("Bearer ")) return json({ error: "Authentification requise." }, 401);
+    if (!auth.startsWith("Bearer ")) return json(req, { error: "Authentification requise." }, 401);
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
     const openaiKey = Deno.env.get("OPENAI_API_KEY");
     const model = Deno.env.get("TAFASS_AI_MODEL") || "gpt-4.1-mini";
-    if (!supabaseUrl || !supabaseAnonKey) return json({ error: "Configuration Supabase serveur manquante." }, 500);
-    if (!openaiKey) return json({ error: "Tafaß AI n'est pas activée côté serveur : OPENAI_API_KEY manque dans les secrets Supabase." }, 503);
+    if (!supabaseUrl || !supabaseAnonKey) return json(req, { error: "Configuration Supabase serveur manquante." }, 500);
+    if (!openaiKey) return json(req, { error: "Tafaß AI n'est pas activée côté serveur : OPENAI_API_KEY manque dans les secrets Supabase." }, 503);
 
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: auth } },
       auth: { persistSession: false, autoRefreshToken: false },
     });
     const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) return json({ error: "Session invalide ou expirée." }, 401);
+    if (userError || !user) return json(req, { error: "Session invalide ou expirée." }, 401);
 
-    const payload = await req.json().catch(() => null);
+    const contentLength = Number(req.headers.get("content-length") || 0);
+    if (contentLength > 16000) return json(req, { error: "La demande est trop volumineuse." }, 413);
+    const rawBody = await req.text();
+    if (rawBody.length > 16000) return json(req, { error: "La demande est trop volumineuse." }, 413);
+    let payload: any = null;
+    try { payload = JSON.parse(rawBody); } catch { return json(req, { error: "Requête JSON invalide." }, 400); }
     const mode = String(payload?.mode || "assistant").slice(0, 32);
     const prompt = String(payload?.prompt || "").trim();
     const language = String(payload?.language || "fr").slice(0, 16);
-    if (!prompt) return json({ error: "La demande est vide." }, 400);
-    if (prompt.length > 8000) return json({ error: "La demande est trop longue (8 000 caractères maximum)." }, 413);
+    if (!prompt) return json(req, { error: "La demande est vide." }, 400);
+    if (prompt.length > 8000) return json(req, { error: "La demande est trop longue (8 000 caractères maximum)." }, 413);
 
     const modeInstruction: Record<string, string> = {
       assistant: "Tu es l'assistant officiel de Tafaß. Réponds clairement, utilement et honnêtement.",
@@ -66,15 +83,15 @@ Deno.serve(async (req) => {
     if (!aiResponse.ok) {
       const detail = await aiResponse.text().catch(() => "");
       console.error("Tafaß AI provider error", aiResponse.status, detail.slice(0, 500));
-      return json({ error: "Le service AI est momentanément indisponible." }, 502);
+      return json(req, { error: "Le service AI est momentanément indisponible." }, 502);
     }
 
     const data = await aiResponse.json();
     const text = String(data?.output_text || "").trim();
-    if (!text) return json({ error: "La réponse AI est vide." }, 502);
-    return json({ response: text, mode, user_id: user.id });
+    if (!text) return json(req, { error: "La réponse AI est vide." }, 502);
+    return json(req, { response: text, mode });
   } catch (error) {
     console.error("Tafaß AI function error", error);
-    return json({ error: "Erreur interne du service AI." }, 500);
+    return json(req, { error: "Erreur interne du service AI." }, 500);
   }
 });
