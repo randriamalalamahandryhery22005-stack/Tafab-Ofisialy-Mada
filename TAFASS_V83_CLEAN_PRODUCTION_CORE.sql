@@ -74,7 +74,39 @@ revoke all on function public.tafa_admin_manage_user_v83(uuid,text) from public;
 grant execute on function public.tafa_admin_manage_user_v83(uuid,text) to authenticated;
 
 -- ------------------------------------------------------------
--- 2. Required Page/Group indexes. Safe if they already exist.
+-- 2. Compatibility: follower rows are addressed by the stable composite key.
+-- Some older production databases created page_followers without an id column.
+-- V83 therefore never requires page_followers.id.
+
+create or replace function public.tafa_toggle_page_follow_v83(p_page_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path=public,auth
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_owner uuid;
+  v_followed boolean;
+begin
+  if v_uid is null then raise exception 'Authentification requise.'; end if;
+  select p.owner_id into v_owner from public.pages p where p.id=p_page_id and coalesce(p.deletion_status,'active') <> 'deleted';
+  if v_owner is null then raise exception 'Page introuvable.'; end if;
+  if v_owner=v_uid then raise exception 'Le propriétaire ne peut pas suivre sa propre Page.'; end if;
+  if exists(select 1 from public.page_followers f where f.page_id=p_page_id and f.user_id=v_uid) then
+    delete from public.page_followers f where f.page_id=p_page_id and f.user_id=v_uid;
+    v_followed:=false;
+  else
+    insert into public.page_followers(page_id,user_id) values(p_page_id,v_uid) on conflict(page_id,user_id) do nothing;
+    v_followed:=exists(select 1 from public.page_followers f where f.page_id=p_page_id and f.user_id=v_uid);
+  end if;
+  return jsonb_build_object('success',true,'followed',v_followed);
+end;
+$$;
+revoke all on function public.tafa_toggle_page_follow_v83(uuid) from public;
+grant execute on function public.tafa_toggle_page_follow_v83(uuid) to authenticated;
+
+-- 3. Required Page/Group indexes. Safe if they already exist.
 -- ------------------------------------------------------------
 create index if not exists pages_owner_created_idx
   on public.pages(owner_id,created_at desc);

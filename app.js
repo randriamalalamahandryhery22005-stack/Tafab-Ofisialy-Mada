@@ -602,7 +602,7 @@ document.documentElement.classList.add("app-boot");
     const token=state.renderToken;
     const [postsR, followersR, membersR]=await Promise.all([
       sb.from("page_posts").select("*").eq("page_id",pg.id).order("created_at",{ascending:false}).limit(50),
-      sb.from("page_followers").select("id",{count:"exact",head:true}).eq("page_id",pg.id),
+      sb.from("page_followers").select("page_id",{count:"exact",head:true}).eq("page_id",pg.id),
       sb.from("page_members").select("user_id,role").eq("page_id",pg.id)
     ]);
     if(token!==state.renderToken || state.route!=="home") return;
@@ -5743,8 +5743,8 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if(xerr) return toast(xerr.message);
     if(!x) return toast('Page introuvable.');
     const [follow,followers,owner,members,posts]=await Promise.all([
-      sb.from('page_followers').select('id').eq('page_id',id).eq('user_id',state.user.id).maybeSingle(),
-      sb.from('page_followers').select('id',{count:'exact',head:true}).eq('page_id',id),
+      sb.from('page_followers').select('page_id,user_id').eq('page_id',id).eq('user_id',state.user.id).maybeSingle(),
+      sb.from('page_followers').select('page_id',{count:'exact',head:true}).eq('page_id',id),
       sb.from('profiles').select('first_name,last_name,username,avatar_url,email,phone,country,city_current,bio').eq('id',x.owner_id).maybeSingle(),
       sb.from('page_members').select('user_id,role,profiles(first_name,last_name,username,avatar_url)').eq('page_id',id).order('created_at',{ascending:true}),
       sb.from('page_posts').select('*,page_post_reactions(id,user_id,reaction_type),page_post_comments(id,user_id,content,created_at,profiles(first_name,last_name,username,avatar_url)),page_post_shares(id,user_id)').eq('page_id',id).order('created_at',{ascending:false}).limit(30)
@@ -5876,18 +5876,18 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     let r=null, error=null;
     ({data:r,error}=await sb.rpc('tafa_toggle_page_follow',{p_page_id:id}));
     if(error){
-      const q=await sb.from('page_followers').select('id').eq('page_id',id).eq('user_id',state.user.id).maybeSingle();
+      const q=await sb.from('page_followers').select('page_id,user_id').eq('page_id',id).eq('user_id',state.user.id).maybeSingle();
       if(q.error)return toast(q.error.message||error.message||'Impossible de modifier le suivi de la Page.');
-      if(q.data){ const d=await sb.from('page_followers').delete().eq('id',q.data.id); if(d.error)return toast(d.error.message); r={followed:false}; }
+      if(q.data){ const d=await sb.from('page_followers').delete().eq('page_id',id).eq('user_id',state.user.id); if(d.error)return toast(d.error.message); r={followed:false}; }
       else { const i=await sb.from('page_followers').insert({page_id:id,user_id:state.user.id}); if(i.error)return toast(i.error.message); r={followed:true}; }
     }
     if(r?.success===false){
       const pg=(await sb.from('pages').select('id,owner_id').eq('id',id).maybeSingle()).data;
       if(!pg) return toast(r.message||'Page introuvable.');
       if(pg.owner_id===state.user.id) return toast('Le propriétaire ne peut pas suivre sa propre Page.');
-      const q=await sb.from('page_followers').select('id').eq('page_id',id).eq('user_id',state.user.id).maybeSingle();
+      const q=await sb.from('page_followers').select('page_id,user_id').eq('page_id',id).eq('user_id',state.user.id).maybeSingle();
       if(q.error)return toast(q.error.message||r.message||'Impossible de modifier le suivi.');
-      if(q.data){const d=await sb.from('page_followers').delete().eq('id',q.data.id);if(d.error)return toast(d.error.message);r={followed:false};}
+      if(q.data){const d=await sb.from('page_followers').delete().eq('page_id',id).eq('user_id',state.user.id);if(d.error)return toast(d.error.message);r={followed:false};}
       else {const i=await sb.from('page_followers').insert({page_id:id,user_id:state.user.id});if(i.error)return toast(i.error.message);r={followed:true};}
     }
     const followed=!!r?.followed;
@@ -8711,9 +8711,9 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     const rpc=await sb.rpc('tafa_v81_toggle_page_follow',{p_page_id:id});
     if(!rpc.error && rpc.data && typeof rpc.data.followed!=='undefined') followed=!!rpc.data.followed;
     if(followed===null){
-      const q=await sb.from('page_followers').select('id').eq('page_id',id).eq('user_id',state.user.id).maybeSingle();
+      const q=await sb.from('page_followers').select('page_id,user_id').eq('page_id',id).eq('user_id',state.user.id).maybeSingle();
       if(q.error)return toast(q.error.message);
-      if(q.data){ const r=await sb.from('page_followers').delete().eq('id',q.data.id); if(r.error)return toast(r.error.message); followed=false; }
+      if(q.data){ const r=await sb.from('page_followers').delete().eq('page_id',id).eq('user_id',state.user.id); if(r.error)return toast(r.error.message); followed=false; }
       else { const r=await sb.from('page_followers').insert({page_id:id,user_id:state.user.id}); if(r.error)return toast(r.error.message); followed=true; }
     }
     if(followed) await sb.from('notifications').insert({user_id:pg.owner_id,actor_id:state.user.id,type:'page_follow',title:'Nouvel abonné',message:`Un membre suit maintenant ${pg.name}.`,entity_type:'page',entity_id:id});
@@ -8897,8 +8897,8 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if(xerr)return toast(xerr.message);
     if(!x)return toast('Page introuvable.');
     const [follow,followers,owner,members,posts]=await Promise.all([
-      sb.from('page_followers').select('id').eq('page_id',id).eq('user_id',state.user.id).maybeSingle(),
-      sb.from('page_followers').select('id',{count:'exact',head:true}).eq('page_id',id),
+      sb.from('page_followers').select('page_id,user_id').eq('page_id',id).eq('user_id',state.user.id).maybeSingle(),
+      sb.from('page_followers').select('page_id',{count:'exact',head:true}).eq('page_id',id),
       sb.from('profiles').select('first_name,last_name,username,avatar_url,email,phone,country,city_current,bio').eq('id',x.owner_id).maybeSingle(),
       sb.from('page_members').select('user_id,role,profiles(first_name,last_name,username,avatar_url)').eq('page_id',id).order('created_at',{ascending:true}),
       sb.from('page_posts').select('*,page_post_reactions(id,user_id,reaction_type),page_post_comments(id,user_id,content,created_at,profiles(first_name,last_name,username,avatar_url)),page_post_shares(id,user_id)').eq('page_id',id).order('created_at',{ascending:false}).limit(50)
