@@ -6,10 +6,10 @@ const papiApiKey = Deno.env.get('PAPI_API_KEY')!;
 const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 
 const PACKAGES: Record<string,{amount:number,coins:number}> = {
-  '1000': { amount: 1000, coins: 10000 },
-  '5000': { amount: 5000, coins: 50000 },
-  '10000': { amount: 10000, coins: 100000 },
-  '25000': { amount: 25000, coins: 250000 },
+  '2000': { amount: 2000, coins: 10000 },
+  '10000': { amount: 10000, coins: 50000 },
+  '20000': { amount: 20000, coins: 100000 },
+  '50000': { amount: 50000, coins: 250000 },
 };
 const PROVIDERS = new Set(['MVOLA','AIRTEL_MONEY','ORANGE_MONEY']);
 
