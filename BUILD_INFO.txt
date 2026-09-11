@@ -1,2 +1,10 @@
-V83.4
-Withdrawal State Integrity + Legacy Reconciliation
+TAFAß V83.5
+Mobile Money Payout Readiness — MVola / Orange Money / Airtel Money
+
+Core state: pending -> processing -> paid / failed
+Provider credentials: Supabase Edge Function Secrets only
+Added: tafa-payout provider adapter layer
+Added: tafa-payout-webhook signed callback endpoint
+Added: provider health table + admin RPC
+Added: Madagascar Mobile Money destination validation
+No fake provider endpoints or credentials are included.
