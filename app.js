@@ -80,7 +80,7 @@ document.documentElement.classList.add("app-boot");
   // Tafaß V85 — Push notifications for Android/PWA when the app is closed.
   // Existing Realtime/audio behavior is preserved; this only registers a
   // browser Push subscription and stores it in public.push_subscriptions.
-  const TAFA_PUSH_VAPID_PUBLIC_KEY = "BKjAYjSCDFeaAczxzQg_ua_9cL9V3fzCU_3lpncLZ1oCQBjV3t91Y8oKSX4Mpk7SLxQXx4qdLsZ73w9mUGOpDbo";
+  const TAFA_PUSH_VAPID_PUBLIC_KEY = "BDKj0LueFYNPlQdnGr_IE0slPUgHwgkPvNwP_1zxmZOGYMj9t20upWUtHVaK_z5LGBXy77p8oXdiY4Tkd4osEMs";
   function tafaBase64ToUint8Array(base64String){
     const padding="=".repeat((4-(base64String.length%4))%4);
     const base64=(base64String+padding).replace(/-/g,"+").replace(/_/g,"/");
@@ -5827,8 +5827,9 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       await splashReady;
       $("auth").classList.add("hidden"); $("app").classList.remove("hidden");
       await loadPosts(); await setupRealtime(); ensureLiveFeedRealtime();
-      // V85: register the Web Push subscription for existing/logged-in accounts too.
-      // Without this call, only newly completed registrations were subscribed.
+      // Register/refresh the Web Push subscription for every authenticated
+      // session, including existing accounts that only log in (not only new
+      // registrations). This is required for background Android/PWA pushes.
       await setupTafaPushNotifications();
       await render();
       await startTimeLimitGuard();

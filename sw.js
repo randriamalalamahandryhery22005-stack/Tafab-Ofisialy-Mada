@@ -1,7 +1,7 @@
 /* Tafaß V83 — Clean Production Core service worker */
-const CACHE = 'tafass-v85-push-production';
+const CACHE = 'tafass-v86-official-push-production';
 const ASSETS = [
-  './', './index.html', './style.css?v=185', './app.js?v=185',
+  './', './index.html', './style.css?v=186', './app.js?v=186',
   './manifest.webmanifest', './assets/tafass-logo-premium.svg'
 ];
 self.addEventListener('install', event => {
