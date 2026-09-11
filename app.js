@@ -7,7 +7,7 @@
 ============================================================ */
 (() => {
   "use strict";
-  const BUILD_ID = "TAFAß-V73";
+  const BUILD_ID = "TAFAß-V83";
   const BUILD_KEY = "tafa_active_build";
   const previous = String(localStorage.getItem(BUILD_KEY) || "");
   if (previous !== BUILD_ID) {
@@ -15,7 +15,7 @@
     // Remove legacy app caches left by older service-worker builds.
     if (window.caches?.keys) {
       caches.keys().then(keys => Promise.all(
-        keys.filter(k => /^tafass-v/i.test(k) && k !== "tafass-v73-premium-shell").map(k => caches.delete(k))
+        keys.filter(k => /^tafass-v/i.test(k) && k !== "tafass-v83-production-core").map(k => caches.delete(k))
       )).catch(() => {});
     }
   }
@@ -2865,15 +2865,46 @@ function publisherBackgrounds(){
   async function stopTafaV80EntityRealtime(){ if(tafaV80EntityChannel){try{await sb.removeChannel(tafaV80EntityChannel);}catch(_){ } tafaV80EntityChannel=null;} }
   function tafaV80PageStatus(p){ if(p.deletion_status==='pending_deletion' && p.deletion_scheduled_at) return `Suppression prévue le ${new Date(p.deletion_scheduled_at).toLocaleDateString('fr-FR')}`; return 'Active'; }
   function tafaV80GroupStatus(g){ if(g.deletion_status==='pending_deletion' && g.deletion_scheduled_at) return `Suppression prévue le ${new Date(g.deletion_scheduled_at).toLocaleDateString('fr-FR')}`; return 'Actif'; }
-  async function setupTafaV80Realtime(kind, entityId=null){
-    await stopTafaV80EntityRealtime();
-    const table=kind==='page'?'pages':'groups';
-    tafaV80EntityChannel=sb.channel(`tafass-v80-${kind}-${entityId||'hub'}`)
-      .on('postgres_changes',{event:'*',schema:'public',table},()=>{ if(state.route===kind+'s' && !entityId){kind==='page'?pagesV80Hub():groupsV80Hub();} else if(entityId){kind==='page'?openPageDetail(entityId):openGroupDetail(entityId);} })
-      .on('postgres_changes',{event:'*',schema:'public',table:kind==='page'?'page_followers':'group_members'},()=>{ if(entityId){kind==='page'?openPageDetail(entityId):openGroupDetail(entityId);} else {kind==='page'?pagesV80Hub():groupsV80Hub();} })
-      .on('postgres_changes',{event:'*',schema:'public',table:kind==='page'?'page_posts':'group_posts'},()=>{ if(entityId){kind==='page'?openPageDetail(entityId):openGroupDetail(entityId);} })
-      .subscribe();
+  // V83: single realtime coordinator for Pages/Groups.
+  // It coalesces bursts of database events instead of reloading the same
+  // screen once per row change. The server/RLS remains authoritative.
+  let tafaV83EntityChannel=null;
+  let tafaV83RefreshTimer=null;
+  async function stopTafaV83Realtime(){
+    if(tafaV83EntityChannel){try{await sb.removeChannel(tafaV83EntityChannel);}catch(_){ } tafaV83EntityChannel=null;}
+    if(tafaV83RefreshTimer){clearTimeout(tafaV83RefreshTimer);tafaV83RefreshTimer=null;}
   }
+  async function setupTafaV80Realtime(kind, entityId=null){
+    await stopTafaV83Realtime();
+    const isPage=kind==='page';
+    const mainTable=isPage?'pages':'groups';
+    const childTables=isPage?['page_followers','page_posts','page_post_reactions','page_post_comments','page_post_shares']:['group_members','group_posts'];
+    const channelName=`tafass-v83-${kind}-${entityId||'hub'}`;
+    const schedule=()=>{
+      if(tafaV83RefreshTimer)clearTimeout(tafaV83RefreshTimer);
+      tafaV83RefreshTimer=setTimeout(()=>{
+        tafaV83RefreshTimer=null;
+        if(isPage){
+          if(entityId && document.querySelector(`[data-page-id=\"${CSS.escape(String(entityId))}\"]`)) openPageDetail(entityId);
+          else if(!entityId && state.route==='pages') pagesV80Hub();
+        }else{
+          if(entityId && state.route==='groups') openGroupDetail(entityId);
+          else if(!entityId && state.route==='groups') groupsV80Hub();
+        }
+      },220);
+    };
+    let ch=sb.channel(channelName);
+    ch=ch.on('postgres_changes',{event:'*',schema:'public',table:mainTable},schedule);
+    for(const table of childTables){
+      const filter=entityId ? (isPage?'page_id':'group_id')+`=eq.${entityId}` : undefined;
+      const cfg={event:'*',schema:'public',table};
+      if(filter)cfg.filter=filter;
+      ch=ch.on('postgres_changes',cfg,schedule);
+    }
+    tafaV83EntityChannel=ch;
+    ch.subscribe();
+  }
+  function supabaseReady(){ return !!(sb && state.user); }
   async function pagesV80Hub(){
     const {data,error}=await sb.from('pages').select(`${PAGE_FIELDS},deletion_status,deletion_requested_at,deletion_scheduled_at`).neq('deletion_status','deleted').order('created_at',{ascending:false}).limit(100);
     if(error)return simplePage('Pages',`<div class="empty-block"><b>Impossible de charger les Pages.</b><small>${esc(error.message)}</small></div>`);
@@ -8809,7 +8840,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   try{ togglePageFollow=window.tafaV81TogglePageFollow; toggleGroupMember=window.tafaV81ToggleGroupMember; }catch(_e){}
 
   /* ============================================================
-     TAFAß V82 — PAGES UI REBUILD
+     TAFAß V83 — CLEAN PRODUCTION CORE / PAGES UI
      New mobile-first Page hub/detail. The old Page presentation is
      no longer used. The detail view is a real scroll container so
      touch/trackpad can move from top to bottom and back without the
@@ -8914,8 +8945,10 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     requestAnimationFrame(()=>{const root=document.querySelector('.tafass-v82-page-modal .v82-scroll');if(root)root.scrollTop=0;});
   }
 
-  // V82 becomes the only active Page hub/detail implementation.
+  // V83 becomes the only active Page hub/detail implementation. Legacy names
+  // are retained only as internal compatibility aliases for existing routes.
   pagesV80Hub=pagesV82Hub;
   openPageDetail=openPageDetailV82;
+  window.__TAFA_V83__={version:'83',core:'clean-production',pages:'v83',realtime:'coalesced'};
 
 })();

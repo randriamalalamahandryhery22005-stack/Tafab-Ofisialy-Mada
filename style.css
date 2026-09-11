@@ -6464,3 +6464,20 @@ body.modal-open{overflow:hidden!important;}
   .tafass-v82-page-modal{width:calc(100vw - 8px)!important;height:calc(100dvh - 8px)!important;max-height:calc(100dvh - 8px)!important;border-radius:21px!important}
   .tafass-v82-page-modal .v82-detail-topbar{height:58px;padding:7px 9px}.v82-back{min-height:40px;padding:0 9px}.v82-top-more{width:40px;height:40px;flex-basis:40px}.v82-cover{height:190px}.v82-identity{padding:0 15px;margin-top:-47px;gap:10px}.v82-detail-avatar{width:88px!important;height:88px!important;border-radius:22px!important}.v82-check{width:24px;height:24px;font-size:10px}.v82-identity-copy h2{font-size:23px}.v82-identity-copy p{font-size:10px;line-height:1.4}.v82-stats{padding:14px 15px 0;gap:7px}.v82-stats span{padding:10px 6px}.v82-stats b{font-size:12px}.v82-stats small{font-size:8px}.v82-main-actions{padding:13px 15px;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 44px}.v82-detail-tabs{padding:0 15px}.v82-detail-tabs button{padding:0 12px;min-height:44px;font-size:11px}.v82-composer{margin:14px 15px;padding:13px}.v82-composer-bottom{flex-wrap:wrap}.v82-composer-bottom>span{order:3;flex-basis:100%}.v82-panel{padding:15px 15px 0}.v82-panel-head h3{font-size:18px}.v82-post-actions button{font-size:10px}.v82-info-grid{grid-template-columns:1fr}.v82-info-grid .wide{grid-column:auto}.tafass-v82-pages{padding:4px 0 24px}.v82-pages-head{padding:0 2px}.v82-brand-line h2{font-size:21px}.v82-intro{font-size:10px}.v82-section-head{margin-left:0;margin-right:0}.v82-page-main{padding:12px}.v82-page-actions{padding:0 12px 12px}
 }
+
+
+/* ============================================================
+   TAFAß V83 — CLEAN PRODUCTION CORE
+   Stable mobile shell and no legacy Page modal overflow leaks.
+============================================================ */
+.tafass-v82-page-modal,
+.tafass-v82-page-modal .v82-scroll{box-sizing:border-box;min-width:0;overscroll-behavior:contain}
+.tafass-v82-page-modal .v82-scroll{-webkit-overflow-scrolling:touch;touch-action:pan-y;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin}
+.tafass-v82-page-modal .v82-post-text,
+.tafass-v82-page-modal .v82-comment p,
+.tafass-v82-page-modal .v82-info-grid b,
+.tafass-v82-page-modal .v82-team-row b{overflow-wrap:anywhere;word-break:break-word}
+@media(max-width:700px){
+  .tafass-v82-page-modal{inset:4px!important;position:fixed!important}
+  .tafass-v82-page-modal .v82-scroll{height:calc(100dvh - 66px);max-height:none}
+}

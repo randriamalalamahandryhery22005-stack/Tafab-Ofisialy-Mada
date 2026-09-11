@@ -1,9 +1,7 @@
-Tafaß V42 — PREMIUM VISUAL REFRESH
-Base: latest working Tafaß build + V41 fixes
-Theme: Black + Premium Green + Premium Orange + Gold
-Age policy: 18+
-Pages/Groups: premium redesign + follow/join reliability
-Badge officiel: new verification wizard
-Splash: logo + loading points only
-Auth: connection/disconnection loading
-owner_id: ambiguity hotfix included
+Tafaß V83 — CLEAN PRODUCTION CORE
+Base: latest working Tafaß build + consolidated V83 frontend core
+Pages: V83 single active mobile-first interface
+Realtime: coalesced Page/Group subscriptions
+Cache: V83 production namespace + network-first deployment
+Auth: Supabase persistent session
+Security: client is UX only; Supabase RLS/RPC remains authoritative
