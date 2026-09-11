@@ -75,6 +75,57 @@ document.documentElement.classList.add("app-boot");
 
   // Production network/realtime guard: keeps the UI honest when connectivity changes.
   const realtimeRuntime = { retryTimer:null, retryCount:0, lastStatus:"", reconnecting:false };
+
+  // Tafaß notification audio: one lightweight client-side sound engine for all
+  // realtime alerts. No database/schema/backend changes are required.
+  const notificationSound = {
+    ctx:null, master:null, unlocked:false, lastAt:0, cooldown:260
+  };
+  function ensureNotificationAudio(){
+    try{
+      const AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC) return null;
+      if(!notificationSound.ctx){
+        notificationSound.ctx=new AC();
+        notificationSound.master=notificationSound.ctx.createGain();
+        notificationSound.master.gain.value=.22;
+        notificationSound.master.connect(notificationSound.ctx.destination);
+      }
+      if(notificationSound.ctx.state==='suspended') notificationSound.ctx.resume().catch(()=>{});
+      notificationSound.unlocked=true;
+      return notificationSound.ctx;
+    }catch(_){ return null; }
+  }
+  function unlockNotificationAudio(){ ensureNotificationAudio(); }
+  function playNotificationSound(kind='notification'){
+    const now=Date.now();
+    if(now-notificationSound.lastAt<notificationSound.cooldown) return;
+    const ctx=ensureNotificationAudio();
+    if(!ctx || !notificationSound.master) return;
+    notificationSound.lastAt=now;
+    const patterns={
+      message:[{f:740,t:0,d:.10},{f:988,t:.115,d:.13}],
+      call:[{f:660,t:0,d:.13},{f:880,t:.16,d:.13},{f:660,t:.34,d:.13}],
+      friend:[{f:520,t:0,d:.11},{f:740,t:.13,d:.16}],
+      notification:[{f:620,t:0,d:.10},{f:820,t:.12,d:.16}]
+    };
+    const list=patterns[kind]||patterns.notification;
+    const start=ctx.currentTime+.01;
+    list.forEach(x=>{
+      const o=ctx.createOscillator(), g=ctx.createGain();
+      o.type='sine'; o.frequency.setValueAtTime(x.f,start+x.t);
+      g.gain.setValueAtTime(.0001,start+x.t);
+      g.gain.exponentialRampToValueAtTime(.55,start+x.t+.018);
+      g.gain.exponentialRampToValueAtTime(.0001,start+x.t+x.d);
+      o.connect(g).connect(notificationSound.master);
+      o.start(start+x.t); o.stop(start+x.t+x.d+.02);
+    });
+    try{ if(navigator.vibrate) navigator.vibrate(kind==='call'?[80,45,80]:35); }catch(_){}
+  }
+  if(!window.__tafaNotificationAudioBound){
+    window.__tafaNotificationAudioBound=true;
+    ['pointerdown','touchstart','keydown'].forEach(ev=>window.addEventListener(ev,unlockNotificationAudio,{passive:true,once:true}));
+  }
   function networkBanner(message, mode="") {
     // V73: no reconnect/offline banner is rendered over the application.
     const el=$("networkStatus"); if(el){ el.hidden=true; el.className="network-status"; el.textContent=""; }
@@ -5271,17 +5322,39 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       post_shares: async () => { await loadPosts(); if (["home","profile"].includes(state.route)) render(); },
       notifications: payload => {
         const rec=payload?.new || payload?.record || payload;
-        if(rec?.user_id && rec.user_id!==state.user.id) return;
-        updateBadges();
-        if(rec?.user_id===state.user.id && rec?.actor_id!==state.user.id && rec?.is_read===false && state.route!=="notifications") {
+        if(rec?.user_id && String(rec.user_id)!==String(state.user.id)) return;
+        const isNew=String(payload?.eventType||payload?.event||'').toUpperCase()==='INSERT' || !!payload?.new;
+        const incoming=rec?.user_id && String(rec.user_id)===String(state.user.id) && String(rec.actor_id||'')!==String(state.user.id) && rec?.is_read===false;
+        if(isNew && incoming){
+          const t=String(rec.type||'').toLowerCase();
+          playNotificationSound(/call|appel/.test(t)?'call':/friend|follow|request/.test(t)?'friend':'notification');
           const title=rec.title || "Nouvelle notification";
-          toast(title);
+          if(state.route!=="notifications") toast(title);
         }
+        updateBadges();
         if (state.route==="notifications") notificationsPage();
       },
-      messages: payload => { updateBadges(); if (state.route==="messages") state.selectedConversation ? openConversation(state.selectedConversation) : messagesPage(); },
-      friend_requests: () => { updateBadges(); if (state.route==="friends") friendsPage(); if (state.viewingProfileId && state.route==="profile") openUserProfile(state.viewingProfileId); },
-      friendships: () => { if (state.route==="friends") friendsPage(); if (state.viewingProfileId && state.route==="profile") openUserProfile(state.viewingProfileId); },
+      messages: payload => {
+        const rec=payload?.new || payload?.record || payload;
+        const isNew=String(payload?.eventType||payload?.event||'').toUpperCase()==='INSERT' || !!payload?.new;
+        if(isNew && rec?.sender_id && String(rec.sender_id)!==String(state.user.id) && rec?.is_read!==true){
+          playNotificationSound('message');
+        }
+        updateBadges();
+        if (state.route==="messages") state.selectedConversation ? openConversation(state.selectedConversation) : messagesPage();
+      },
+      friend_requests: payload => {
+        const rec=payload?.new || payload?.record || payload;
+        const isNew=String(payload?.eventType||payload?.event||'').toUpperCase()==='INSERT' || !!payload?.new;
+        if(isNew && rec?.receiver_id && String(rec.receiver_id)===String(state.user.id) && String(rec.sender_id||'')!==String(state.user.id) && String(rec.status||'pending')==='pending') playNotificationSound('friend');
+        updateBadges(); if (state.route==="friends") friendsPage(); if (state.viewingProfileId && state.route==="profile") openUserProfile(state.viewingProfileId);
+      },
+      friendships: payload => {
+        const rec=payload?.new || payload?.record || payload;
+        const isNew=String(payload?.eventType||payload?.event||'').toUpperCase()==='INSERT' || !!payload?.new;
+        if(isNew && rec && String(rec.user_id||'')!==String(state.user.id) && String(rec.friend_id||'')===String(state.user.id)) playNotificationSound('friend');
+        if (state.route==="friends") friendsPage(); if (state.viewingProfileId && state.route==="profile") openUserProfile(state.viewingProfileId);
+      },
       follows: () => { if (state.route==="profile") state.viewingProfileId ? openUserProfile(state.viewingProfileId) : profilePage(state.profileTab); },
       groups: () => { if (state.route==="groups") genericListPage("groups"); },
       group_members: () => { if (state.route==="groups") genericListPage("groups"); },
