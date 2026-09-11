@@ -6384,6 +6384,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if (action === "admin-boost-campaign-control") return adminControlBoostCampaign(id,actionEl.dataset.status||'paused');
     if (action === "confirm-boost-admin") return confirmBoostAdminAction(actionEl.dataset.kind||"payment",id,actionEl.dataset.status||"rejected");
     if (action === "admin-report-status") return adminSetReportStatus(id,actionEl.dataset.status||'resolved');
+    if (action === "v81-follow-user") return window.tafaV81FollowUser(id);
     if (action === "search-category") { searchCategory = actionEl.dataset.category || "accounts"; return searchPage($("searchInput")?.value || "", searchCategory); }
     if (action === "profile-wall-composer") { const owner=actionEl.dataset.id||state.viewingProfileId||state.user.id; const prof=owner===state.user.id?state.profile:((state.users||[]).find(x=>String(x.id)===String(owner))||{}); return openProfileWallComposer(owner,nameOf(prof)); }
     if (action === "close-profile-wall-composer") { closeModal(); return; }
@@ -8637,4 +8638,173 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     cleanupLegacyAdmin();
   },true);
   cleanupLegacyAdmin();
+})();
+
+/* =========================================================
+   TAFAß V81 — PROFILE / FRIENDS / SEARCH / SETTINGS + ENTITY ACTIONS
+   Authoritative patch layered on V80. No legacy V79 code is used as base.
+   ========================================================= */
+(function installTafaV81(){
+  const v81GetFollowed = async (ids=[]) => {
+    if(!state.user?.id || !ids.length) return new Set();
+    const r=await sb.from('follows').select('following_id').eq('follower_id',state.user.id).in('following_id',ids);
+    return new Set((r.data||[]).map(x=>String(x.following_id)));
+  };
+
+  window.tafaV81FollowUser = async function(userId){
+    if(!state.user?.id || !userId || String(userId)===String(state.user.id)) return;
+    if(await denyIfBlocked(userId,'Action impossible : ce compte est bloqué.')) return;
+    const existing=await sb.from('follows').select('id').eq('follower_id',state.user.id).eq('following_id',userId).maybeSingle();
+    if(existing.error) return toast(existing.error.message);
+    if(existing.data){
+      const r=await sb.from('follows').delete().eq('id',existing.data.id);
+      if(r.error)return toast(r.error.message);
+      toast('Vous ne suivez plus ce compte.');
+    }else{
+      const r=await sb.from('follows').insert({follower_id:state.user.id,following_id:userId});
+      if(r.error)return toast(r.error.message);
+      toast('Vous suivez maintenant ce compte.');
+      await sb.from('notifications').insert({user_id:userId,actor_id:state.user.id,type:'follow',title:'Nouvel abonné',message:'Un membre vous suit maintenant.',entity_type:'profile',entity_id:userId});
+    }
+    if(state.route==='search') return searchPage(document.getElementById('searchInput')?.value||'',searchCategory);
+    if(state.viewingProfileId===userId) return openUserProfile(userId);
+    return friendsPage(state.friendsTab);
+  };
+
+  window.tafaV81TogglePageFollow = async function(id){
+    if(!state.user?.id)return toast('Connectez-vous pour suivre une Page.');
+    const pg=(await sb.from('pages').select('id,owner_id,name').eq('id',id).maybeSingle()).data;
+    if(!pg)return toast('Page introuvable.');
+    if(String(pg.owner_id)===String(state.user.id))return toast('Le propriétaire ne peut pas suivre sa propre Page.');
+    let followed=null;
+    const rpc=await sb.rpc('tafa_v81_toggle_page_follow',{p_page_id:id});
+    if(!rpc.error && rpc.data && typeof rpc.data.followed!=='undefined') followed=!!rpc.data.followed;
+    if(followed===null){
+      const q=await sb.from('page_followers').select('id').eq('page_id',id).eq('user_id',state.user.id).maybeSingle();
+      if(q.error)return toast(q.error.message);
+      if(q.data){ const r=await sb.from('page_followers').delete().eq('id',q.data.id); if(r.error)return toast(r.error.message); followed=false; }
+      else { const r=await sb.from('page_followers').insert({page_id:id,user_id:state.user.id}); if(r.error)return toast(r.error.message); followed=true; }
+    }
+    if(followed) await sb.from('notifications').insert({user_id:pg.owner_id,actor_id:state.user.id,type:'page_follow',title:'Nouvel abonné',message:`Un membre suit maintenant ${pg.name}.`,entity_type:'page',entity_id:id});
+    toast(followed?'Vous suivez maintenant cette Page.':'Vous ne suivez plus cette Page.');
+    state.renderToken++;
+    return pagesV80Hub();
+  };
+
+  window.tafaV81ToggleGroupMember = async function(id){
+    if(!state.user?.id)return toast('Connectez-vous pour rejoindre un groupe.');
+    const g=(await sb.from('groups').select('id,owner_id,privacy,name').eq('id',id).maybeSingle()).data;
+    if(!g)return toast('Groupe introuvable.');
+    const q=await sb.from('group_members').select('id,role').eq('group_id',id).eq('user_id',state.user.id).maybeSingle();
+    if(q.error)return toast(q.error.message);
+    if(q.data){
+      if(String(g.owner_id)===String(state.user.id))return toast('Le propriétaire ne peut pas quitter son propre groupe.');
+      const rpc=await sb.rpc('tafa_v81_toggle_group_membership',{p_group_id:id});
+      if(rpc.error){const r=await sb.from('group_members').delete().eq('id',q.data.id);if(r.error)return toast(r.error.message);}
+      toast('Vous avez quitté le groupe.');
+    }else if(String(g.privacy||'public').toLowerCase()==='private'){
+      const reqRpc=await sb.rpc('tafa_v81_request_group_join',{p_group_id:id});
+      if(reqRpc.error){
+        const existing=await sb.from('group_join_requests').select('id,status').eq('group_id',id).eq('user_id',state.user.id).eq('status','pending').maybeSingle();
+        if(existing.error && !/column .*user_id.*does not exist|relation .*group_join_requests.*does not exist/i.test(existing.error.message||''))return toast(existing.error.message);
+        if(existing.data)return toast('Votre demande est déjà en attente.');
+        const r=await sb.from('group_join_requests').insert({group_id:id,user_id:state.user.id,status:'pending'});
+        if(r.error)return toast(r.error.message||'Impossible d’envoyer la demande.');
+      } else if(reqRpc.data?.requested===false && reqRpc.data?.joined===true){
+        toast('Vous avez rejoint le groupe.');
+      } else if(reqRpc.data?.already_requested){ return toast('Votre demande est déjà en attente.'); }
+      toast('Demande envoyée au groupe.');
+      await sb.from('notifications').insert({user_id:g.owner_id,actor_id:state.user.id,type:'group_join_request',title:'Demande pour rejoindre le groupe',message:`Une personne demande à rejoindre ${g.name}.`,entity_type:'group',entity_id:id});
+    }else{
+      const rpc=await sb.rpc('tafa_v81_toggle_group_membership',{p_group_id:id});
+      if(rpc.error){ const r=await sb.from('group_members').insert({group_id:id,user_id:state.user.id,role:'member'}); if(r.error)return toast(r.error.message); }
+      toast('Vous avez rejoint le groupe.');
+      await sb.from('notifications').insert({user_id:g.owner_id,actor_id:state.user.id,type:'group_join',title:'Nouveau membre',message:`Un membre a rejoint ${g.name}.`,entity_type:'group',entity_id:id});
+    }
+    state.renderToken++;
+    return groupsV80Hub();
+  };
+
+  /* V81: reliable Friends hub with all relationship states. */
+  window.friendsPage = async function(tab=state.friendsTab){
+    state.friendsTab=tab||'suggestions';
+    const token=state.renderToken;
+    await getBlockedIds();
+    const peopleR=await sb.from('profiles').select('*').neq('id',state.user.id).order('created_at',{ascending:false}).limit(150);
+    if(token!==state.renderToken)return;
+    if(peopleR.error)return simplePage('Amis',`<div class="empty">${esc(peopleR.error.message)}</div>`);
+    const people=filterBlocked(peopleR.data||[],'id');
+    const ids=people.map(p=>p.id);
+    const [inR,sentR,friendR,followersR,followingR]=await Promise.all([
+      sb.from('friend_requests').select('id,sender_id').eq('receiver_id',state.user.id).eq('status','pending'),
+      sb.from('friend_requests').select('id,receiver_id').eq('sender_id',state.user.id).eq('status','pending'),
+      sb.from('friendships').select('friend_id').eq('user_id',state.user.id),
+      sb.from('follows').select('follower_id').eq('following_id',state.user.id),
+      sb.from('follows').select('following_id').eq('follower_id',state.user.id)
+    ]);
+    const incoming=new Set((inR.data||[]).map(x=>String(x.sender_id)));
+    const sent=new Set((sentR.data||[]).map(x=>String(x.receiver_id)));
+    const friends=new Set((friendR.data||[]).map(x=>String(x.friend_id)));
+    const followers=new Set((followersR.data||[]).map(x=>String(x.follower_id)));
+    const following=new Set((followingR.data||[]).map(x=>String(x.following_id)));
+    const map=new Map(people.map(p=>[String(p.id),p]));
+    const rows=(set)=>[...set].map(id=>map.get(id)).filter(Boolean);
+    const suggestions=people.filter(p=>!friends.has(String(p.id))&&!incoming.has(String(p.id))&&!sent.has(String(p.id)));
+    const commonMap=new Map();
+    if(ids.length){const r=await sb.rpc('tafa_common_friend_counts',{p_user_ids:ids});(r.data||[]).forEach(x=>commonMap.set(String(x.user_id),Number(x.common_count||0)));}
+    const tabs=[['suggestions','Suggestions',suggestions.length],['friends','Amis',friends.size],['requests','Demandes reçues',incoming.size],['sent','Demandes envoyées',sent.size],['followers','Abonnés',followers.size],['following','Abonnements',following.size]];
+    const personRow=(p)=>{
+      const pid=String(p.id), isFriend=friends.has(pid), isIn=incoming.has(pid), isSent=sent.has(pid), isFollowing=following.has(pid);
+      let action='';
+      if(isFriend) action=`<button class="ghost-action" data-action="view-profile" data-id="${esc(p.id)}">Profil</button>`;
+      else if(isIn) action=`<div class="friend-actions"><button class="small-action" data-action="accept-friend" data-id="${esc(p.id)}">Confirmer</button><button class="ghost-action" data-action="decline-friend" data-id="${esc(p.id)}">Refuser</button></div>`;
+      else if(isSent) action=`<button class="ghost-action" disabled>Demande envoyée</button>`;
+      else action=`<button class="small-action" data-action="add-friend" data-id="${esc(p.id)}">Ajouter</button>`;
+      if(!isFriend && !isIn) action+=`<button class="ghost-action" data-action="v81-follow-user" data-id="${esc(p.id)}">${isFollowing?'Ne plus suivre':'Suivre'}</button>`;
+      return `<div class="list-row friend-row v81-friend-row">${avatarHTML(p)}<div class="grow">${displayNameHTML(p)}${commonMap.get(pid)?`<small class="mutual-friends">${commonMap.get(pid)} ami${commonMap.get(pid)>1?'s':''} en commun</small>`:''}</div><div class="v81-friend-actions">${action}</div></div>`;
+    };
+    let list=[];
+    if(state.friendsTab==='friends')list=rows(friends);
+    else if(state.friendsTab==='requests')list=rows(incoming);
+    else if(state.friendsTab==='sent')list=rows(sent);
+    else if(state.friendsTab==='followers')list=rows(followers);
+    else if(state.friendsTab==='following')list=rows(following);
+    else list=suggestions;
+    const body=list.length?list.map(personRow).join(''):`<div class="empty">Aucun résultat dans cette section.</div>`;
+    const tabHtml=tabs.map(([k,l,c])=>`<button class="${state.friendsTab===k?'active':''}" data-action="friends-tab" data-tab="${k}">${l}<span class="tab-count">${c}</span></button>`).join('');
+    simplePage('Amis',`<section class="v81-friends-shell"><div class="v81-friends-hero"><div><span class="eyebrow">TAFAß • MON RÉSEAU</span><h2>Amis</h2><p>Gérez vos amis, demandes, abonnés et abonnements au même endroit.</p></div><div class="v81-network-stats"><b>${friends.size}</b><small>Amis</small><b>${followers.size}</b><small>Abonnés</small></div></div><div class="friends-filter v81-friends-tabs">${tabHtml}</div><div class="clean-section"><h3 class="menu-section-title">${esc(tabs.find(x=>x[0]===state.friendsTab)?.[1]||'Amis')}</h3><div class="friends-list">${body}</div></div></section>`);
+  };
+
+  /* Search: actions are available immediately from result rows. */
+  window.searchPage = async function(q='',category=searchCategory){
+    searchCategory=category||searchCategory; const token=state.renderToken; const term=q.trim();
+    let people=[],posts=[],pages=[],groups=[];
+    if(term){
+      const safe=term.replace(/[%_]/g,'').trim(); if(!safe)return searchPage('',searchCategory);
+      const [pr,por,pgr,gr]=await Promise.all([
+        sb.from('profiles').select('*').or(`first_name.ilike.%${safe}%,last_name.ilike.%${safe}%,username.ilike.%${safe}%`).limit(40),
+        sb.from('posts').select('*').or(`content.ilike.%${safe}%`).order('created_at',{ascending:false}).limit(30),
+        sb.from('pages').select(`${PAGE_FIELDS},deletion_status`).or(`name.ilike.%${safe}%,category.ilike.%${safe}%,bio.ilike.%${safe}%`).neq('deletion_status','deleted').limit(30),
+        sb.from('groups').select(`${GROUP_FIELDS},deletion_status`).or(`name.ilike.%${safe}%,description.ilike.%${safe}%`).neq('deletion_status','deleted').limit(30)
+      ]);
+      await getBlockedIds(); people=filterBlocked(pr.data||[],'id'); posts=filterBlocked(por.data||[],'user_id'); pages=pgr.data||[]; groups=gr.data||[];
+      if(state.user&&safe.length>=2){const h=await sb.from('search_history').select('id').eq('user_id',state.user.id).eq('search_text',term).limit(1);if(!(h.data||[]).length)await sb.from('search_history').insert({user_id:state.user.id,search_text:term,result_type:'all'});}
+      const pids=[...new Set(posts.map(x=>x.user_id).filter(Boolean))];const pp=pids.length?await sb.from('profiles').select('*').in('id',pids):{data:[]};const pm=new Map((pp.data||[]).map(x=>[String(x.id),x]));posts=posts.map(x=>({...x,author:pm.get(String(x.user_id))}));
+    }
+    if(token!==state.renderToken||state.route!=='search')return;
+    const followed=await v81GetFollowed(people.map(p=>p.id));
+    const peopleHtml=people.length?people.map(p=>`<div class="list-row search-result-row v81-search-person">${avatarHTML(p)}<div class="grow">${displayNameHTML(p)}<small>${esc([p.city_current,p.country].filter(Boolean).join(' · ')||'Compte Tafaß')}</small></div><div class="v81-search-actions"><button class="small-action" data-action="v81-follow-user" data-id="${esc(p.id)}">${followed.has(String(p.id))?'Ne plus suivre':'Suivre'}</button><button class="ghost-action" data-action="view-profile" data-id="${esc(p.id)}">Profil</button></div></div>`).join(''):`<div class="empty">Aucun compte trouvé.</div>`;
+    const postHtml=posts.length?posts.map(p=>`<div class="list-row search-result-row"><div class="grow"><b>${esc(nameOf(p.author||{}))}</b><small>${esc((p.content||'Publication sans texte').slice(0,160))}</small></div><button class="small-action" data-action="search-post" data-id="${esc(p.id)}">Voir</button></div>`).join(''):`<div class="empty">Aucune publication trouvée.</div>`;
+    const pageHtml=pages.length?pages.map(x=>`<div class="list-row search-result-row"><div class="entity-search-icon">▣</div><div class="grow"><b>${esc(x.name)}</b><small>${esc(x.category||'Page')} · ${esc(x.bio||'')}</small></div><div class="v81-search-actions"><button class="small-action" data-action="toggle-page-follow" data-id="${esc(x.id)}">Suivre</button><button class="ghost-action" data-action="page-open" data-id="${esc(x.id)}">Ouvrir</button></div></div>`).join(''):`<div class="empty">Aucune Page trouvée.</div>`;
+    const groupHtml=groups.length?groups.map(x=>`<div class="list-row search-result-row"><div class="entity-search-icon">◎</div><div class="grow"><b>${esc(x.name)}</b><small>${esc(x.privacy==='private'?'Privé':'Public')} · ${esc(x.description||'')}</small></div><div class="v81-search-actions"><button class="small-action" data-action="toggle-group-member" data-id="${esc(x.id)}">${x.privacy==='private'?'Demander':'Rejoindre'}</button><button class="ghost-action" data-action="group-open" data-id="${esc(x.id)}">Ouvrir</button></div></div>`).join(''):`<div class="empty">Aucun groupe trouvé.</div>`;
+    const categories=[['accounts','Comptes',people.length],['posts','Publications',posts.length],['pages','Pages',pages.length],['groups','Groupes',groups.length]];
+    const categoryTabs=term?`<div class="search-category-bar" role="tablist">${categories.map(([k,l,c])=>`<button type="button" class="search-category-tab ${searchCategory===k?'active':''}" data-action="search-category" data-category="${k}"><span>${k==='accounts'?'♙':k==='posts'?'▤':k==='pages'?'▣':'◎'}</span><span>${l}</span><b>${c}</b></button>`).join('')}</div>`:'';
+    const map={accounts:['Comptes',peopleHtml],posts:['Publications',postHtml],pages:['Pages',pageHtml],groups:['Groupes',groupHtml]};const active=term?map[searchCategory]||map.accounts:['','<div class="search-ready-hint"><span>⌕</span><div><b>Commencez votre recherche</b><small>Recherchez un compte, une publication, une Page ou un groupe.</small></div></div>'];
+    simplePage('Rechercher',`<section class="search-page-v81"><div class="page-header clean-page-header"><div><span class="eyebrow">TAFAß • EXPLORER</span><h2>Rechercher</h2><p class="page-kicker">Personnes, Pages, Groupes et publications.</p></div></div><form id="tafaSearchForm" class="clean-search searchbox premium-searchbox"><span class="icon">⌕</span><input id="searchInput" value="${esc(term)}" placeholder="Rechercher…" autocomplete="off"><button type="submit">→</button></form>${categoryTabs}<div class="search-active-result"><div class="search-result-heading"><div><span class="eyebrow">RÉSULTATS</span><h3>${esc(active[0]||'Recherche')}</h3></div><span class="search-result-count">${term?(categories.find(x=>x[0]===searchCategory)?.[2]||0):0}</span></div><div class="clean-list search-results-list">${active[1]}</div></div></section>`);
+    $('tafaSearchForm')?.addEventListener('submit',e=>{e.preventDefault();const v=$('searchInput')?.value.trim()||'';if(v)searchPage(v,searchCategory);});
+  };
+
+  /* Route handlers call these wrappers, so V80 buttons no longer enter broken legacy detail flows after a mutation. */
+  window.__tafaV81Installed=true;
+  try{ togglePageFollow=window.tafaV81TogglePageFollow; toggleGroupMember=window.tafaV81ToggleGroupMember; }catch(_e){}
 })();

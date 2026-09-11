@@ -1,7 +1,7 @@
 /* Tafaß V80 — single active Pages & Groupes version */
-const CACHE = 'tafass-v80-entities-shell';
+const CACHE = 'tafass-v81-complete-social-shell';
 const ASSETS = [
-  './', './index.html', './style.css?v=180', './app.js?v=180',
+  './', './index.html', './style.css?v=181', './app.js?v=181',
   './manifest.webmanifest', './assets/tafass-logo-premium.svg'
 ];
 self.addEventListener('install', event => {
