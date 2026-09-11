@@ -6125,3 +6125,84 @@ body.page-loading #content{pointer-events:auto!important}
   .tfa-public-tabs-v71{margin-left:-12px;margin-right:-12px}
   .profile-wall-media{max-height:68vh}
 }
+
+
+/* ============================================================
+   TAFAß V73 — FINAL PROFILE / TOUCH / NO-BLOCKING SKIN
+   ============================================================ */
+html,body{overscroll-behavior-y:contain}
+body,.app-shell,#app,#content{touch-action:pan-y}
+button,[role="button"],[data-action],[data-route],a{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+#content.v44-route-switching{opacity:1!important;transform:none!important;transition:none!important}
+.v44-page-skeleton{display:none!important}
+.tafass-app-transition{display:none!important;opacity:0!important;pointer-events:none!important}
+.network-status{display:none!important}
+
+/* Personal profile PDP: stays completely inside the circular case and sits
+   lower on the cover edge instead of escaping too far upward. */
+.tfa-profile-avatar-row-v70{
+  position:relative!important;
+  height:112px!important;
+  margin-top:-38px!important;
+  display:flex!important;
+  align-items:center!important;
+  z-index:8!important;
+  padding-left:2px!important;
+}
+.tfa-profile-avatar-ring-v70{
+  width:112px!important;height:112px!important;
+  min-width:112px!important;min-height:112px!important;
+  box-sizing:border-box!important;padding:4px!important;
+  border-radius:50%!important;overflow:hidden!important;
+  display:block!important;isolation:isolate!important;
+}
+.tfa-profile-avatar-ring-v70>.avatar{
+  width:100%!important;height:100%!important;
+  min-width:0!important;min-height:0!important;
+  max-width:none!important;max-height:none!important;
+  margin:0!important;border-radius:50%!important;
+  overflow:hidden!important;box-sizing:border-box!important;
+}
+.tfa-profile-avatar-ring-v70>.avatar>img{
+  width:100%!important;height:100%!important;
+  min-width:0!important;min-height:0!important;
+  max-width:none!important;max-height:none!important;
+  display:block!important;border-radius:50%!important;
+  object-fit:cover!important;object-position:center center!important;
+}
+.tfa-profile-avatar-camera-v70{left:78px!important;bottom:4px!important}
+.tfa-public-avatar-row-v71{
+  height:112px!important;margin-top:-38px!important;
+  align-items:center!important;padding-left:2px!important;
+}
+.tfa-public-avatar-ring-v71{
+  width:112px!important;height:112px!important;
+  min-width:112px!important;min-height:112px!important;
+  box-sizing:border-box!important;padding:4px!important;
+  border-radius:50%!important;overflow:hidden!important;isolation:isolate!important;
+}
+.tfa-public-avatar-ring-v71>.avatar,
+.tfa-public-avatar-ring-v71>.avatar>img{
+  width:100%!important;height:100%!important;min-width:0!important;min-height:0!important;
+  border-radius:50%!important;overflow:hidden!important;object-fit:cover!important;
+}
+.tfa-public-avatar-camera-v71{left:78px!important;bottom:4px!important}
+
+/* Presence markers are deliberately compact. */
+.tfa-presence-dot{width:8px!important;height:8px!important;min-width:8px!important}
+
+/* Profile wall composer remains visible and usable. */
+.tfa-own-profile-composer-v72,.tfa-public-composer-v72{pointer-events:auto!important;position:relative!important;z-index:4!important}
+
+@media(max-width:720px){
+  .tfa-profile-avatar-row-v70{height:104px!important;margin-top:-32px!important}
+  .tfa-profile-avatar-ring-v70{width:104px!important;height:104px!important;min-width:104px!important;min-height:104px!important}
+  .tfa-profile-avatar-camera-v70{left:72px!important;bottom:2px!important}
+  .tfa-public-avatar-row-v71{height:104px!important;margin-top:-32px!important}
+  .tfa-public-avatar-ring-v71{width:104px!important;height:104px!important;min-width:104px!important;min-height:104px!important}
+  .tfa-public-avatar-camera-v71{left:72px!important;bottom:2px!important}
+}
+
+/* Clean search: no remote/suggestion interface before explicit validation. */
+.tafa-v49-search-suggestions{display:none!important}
+.search-page-premium .search-ready-hint{display:flex!important}

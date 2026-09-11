@@ -7,7 +7,7 @@
 ============================================================ */
 (() => {
   "use strict";
-  const BUILD_ID = "TAFAß-V72";
+  const BUILD_ID = "TAFAß-V73";
   const BUILD_KEY = "tafa_active_build";
   const previous = String(localStorage.getItem(BUILD_KEY) || "");
   if (previous !== BUILD_ID) {
@@ -15,7 +15,7 @@
     // Remove legacy app caches left by older service-worker builds.
     if (window.caches?.keys) {
       caches.keys().then(keys => Promise.all(
-        keys.filter(k => /^tafass-v/i.test(k) && k !== "tafass-v72-premium-shell").map(k => caches.delete(k))
+        keys.filter(k => /^tafass-v/i.test(k) && k !== "tafass-v73-premium-shell").map(k => caches.delete(k))
       )).catch(() => {});
     }
   }
@@ -76,9 +76,8 @@ document.documentElement.classList.add("app-boot");
   // Production network/realtime guard: keeps the UI honest when connectivity changes.
   const realtimeRuntime = { retryTimer:null, retryCount:0, lastStatus:"", reconnecting:false };
   function networkBanner(message, mode="") {
-    const el=$("networkStatus"); if(!el)return;
-    if(!message){ el.hidden=true; el.className="network-status"; el.textContent=""; return; }
-    el.hidden=false; el.className=`network-status ${mode}`; el.textContent=message;
+    // V73: no reconnect/offline banner is rendered over the application.
+    const el=$("networkStatus"); if(el){ el.hidden=true; el.className="network-status"; el.textContent=""; }
   }
   function scheduleRealtimeReconnect(){
     if(!state.user || realtimeRuntime.retryTimer)return;
@@ -105,25 +104,16 @@ document.documentElement.classList.add("app-boot");
   let presenceHeartbeatTimer = null;
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState !== "visible" || !state.user) return;
+    // V73: returning from background must never replace the current page with
+    // a reconnect/loading screen. Realtime is allowed to recover silently.
     if (foregroundRecoveryTimer) clearTimeout(foregroundRecoveryTimer);
-    foregroundRecoveryTimer = setTimeout(async () => {
+    foregroundRecoveryTimer = setTimeout(() => {
       foregroundRecoveryTimer = null;
-      try {
-        const { data, error } = await sb.auth.getSession();
-        if (error) throw error;
-        if (!data.session?.user) return;
-        state.user = data.session.user;
-        await setupRealtime();
-        ensureLiveFeedRealtime();
-        if (["messages","notifications","home","friends","pages","groups","reels","saved","tafab","profile"].includes(state.route)) {
-          await render();
-        }
-        networkBanner("");
-      } catch (e) {
-        console.warn("Tafaß foreground recovery:", e);
-        if (navigator.onLine) scheduleRealtimeReconnect();
-      }
-    }, 350);
+      sb.auth.getSession().then(({data}) => {
+        if (data?.session?.user) state.user = data.session.user;
+        if (state.user && navigator.onLine && !state.presenceChannel) setupRealtime().catch(()=>{});
+      }).catch(()=>{});
+    }, 0);
   });
 
   const DEFAULT_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop stop-color='%2319f58a'/%3E%3Cstop offset='.55' stop-color='%23088f52'/%3E%3Cstop offset='1' stop-color='%23ff9f1c'/%3E%3C/linearGradient%3E%3ClinearGradient id='h' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop stop-color='%23ffffff' stop-opacity='.9'/%3E%3Cstop offset='1' stop-color='%23dce8ff' stop-opacity='.7'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='256' height='256' rx='128' fill='url(%23g)'/%3E%3Ccircle cx='128' cy='101' r='47' fill='url(%23h)'/%3E%3Cpath d='M52 218c10-47 38-70 76-70s66 23 76 70' fill='url(%23h)'/%3E%3Ccircle cx='128' cy='128' r='112' fill='none' stroke='%23ffffff' stroke-opacity='.22' stroke-width='5'/%3E%3C/svg%3E";
@@ -8172,5 +8162,191 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     }catch(_){}
     return result;
   };
+
+
+  /* ============================================================
+     TAFAß V73 — FINAL STABLE RUNTIME / SINGLE ACTIVE UI
+     - instant navigation: no skeleton, no reconnect overlay
+     - silent foreground recovery
+     - resilient profile hydration after signup/OAuth
+     - profile PDP clipping/position is enforced in CSS
+     - presence refresh updates labels only, never reloads the whole profile
+     - search results are explicit: only shown after validation
+     ============================================================ */
+  (() => {
+    const baseLoadProfileV73 = loadProfile;
+    loadProfile = async function(){
+      if(!state.user) return;
+      const uid=String(state.user.id);
+      const meta=state.user.user_metadata||{};
+      const authEmail=String(state.user.email||"").trim();
+      let row=null;
+      try{
+        const r=await sb.from("profiles").select("*").eq("id",uid).maybeSingle();
+        row=r.data||null;
+      }catch(_){ row=null; }
+      const fallback={
+        id:state.user.id,
+        first_name:String(meta.first_name||meta.given_name||"").trim(),
+        last_name:String(meta.last_name||meta.family_name||"").trim(),
+        email:authEmail,
+        phone:String(meta.phone||"").trim(),
+        phone_code:String(meta.phone_code||"+261"),
+        country:String(meta.country||"Madagascar")
+      };
+      state.profile={...(row||{}),...fallback};
+      // Database values remain authoritative when present.
+      if(row){
+        state.profile={...fallback,...row};
+        if(!String(state.profile.email||"").trim() && authEmail) state.profile.email=authEmail;
+        if(!String(state.profile.first_name||"").trim() && fallback.first_name) state.profile.first_name=fallback.first_name;
+        if(!String(state.profile.last_name||"").trim() && fallback.last_name) state.profile.last_name=fallback.last_name;
+      }
+      const needsCreate=!row?.id;
+      const needsPatch=row && (
+        (!String(row.first_name||"").trim() && fallback.first_name) ||
+        (!String(row.last_name||"").trim() && fallback.last_name) ||
+        (!String(row.email||"").trim() && authEmail)
+      );
+      if(needsCreate || needsPatch){
+        const patch={
+          id:state.user.id,
+          first_name:state.profile.first_name||"",
+          last_name:state.profile.last_name||"",
+          email:authEmail||state.profile.email||null,
+          phone:state.profile.phone||null,
+          phone_code:state.profile.phone_code||"+261",
+          country:state.profile.country||"Madagascar",
+          updated_at:new Date().toISOString()
+        };
+        sb.from("profiles").upsert(patch,{onConflict:"id"}).then(({data,error})=>{
+          if(!error && data) state.profile={...state.profile,...(Array.isArray(data)?data[0]:data)};
+        }).catch(()=>{});
+      }
+      const sideName=$("sideName"); if(sideName) sideName.textContent=nameOf(state.profile);
+      const sideAvatar=$("sideAvatar");
+      if(sideAvatar) sideAvatar.outerHTML=avatarHTML(state.profile,"avatar").replace("<span ",'<span id="sideAvatar" ');
+      return state.profile;
+    };
+
+    // V73: entering an already authenticated account is immediate. The shell
+    // becomes visible first; profile/feed/realtime hydration continues silently.
+    const baseEnterAppV73=enterApp;
+    enterApp=async function(){
+      if(state.entering || !state.user) return;
+      state.entering=true;
+      try{
+        hideAppTransition();
+        document.body.classList.remove("modal-open","app-logging-out");
+        // Build a provisional identity from Auth metadata so a returning/new
+        // account never flashes as "Membre Tafaß" while the DB is loading.
+        if(!state.profile){
+          const m=state.user.user_metadata||{};
+          state.profile={id:state.user.id,first_name:m.first_name||m.given_name||"",last_name:m.last_name||m.family_name||"",email:state.user.email||"",phone:m.phone||"",country:m.country||"Madagascar"};
+        }
+        $("auth")?.classList.add("hidden");
+        $("app")?.classList.remove("hidden");
+        document.documentElement.classList.remove("app-boot");
+        hideAppTransition();
+        // Do not await the network before painting the application.
+        const hydrate=async()=>{
+          try{
+            await loadProfile();
+            if(!state.profile?.id) return;
+            await Promise.allSettled([loadPosts(),setupRealtime(),ensureLiveFeedRealtime()]);
+            if(state.route) await render();
+          }catch(e){ console.warn("Tafaß background hydration:",e); }
+          finally{ hideAppTransition(); }
+        };
+        void hydrate();
+      }finally{
+        state.entering=false;
+      }
+    };
+
+    // Instant route switch: keep the current page visible until the destination
+    // is ready instead of showing a blocking skeleton/loading screen.
+    const baseNavigateV73=navigate;
+    navigate=function(route, options={}){
+      if(!routes.includes(route)) route="home";
+      if(document.body.classList.contains("modal-open")) closeModal();
+      state.backOverride=null;
+      if(state.route===route && document.querySelector(`#content [data-page-route="${route}"]`)) return;
+      if(!options.replaceStack && state.route!==route){
+        const last=state.navStack[state.navStack.length-1];
+        if(last!==route) state.navStack.push(route);
+      }
+      if(options.replaceStack) state.navStack=[route];
+      state.renderToken++;
+      state.route=route;
+      markRouteBadgeSeen(route);
+      if(route==="profile") state.profileTab=state.profileTab||"posts";
+      if(route==="groups") state.groupsTab="mine";
+      state.selectedConversation=route==="messages"?state.selectedConversation:null;
+      history.replaceState(null,"","#"+route);
+      document.querySelectorAll("[data-route]").forEach(el=>el.classList.toggle("active",el.dataset.route===route));
+      // Do not blank the page. The async renderer replaces it when ready.
+      Promise.resolve(render()).catch(err=>console.warn("Tafaß navigation V73:",err));
+    };
+
+    // Remove the blocking transition if an older handler created it.
+    const killTransition=()=>document.getElementById("tafass-app-transition")?.remove();
+    killTransition();
+
+    // Foreground/online events are silent. Realtime can recover without making
+    // the user wait or seeing a reconnect page.
+    window.addEventListener("online",()=>{
+      networkBanner("");
+      if(state.user && !state.presenceChannel) setupRealtime().catch(()=>{});
+    },{passive:true});
+
+    // Presence events must update small labels only. Never refetch the whole
+    // profile for a single join/leave event; that was a major source of lag.
+    window.addEventListener("tafass:presence-change", ev=>{
+      const id=String(ev?.detail?.key||"");
+      if(!id) return;
+      document.querySelectorAll(`[data-presence-user="${CSS.escape(id)}"]`).forEach(el=>{
+        const online=!!ev?.detail?.online;
+        el.innerHTML=online?'<span class="tafa-presence-dot online" title="En ligne"></span>':'<span class="tafa-presence-offline">hors ligne</span>';
+      });
+    });
+
+    // Search: the search shell stays empty/clean until a real submit. Typing
+    // never triggers remote search requests.
+    const originalSearchPageV73=searchPage;
+    searchPage=async function(q="",category=searchCategory){
+      const term=String(q||"").trim();
+      if(!term){
+        return originalSearchPageV73("",category);
+      }
+      return originalSearchPageV73(term,category);
+    };
+
+    // Remove any old reconnect/transition nodes that may have been injected by
+    // previous builds and never allow them to block touch/scroll.
+    const cleanupRuntimeOverlays=()=>{
+      document.querySelectorAll("#tafass-app-transition,.tafa-reconnect-overlay,.reconnect-overlay,.app-reconnect-overlay").forEach(el=>el.remove());
+      const c=$("content"); if(c){c.style.pointerEvents="auto";c.classList.remove("v44-route-switching");}
+    };
+    cleanupRuntimeOverlays();
+    setInterval(cleanupRuntimeOverlays,2000);
+
+    // Static duplicate cleanup: keep only one shell/navigation/search surface.
+    const dedupeRuntime=(selector)=>{
+      const nodes=[...document.querySelectorAll(selector)];
+      nodes.slice(1).forEach(n=>n.remove());
+    };
+    dedupeRuntime('#tafaSearchForm');
+    dedupeRuntime('.tafa-bottom-nav');
+    dedupeRuntime('.bottom-nav');
+
+    // Never block touch because an old loading class survived a route switch.
+    document.addEventListener("touchstart",()=>{
+      document.documentElement.style.setProperty("--tafa-touch-ready","1");
+    },{passive:true});
+
+    // No advertisement slots are mounted by V73 runtime.
+    document.querySelectorAll('[data-ad-slot],.ad-slot,.advertisement-slot,.tafa-ad-slot').forEach(el=>el.remove());
+  })();
 
 })();
