@@ -1,3 +1,6 @@
-Tafaß V83.2 — Withdrawal ID Fix
+Tafaß V83.3 — Real Withdrawal Tracking + Mobile Money Payout Core
 Build: 2026-09-11
-Scope: FIX ONLY
+Scope: WITHDRAWAL / PAYOUT FIX
+Frontend: V83.3
+Server: tafa-payout Edge Function
+Supported payout destinations: MVola, Orange Money, Airtel Money
