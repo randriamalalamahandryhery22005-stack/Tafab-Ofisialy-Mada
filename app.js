@@ -1941,7 +1941,7 @@ function publisherBackgrounds(){
       if(mt.startsWith('audio/')) body=`<div class="message-audio-wrap"><audio controls preload="metadata" src="${esc(m.media_url)}"></audio><button class="message-download" data-action="download-message-file" data-url="${esc(m.media_url)}" data-name="${esc(m.content||'message-vocal.webm')}">⬇</button></div>`;
       else if(mt.startsWith('video/')) body=`<div class="message-media-wrap"><video class="message-media" controls playsinline preload="metadata" src="${esc(m.media_url)}"></video><button class="message-download" data-action="download-message-file" data-url="${esc(m.media_url)}" data-name="${esc(m.content||'video')}">⬇ Télécharger</button></div>`;
       else if(mt.startsWith('image/')) body=`<div class="message-media-wrap"><img class="message-media" src="${esc(m.media_url)}" alt="${esc(m.content||'Image')}" loading="lazy"><button class="message-download" data-action="download-message-file" data-url="${esc(m.media_url)}" data-name="${esc(m.content||'image')}">⬇ Télécharger</button></div>`;
-      else body=`<div class="message-file-wrap"><a class="message-file" href="${esc(m.media_url)}" target="_blank" rel="noopener">📎 ${esc(m.content||'Fichier')}</a><button class="message-download" data-action="download-message-file" data-url="${esc(m.media_url)}" data-name="${esc(m.content||'Fichier')}">⬇ Télécharger</button></div>`;
+      else body=`<div class="message-file-wrap"><a class="message-file" href="${esc(safeHttpUrl(m.media_url))}" target="_blank" rel="noopener">📎 ${esc(m.content||'Fichier')}</a><button class="message-download" data-action="download-message-file" data-url="${esc(m.media_url)}" data-name="${esc(m.content||'Fichier')}">⬇ Télécharger</button></div>`;
     } else body=esc(m.content||'');
     const replyPreview = m.reply_to_content ? `<div class="message-reply-preview"><span class="message-reply-line"></span><div><b>Message</b><span>${esc(String(m.reply_to_content).slice(0,180))}</span></div></div>` : '';
     const edited = m.updated_at && m.updated_at !== m.created_at ? ` · <button type="button" class="message-edited-link" data-action="message-history" data-id="${esc(m.id)}">modifié</button>` : '';
@@ -3885,7 +3885,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
         };
         const d=docs[action];
         const body=d.sections.map(s=>`<article class="legal-long-block"><h4>${esc(s[0])}</h4><p>${esc(s[1])}</p></article>`).join("");
-        settingsDetail(d.title,"TAFAß • DOCUMENT OFFICIEL",d.intro,`<div class="settings-legal-long">${body}</div><div class="legal-document-actions"><a class="primary big legal-open-link" href="${esc(d.file)}" target="_blank" rel="noopener">Ouvrir le document complet ↗</a><button class="secondary-action big" data-route="settings">Retour aux paramètres</button></div>`);
+        settingsDetail(d.title,"TAFAß • DOCUMENT OFFICIEL",d.intro,`<div class="settings-legal-long">${body}</div><div class="legal-document-actions"><a class="primary big legal-open-link" href="${esc(safeHttpUrl(d.file))}" target="_blank" rel="noopener">Ouvrir le document complet ↗</a><button class="secondary-action big" data-route="settings">Retour aux paramètres</button></div>`);
         return;
       }
 
@@ -6788,7 +6788,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       const r = await sb.from("tafab_ads").select("*").eq("id",id).maybeSingle();
       if (r.error || !r.data) return toast(r.error?.message || "Publicité introuvable.");
       const a = r.data;
-      return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • PUBLICITÉ</span><h3>${esc(a.title)}</h3>${a.image_url?`<img class="post-media" src="${esc(a.image_url)}" alt="Publicité" loading="lazy">`:""}<p>${esc(a.description||"")}</p>${a.target_url?`<a class="primary big" href="${esc(a.target_url)}" target="_blank" rel="noopener noreferrer">Ouvrir le lien</a>`:""}</div>`);
+      return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • PUBLICITÉ</span><h3>${esc(a.title)}</h3>${a.image_url?`<img class="post-media" src="${esc(a.image_url)}" alt="Publicité" loading="lazy">`:""}<p>${esc(a.description||"")}</p>${a.target_url?`<a class="primary big" href="${esc(safeHttpUrl(a.target_url))}" target="_blank" rel="noopener noreferrer">Ouvrir le lien</a>`:""}</div>`);
     }
     if (action === "save-tafab-ad") return saveTafabAd();
     if (action === "tafab-message") return contactTafabListing(id);
