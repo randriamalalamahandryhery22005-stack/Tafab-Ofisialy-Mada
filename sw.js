@@ -1,8 +1,8 @@
 /* Tafaß V83 — Clean Production Core service worker */
-const CACHE = 'tafass-v86-2-official-push-production';
+const CACHE = 'tafass-v86-3-official-push-logo';
 const ASSETS = [
   './', './index.html', './style.css?v=187', './app.js?v=187',
-  './manifest.webmanifest', './assets/tafass-logo-premium.svg'
+  './manifest.webmanifest', './assets/tafass-logo-premium.svg', './assets/tafass-notification-icon.png'
 ];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
@@ -23,8 +23,8 @@ self.addEventListener('push', event => {
   }
   const title = String(data.title || 'Tafaß');
   const body = String(data.body || data.message || 'Vous avez une nouvelle notification.');
-  const icon = data.icon || './assets/tafass-logo-premium.svg';
-  const badge = data.badge || icon;
+  const icon = data.icon || './assets/tafass-notification-icon.png';
+  const badge = data.badge || './assets/tafass-notification-icon.png';
   const url = data.url || './';
   const tag = data.tag || ('tafass-' + Date.now());
   event.waitUntil(
