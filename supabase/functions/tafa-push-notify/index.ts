@@ -224,14 +224,10 @@ Deno.serve(async (req) => {
       body: action || rawTitle,
 
       icon:
-        `${supabaseUrl.replace(/\/$/, "")}` +
-        `/storage/v1/object/public/` +
-        `tafass-assets/tafass-logo-premium.svg`,
+        `https://tafab-ofisialy-mg.vercel.app/assets/tafass-notification-icon.png`,
 
       badge:
-        `${supabaseUrl.replace(/\/$/, "")}` +
-        `/storage/v1/object/public/` +
-        `tafass-assets/tafass-logo-premium.svg`,
+        `https://tafab-ofisialy-mg.vercel.app/assets/tafass-notification-icon.png`,
 
       url: routeFor(record),
 
