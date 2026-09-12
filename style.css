@@ -7041,38 +7041,117 @@ body.tafa-conversation-active .message-send-button span{display:none!important}
   display:none !important;
 }
 
+
 /* =========================================================
-   Tafaß SPLASH FIX — V188
-   Restaure les éléments de marque masqués par l'ancien
-   patch V41 et garde le splash centré sur mobile.
-   ========================================================= */
-.splash-brand,
-.splash-tagline,
+   TAFAß SPLASH CENTER FIX — V88
+   Dernière règle volontairement prioritaire pour éviter les
+   anciennes couches CSS dupliquées qui décalent/cachent le splash.
+========================================================= */
+.splash-screen{
+  position:fixed!important;
+  inset:0!important;
+  width:100vw!important;
+  height:100dvh!important;
+  min-height:100svh!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  padding:0!important;
+  margin:0!important;
+  box-sizing:border-box!important;
+  overflow:hidden!important;
+}
+.splash-content{
+  position:absolute!important;
+  left:50%!important;
+  top:50%!important;
+  right:auto!important;
+  bottom:auto!important;
+  width:min(88vw,430px)!important;
+  max-width:430px!important;
+  margin:0!important;
+  padding:0!important;
+  box-sizing:border-box!important;
+  display:flex!important;
+  flex-direction:column!important;
+  align-items:center!important;
+  justify-content:center!important;
+  text-align:center!important;
+  gap:0!important;
+  transform:translate(-50%,-50%)!important;
+  animation:none!important;
+}
+.splash-kicker{
+  display:block!important;
+  width:100%!important;
+  margin:0 0 20px!important;
+  text-align:center!important;
+}
+.splash-mark-wrap{
+  flex:0 0 auto!important;
+  width:132px!important;
+  height:132px!important;
+  margin:0 auto 16px!important;
+  display:grid!important;
+  place-items:center!important;
+  position:relative!important;
+}
+.splash-logo-image{
+  display:block!important;
+  width:104px!important;
+  height:104px!important;
+  max-width:none!important;
+  object-fit:contain!important;
+  margin:0!important;
+}
+.splash-halo{
+  display:block!important;
+}
+.splash-brand{
+  display:block!important;
+  width:100%!important;
+  margin:0!important;
+  text-align:center!important;
+  font-size:42px!important;
+  line-height:1.05!important;
+  font-weight:900!important;
+  letter-spacing:-2px!important;
+}
+.splash-tagline{
+  display:block!important;
+  width:100%!important;
+  margin:8px 0 0!important;
+  text-align:center!important;
+  font-size:13px!important;
+  line-height:1.45!important;
+  letter-spacing:.04em!important;
+  text-transform:none!important;
+}
+.splash-loader{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  width:100%!important;
+  margin:30px 0 0!important;
+}
 .splash-status{
   display:block!important;
-  visibility:visible!important;
+  width:100%!important;
+  margin:10px 0 0!important;
+  text-align:center!important;
 }
-
-.splash-content{
-  justify-content:center!important;
-  gap:0!important;
-  transform:translateY(-2vh)!important;
+@media(max-width:480px){
+  .splash-content{width:min(88vw,400px)!important}
+  .splash-kicker{margin-bottom:17px!important}
+  .splash-mark-wrap{width:116px!important;height:116px!important;margin-bottom:14px!important}
+  .splash-logo-image{width:92px!important;height:92px!important}
+  .splash-brand{font-size:36px!important}
+  .splash-tagline{font-size:12px!important}
+  .splash-loader{margin-top:27px!important}
 }
-
-.splash-brand{
-  margin-top:14px!important;
-  line-height:1.05!important;
+@media(max-width:360px){
+  .splash-mark-wrap{width:104px!important;height:104px!important}
+  .splash-logo-image{width:82px!important;height:82px!important}
+  .splash-brand{font-size:33px!important}
+  .splash-tagline{font-size:11px!important}
 }
-
-.splash-tagline{
-  margin-top:8px!important;
-}
-
-.splash-loader{
-  margin-top:28px!important;
-}
-
-.splash-status{
-  min-height:14px!important;
-}
-
