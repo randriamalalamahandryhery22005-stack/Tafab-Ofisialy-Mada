@@ -860,7 +860,7 @@ document.documentElement.classList.add("app-boot");
         <div class="page-feed-identity">${entityAvatarHTML(pg,"page","page-feed-avatar")}<div class="grow"><span class="eyebrow">MODE PAGE • ACTUALITÉS</span><h2>${esc(pg.name)}</h2><p>${esc(pg.bio||"Votre espace professionnel Tafaß.")}</p></div><button class="page-profile-mini" data-action="page-open" data-id="${esc(pg.id)}">Profil</button></div>
         <div class="page-feed-stats"><div><b>${followerCount}</b><small>Abonnés</small></div><div><b>${posts.length}</b><small>Publications</small></div><div><b>${mediaCount}</b><small>Médias</small></div><div><b>${canManage?'Gestion':'Lecture'}</b><small>Accès</small></div></div>
       </div>
-      <div class="page-quick-grid">${quick('page-open','Profil de la Page','Voir la Page comme un visiteur',menuIcon('pages'))}${quick('page-invite-friends','Inviter des amis','Inviter vos amis à suivre',menuIcon('friends'))}${quick('page-more','Outils de la Page','Partage, équipe et options',menuIcon('help'))}${canManage?quick('page-settings','Paramètres','Configurer toute la Page',menuIcon('settings')):quick('page-share','Partager','Partager cette Page',menuIcon('share'))}</div>
+      <div class="page-quick-grid">${quick('page-open','Profil de la Page','Voir la Page comme un visiteur',menuIcon('pages'))}${quick('page-invite-friends','Inviter des amis','Inviter vos amis à suivre',menuIcon('friends'))}${canManage?quick('page-settings','Paramètres','Configurer toute la Page',menuIcon('settings')):quick('page-share','Partager','Partager cette Page',menuIcon('share'))}</div>
       ${ownerMe?`<div class="composer composer-clean page-mode-composer page-mode-composer-premium"><div class="composer-top">${entityAvatarHTML(pg,"page","avatar")}<div><b>Publier au nom de ${esc(pg.name)}</b><small>Votre publication sera publiée comme une Page</small></div></div><textarea id="pageModePostText" maxlength="5000" placeholder="Quoi de neuf sur votre Page ?"></textarea><div class="composer-actions"><button type="button" class="primary" data-action="page-mode-publish" data-id="${esc(pg.id)}">Publier</button></div></div>`:""}
       <div class="page-feed-section-head"><div><span class="eyebrow">TAFAß • PAGE</span><h3>Publications récentes</h3></div><span>${posts.length} au total</span></div>`;
     if(!posts.length) html+=`<div class="page-feed-empty-premium"><div>✦</div><b>Aucune publication pour le moment</b><span>Les actualités de ${esc(pg.name)} apparaîtront ici.</span>${ownerMe?`<button class="primary" data-action="page-mode-focus">Créer la première publication</button>`:''}</div>`;
@@ -3201,7 +3201,7 @@ function publisherBackgrounds(){
     const fc=new Map(), following=new Set(); (fr.data||[]).forEach(x=>{fc.set(x.page_id,(fc.get(x.page_id)||0)+1);if(x.user_id===state.user.id)following.add(x.page_id);});
     const mine=rows.filter(x=>x.owner_id===state.user.id), discover=rows.filter(x=>x.owner_id!==state.user.id);
     const list=state.pagesTab==='mine'?mine:discover;
-    const card=p=>{const own=p.owner_id===state.user.id, fol=following.has(p.id);return `<article class="tfa-v80-entity-card"><button class="tfa-v80-entity-main" data-action="page-open" data-id="${esc(p.id)}">${entityAvatarHTML(p,'page','tfa-v80-entity-avatar')}<span><b>${esc(p.name)}</b><small>${fc.get(p.id)||0} abonnés · ${esc(p.category||'Page')}</small><em>${esc(p.bio||'Page Tafaß')}</em></span></button><div class="tfa-v80-entity-actions">${own?`<button class="tfa-v80-btn secondary" data-action="page-switch" data-id="${esc(p.id)}">Basculer</button>`:`<button class="tfa-v80-btn ${fol?'secondary':'primary'}" data-action="toggle-page-follow" data-id="${esc(p.id)}">${fol?'✓ Suivie':'＋ Suivre'}</button>`}<button class="tfa-v80-btn icon" data-action="page-more" data-id="${esc(p.id)}">•••</button></div></article>`};
+    const card=p=>{const own=p.owner_id===state.user.id, fol=following.has(p.id);return `<article class="tfa-v80-entity-card"><button class="tfa-v80-entity-main" data-action="page-open" data-id="${esc(p.id)}">${entityAvatarHTML(p,'page','tfa-v80-entity-avatar')}<span><b>${esc(p.name)}</b><small>${fc.get(p.id)||0} abonnés · ${esc(p.category||'Page')}</small><em>${esc(p.bio||'Page Tafaß')}</em></span></button><div class="tfa-v80-entity-actions">${own?`<button class="tfa-v80-btn secondary" data-action="page-switch" data-id="${esc(p.id)}">Basculer</button>`:`<button class="tfa-v80-btn ${fol?'secondary':'primary'}" data-action="toggle-page-follow" data-id="${esc(p.id)}">${fol?'✓ Suivie':'＋ Suivre'}</button>`}</div></article>`};
     await setupTafaV80Realtime('page');
     return simplePage('Pages',`<section class="tfa-v80-hub"><header class="tfa-v80-hero"><div><span class="eyebrow">TAFAß • PAGES</span><h2>Pages</h2><p>Suivez les Pages et recevez leurs publications dans votre fil Actualités.</p></div><button class="tfa-v80-btn primary" data-action="create-page">＋ Créer une Page</button></header><nav class="tfa-v80-tabs"><button class="${state.pagesTab==='mine'?'active':''}" data-action="pages-tab" data-tab="mine">Mes Pages <small>${mine.length}</small></button><button class="${state.pagesTab==='discover'?'active':''}" data-action="pages-tab" data-tab="discover">Découvrir <small>${discover.length}</small></button></nav><div class="tfa-v80-list">${list.length?list.map(card).join(''):`<div class="tfa-v80-empty"><b>${state.pagesTab==='mine'?'Aucune Page créée':'Aucune Page à découvrir'}</b><span>${state.pagesTab==='mine'?'Créez votre Page professionnelle.':'Les Pages publiques apparaîtront ici.'}</span></div>`}</div></section>`);
   }
@@ -3246,7 +3246,7 @@ function publisherBackgrounds(){
         </button>
         <div class="fb-entity-actions">
           ${isMine?`<button class="fb-blue-btn" data-action="page-switch" data-id="${esc(x.id)}">Basculer</button><button class="fb-more-btn" data-action="edit-page" data-id="${esc(x.id)}" aria-label="Gérer">•••</button>`
-          :`<button class="${isFollowing?'fb-gray-btn':'fb-blue-btn'}" data-action="toggle-page-follow" data-id="${esc(x.id)}">${isFollowing?'Suivi(e)':'Suivre'}</button><button class="fb-more-btn" data-action="page-more" data-id="${esc(x.id)}">•••</button>`}
+          :`<button class="${isFollowing?'fb-gray-btn':'fb-blue-btn'}" data-action="toggle-page-follow" data-id="${esc(x.id)}">${isFollowing?'Suivi(e)':'Suivre'}</button>`}
         </div>
       </article>`;
     };
@@ -3567,21 +3567,6 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[type] || paths.settings}</svg>`;
   }
 
-  function pageMenu(){
-    const pg=state.activePage;
-    if(!pg) return menuPage();
-    const card=(action,title,sub,icon)=>`<button class="menu-card premium-menu-card page-menu-card" data-action="${action}" data-id="${esc(pg.id)}"><span class="menu-icon">${icon}</span><span class="menu-card-copy"><b>${title}</b><small>${sub}</small></span><span class="menu-arrow">›</span></button>`;
-    simplePage("Menu",`${pageContextBanner()}<div class="page-menu-hero page-menu-hero-premium">${entityAvatarHTML(pg,"page","page-menu-avatar")}<div class="grow"><span class="eyebrow">MODE PAGE</span><h2>${esc(pg.name)}</h2><small>Vous utilisez Tafaß avec l’identité de cette Page.</small></div><button class="page-profile-mini" data-action="page-open" data-id="${esc(pg.id)}">Profil</button></div>
-      <div class="page-menu-dashboard"><div><span>ESPACE PAGE</span><b>Centre de contrôle</b><small>Actualités, communauté, messages et paramètres.</small></div><span class="page-menu-live">● ACTIF</span></div>
-      <div class="menu-section-title">Navigation de la Page</div><div class="menu-grid premium-menu-grid">
-        ${card('page-open','Profil de la Page','Voir votre Page publiquement','◉')}${`<button class="menu-card premium-menu-card page-menu-card" data-route="home"><span class="menu-icon">⌂</span><span class="menu-card-copy"><b>Actualités</b><small>Publier et gérer le fil de la Page</small></span><span class="menu-arrow">›</span></button>`}${`<button class="menu-card premium-menu-card page-menu-card" data-route="messages"><span class="menu-icon">▤</span><span class="menu-card-copy"><b>Messages</b><small>Boîte de réception de la Page</small></span><span class="menu-arrow">›</span></button>`}${`<button class="menu-card premium-menu-card page-menu-card" data-route="search"><span class="menu-icon">⌕</span><span class="menu-card-copy"><b>Rechercher</b><small>Rechercher sur Tafaß</small></span><span class="menu-arrow">›</span></button>`}${`<button class="menu-card premium-menu-card page-menu-card" data-route="notifications"><span class="menu-icon">♢</span><span class="menu-card-copy"><b>Alertes</b><small>Activités liées à la Page</small></span><span class="menu-arrow">›</span></button>`}${`<button class="menu-card premium-menu-card page-menu-card" data-route="groups"><span class="menu-icon">◎</span><span class="menu-card-copy"><b>Groupes</b><small>Communautés</small></span><span class="menu-arrow">›</span></button>`}
-      </div>
-      <div class="menu-section-title">Gestion complète</div><div class="menu-grid premium-menu-grid">
-        ${card('page-settings','Paramètres de la Page','Informations, confidentialité, messages et invitations','⚙')}${card('edit-page','Modifier les informations','Nom, @username, bio, contacts et visuels','✎')}${card('page-invite-friends','Inviter des amis','Chaque membre peut inviter ses amis','👥')}${card('page-business','Outils de gestion','Équipe, publication et gestion professionnelle','◒')}
-      </div>
-      <div class="menu-section-title">Compte</div><div class="menu-grid premium-menu-grid">${card('page-exit-mode','Retour au compte','Quitter le Mode Page et revenir au profil','↩')}</div>`);
-  }
-
   async function pageSettings(id){
     const {data:p,error}=await fetchPageById(id||state.activePage?.id);
     if(error||!p)return toast(error?.message||'Page introuvable.');
@@ -3614,7 +3599,6 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
         if(state.route==="menu" && ok!==state.__isAdmin){ state.__isAdmin=ok; render().catch(()=>{}); }
       }).catch(()=>{});
     }
-    if(pageModeActive()) return pageMenu();
     const p = state.profile || {};
     const items = [
       ["profile","profile","Profil","Voir votre profil"],
@@ -6168,7 +6152,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       <div class="page-cover" ${x.cover_url?`style="background-image:url('${esc(x.cover_url)}')"`:''}><div class="page-cover-overlay"></div><div class="page-live-badge">● PAGE</div></div>
       <div class="page-profile-head page-profile-head-v2"><div class="page-avatar-wrap">${avatar}<span class="page-verified">✓</span></div></div>
       <div class="page-profile-copy-v2"><h2>${esc(x.name)}</h2>${x.deletion_status==='pending_deletion'?`<div class="tfa-v80-deletion-alert">⚠ Suppression prévue le ${new Date(x.deletion_scheduled_at).toLocaleDateString('fr-FR')} · récupérable pendant 15 jours</div>`:""}${x.username?`<div class="page-handle">@${esc(x.username)}</div>`:''}<p>${esc(x.bio||'Présentez votre activité, votre communauté et vos actualités.')}</p><div class="page-follow-line"><span><b>${followerCount}</b> abonnés</span><span><b>${postCount}</b> publications</span></div></div>
-      <div class="page-top-actions page-primary-actions">${ownerMe?`<button class="page-action primary" data-action="page-switch" data-id="${esc(id)}">⇄ Basculer</button><button class="page-action secondary" data-action="edit-page" data-id="${esc(id)}">⚙ Gérer</button><button class="page-action secondary" data-action="page-share" data-id="${esc(id)}">↗ Partager</button>`:`<button class="page-action ${follow.data?'secondary':'primary'}" data-action="toggle-page-follow" data-id="${esc(id)}">${follow.data?'✓ Suivie':'＋ Suivre'}</button><button class="page-action secondary" data-action="page-contact" data-id="${esc(id)}">💬 Messages</button><button class="page-action secondary" data-action="page-share" data-id="${esc(id)}">↗ Partager</button>`}<button class="page-action secondary page-more-action" data-action="page-more" data-id="${esc(id)}" aria-label="Options de la Page">•••</button></div>
+      <div class="page-top-actions page-primary-actions">${ownerMe?`<button class="page-action primary" data-action="page-switch" data-id="${esc(id)}">⇄ Basculer</button><button class="page-action secondary" data-action="edit-page" data-id="${esc(id)}">⚙ Gérer</button><button class="page-action secondary" data-action="page-share" data-id="${esc(id)}">↗ Partager</button>`:`<button class="page-action ${follow.data?'secondary':'primary'}" data-action="toggle-page-follow" data-id="${esc(id)}">${follow.data?'✓ Suivie':'＋ Suivre'}</button><button class="page-action secondary" data-action="page-contact" data-id="${esc(id)}">💬 Messages</button><button class="page-action secondary" data-action="page-share" data-id="${esc(id)}">↗ Partager</button>`}</div>
       <nav class="page-tabs page-tabs-distinct"><button class="active" data-action="page-tab" data-tab="posts" data-id="${esc(id)}">Publications</button><button data-action="page-tab" data-tab="about" data-id="${esc(id)}">À propos</button><button data-action="page-tab" data-tab="team" data-id="${esc(id)}">Communauté</button></nav>
       ${canPublish?`<section class="page-composer"><div class="page-composer-title"><span>✦</span><div><b>Publier en tant que ${esc(x.name)}</b><small>${myRole==='editor'?'Éditeur':'Gestionnaire'}</small></div></div><textarea id="pagePostText" maxlength="5000" placeholder="Partagez une actualité avec vos abonnés…"></textarea><div class="page-composer-bottom"><label class="page-media-btn">＋ Média<input id="pagePostMedia" type="file" accept="image/*,video/*" hidden></label><span id="pagePostMediaName">Aucun fichier</span><button class="page-publish-btn" data-action="page-publish" data-id="${esc(id)}">Publier</button></div></section>`:''}
       <section class="page-tab-panel page-live-section" data-tab="posts"><div class="page-section-title"><div><span>ACTUALITÉ</span><h3>Publications</h3></div><strong>● EN DIRECT</strong></div><div class="page-post-list">${postRows}</div></section>
@@ -6217,75 +6201,6 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if(r.error)return toast(r.error.message);
     closeModal();toast('Signalement envoyé.');
   }
-
-  async function pageMore(id){
-    const {data:p,error}=await sb.from('pages').select('id,name,owner_id,username,deletion_status,deletion_scheduled_at').eq('id',id).maybeSingle();
-    if(error||!p)return toast(error?.message||'Page introuvable.');
-    const {data:m}=await sb.from('page_members').select('role').eq('page_id',id).eq('user_id',state.user.id).maybeSingle();
-    const ownerMe=String(p.owner_id)===String(state.user.id);
-    const isManager=ownerMe;
-
-    if(!isManager){
-      openModal(`<div class="modal-box page-more-menu-modal p91-page-menu p91-visitor-page-menu">
-        <div class="p91-sheet-handle"></div>
-        <div class="p91-owner-menu-head">
-          <div class="p91-page-menu-avatar">${entityAvatarHTML(p,'page','p91-menu-avatar')}</div>
-          <div><span class="eyebrow">TAFAß · PAGE PUBLIQUE</span><h3>${esc(p.name)}</h3><small>${esc(p.category||'Page')} · vous êtes visiteur / abonné</small></div>
-        </div>
-        <div class="p91-page-menu-list">
-          <button class="p91-page-menu-item" data-action="toggle-page-follow" data-id="${esc(id)}"><span>＋</span><div><b>Suivre / ne plus suivre</b><small>Gérer uniquement votre abonnement à cette Page</small></div></button>
-          <button class="p91-page-menu-item" data-action="page-contact" data-id="${esc(id)}"><span>✉</span><div><b>Contacter la Page</b><small>Envoyer un message à l’équipe de la Page</small></div></button>
-          <button class="p91-page-menu-item" data-action="page-share" data-id="${esc(id)}"><span>↗</span><div><b>Partager la Page</b><small>Partager uniquement le lien public</small></div></button>
-          <button class="p91-page-menu-item" data-action="page-copy-link" data-id="${esc(id)}"><span>⌁</span><div><b>Copier le lien public</b><small>Aucun accès aux outils de gestion</small></div></button>
-          <button class="p91-page-menu-item" data-action="page-report" data-id="${esc(id)}"><span>⚑</span><div><b>Signaler la Page</b><small>Signaler un problème concernant cette Page</small></div></button>
-        </div>
-        <button class="p91-menu-cancel" data-action="close-modal">Annuler</button>
-      </div>`);
-      return;
-    }
-
-    openModal(`<div class="modal-box page-more-menu-modal p91-page-menu p91-page-owner-menu">
-      <div class="p91-sheet-handle"></div>
-      <div class="p91-owner-menu-head">
-        <div class="p91-page-menu-avatar">${entityAvatarHTML(p,'page','p91-menu-avatar')}</div>
-        <div><span class="eyebrow">TAFAß · GESTION DE PAGE</span><h3>${esc(p.name)}</h3><small>Outils professionnels et gestion</small></div>
-      </div>
-      ${p.deletion_status==='pending_deletion'?`<div class="tfa-v80-deletion-alert">⚠ Suppression prévue le ${new Date(p.deletion_scheduled_at).toLocaleDateString('fr-FR')} · 15 jours pour annuler</div>`:''}
-      <div class="p91-page-menu-section"><span>OUTILS</span></div>
-      <div class="p91-page-menu-list">
-        <button class="p91-page-menu-item" data-action="page-promote" data-id="${esc(id)}"><span>📣</span><div><b>Promouvoir</b><small>Développer la portée des publications de la Page</small></div></button>
-        <button class="p91-page-menu-item" data-action="page-status" data-id="${esc(id)}"><span>◉</span><div><b>Statut de la Page</b><small>Vérifier l’état et la visibilité de votre Page</small></div></button>
-        <button class="p91-page-menu-item" data-action="page-action-button" data-id="${esc(id)}"><span>⌁</span><div><b>Modifier le bouton d’action</b><small>Configurer l’action principale affichée aux visiteurs</small></div></button>
-        <button class="p91-page-menu-item" data-action="page-archive" data-id="${esc(id)}"><span>▣</span><div><b>Archive</b><small>Consulter les éléments archivés de la Page</small></div></button>
-        <button class="p91-page-menu-item" data-action="page-activity" data-id="${esc(id)}"><span>☷</span><div><b>Historique d’activité</b><small>Voir les actions réalisées sur la Page</small></div></button>
-        <button class="p91-page-menu-item" data-action="page-review" data-id="${esc(id)}"><span>▤</span><div><b>Examiner les publications et les identifications</b><small>Contrôler les contenus associés à la Page</small></div></button>
-        <button class="p91-page-menu-item" data-action="page-feature" data-id="${esc(id)}"><span>✦</span><div><b>Ajouter des éléments à la une</b><small>Mettre en avant les contenus importants</small></div></button>
-        <button class="p91-page-menu-item" data-action="page-search" data-id="${esc(id)}"><span>⌕</span><div><b>Rechercher</b><small>Rechercher dans les contenus de la Page</small></div></button>
-        <button class="p91-page-menu-item" data-action="page-invite-friends" data-id="${esc(id)}"><span>♙</span><div><b>Inviter des personnes à entrer en contact</b><small>Inviter vos amis à découvrir la Page</small></div></button>
-        <button class="p91-page-menu-item" data-action="page-copy-link" data-id="${esc(id)}"><span>🔗</span><div><b>Copier le lien sur la Page</b><small>Copier l’adresse publique de la Page</small></div></button>
-      </div>
-      <div class="p91-page-menu-section"><span>ADMINISTRATION</span></div>
-      <div class="p91-page-menu-list">
-        <button class="p91-page-menu-item" data-action="page-team" data-id="${esc(id)}"><span>♛</span><div><b>Équipe et rôles</b><small>Administrateurs, éditeurs et gestionnaires</small></div></button>
-        <button class="p91-page-menu-item" data-action="edit-page" data-id="${esc(id)}"><span>⚙</span><div><b>Paramètres et informations</b><small>Identité, coordonnées, visuels et configuration</small></div></button>
-        ${ownerMe&&p.deletion_status==='pending_deletion'?`<button class="p91-page-menu-item" data-action="page-cancel-delete" data-id="${esc(id)}"><span>↶</span><div><b>Annuler la suppression</b><small>Réactiver la Page avant l’échéance</small></div></button>`:''}
-      </div>
-      <button class="p91-menu-cancel" data-action="close-modal">Fermer</button>
-    </div>`);
-  }
-
-  async function pageOwnerMenuInfo(id,title,text,actionLabel='Ouvrir'){
-    openModal(`<div class="modal-box p91-info-modal"><div class="p91-sheet-handle"></div><span class="eyebrow">TAFAß · PAGE</span><h3>${esc(title)}</h3><p>${esc(text)}</p><button class="primary big" data-action="${esc(actionLabel==='Gérer'?'edit-page':'close-modal')}" data-id="${esc(id)}">${esc(actionLabel)}</button></div>`);
-  }
-
-  async function pageStatus(id){ return pageOwnerMenuInfo(id,'Statut de la Page','Votre Page est actuellement visible et accessible aux visiteurs.','Fermer'); }
-  async function pagePromote(id){ return pageOwnerMenuInfo(id,'Promouvoir','Les outils de promotion permettent de développer la portée de vos contenus.','Fermer'); }
-  async function pageArchive(id){ return pageOwnerMenuInfo(id,'Archive','La gestion des éléments archivés sera centralisée ici sans modifier vos publications actives.','Fermer'); }
-  async function pageActivity(id){ closeModal(); return pageOwnerMenuInfo(id,'Historique d’activité','Les actions de gestion et de publication de la Page sont suivies dans votre historique.','Fermer'); }
-  async function pageReview(id){ return pageOwnerMenuInfo(id,'Publications et identifications','Utilisez cet espace pour contrôler les contenus associés à votre Page avant de les mettre en avant.','Fermer'); }
-  async function pageFeature(id){ return pageOwnerMenuInfo(id,'À la une','Les contenus importants de la Page pourront être regroupés ici.','Fermer'); }
-  async function pageSearch(id){ closeModal(); return toast('Recherche de Page prête à être utilisée.'); }
-  async function pageActionButton(id){ return pageOwnerMenuInfo(id,'Bouton d’action','La configuration du bouton principal de la Page est disponible dans les paramètres de gestion.','Gérer'); }
 
   async function pageInviteFriends(id){
     const pgOwner=(await sb.from('pages').select('owner_id').eq('id',id).maybeSingle()).data;
@@ -7356,15 +7271,6 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     }
     if (action === "page-profile") { state.entityBackRoute = state.route || "pages"; return openPageDetail(id); }
     if (action === "page-open") { state.entityBackRoute = pageModeActive() && state.activePage?.id===id ? "home" : (state.route || "pages"); return openPageDetail(id); }
-    if (action === "page-more") return pageMore(id);
-    if (action === "page-promote") { const pg=(await sb.from('pages').select('owner_id').eq('id',id).maybeSingle()).data; if(!pg || String(pg.owner_id)!==String(state.user.id)) return toast('Accès refusé : réservé au propriétaire de la Page.'); return pagePromote(id); }
-    if (action === "page-status") { const pg=(await sb.from('pages').select('owner_id').eq('id',id).maybeSingle()).data; if(!pg || String(pg.owner_id)!==String(state.user.id)) return toast('Accès refusé : réservé au propriétaire de la Page.'); return pageStatus(id); }
-    if (action === "page-action-button") { const pg=(await sb.from('pages').select('owner_id').eq('id',id).maybeSingle()).data; if(!pg || String(pg.owner_id)!==String(state.user.id)) return toast('Accès refusé : réservé au propriétaire de la Page.'); return pageActionButton(id); }
-    if (action === "page-archive") { const pg=(await sb.from('pages').select('owner_id').eq('id',id).maybeSingle()).data; if(!pg || String(pg.owner_id)!==String(state.user.id)) return toast('Accès refusé : réservé au propriétaire de la Page.'); return pageArchive(id); }
-    if (action === "page-activity") { const pg=(await sb.from('pages').select('owner_id').eq('id',id).maybeSingle()).data; if(!pg || String(pg.owner_id)!==String(state.user.id)) return toast('Accès refusé : réservé au propriétaire de la Page.'); return pageActivity(id); }
-    if (action === "page-review") { const pg=(await sb.from('pages').select('owner_id').eq('id',id).maybeSingle()).data; if(!pg || String(pg.owner_id)!==String(state.user.id)) return toast('Accès refusé : réservé au propriétaire de la Page.'); return pageReview(id); }
-    if (action === "page-feature") { const pg=(await sb.from('pages').select('owner_id').eq('id',id).maybeSingle()).data; if(!pg || String(pg.owner_id)!==String(state.user.id)) return toast('Accès refusé : réservé au propriétaire de la Page.'); return pageFeature(id); }
-    if (action === "page-search") { const pg=(await sb.from('pages').select('owner_id').eq('id',id).maybeSingle()).data; if(!pg || String(pg.owner_id)!==String(state.user.id)) return toast('Accès refusé : réservé au propriétaire de la Page.'); return pageSearch(id); }
     if (action === "page-post-more") return pagePostMore(id, actionEl.dataset.entityId);
     if (action === "page-post-copy-link") return pagePostCopyLink(id, actionEl.dataset.entityId);
     if (action === "page-post-share") return pagePostShare(id, actionEl.dataset.entityId);
@@ -8614,117 +8520,6 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   })();
 
 
-/* ============================================================
-   TAFAß V65 — PAGE EXPERIENCE / SINGLE AUTHORITATIVE VERSION
-   The Page mode owns one stable UI. Legacy Page-menu presentation
-   layers are superseded here without touching existing data/RPCs.
-============================================================ */
-(() => {
-  const pageMenuV65 = () => {
-    const pg = state.activePage;
-    if (!pg) return menuPage();
-    const id = esc(pg.id);
-    const item = (action, title, sub, icon, extra='') =>
-      `<button type="button" class="tafa-v65-page-menu-item" data-action="${esc(action)}" data-id="${id}" ${extra}>
-        <span class="tafa-v65-page-menu-icon">${icon}</span>
-        <span class="tafa-v65-page-menu-copy"><b>${title}</b><small>${sub}</small></span>
-        <span class="tafa-v65-page-menu-arrow">›</span>
-      </button>`;
-    const routeItem = (route,title,sub,icon) =>
-      `<button type="button" class="tafa-v65-page-menu-item" data-route="${esc(route)}">
-        <span class="tafa-v65-page-menu-icon">${icon}</span>
-        <span class="tafa-v65-page-menu-copy"><b>${title}</b><small>${sub}</small></span>
-        <span class="tafa-v65-page-menu-arrow">›</span>
-      </button>`;
-
-    simplePage("Menu", `
-      <section class="tafa-v65-page-shell" data-page-route="menu">
-        <div class="tafa-v65-page-hero">
-          <div class="tafa-v65-page-brand">
-            ${entityAvatarHTML(pg,'page','tafa-v65-page-avatar')}
-            <div class="tafa-v65-page-brand-copy">
-              <span class="tafa-v65-eyebrow">TAFAß • MODE PAGE</span>
-              <h2>${esc(pg.name || 'Votre Page')}</h2>
-              <p>Centre de contrôle officiel de votre Page.</p>
-            </div>
-            <span class="tafa-v65-live">● ACTIF</span>
-          </div>
-          <div class="tafa-v65-page-summary">
-            <span><b>Identité Page</b><small>Publications, communauté et messages sont séparés de votre compte personnel.</small></span>
-            <button type="button" class="tafa-v65-profile-btn" data-action="page-open" data-id="${id}">Voir la Page</button>
-          </div>
-        </div>
-
-        <div class="tafa-v65-page-section">
-          <div class="tafa-v65-section-heading"><div><span>ACCÈS RAPIDE</span><h3>Navigation</h3></div><small>Une seule interface Page</small></div>
-          <div class="tafa-v65-page-grid">
-            ${routeItem('home','Actualités','Publier et consulter le fil de la Page','⌂')}
-            ${routeItem('messages','Messages','Répondre aux messages reçus par la Page','▤')}
-            ${routeItem('notifications','Alertes','Activité, abonnements et actions importantes','♢')}
-            ${routeItem('search','Rechercher','Trouver des comptes et contenus','⌕')}
-            ${routeItem('groups','Groupes','Accéder aux communautés','◎')}
-            ${item('page-open','Profil de la Page','Voir la Page comme un visiteur','◉')}
-          </div>
-        </div>
-
-        <div class="tafa-v65-page-section">
-          <div class="tafa-v65-section-heading"><div><span>GESTION</span><h3>Outils professionnels</h3></div><small>Réservé aux gestionnaires</small></div>
-          <div class="tafa-v65-page-grid">
-            ${item('page-settings','Paramètres de la Page','Confidentialité, messages, visibilité et préférences','⚙')}
-            ${item('edit-page','Informations de la Page','Nom, @username, catégorie, bio et visuels','✎')}
-            ${item('page-team','Équipe & rôles','Administrateurs, éditeurs et membres','♛')}
-            ${item('page-invite-friends','Inviter des amis','Inviter votre réseau à suivre la Page','♙')}
-            ${item('page-business','Outils de gestion','Gestion professionnelle et activité de la Page','◒')}
-            ${item('page-name-history','Historique des noms','Consulter les changements de nom','◷')}
-          </div>
-        </div>
-
-        <div class="tafa-v65-page-footer">
-          <div><span class="tafa-v65-footer-icon">✓</span><div><b>Mode Page sécurisé</b><small>Le contenu et les actions de la Page restent séparés de votre compte personnel.</small></div></div>
-          <button type="button" class="tafa-v65-exit" data-action="page-exit-mode">↩ Retour au compte</button>
-        </div>
-      </section>`);
-
-    requestAnimationFrame(() => {
-      const root=document.querySelector('.tafa-v65-page-shell');
-      if(root) root.dataset.pageVersion='v65';
-    });
-  };
-
-  // One final authoritative Page Menu implementation.
-  pageMenu = pageMenuV65;
-
-  // Prevent Page mode from rebuilding a different navigation structure.
-  const oldSyncIdentityUI = syncIdentityUI;
-  syncIdentityUI = function(...args){
-    oldSyncIdentityUI.apply(this,args);
-    const left=document.querySelector('.left-sidebar');
-    const bottom=document.querySelector('.bottom-nav');
-    // Navigation remains the account navigation; only identity is Page-aware.
-    if(left) left.dataset.navigationVersion='v65-single';
-    if(bottom) bottom.dataset.navigationVersion='v65-single';
-    document.querySelectorAll('.tafa-premium-nav-item[data-route="reels"]').forEach(el=>el.hidden=false);
-  };
-
-  // Stable Page switch: preserve the same navigation DOM and render only content.
-  const oldPageSwitchHandler = async (actionEl, id) => {
-    const pg=(await fetchPageById(id)).data;
-    if(!pg) return toast('Page introuvable.');
-    closeModal();
-    state.activePage={...pg};
-    state.navStack=['home'];
-    state.route='home';
-    syncIdentityUI();
-    history.replaceState(null,'','#home');
-    return render();
-  };
-
-  // Expose a stable helper for the delegated action handler without replacing
-  // the whole handler (which contains all other application actions).
-  window.__tafassV65PageSwitch = oldPageSwitchHandler;
-})();
-
-
   /* ============================================================
      TAFAß V66 — PAGE NAVIGATION / MENU SINGLE VERSION
      Page mode has no Friends. The Menu occupies that navigation slot.
@@ -9414,7 +9209,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
         </button>
         <div class="v82-page-actions">
           ${own?`<button type="button" class="v82-secondary" data-action="page-switch" data-id="${esc(p.id)}">⇄ Basculer</button><button type="button" class="v82-secondary icon" data-action="edit-page" data-id="${esc(p.id)}" aria-label="Gérer la Page">⚙</button>`:
-          `<button type="button" class="${fol?'v82-secondary':'v82-primary'}" data-action="toggle-page-follow" data-id="${esc(p.id)}">${fol?'✓ Suivie':'＋ Suivre'}</button><button type="button" class="v82-secondary icon" data-action="page-more" data-id="${esc(p.id)}" aria-label="Options">•••</button>`}
+          `<button type="button" class="${fol?'v82-secondary':'v82-primary'}" data-action="toggle-page-follow" data-id="${esc(p.id)}">${fol?'✓ Suivie':'＋ Suivre'}</button>`}
         </div>
       </article>`;
     }).join('');
@@ -9469,7 +9264,6 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       <header class="p91-page-topbar">
         <button type="button" class="p91-page-back" data-action="close-entity" data-route-back="${esc(state.entityBackRoute||'pages')}" aria-label="Retour"><span>‹</span><b>Retour</b></button>
         <div class="p91-page-top-title"><span>${ownerMe?'TAFAß · GESTION DE PAGE':'TAFAß · PAGE PUBLIQUE'}</span><strong>${esc(x.name)}</strong></div>
-        <button type="button" class="p91-page-icon" data-action="page-more" data-id="${esc(id)}" aria-label="Plus d’options">•••</button>
       </header>
       <div class="p91-page-scroll">
         <section class="p91-cover" ${x.cover_url?`style="background-image:url('${esc(x.cover_url)}')"`:''}>
