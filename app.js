@@ -77,9 +77,9 @@ document.documentElement.classList.add("app-boot");
   const realtimeRuntime = { retryTimer:null, retryCount:0, lastStatus:"", reconnecting:false };
 
 
-  // Tafaß V85 — Push notifications for Android/PWA when the app is closed.
-  // Existing Realtime/audio behavior is preserved; this only registers a
-  // browser Push subscription and stores it in public.push_subscriptions.
+  // Tafaß V86.2 — Premium Web Push activation.
+  // Permission is requested only from an explicit user action. Existing
+  // granted subscriptions are refreshed silently after authentication.
   const TAFA_PUSH_VAPID_PUBLIC_KEY = "BDKj0LueFYNPlQdnGr_IE0slPUgHwgkPvNwP_1zxmZOGYMj9t20upWUtHVaK_z5LGBXy77p8oXdiY4Tkd4osEMs";
   function tafaBase64ToUint8Array(base64String){
     const padding="=".repeat((4-(base64String.length%4))%4);
@@ -87,15 +87,27 @@ document.documentElement.classList.add("app-boot");
     const raw=atob(base64);
     return Uint8Array.from([...raw].map(c=>c.charCodeAt(0)));
   }
-  async function setupTafaPushNotifications(){
+  async function setupTafaPushNotifications({requestPermission=false}={}){
     try{
-      if(!state.user || !("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) return;
-      if(location.protocol!=="https:" && location.hostname!=="localhost") return;
-      const permission = Notification.permission==="default"
-        ? await Notification.requestPermission()
-        : Notification.permission;
-      if(permission!=="granted") return;
-      const registration=await navigator.serviceWorker.ready;
+      if(!state.user) return {ok:false,reason:"no_user",message:"Session introuvable."};
+      if(!window.isSecureContext && location.hostname!=="localhost") return {ok:false,reason:"insecure",message:"Les notifications sécurisées nécessitent HTTPS."};
+      if(!("serviceWorker" in navigator)) return {ok:false,reason:"no_service_worker",message:"Le navigateur ne prend pas en charge les notifications en arrière-plan."};
+      if(!("PushManager" in window)) return {ok:false,reason:"no_push",message:"Les notifications Push ne sont pas disponibles dans ce navigateur."};
+      if(!("Notification" in window)) return {ok:false,reason:"no_notification",message:"Les notifications système ne sont pas disponibles sur cet appareil."};
+
+      let permission=Notification.permission;
+      if(permission==="default" && requestPermission){
+        permission=await Notification.requestPermission();
+      }
+      if(permission!=="granted"){
+        return {ok:false,reason:permission==="denied"?"denied":"permission_pending",message:permission==="denied"?"Les notifications sont bloquées. Autorisez-les dans les paramètres du navigateur pour Tafaß.":"Autorisation des notifications en attente."};
+      }
+
+      let registration=await navigator.serviceWorker.getRegistration("./");
+      if(!registration) registration=await navigator.serviceWorker.register("sw.js",{scope:"./"});
+      await navigator.serviceWorker.ready;
+      registration=await navigator.serviceWorker.getRegistration("./") || registration;
+
       let subscription=await registration.pushManager.getSubscription();
       if(!subscription){
         subscription=await registration.pushManager.subscribe({
@@ -104,7 +116,7 @@ document.documentElement.classList.add("app-boot");
         });
       }
       const j=subscription.toJSON();
-      if(!j.endpoint || !j.keys?.p256dh || !j.keys?.auth) return;
+      if(!j.endpoint || !j.keys?.p256dh || !j.keys?.auth) return {ok:false,reason:"invalid_subscription",message:"La souscription Push est incomplète."};
       const {error}=await sb.from("push_subscriptions").upsert({
         user_id:state.user.id,
         endpoint:j.endpoint,
@@ -113,9 +125,29 @@ document.documentElement.classList.add("app-boot");
         user_agent:navigator.userAgent.slice(0,500),
         updated_at:new Date().toISOString()
       },{onConflict:"user_id,endpoint"});
-      if(error) console.warn("Tafaß push subscription:",error.message);
+      if(error) return {ok:false,reason:"database",message:error.message};
+      return {ok:true,subscription};
     }catch(e){
       console.warn("Tafaß push setup:",e?.message||e);
+      return {ok:false,reason:"exception",message:e?.message||"Impossible d'activer les notifications sur cet appareil."};
+    }
+  }
+  async function enableTafaPushNotifications(){
+    const btn=document.querySelector('[data-action="enable-push-notifications"]');
+    if(btn){btn.disabled=true;btn.classList.add("is-loading");btn.setAttribute("aria-busy","true");}
+    try{
+      const result=await setupTafaPushNotifications({requestPermission:true});
+      if(result.ok){
+        toast("Notifications activées sur cet appareil");
+        return openAdvancedSetting("notifications-settings");
+      }
+      if(result.reason==="denied"){
+        toast("Notifications bloquées. Autorisez-les dans les paramètres du navigateur, puis réessayez.");
+      }else{
+        toast(result.message||"Impossible d'activer les notifications.");
+      }
+    }finally{
+      if(btn){btn.disabled=false;btn.classList.remove("is-loading");btn.removeAttribute("aria-busy");}
     }
   }
   async function removeTafaPushSubscription(){
@@ -3884,9 +3916,13 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
             ${settingSwitch("notifFriends","Amis","Demandes d’amis et changements de relation.",x.friend_notifications !== false)}
             ${settingSwitch("notifReactions","Réactions","Réactions sur vos publications.",x.reaction_notifications !== false)}
             ${settingSwitch("notifComments","Commentaires","Nouveaux commentaires sur vos publications.",x.comment_notifications !== false)}
-          </div><button class="primary big settings-save" data-action="save-notification-settings">Enregistrer</button>
-          <button class="secondary big" data-action="enable-push-notifications">Activer les notifications sur cet appareil</button>
-          <small class="muted">Autorisez les notifications Android pour recevoir les alertes même lorsque Tafaß est fermé.</small>`);
+          </div>
+          <section class="tafa-push-device-card" aria-label="Notifications sur cet appareil">
+            <div class="tafa-push-device-head"><span class="tafa-push-device-icon">⌁</span><div><strong>Notifications sur cet appareil</strong><small>Recevez les alertes Tafaß même lorsque l’application est en arrière-plan.</small></div></div>
+            <button type="button" class="tafa-push-device-button" data-action="enable-push-notifications"><span>Activer les notifications</span><span class="tafa-push-device-arrow">›</span></button>
+            <p class="tafa-push-device-note"><span>ⓘ</span><span>Une autorisation Android peut apparaître. Elle est demandée uniquement lorsque vous appuyez sur le bouton.</span></p>
+          </section>
+          <button class="primary big settings-save" data-action="save-notification-settings">Enregistrer les modifications</button>`);
         return;
       }
 
@@ -4156,16 +4192,6 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       if(action==="save-privacy-assistance") return saveUserSetting({allow_friend_requests:!!$('privacyFriend')?.checked,allow_messages:!!$('privacyMessage')?.checked,allow_search_by_phone:!!$('privacyPhone')?.checked,allow_search_by_email:!!$('privacyEmail')?.checked});
       if(action==="save-find-contact-settings") return saveUserSetting({allow_friend_requests:!!$('findFriends')?.checked,allow_messages:!!$('findMessages')?.checked,allow_search_by_phone:!!$('findPhone')?.checked,allow_search_by_email:!!$('findEmail')?.checked});
       if(action==="save-notification-settings") return saveUserSetting({notifications_enabled:!!$('notifAll')?.checked,message_notifications:!!$('notifMessages')?.checked,friend_notifications:!!$('notifFriends')?.checked,reaction_notifications:!!$('notifReactions')?.checked,comment_notifications:!!$('notifComments')?.checked});
-      if(action==="enable-push-notifications"){
-        if(!state.user)return toast("Connectez-vous d’abord.");
-        if(!window.isSecureContext && location.hostname!=="localhost")return toast("Les notifications push nécessitent HTTPS.");
-        if(!("Notification" in window)||!("serviceWorker" in navigator)||!("PushManager" in window))return toast("Les notifications push ne sont pas prises en charge sur cet appareil.");
-        await setupTafaPushNotifications();
-        if(Notification.permission==="granted")toast("Notifications de cet appareil activées.");
-        else if(Notification.permission==="denied")toast("Notifications bloquées. Autorisez-les dans les réglages Android du navigateur/app.");
-        else toast("Autorisez les notifications lorsque la demande apparaît.");
-        return;
-      }
       if(action==="save-family-settings") return saveSettingsTable("family_settings",{safety_mode:!!$('familySafety')?.checked,contact_restrictions:!!$('familyContacts')?.checked},"Contrôles familiaux enregistrés");
       if(action==="save-story-settings") return saveSettingsTable("story_settings",{allow_public_sharing:!!$('storyPublicShare')?.checked,allow_personal_sharing:!!$('storyPersonalShare')?.checked,allow_mention_sharing:!!$('storyMentionShare')?.checked,allow_story_sharing:!!$('storyShare')?.checked,archive_stories:!!$('storyArchive')?.checked,muted_stories_enabled:!!$('storyMuted')?.checked},"Réglages des stories enregistrés");
       if(action==="save-publication-settings") return saveSettingsTable("publication_settings",{future_audience:$('futureAudience')?.value||"public",limit_old_posts:!!$('limitOldPosts')?.checked,comment_summaries:!!$('commentSummaries')?.checked,share_posts_to_story:!!$('sharePostsStory')?.checked},"Réglages des publications enregistrés");
@@ -5682,7 +5708,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       const complete=Boolean(state.profile&&String(state.user.email||state.profile.email||'').trim()&&String(state.profile.first_name||'').trim()&&String(state.profile.last_name||'').trim()&&state.profile.birth&&String(state.profile.gender||'').trim()&&String(state.profile.phone||'').trim()&&String(state.profile.country||'').trim()&&String(state.profile.city_current||'').trim()&&String(state.profile.city_origin||'').trim());
       if(!complete){ setLoading(btn,false,'Déverrouiller Tafaß'); return toast('Le profil n’a pas été enregistré complètement. Réessayez.'); }
       $('oauthOnboardingView')?.remove(); $('auth')?.classList.add('hidden'); $('app')?.classList.remove('hidden'); state.entering=false;
-      await loadPosts(); await setupRealtime(); ensureLiveFeedRealtime(); setupTafaPushNotifications(); await render(); toast('Compte complété. Bienvenue sur Tafaß.');
+      await loadPosts(); await setupRealtime(); ensureLiveFeedRealtime(); setupTafaPushNotifications({requestPermission:false}); await render(); toast('Compte complété. Bienvenue sur Tafaß.');
     } catch(e){ setLoading(btn,false,'Déverrouiller Tafaß'); toast(e?.message||'Impossible de valider le compte.'); }
   }
 
@@ -5842,7 +5868,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       // Register/refresh the Web Push subscription for every authenticated
       // session, including existing accounts that only log in (not only new
       // registrations). This is required for background Android/PWA pushes.
-      await setupTafaPushNotifications();
+      await setupTafaPushNotifications({requestPermission:false});
       await render();
       await startTimeLimitGuard();
       hideAppTransition();
@@ -6947,6 +6973,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if (action === "open-conversation") return openConversation(id);
     if (action === "mark-read") return markRead();
     if (action === "theme") return toggleTheme();
+    if (action === "enable-push-notifications") return enableTafaPushNotifications();
     if (action === "settings-focus-search") { $("settingsSearch")?.focus(); return; }
     if (action === "open-games") return gamesModal();
     if (action === "capture-exact-location") return captureExactLocation();
