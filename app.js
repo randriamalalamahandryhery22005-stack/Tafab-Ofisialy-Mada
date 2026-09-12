@@ -70,7 +70,7 @@ document.documentElement.classList.add("app-boot");
     channel: null, theme: "dark", entering: false, loggingOut: false, composerOpen: false, composerBackground: "plain", composerLocation: "",
     composerDraftText: "", composerFile: null, composerVisibility: "public", composerMeta: {}, profileWallOwnerId:null, profileWallRequireApproval:true, profileWallRows:[],
     liveFeedChannel: null, conversationChannel: null, presenceChannel: null, activeLive: null, adminDashboardChannel:null, adminDashboardTimer:null, adminDashboardRefreshing:false, adminDashboardRefreshTimer:null,
-    profileTab: "posts", reactionSettingsCache:new Map(), locationWatchId:null, timeLimitRuntime:null, timeLimitTimer:null, timeLimitOverlay:null, friendsTab: "suggestions", pagesTab: "mine", groupsTab: "mine", groupSort: "recent", selectedConversation: null, viewingProfileId: null, renderToken: 0, activePage: null, entityBackRoute: null, pushLoginPromptOpen:false
+    profileTab: "posts", reactionSettingsCache:new Map(), locationWatchId:null, timeLimitRuntime:null, timeLimitTimer:null, timeLimitOverlay:null, friendsTab: "suggestions", pagesTab: "mine", groupsTab: "mine", groupSort: "recent", selectedConversation: null, viewingProfileId: null, renderToken: 0, activePage: null, entityBackRoute: null, pushLoginPromptOpen:false, pendingPushTarget:null
   };
 
   // Production network/realtime guard: keeps the UI honest when connectivity changes.
@@ -542,10 +542,13 @@ document.documentElement.classList.add("app-boot");
     return map[n?.type] || n?.message || "a effectué une nouvelle activité.";
   }
   function notificationTarget(n, actor) {
+    if (n?.entity_type === "conversation" && n?.entity_id) return { action:"open-conversation", id:n.entity_id };
     if (n?.type === "message" && n?.entity_id) return { action:"open-conversation", id:n.entity_id };
     if (["page_follow","page_follow_invite"].includes(n?.type) && n?.entity_id) return { action:"page-open", id:n.entity_id };
     if (["group_join"].includes(n?.type) && n?.entity_id) return { action:"group-open", id:n.entity_id };
     if (n?.entity_type === "post" || n?.post_id) return { action:"open-notification-post", id:n.post_id || n.entity_id };
+    if (n?.entity_type === "page" && n?.entity_id) return { action:"page-open", id:n.entity_id };
+    if (n?.entity_type === "group" && n?.entity_id) return { action:"group-open", id:n.entity_id };
     if (actor?.id) return { action:"view-profile", id:actor.id };
     return null;
   }
@@ -5880,6 +5883,102 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     setTimeout(()=>el.remove(),180);
   }
 
+  // Tafaß V87 — Push deep-link routing.
+  // A notification must open the exact resource that generated it, not just
+  // the generic home/notifications screen. This also works when the PWA was
+  // completely closed: the target is encoded in the URL by sw.js.
+  function readPushTargetFromLocation(){
+    try{
+      const raw=String(location.hash||"").replace(/^#/,"");
+      const [route, queryString=""]=raw.split("?");
+      const p=new URLSearchParams(queryString);
+      if(p.get("push")!=="1") return null;
+      const target={
+        route: p.get("route") || route || "notifications",
+        notificationId: p.get("notification") || "",
+        conversationId: p.get("conversation") || "",
+        postId: p.get("post") || "",
+        entityId: p.get("entity") || "",
+        entityType: p.get("entity_type") || ""
+      };
+      return target.notificationId || target.conversationId || target.postId || target.entityId
+        ? target : null;
+    }catch(_){ return null; }
+  }
+
+  function rememberPushTarget(target){
+    if(!target) return;
+    state.pendingPushTarget=target;
+  }
+
+  async function handlePushTarget(target){
+    if(!target || !state.user) return false;
+    state.pendingPushTarget=null;
+    try{
+      if(target.notificationId){
+        await sb.from("notifications")
+          .update({is_read:true})
+          .eq("id",target.notificationId)
+          .eq("user_id",state.user.id);
+      }
+
+      const route=String(target.route||"notifications");
+
+      if(target.conversationId || route==="messages"){
+        const conversationId=target.conversationId || target.entityId;
+        if(conversationId){
+          closeModal();
+          await openConversation(conversationId);
+          return true;
+        }
+        navigate("messages");
+        return true;
+      }
+
+      if(target.postId || route==="home"){
+        const postId=target.postId || target.entityId;
+        if(postId){
+          closeModal();
+          await openNotificationPost(target.notificationId || postId);
+          return true;
+        }
+        navigate("home");
+        return true;
+      }
+
+      if(route==="pages" && target.entityId){
+        closeModal();
+        await openPageDetail(target.entityId);
+        return true;
+      }
+
+      if(route==="groups" && target.entityId){
+        closeModal();
+        await openGroupDetail(target.entityId);
+        return true;
+      }
+
+      if(route==="profile" && target.entityId){
+        closeModal();
+        await openUserProfile(target.entityId);
+        return true;
+      }
+
+      navigate(routes.includes(route) ? route : "notifications");
+      return true;
+    }catch(e){
+      console.warn("Tafaß push deep-link:",e);
+      navigate(routes.includes(target.route) ? target.route : "notifications");
+      return false;
+    }
+  }
+
+  function consumePushTargetAfterRender(){
+    const target=state.pendingPushTarget;
+    if(!target || !state.user) return;
+    setTimeout(()=>handlePushTarget(target),60);
+  }
+
   async function enterApp() {
     if (state.entering || !state.user) return;
     state.entering = true;
@@ -5909,6 +6008,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       // after login so users do not have to search through Settings.
       await setupTafaPushNotifications({requestPermission:false});
       await render();
+      consumePushTargetAfterRender();
       await startTimeLimitGuard();
       hideAppTransition();
       if(Notification.permission==="default") setTimeout(showLoginPushPrompt,220);
@@ -7359,9 +7459,26 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if(e.target.id==="groupPostMedia") $("groupPostMediaName")?.replaceChildren(document.createTextNode(e.target.files?.[0]?.name||"Aucun fichier"));
   });
   $("globalSearch").addEventListener("keydown", e => { if (e.key === "Enter") { const q=e.target.value; navigate("search"); setTimeout(()=>{ const input=$("searchInput"); if(input){input.value=q; searchPage(q);} },0); } });
-  window.addEventListener("hashchange", () => { const r=location.hash.slice(1); if(routes.includes(r) && r !== state.route) navigate(r); });
-  const initialRoute = routes.includes(location.hash.slice(1)) ? location.hash.slice(1) : "home";
+  window.addEventListener("hashchange", () => {
+    const raw=String(location.hash||"").replace(/^#/,"");
+    const r=raw.split("?")[0];
+    const pushTarget=readPushTargetFromLocation();
+    if(pushTarget){ rememberPushTarget(pushTarget); if(state.user) consumePushTargetAfterRender(); return; }
+    if(routes.includes(r) && r !== state.route) navigate(r);
+  });
+  window.addEventListener("message", e => {
+    const data=e?.data;
+    if(!data || data.type!=="TAFASS_PUSH_CLICK") return;
+    const target=data.target || {};
+    rememberPushTarget(target);
+    if(state.user && !$("app")?.classList.contains("hidden")) consumePushTargetAfterRender();
+  });
+  const initialHash = String(location.hash || "").replace(/^#/, "");
+  const initialHashParts = initialHash.split("?");
+  const initialRouteCandidate = initialHashParts[0];
+  const initialRoute = routes.includes(initialRouteCandidate) ? initialRouteCandidate : "home";
   state.route = initialRoute; state.navStack = [initialRoute];
+  rememberPushTarget(readPushTargetFromLocation());
 
   document.body.classList.toggle("light", state.theme === "light");
 

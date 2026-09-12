@@ -1,5 +1,5 @@
 /* Tafaß V83 — Clean Production Core service worker */
-const CACHE = 'tafass-v86-3-official-push-logo';
+const CACHE = 'tafass-v87-push-deeplink';
 const ASSETS = [
   './', './index.html', './style.css?v=187', './app.js?v=187',
   './manifest.webmanifest', './assets/tafass-logo-premium.svg', './assets/tafass-notification-icon.png'
@@ -27,6 +27,14 @@ self.addEventListener('push', event => {
   const badge = data.badge || './assets/tafass-notification-icon.png';
   const url = data.url || './';
   const tag = data.tag || ('tafass-' + Date.now());
+  const target = {
+    route: data.route || '',
+    notificationId: data.notification_id || '',
+    conversationId: data.conversation_id || '',
+    postId: data.post_id || '',
+    entityId: data.entity_id || '',
+    entityType: data.entity_type || ''
+  };
   event.waitUntil(
     self.registration.showNotification(title, {
       body,
@@ -34,23 +42,32 @@ self.addEventListener('push', event => {
       badge,
       tag,
       renotify: true,
-      data: { url },
+      data: { url, target },
       vibrate: [120, 60, 120]
     })
   );
 });
 self.addEventListener('notificationclick', event => {
   event.notification.close();
-  const target = event.notification?.data?.url || './';
+  const data = event.notification?.data || {};
+  const url = data.url || './';
+  const pushTarget = data.target || {};
   event.waitUntil((async () => {
     const clients = await self.clients.matchAll({type:'window', includeUncontrolled:true});
     for (const client of clients) {
       if ('focus' in client) {
-        try { await client.navigate(target); } catch (_) {}
+        try {
+          // Keep a deterministic URL for cold starts, while also sending the
+          // target directly to an already-open Tafaß window.
+          if (pushTarget && (pushTarget.notificationId || pushTarget.entityId || pushTarget.postId || pushTarget.conversationId)) {
+            client.postMessage({type:'TAFASS_PUSH_CLICK', target:pushTarget});
+          }
+          await client.navigate(url);
+        } catch (_) {}
         return client.focus();
       }
     }
-    if (self.clients.openWindow) return self.clients.openWindow(target);
+    if (self.clients.openWindow) return self.clients.openWindow(url);
   })());
 });
 
