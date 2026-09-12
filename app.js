@@ -6048,9 +6048,8 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     ]);
     if(postErr||!post)return toast(postErr?.message||'Publication introuvable.');
     if(pageErr||!page)return toast(pageErr?.message||'Page introuvable.');
-    const {data:member}=await sb.from('page_members').select('role').eq('page_id',pageId).eq('user_id',state.user.id).maybeSingle();
-    const canManage=String(page.owner_id)===String(state.user.id)||['owner','admin','editor'].includes(String(member?.role||''))||state.__isAdmin===true;
-    const canEdit=String(post.user_id)===String(state.user.id)||canManage;
+    const canManage=String(page.owner_id)===String(state.user.id);
+    const canEdit=canManage;
     const canDelete=canManage;
     const link=`${location.origin}${location.pathname}#/pages/${pageId}?post=${encodeURIComponent(postId)}`;
     openModal(`<div class="modal-box page-post-options-modal p91-post-menu">
@@ -6073,7 +6072,8 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   async function editPagePost(postId,pageId){
     const {data:post,error}=await sb.from('page_posts').select('id,content,user_id').eq('id',postId).maybeSingle();
     if(error||!post)return toast(error?.message||'Publication introuvable.');
-    if(String(post.user_id)!==String(state.user.id))return toast('Vous ne pouvez modifier que votre publication.');
+    const pg=(await sb.from('pages').select('owner_id').eq('id',pageId).maybeSingle()).data;
+    if(!pg || String(pg.owner_id)!==String(state.user.id))return toast('Accès refusé : seul le propriétaire peut modifier une publication de la Page.');
     openModal(`<div class="modal-box page-post-edit-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß · MODIFICATION</span><h3>Modifier la publication</h3><textarea id="pagePostEditText" class="premium-input" maxlength="5000" placeholder="Votre publication…">${esc(post.content||'')}</textarea><div class="page-post-edit-actions"><button class="secondary" data-action="close-modal">Annuler</button><button class="primary" data-action="save-page-post-edit" data-id="${esc(postId)}" data-entity-id="${esc(pageId)}">Enregistrer</button></div></div>`);
     setTimeout(()=>$('pagePostEditText')?.focus(),50);
   }
@@ -6184,9 +6184,9 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       sb.from('pages').select('id,name,owner_id').eq('id',pageId).maybeSingle()
     ]);
     if(pe||ge||!p||!pg) return toast(pe?.message||ge?.message||'Publication introuvable.');
-    const me=(await sb.from('page_members').select('role').eq('page_id',pageId).eq('user_id',state.user.id).maybeSingle()).data;
-    const canManage=pg.owner_id===state.user.id || ['owner','admin','editor'].includes(me?.role) || state.__isAdmin===true;
-    const canEdit=p.user_id===state.user.id || canManage;
+    const ownerMe=String(pg.owner_id)===String(state.user.id);
+    const canManage=ownerMe;
+    const canEdit=ownerMe;
     openModal(`<div class="modal-box page-post-options-modal">
       <button class="modal-close" data-action="close-modal">×</button>
       <div class="page-post-options-head"><span class="eyebrow">TAFAß • PUBLICATION</span><h3>Options de la publication</h3><p>${esc(pg.name)}</p></div>
@@ -6223,20 +6223,20 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if(error||!p)return toast(error?.message||'Page introuvable.');
     const {data:m}=await sb.from('page_members').select('role').eq('page_id',id).eq('user_id',state.user.id).maybeSingle();
     const ownerMe=String(p.owner_id)===String(state.user.id);
-    const isManager=ownerMe||['owner','admin','editor'].includes(String(m?.role||''))||state.__isAdmin===true;
+    const isManager=ownerMe;
 
     if(!isManager){
-      openModal(`<div class="modal-box page-more-menu-modal p91-page-menu">
+      openModal(`<div class="modal-box page-more-menu-modal p91-page-menu p91-visitor-page-menu">
         <div class="p91-sheet-handle"></div>
         <div class="p91-owner-menu-head">
           <div class="p91-page-menu-avatar">${entityAvatarHTML(p,'page','p91-menu-avatar')}</div>
-          <div><span class="eyebrow">TAFAß · PAGE</span><h3>${esc(p.name)}</h3><small>${esc(p.category||'Page')} · espace public</small></div>
+          <div><span class="eyebrow">TAFAß · PAGE PUBLIQUE</span><h3>${esc(p.name)}</h3><small>${esc(p.category||'Page')} · vous êtes visiteur / abonné</small></div>
         </div>
         <div class="p91-page-menu-list">
-          <button class="p91-page-menu-item" data-action="toggle-page-follow" data-id="${esc(id)}"><span>＋</span><div><b>Suivre la Page</b><small>Recevoir les actualités de cette Page</small></div></button>
-          <button class="p91-page-menu-item" data-action="page-contact" data-id="${esc(id)}"><span>✉</span><div><b>Envoyer un message</b><small>Contacter directement la Page</small></div></button>
-          <button class="p91-page-menu-item" data-action="page-share" data-id="${esc(id)}"><span>↗</span><div><b>Partager la Page</b><small>Partager cette Page avec vos contacts</small></div></button>
-          <button class="p91-page-menu-item" data-action="page-copy-link" data-id="${esc(id)}"><span>⌁</span><div><b>Copier le lien</b><small>Copier le lien public de la Page</small></div></button>
+          <button class="p91-page-menu-item" data-action="toggle-page-follow" data-id="${esc(id)}"><span>＋</span><div><b>Suivre / ne plus suivre</b><small>Gérer uniquement votre abonnement à cette Page</small></div></button>
+          <button class="p91-page-menu-item" data-action="page-contact" data-id="${esc(id)}"><span>✉</span><div><b>Contacter la Page</b><small>Envoyer un message à l’équipe de la Page</small></div></button>
+          <button class="p91-page-menu-item" data-action="page-share" data-id="${esc(id)}"><span>↗</span><div><b>Partager la Page</b><small>Partager uniquement le lien public</small></div></button>
+          <button class="p91-page-menu-item" data-action="page-copy-link" data-id="${esc(id)}"><span>⌁</span><div><b>Copier le lien public</b><small>Aucun accès aux outils de gestion</small></div></button>
           <button class="p91-page-menu-item" data-action="page-report" data-id="${esc(id)}"><span>⚑</span><div><b>Signaler la Page</b><small>Signaler un problème concernant cette Page</small></div></button>
         </div>
         <button class="p91-menu-cancel" data-action="close-modal">Annuler</button>
@@ -6288,6 +6288,8 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   async function pageActionButton(id){ return pageOwnerMenuInfo(id,'Bouton d’action','La configuration du bouton principal de la Page est disponible dans les paramètres de gestion.','Gérer'); }
 
   async function pageInviteFriends(id){
+    const pgOwner=(await sb.from('pages').select('owner_id').eq('id',id).maybeSingle()).data;
+    if(!pgOwner || String(pgOwner.owner_id)!==String(state.user.id)) return toast('Accès refusé : seul le propriétaire peut inviter des personnes pour cette Page.');
     const {data:friends,error}=await sb.from('friendships').select('user_id,friend_id').or(`user_id.eq.${state.user.id},friend_id.eq.${state.user.id}`).limit(200);
     if(error)return toast(error.message);
     const ids=[...(friends||[])].map(f=>f.user_id===state.user.id?f.friend_id:f.user_id).filter(Boolean);
@@ -6303,6 +6305,8 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   }
 
   async function sendPageInvites(id){
+    const pgOwner=(await sb.from('pages').select('owner_id').eq('id',id).maybeSingle()).data;
+    if(!pgOwner || String(pgOwner.owner_id)!==String(state.user.id)) return toast('Accès refusé.');
     const ids=[...document.querySelectorAll('.invite-friend-list input:checked')].map(x=>x.value);
     if(!ids.length)return toast('Sélectionnez au moins un ami.');
     const pg=(await fetchPageById(id)).data; if(!pg)return toast('Page introuvable.');
@@ -6334,7 +6338,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     const {data:entity,error}=await sb.from(ownerTable).select('id,name,owner_id').eq('id',id).maybeSingle();
     if(error||!entity)return toast('Élément introuvable.');
     const {data:me}=await sb.from(table).select('role').eq(key,id).eq('user_id',state.user.id).maybeSingle();
-    if(entity.owner_id!==state.user.id && me?.role!=='admin' && state.__isAdmin!==true)return toast('Vous n’avez pas les droits de gestion.');
+    if(isPage ? String(entity.owner_id)!==String(state.user.id) : (entity.owner_id!==state.user.id && me?.role!=='admin' && state.__isAdmin!==true))return toast('Vous n’avez pas les droits de gestion.');
     const {data:members,error:membersError}=await sb.from(table).select('user_id,role,profiles(first_name,last_name,username,avatar_url)').eq(key,id).limit(100);
     if(membersError)return toast(membersError.message);
     const rows=(members||[]).map(m=>{const role=String(m.role||'member'),locked=m.user_id===entity.owner_id;const label=role==='owner'?'Propriétaire':role==='admin'?'Administrateur':role==='editor'?'Éditeur':role==='moderator'?'Modérateur':'Membre';return `<div class="team-member-row"><div class="team-member-person">${avatarHTML(m.profiles||{},'avatar team-member-avatar')}<span><b>${esc(nameOf(m.profiles||{}))}</b><small>@${esc(m.profiles?.username||'membre')} · ${label}</small></span></div><div class="team-member-actions">${locked?'<span class="team-owner-lock">PROPRIÉTAIRE</span>':`<select class="team-role-select" data-team-role data-kind="${kind}" data-entity-id="${esc(id)}" data-user-id="${esc(m.user_id)}"><option value="member" ${role==='member'?'selected':''}>Membre</option><option value="editor" ${role==='editor'?'selected':''}>Éditeur</option><option value="moderator" ${role==='moderator'?'selected':''}>Modérateur</option><option value="admin" ${role==='admin'?'selected':''}>Administrateur</option></select><button class="team-remove-btn" data-action="team-remove" data-kind="${kind}" data-id="${esc(m.user_id)}" data-entity-id="${esc(id)}">Retirer</button>`}</div></div>`}).join('')||'<div class="team-empty"><b>Aucun membre</b><span>Aucun gestionnaire supplémentaire.</span></div>';
@@ -6391,12 +6395,13 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   async function editPage(id){
     const {data:p,error}=await fetchPageById(id);
     if(error) return toast(error.message); if(!p) return toast('Page introuvable.');
-    const {data:roleRow}=await sb.from('page_members').select('role').eq('page_id',id).eq('user_id',state.user.id).maybeSingle();
-    if(p.owner_id!==state.user.id && roleRow?.role!=='admin') return toast('Seul le propriétaire ou un administrateur peut modifier la Page.');
+    if(String(p.owner_id)!==String(state.user.id)) return toast('Accès refusé : seul le propriétaire de la Page peut la gérer.');
     openModal(`<div class="modal-box page-edit-modal page-manage-screen"><div class="page-manage-topbar"><button class="entity-back-btn compact" data-action="page-manage-back" data-id="${esc(id)}" aria-label="Retour à la Page"><span>‹</span><small>Retour</small></button><span class="page-eyebrow">TAFAß · ADMINISTRATION</span></div><div class="page-manage-scroll"><div class="page-manage-heading"><h2>Gérer la Page</h2><p>Modifiez l’identité publique, les coordonnées et les visuels.</p></div><div class="page-rename-rule"><span>◷</span><div><b>Le nom peut être modifié une fois tous les 15 jours</b><small>Si vous changez le nom, l’ancien nom restera visible dans les détails de la Page.</small></div></div><div class="page-edit-grid"><label>Nom<input id="editPageName" maxlength="80" value="${esc(p.name)}"></label><label>Nom d’utilisateur<input id="editPageUsername" maxlength="50" value="${esc(p.username||'')}" placeholder="@ma-page"></label><label>Catégorie<select id="editPageCategory">${pageCategoryOptions(p.category||'Autre')}</select><small>Cette information apparaîtra uniquement dans « À propos ».</small></label><label>Site web<input id="editPageWebsite" type="url" value="${esc(p.website_url||'')}" placeholder="https://…"></label><label class="wide">Présentation<textarea id="editPageBio" maxlength="1000">${esc(p.bio||'')}</textarea></label><label>Adresse<input id="editPageAddress" maxlength="200" value="${esc(p.address||p.location||'')}" placeholder="Adresse / ville"></label><label>E-mail professionnel<input id="editPageEmail" type="email" value="${esc(p.contact_email||'')}" placeholder="contact@…"></label><label>Téléphone professionnel<input id="editPagePhone" type="tel" value="${esc(p.contact_phone||'')}" placeholder="+261…"></label><label>Logo<input id="editPageLogo" type="file" accept="image/jpeg,image/png,image/webp"></label><label>Couverture<input id="editPageCover" type="file" accept="image/jpeg,image/png,image/webp"></label></div></div><div class="page-manage-footer"><button class="ghost-action" data-action="page-manage-back" data-id="${esc(id)}">Annuler</button><button class="primary big" data-action="save-page-edit" data-id="${esc(id)}">Enregistrer les modifications</button></div></div>`);
   }
 
   async function savePageEdit(id){
+    const ownerCheck=(await sb.from('pages').select('owner_id').eq('id',id).maybeSingle()).data;
+    if(!ownerCheck || String(ownerCheck.owner_id)!==String(state.user.id)) return toast('Accès refusé : seul le propriétaire de la Page peut modifier ces paramètres.');
     const btn=document.querySelector('[data-action="save-page-edit"]'); setLoading(btn,true,'Enregistrer');
     try{
       const current=(await fetchPageById(id)).data;
@@ -6423,6 +6428,8 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   }
 
   async function pageMemberMenu(userId,pageId){
+    const pg=(await sb.from('pages').select('owner_id').eq('id',pageId).maybeSingle()).data;
+    if(!pg || String(pg.owner_id)!==String(state.user.id)) return toast('Accès refusé.');
     const {data:m}=await sb.from('page_members').select('role,profiles(first_name,last_name,username,avatar_url)').eq('page_id',pageId).eq('user_id',userId).maybeSingle();
     if(!m) return toast('Gestionnaire introuvable.');
     openModal(`<div class="modal-box page-edit-modal"><button class="page-close" data-action="close-modal">×</button><span class="page-eyebrow">ÉQUIPE DE LA PAGE</span><h2>${esc(nameOf(m.profiles||{}))}</h2><p class="muted">Rôle actuel : ${esc(m.role)}</p><div class="page-role-actions"><button class="page-action secondary" data-action="set-page-role" data-id="${esc(userId)}" data-entity-id="${esc(pageId)}" data-role="admin">Administrateur</button><button class="page-action secondary" data-action="set-page-role" data-id="${esc(userId)}" data-entity-id="${esc(pageId)}" data-role="editor">Éditeur</button><button class="page-action secondary" data-action="set-page-role" data-id="${esc(userId)}" data-entity-id="${esc(pageId)}" data-role="moderator">Modérateur</button><button class="page-action secondary danger" data-action="remove-page-member" data-id="${esc(userId)}" data-entity-id="${esc(pageId)}">Retirer de l’équipe</button></div></div>`);
@@ -6985,8 +6992,8 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if (action === "page-manage-back") { const pageId=actionEl.dataset.id || ""; closeModal(); return pageId ? openPageDetail(pageId) : navigate("pages"); }
     if (action === "page-back") return goBack();
     if (action === "toggle-page-follow") return togglePageFollow(id);
-    if (action === "edit-page") return editPage(id);
-    if (action === "save-page-edit") return savePageEdit(id);
+    if (action === "edit-page") { const pg=(await sb.from('pages').select('owner_id').eq('id',id).maybeSingle()).data; if(!pg || String(pg.owner_id)!==String(state.user.id)) return toast('Accès refusé : réservé au propriétaire de la Page.'); return editPage(id); }
+    if (action === "save-page-edit") { const pg=(await sb.from('pages').select('owner_id').eq('id',id).maybeSingle()).data; if(!pg || String(pg.owner_id)!==String(state.user.id)) return toast('Accès refusé : réservé au propriétaire de la Page.'); return savePageEdit(id); }
     if (action === "page-member-menu") return pageMemberMenu(id, actionEl.dataset.entityId);
     if (action === "set-page-role") { const role=actionEl.dataset.role; const r=state.__isAdmin===true ? await sb.rpc('tafa_v80_platform_admin_set_role',{p_kind:'page',p_entity_id:actionEl.dataset.entityId,p_user_id:id,p_role:role}) : await sb.from('page_members').update({role}).eq('page_id',actionEl.dataset.entityId).eq('user_id',id); if(r.error)return toast(r.error.message); closeModal(); toast('Rôle mis à jour.'); return openPageDetail(actionEl.dataset.entityId); }
     if (action === "remove-page-member") { const r=await sb.from('page_members').delete().eq('page_id',actionEl.dataset.entityId).eq('user_id',id); if(r.error)return toast(r.error.message); closeModal(); toast('Gestionnaire retiré.'); return openPageDetail(actionEl.dataset.entityId); }
@@ -7007,6 +7014,8 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if (action === "page-about-tab") return pageTab(id,'about');
     if (action === "page-admin-tab") return pageTab(id,'team');
     if (action === "page-publish") {
+      const ownerRow=(await sb.from('pages').select('owner_id').eq('id',id).maybeSingle()).data;
+      if(!ownerRow || String(ownerRow.owner_id)!==String(state.user.id)) return toast('Accès refusé : seul le propriétaire peut publier au nom de la Page.');
       const content=$('pagePostText')?.value.trim(); const file=$('pagePostMedia')?.files?.[0];
       if(!content && !file)return toast('Ajoutez un texte ou un média.');
       const btn=actionEl; setLoading(btn,true,'Publier');
@@ -7021,6 +7030,8 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if (action === "save-page-post-edit") {
       const pageId=actionEl.dataset.entityId, text=$('pagePostEditText')?.value.trim()||'';
       if(!text)return toast('La publication ne peut pas être vide.');
+      const pgOwner=(await sb.from('pages').select('owner_id').eq('id',pageId).maybeSingle()).data;
+      if(!pgOwner || String(pgOwner.owner_id)!==String(state.user.id)) return toast('Accès refusé : seul le propriétaire peut modifier les publications de la Page.');
       const r=await sb.from('page_posts').update({content:text}).eq('id',id).eq('user_id',state.user.id);
       if(r.error)return toast(r.error.message);
       closeModal(); toast('Publication modifiée.'); return openPageDetail(pageId);
@@ -7346,20 +7357,20 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if (action === "page-profile") { state.entityBackRoute = state.route || "pages"; return openPageDetail(id); }
     if (action === "page-open") { state.entityBackRoute = pageModeActive() && state.activePage?.id===id ? "home" : (state.route || "pages"); return openPageDetail(id); }
     if (action === "page-more") return pageMore(id);
-    if (action === "page-promote") return pagePromote(id);
-    if (action === "page-status") return pageStatus(id);
-    if (action === "page-action-button") return pageActionButton(id);
-    if (action === "page-archive") return pageArchive(id);
-    if (action === "page-activity") return pageActivity(id);
-    if (action === "page-review") return pageReview(id);
-    if (action === "page-feature") return pageFeature(id);
-    if (action === "page-search") return pageSearch(id);
+    if (action === "page-promote") { const pg=(await sb.from('pages').select('owner_id').eq('id',id).maybeSingle()).data; if(!pg || String(pg.owner_id)!==String(state.user.id)) return toast('Accès refusé : réservé au propriétaire de la Page.'); return pagePromote(id); }
+    if (action === "page-status") { const pg=(await sb.from('pages').select('owner_id').eq('id',id).maybeSingle()).data; if(!pg || String(pg.owner_id)!==String(state.user.id)) return toast('Accès refusé : réservé au propriétaire de la Page.'); return pageStatus(id); }
+    if (action === "page-action-button") { const pg=(await sb.from('pages').select('owner_id').eq('id',id).maybeSingle()).data; if(!pg || String(pg.owner_id)!==String(state.user.id)) return toast('Accès refusé : réservé au propriétaire de la Page.'); return pageActionButton(id); }
+    if (action === "page-archive") { const pg=(await sb.from('pages').select('owner_id').eq('id',id).maybeSingle()).data; if(!pg || String(pg.owner_id)!==String(state.user.id)) return toast('Accès refusé : réservé au propriétaire de la Page.'); return pageArchive(id); }
+    if (action === "page-activity") { const pg=(await sb.from('pages').select('owner_id').eq('id',id).maybeSingle()).data; if(!pg || String(pg.owner_id)!==String(state.user.id)) return toast('Accès refusé : réservé au propriétaire de la Page.'); return pageActivity(id); }
+    if (action === "page-review") { const pg=(await sb.from('pages').select('owner_id').eq('id',id).maybeSingle()).data; if(!pg || String(pg.owner_id)!==String(state.user.id)) return toast('Accès refusé : réservé au propriétaire de la Page.'); return pageReview(id); }
+    if (action === "page-feature") { const pg=(await sb.from('pages').select('owner_id').eq('id',id).maybeSingle()).data; if(!pg || String(pg.owner_id)!==String(state.user.id)) return toast('Accès refusé : réservé au propriétaire de la Page.'); return pageFeature(id); }
+    if (action === "page-search") { const pg=(await sb.from('pages').select('owner_id').eq('id',id).maybeSingle()).data; if(!pg || String(pg.owner_id)!==String(state.user.id)) return toast('Accès refusé : réservé au propriétaire de la Page.'); return pageSearch(id); }
     if (action === "page-post-more") return pagePostMore(id, actionEl.dataset.entityId);
     if (action === "page-post-copy-link") return pagePostCopyLink(id, actionEl.dataset.entityId);
     if (action === "page-post-share") return pagePostShare(id, actionEl.dataset.entityId);
     if (action === "page-post-report") return pagePostReport(id, actionEl.dataset.entityId);
-    if (action === "page-team") return entityTeamManager("page",id);
-    if (action === "page-invite-friends") return pageInviteFriends(id);
+    if (action === "page-team") { const pg=(await sb.from('pages').select('owner_id').eq('id',id).maybeSingle()).data; if(!pg || String(pg.owner_id)!==String(state.user.id)) return toast('Accès refusé : réservé au propriétaire de la Page.'); return entityTeamManager("page",id); }
+    if (action === "page-invite-friends") { const pg=(await sb.from('pages').select('owner_id').eq('id',id).maybeSingle()).data; if(!pg || String(pg.owner_id)!==String(state.user.id)) return toast('Accès refusé : réservé au propriétaire de la Page.'); return pageInviteFriends(id); }
     if (action === "page-role-request") return sendPageRoleRequest(id, actionEl.dataset.entityId);
     if (action === "role-request-accept") return respondRoleRequest(id, true);
     if (action === "role-request-reject") return respondRoleRequest(id, false);
@@ -7419,7 +7430,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
         sb.from('pages').select('owner_id').eq('id',pageId).maybeSingle(),
         sb.from('page_members').select('role').eq('page_id',pageId).eq('user_id',state.user.id).maybeSingle()
       ]);
-      const allowed=post && page && (String(post.user_id)===String(state.user.id) || String(page.owner_id)===String(state.user.id) || ['owner','admin'].includes(String(member?.role||'')));
+      const allowed=post && page && String(page.owner_id)===String(state.user.id);
       if(!allowed)return toast('Vous n’avez pas les droits pour supprimer cette publication.');
       const ok=window.confirm('Supprimer définitivement cette publication ?');
       if(!ok)return;
@@ -9434,8 +9445,8 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if(posts.error)return toast(posts.error.message);
     const ownerMe=String(x.owner_id)===String(state.user.id);
     const myRole=(members.data||[]).find(m=>String(m.user_id)===String(state.user.id))?.role||null;
-    const canManage=ownerMe||['owner','admin'].includes(myRole);
-    const canPublish=ownerMe||['owner','admin','editor'].includes(myRole);
+    const canManage=ownerMe;
+    const canPublish=ownerMe;
     const followerCount=followers.count||0;
     const postsRows=posts.data||[];
     const postRows=postsRows.map(p=>{
@@ -9443,7 +9454,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       const mine=reactions.some(r=>String(r.user_id)===String(state.user.id));
       const preview=comments.slice(-2).map(c=>`<div class="v82-comment"><span>${avatarHTML(c.profiles||{},'avatar v82-comment-avatar')}</span><div><b>${esc(nameOf(c.profiles||{}))}</b><p>${esc(c.content||'')}</p><small>${timeAgo(c.created_at)}</small></div></div>`).join('');
       return `<article class="v82-post" data-page-post="${esc(p.id)}">
-        <header class="v82-post-head"><div>${entityAvatarHTML(x,'page','v82-post-avatar')}<div><b>${esc(x.name)}</b><small>${timeAgo(p.created_at)} · Page</small></div></div>${(p.user_id===state.user.id||canManage)?`<button type="button" class="v82-icon p89-post-options" data-action="page-post-menu" data-id="${esc(p.id)}" data-entity-id="${esc(id)}" aria-label="Options de la publication">•••</button>`:''}</header>
+        <header class="v82-post-head"><div>${entityAvatarHTML(x,'page','v82-post-avatar')}<div><b>${esc(x.name)}</b><small>${timeAgo(p.created_at)} · Page</small></div></div><button type="button" class="v82-icon p89-post-options" data-action="page-post-menu" data-id="${esc(p.id)}" data-entity-id="${esc(id)}" aria-label="Options de la publication">•••</button></header>
         ${p.content?`<div class="v82-post-text">${esc(p.content)}</div>`:''}
         ${p.media_url?(String(p.media_type||'').startsWith('video')?`<video class="v82-post-media" src="${esc(p.media_url)}" controls playsinline preload="metadata"></video>`:`<img class="v82-post-media" src="${esc(p.media_url)}" alt="Publication" loading="lazy">`):''}
         <div class="v82-post-stats"><span>${reactions.length} réaction${reactions.length===1?'':'s'}</span><span>${comments.length} commentaire${comments.length===1?'':'s'}</span><span>${shares.length} partage${shares.length===1?'':'s'}</span></div>
@@ -9454,16 +9465,16 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     const team=(members.data||[]).map(m=>`<div class="v82-team-row">${avatarHTML(m.profiles||{},'avatar v82-team-avatar')}<div><b>${esc(nameOf(m.profiles||{}))}</b><small>${esc(m.role||'editor')}</small></div>${canManage&&String(m.user_id)!==String(state.user.id)?`<button type="button" class="v82-icon" data-action="page-member-menu" data-id="${esc(m.user_id)}" data-entity-id="${esc(id)}">•••</button>`:''}</div>`).join('')||`<div class="v82-muted">Aucun gestionnaire supplémentaire.</div>`;
     const about=`<div class="v82-info-grid"><div><small>Catégorie</small><b>${esc(x.category||'Autre')}</b></div><div><small>Créée le</small><b>${new Date(x.created_at).toLocaleDateString('fr-FR')}</b></div><div><small>Responsable</small><b>${esc(owner.data?nameOf(owner.data):'Membre Tafaß')}</b></div><div><small>Adresse</small><b>${esc(x.address||owner.data?.city_current||'Non renseignée')}</b></div>${x.contact_email?`<div><small>E-mail</small><b>${esc(x.contact_email)}</b></div>`:''}${x.contact_phone?`<div><small>Téléphone</small><b>${esc(x.contact_phone)}</b></div>`:''}${x.website_url?`<div class="wide"><small>Site web</small><b>${esc(x.website_url)}</b></div>`:''}</div>`;
     setupTafaV80Realtime('page',id);
-    openModal(`<div class="modal-box page-detail tafass-v91-page-modal" data-page-id="${esc(id)}">
+    openModal(`<div class="modal-box page-detail tafass-v91-page-modal ${ownerMe?'p91-page-owner-view':'p91-page-visitor-view'}" data-page-id="${esc(id)}">
       <header class="p91-page-topbar">
         <button type="button" class="p91-page-back" data-action="close-entity" data-route-back="${esc(state.entityBackRoute||'pages')}" aria-label="Retour"><span>‹</span><b>Retour</b></button>
-        <div class="p91-page-top-title"><span>TAFAß · PAGE</span><strong>${esc(x.name)}</strong></div>
+        <div class="p91-page-top-title"><span>${ownerMe?'TAFAß · GESTION DE PAGE':'TAFAß · PAGE PUBLIQUE'}</span><strong>${esc(x.name)}</strong></div>
         <button type="button" class="p91-page-icon" data-action="page-more" data-id="${esc(id)}" aria-label="Plus d’options">•••</button>
       </header>
       <div class="p91-page-scroll">
         <section class="p91-cover" ${x.cover_url?`style="background-image:url('${esc(x.cover_url)}')"`:''}>
           <div class="p91-cover-shade"></div>
-          <div class="p91-cover-meta"><span>PAGE OFFICIELLE</span><b>${esc(x.category||'Communauté')}</b></div>
+          <div class="p91-cover-meta"><span>${ownerMe?'ESPACE PROPRIÉTAIRE':'ESPACE PUBLIC'}</span><b>${esc(x.category||'Communauté')}</b></div>
         </section>
         <section class="p91-identity">
           <div class="p91-avatar-wrap">${entityAvatarHTML(x,'page','p91-page-avatar')}<span class="p91-verified">✓</span></div>
