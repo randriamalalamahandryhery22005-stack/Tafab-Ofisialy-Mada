@@ -3884,7 +3884,9 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
             ${settingSwitch("notifFriends","Amis","Demandes d’amis et changements de relation.",x.friend_notifications !== false)}
             ${settingSwitch("notifReactions","Réactions","Réactions sur vos publications.",x.reaction_notifications !== false)}
             ${settingSwitch("notifComments","Commentaires","Nouveaux commentaires sur vos publications.",x.comment_notifications !== false)}
-          </div><button class="primary big settings-save" data-action="save-notification-settings">Enregistrer</button>`);
+          </div><button class="primary big settings-save" data-action="save-notification-settings">Enregistrer</button>
+          <button class="secondary big" data-action="enable-push-notifications">Activer les notifications sur cet appareil</button>
+          <small class="muted">Autorisez les notifications Android pour recevoir les alertes même lorsque Tafaß est fermé.</small>`);
         return;
       }
 
@@ -4154,6 +4156,16 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       if(action==="save-privacy-assistance") return saveUserSetting({allow_friend_requests:!!$('privacyFriend')?.checked,allow_messages:!!$('privacyMessage')?.checked,allow_search_by_phone:!!$('privacyPhone')?.checked,allow_search_by_email:!!$('privacyEmail')?.checked});
       if(action==="save-find-contact-settings") return saveUserSetting({allow_friend_requests:!!$('findFriends')?.checked,allow_messages:!!$('findMessages')?.checked,allow_search_by_phone:!!$('findPhone')?.checked,allow_search_by_email:!!$('findEmail')?.checked});
       if(action==="save-notification-settings") return saveUserSetting({notifications_enabled:!!$('notifAll')?.checked,message_notifications:!!$('notifMessages')?.checked,friend_notifications:!!$('notifFriends')?.checked,reaction_notifications:!!$('notifReactions')?.checked,comment_notifications:!!$('notifComments')?.checked});
+      if(action==="enable-push-notifications"){
+        if(!state.user)return toast("Connectez-vous d’abord.");
+        if(!window.isSecureContext && location.hostname!=="localhost")return toast("Les notifications push nécessitent HTTPS.");
+        if(!("Notification" in window)||!("serviceWorker" in navigator)||!("PushManager" in window))return toast("Les notifications push ne sont pas prises en charge sur cet appareil.");
+        await setupTafaPushNotifications();
+        if(Notification.permission==="granted")toast("Notifications de cet appareil activées.");
+        else if(Notification.permission==="denied")toast("Notifications bloquées. Autorisez-les dans les réglages Android du navigateur/app.");
+        else toast("Autorisez les notifications lorsque la demande apparaît.");
+        return;
+      }
       if(action==="save-family-settings") return saveSettingsTable("family_settings",{safety_mode:!!$('familySafety')?.checked,contact_restrictions:!!$('familyContacts')?.checked},"Contrôles familiaux enregistrés");
       if(action==="save-story-settings") return saveSettingsTable("story_settings",{allow_public_sharing:!!$('storyPublicShare')?.checked,allow_personal_sharing:!!$('storyPersonalShare')?.checked,allow_mention_sharing:!!$('storyMentionShare')?.checked,allow_story_sharing:!!$('storyShare')?.checked,archive_stories:!!$('storyArchive')?.checked,muted_stories_enabled:!!$('storyMuted')?.checked},"Réglages des stories enregistrés");
       if(action==="save-publication-settings") return saveSettingsTable("publication_settings",{future_audience:$('futureAudience')?.value||"public",limit_old_posts:!!$('limitOldPosts')?.checked,comment_summaries:!!$('commentSummaries')?.checked,share_posts_to_story:!!$('sharePostsStory')?.checked},"Réglages des publications enregistrés");
