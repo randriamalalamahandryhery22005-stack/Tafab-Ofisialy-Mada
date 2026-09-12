@@ -43,7 +43,7 @@ document.documentElement.classList.add("app-boot");
 
   const $ = id => document.getElementById(id);
   const esc = s => String(s ?? "").replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]));
-  const routes = ["home","friends","search","messages","notifications","profile","reels","pages","groups","saved","menu","tafab","events","studio","settings","creator","ai","music","business","admin","verification"];
+  const routes = ["home","friends","search","messages","notifications","profile","reels","groups","saved","menu","tafab","events","studio","settings","creator","ai","music","business","admin","verification"];
 
   // V19 production upload guard: client-side validation is UX protection only;
   // Supabase Storage policies/server-side validation must remain the authority.
@@ -634,25 +634,19 @@ document.documentElement.classList.add("app-boot");
   }
 
   async function loadV80FollowedEntityFeed(){
+    // V97: Page content is intentionally excluded from the main feed.
     state.v80EntityFeed=[];
     if(!state.user?.id) return;
     try{
-      const [pf,gm]=await Promise.all([
-        sb.from('page_followers').select('page_id').eq('user_id',state.user.id),
-        sb.from('group_members').select('group_id').eq('user_id',state.user.id)
-      ]);
-      const pageIds=[...(pf.data||[])].map(x=>x.page_id).filter(Boolean), groupIds=[...(gm.data||[])].map(x=>x.group_id).filter(Boolean);
-      const [pagesR,groupsR]=await Promise.all([
-        pageIds.length?sb.from('page_posts').select('id,page_id,user_id,content,media_url,media_type,created_at,visibility').in('page_id',pageIds).order('created_at',{ascending:false}).limit(60):Promise.resolve({data:[]}),
-        groupIds.length?sb.from('group_posts').select('id,group_id,user_id,content,media_url,media_type,created_at,visibility').in('group_id',groupIds).order('created_at',{ascending:false}).limit(60):Promise.resolve({data:[]})
-      ]);
-      const pids=[...(pagesR.data||[])].map(x=>x.page_id), gids=[...(groupsR.data||[])].map(x=>x.group_id);
-      const [pages,groups]=await Promise.all([
-        pids.length?sb.from('pages').select('id,name,logo_url,username').in('id',pids):Promise.resolve({data:[]}),
-        gids.length?sb.from('groups').select('id,name,logo_url').in('id',gids):Promise.resolve({data:[]})
-      ]);
-      const pm=new Map((pages.data||[]).map(x=>[String(x.id),x])), gm2=new Map((groups.data||[]).map(x=>[String(x.id),x]));
-      state.v80EntityFeed=[...(pagesR.data||[]).map(x=>({...x,entity_kind:'page',entity:pm.get(String(x.page_id))})),...(groupsR.data||[]).map(x=>({...x,entity_kind:'group',entity:gm2.get(String(x.group_id))}))].filter(x=>x.entity).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at)).slice(0,60);
+      const gm=await sb.from('group_members').select('group_id').eq('user_id',state.user.id);
+      const groupIds=[...(gm.data||[])].map(x=>x.group_id).filter(Boolean);
+      if(!groupIds.length) return;
+      const gr=await sb.from('group_posts').select('id,group_id,user_id,content,media_url,media_type,created_at,visibility').in('group_id',groupIds).order('created_at',{ascending:false}).limit(60);
+      const gids=[...(gr.data||[])].map(x=>x.group_id);
+      const groups=gid=>sb.from('groups').select('id,name,logo_url').in('id',gid);
+      const g=await groups(gids);
+      const gm2=new Map((g.data||[]).map(x=>[String(x.id),x]));
+      state.v80EntityFeed=(gr.data||[]).map(x=>({...x,entity_kind:'group',entity:gm2.get(String(x.group_id))})).filter(x=>x.entity).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at)).slice(0,60);
     }catch(_){ state.v80EntityFeed=[]; }
   }
 
@@ -710,8 +704,8 @@ document.documentElement.classList.add("app-boot");
     return rows.map(x => ({ ...x, user: map.get(x.user_id) })).filter(x => x.user);
   }
 
-  function pageModeActive(){ return !!state.activePage?.id; }
-  function pageModeLabel(){ return pageModeActive() ? (state.activePage.name || "Page Tafaß") : "Mon compte"; }
+  function pageModeActive(){ state.activePage=null; return false; }
+  function pageModeLabel(){ return "Mon compte"; }
   function navBadge(route){ return `<span class="nav-badge hidden" data-badge-route="${esc(route)}" aria-label="Notifications ${esc(route)}"></span>`; }
   function navButton(route, icon, label, mobile=false){
     return `<button class="tafa-premium-nav-item" data-route="${esc(route)}" aria-label="${esc(label)}"><span class="${mobile?'nav-svg':'nav-ico'} tafa-premium-nav-icon">${menuIcon(icon)}</span>${mobile?`<small>${esc(label)}</small>`:`<span class="tafa-premium-nav-label">${esc(label)}</span>`}${navBadge(route)}</button>`;
@@ -759,7 +753,7 @@ document.documentElement.classList.add("app-boot");
       setNavBadge("friends",n.friends);
       setNavBadge("messages",msg.count||0);
       setNavBadge("notifications",n.notifications);
-      ["pages","groups","reels","events","tafab","studio","creator","ai","music","business","saved","settings","menu"].forEach(r=>setNavBadge(r,n[r]||0));
+      ["groups","reels","events","tafab","studio","creator","ai","music","business","saved","settings","menu"].forEach(r=>setNavBadge(r,n[r]||0));
       if(state.__isAdmin===true){ adminBadgeCount().then(c=>{ document.querySelectorAll('[data-admin-badge]').forEach(el=>{el.textContent=c>0?String(c):''; el.classList.toggle('hidden',c<=0);}); setNavBadge('menu',Math.max(Number(n.menu||0),c)); }).catch(()=>{}); }
     }catch(e){ console.warn("Tafaß badges:",e); }
   }
@@ -829,8 +823,8 @@ document.documentElement.classList.add("app-boot");
   }
   function restoreAccountNavigation(){
     const left=document.querySelector(".left-sidebar"), bottom=document.querySelector(".bottom-nav");
-    if(left) left.innerHTML=`<button data-route="profile" class="profile-shortcut"><span id="sideAvatar" class="avatar">T</span><span><b id="sideName">Mon profil</b><small>Voir mon profil</small></span></button>${navButton("home","home","Actualités")}${navButton("friends","friends","Amis")}${navButton("messages","messages","Messages")}${navButton("notifications","notifications","Notifications")}${navButton("pages","pages","Pages")}${navButton("groups","groups","Groupes")}${navButton("reels","reels","Reels")}${navButton("events","history","Évènements")}${navButton("studio","videos","Studio")}${navButton("tafab","tafab","Tafaß")}${navButton("saved","saved","Enregistrements")}${navButton("menu","settings","Menu")}`;
-    if(bottom) bottom.innerHTML=`${navButton("home","home","Actualités",true)}${navButton("friends","friends","Amis",true)}${navButton("messages","messages","Messages",true)}${navButton("pages","pages","Pages",true)}${navButton("groups","groups","Groupes",true)}${navButton("reels","reels","Reels",true)}`;
+    if(left) left.innerHTML=`<button data-route="profile" class="profile-shortcut"><span id="sideAvatar" class="avatar">T</span><span><b id="sideName">Mon profil</b><small>Voir mon profil</small></span></button>${navButton("home","home","Actualités")}${navButton("friends","friends","Amis")}${navButton("messages","messages","Messages")}${navButton("notifications","notifications","Notifications")}${navButton("groups","groups","Groupes")}${navButton("reels","reels","Reels")}${navButton("events","history","Évènements")}${navButton("studio","videos","Studio")}${navButton("tafab","tafab","Tafaß")}${navButton("saved","saved","Enregistrements")}${navButton("menu","settings","Menu")}`;
+    if(bottom) bottom.innerHTML=`${navButton("home","home","Actualités",true)}${navButton("friends","friends","Amis",true)}${navButton("messages","messages","Messages",true)}${navButton("groups","groups","Groupes",true)}${navButton("reels","reels","Reels",true)}`;
     const nameEl=$("sideName"), avatarEl=$("sideAvatar"); if(nameEl) nameEl.textContent=nameOf(state.profile); if(avatarEl) avatarEl.outerHTML=avatarHTML(state.profile,"avatar").replace("<span ", '<span id="sideAvatar" ');
   }
   function pageContextBanner(){
@@ -1843,7 +1837,7 @@ function publisherBackgrounds(){
     searchCategory = category || searchCategory;
     const token = state.renderToken;
     const term = q.trim();
-    let people = [], posts = [], pages = [], groups = [];
+    let people = [], posts = [], groups = [];
 
     // A search screen must stay clean until the user actually searches.
     // Search history is intentionally kept in the dedicated History table.
@@ -1853,10 +1847,9 @@ function publisherBackgrounds(){
       const [pr, por, pgr, gr] = await Promise.all([
         sb.from("profiles").select("*").or(`first_name.ilike.%${safe}%,last_name.ilike.%${safe}%,username.ilike.%${safe}%`).limit(30),
         sb.from("posts").select("*").or(`content.ilike.%${safe}%`).order("created_at", {ascending:false}).limit(30),
-        sb.from("pages").select(PAGE_FIELDS).or(`name.ilike.%${safe}%,category.ilike.%${safe}%,bio.ilike.%${safe}%`).limit(20),
         sb.from("groups").select(GROUP_FIELDS).or(`name.ilike.%${safe}%,description.ilike.%${safe}%`).limit(20)
       ]);
-      await getBlockedIds(); people=filterBlocked(pr.data||[],"id"); posts=filterBlocked(por.data||[],"user_id"); pages=pgr.data||[]; groups=gr.data||[];
+      await getBlockedIds(); people=filterBlocked(pr.data||[],"id"); posts=filterBlocked(por.data||[],"user_id"); groups=gr.data||[];
       if (state.user && safe.length >= 2) {
         const recent=await sb.from("search_history").select("id").eq("user_id",state.user.id).eq("search_text",term).limit(1);
         if(!(recent.data||[]).length) await sb.from("search_history").insert({ user_id:state.user.id, search_text:term, result_type:"all" });
@@ -1870,19 +1863,17 @@ function publisherBackgrounds(){
 
     const peopleHtml=people.length ? people.map(p=>`<div class="list-row search-result-row">${avatarHTML(p)}<div class="grow">${displayNameHTML(p)}</div><button class="small-action" data-action="view-profile" data-id="${esc(p.id)}">Voir le profil</button></div>`).join("") : `<div class="empty">Aucun compte trouvé.</div>`;
     const postHtml=posts.length ? posts.map(p=>`<div class="list-row search-result-row"><div class="grow"><b>${esc(nameOf(p.author||{}))}</b><small>${esc((p.content||"Publication sans texte").slice(0,140))}</small></div><button class="small-action" data-action="search-post" data-id="${esc(p.id)}">Voir</button></div>`).join("") : `<div class="empty">Aucune publication trouvée.</div>`;
-    const pageHtml=pages.length ? pages.map(x=>`<div class="list-row search-result-row"><div class="entity-search-icon">▣</div><div class="grow"><b>${esc(x.name)}</b><small>${esc(x.category||"Page")} · ${esc(x.bio||"")}</small></div><button class="small-action" data-action="page-open" data-id="${esc(x.id)}">Ouvrir</button></div>`).join("") : `<div class="empty">Aucune Page trouvée.</div>`;
     const groupHtml=groups.length ? groups.map(x=>`<div class="list-row search-result-row"><div class="entity-search-icon">◎</div><div class="grow"><b>${esc(x.name)}</b><small>${esc(x.privacy||"public")} · ${esc(x.description||"")}</small></div><button class="small-action" data-action="group-open" data-id="${esc(x.id)}">Ouvrir</button></div>`).join("") : `<div class="empty">Aucun groupe trouvé.</div>`;
 
     const categories = [
       ["accounts","Comptes","people",people.length],
       ["posts","Publications","post",posts.length],
-      ["pages","Pages","page",pages.length],
       ["groups","Groupes","group",groups.length]
     ];
     const categoryTabs = term ? `<div class="search-category-bar" role="tablist" aria-label="Types de résultats">${categories.map(([key,label,icon,count])=>`<button type="button" class="search-category-tab ${searchCategory===key?"active":""}" data-action="search-category" data-category="${key}" role="tab" aria-selected="${searchCategory===key}"><span class="search-tab-icon">${icon === "people" ? "♙" : icon === "post" ? "▤" : icon === "page" ? "▣" : "◎"}</span><span>${label}</span><b>${count}</b></button>`).join("")}</div>` : "";
     let activeResults = "";
     if (term) {
-      const map = {accounts: ["Comptes", peopleHtml], posts: ["Publications", postHtml], pages: ["Pages", pageHtml], groups: ["Groupes", groupHtml]};
+      const map = {accounts: ["Comptes", peopleHtml], posts: ["Publications", postHtml], groups: ["Groupes", groupHtml]};
       const [label, html] = map[searchCategory] || map.accounts;
       activeResults = `<div class="search-active-result"><div class="search-result-heading"><div><span class="eyebrow">TAFAß • RECHERCHE</span><h3>${label}</h3><p>${html.includes("Aucun") ? "Aucun résultat pour cette catégorie." : "Résultats correspondant à votre recherche."}</p></div><span class="search-result-count">${categories.find(x=>x[0]===searchCategory)?.[3] || 0}</span></div><div class="clean-list search-results-list">${html}</div></div>`;
     } else {
@@ -3321,7 +3312,7 @@ async function genericListPage(route) {
       $("content").innerHTML = `<div class="card"><div class="page-header"><h2>Reels</h2><span class="muted">Découvrir</span></div>${rows.length?rows.map(p=>`<article class="post"><div class="post-head">${profileLink(p.author, avatarHTML(p.author), "profile-link profile-avatar-link")}<div class="meta">${profileLink(p.author, `<span class="post-author-name">${displayNameHTML(p.author)}</span>`, "profile-link profile-meta-link")}<span class="post-time"><small>${timeAgo(p.created_at)}</small></span></div></div>${p.content?`<div class="post-body">${esc(p.content)}</div>`:""}<video class="post-media" data-post-viewable="1" data-post-id="${esc(p.id)}" src="${esc(p.media_url)}" controls></video></article>`).join(""):`<div class="empty">Aucun Reel pour le moment.</div>`}</div>`;
       return;
     }
-    if (route === "pages") return pagesV80Hub();
+    if (route === "pages") return navigate("home", {replaceStack:true});
     if (route === "groups") return groupsV80Hub();
     if (route === "saved") {
       const token2=state.renderToken;
@@ -3763,11 +3754,9 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
           <p class="fb-settings-note">Choisissez qui voit ce que vous partagez sur Tafaß.</p>
           ${row("profile-lock","privacy", "Verrouillage du profil", visibility === "private" ? "Verrouillé" : "Non verrouillé")}
           ${row("account-settings","profile","Informations du profil","Informations personnelles et coordonnées")}
-          ${row("professional-mode","pages","Mode professionnel","Utilisez vos outils Pages et Business Suite")}
           ${row("find-contact-settings","friends","Comment les autres peuvent vous trouver et vous contacter","Demandes d’amis, messages et recherche")}
           ${row("post-privacy","home","Publications","Audience de vos publications")}
           ${row("story-privacy","reels","Stories","Audience de vos stories")}
-          ${row("page-privacy","pages","Pages","Pages que vous gérez et leurs permissions")}
           ${row("followers-public","friends","Followers et contenu public","Abonnés et visibilité du contenu public")}
           ${row("profile-identification","profile","Profil et identification","Profil, identification et apparence publique")}
           ${row("blocking","privacy","Blocage","Comptes bloqués et restrictions")}
@@ -3786,7 +3775,6 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
           ${row("activity-settings","history","Historique d’activité","Actions et recherches enregistrées")}
           ${row("location-settings","profile","Localisation","Ville et informations de localisation de votre profil")}
           ${row("apps-web","pages","Applications et sites Web","Connexions et intégrations disponibles")}
-          ${row("professional-integrations","pages","Intégrations professionnelles","Outils professionnels et Pages Tafaß")}
           ${row("information-management","settings","Comment gérer vos informations","Contrôle des informations de votre compte")}
         </div>
 
@@ -4079,9 +4067,8 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       }
 
       if (action === "professional-mode") {
+        return settingsDetail("Fonctionnalité indisponible","TAFAß • PARAMÈTRES","Les espaces de Page ne font pas partie de cette version de l’application.",`<div class="settings-info-card"><b>Mode professionnel indisponible</b><small>Votre espace personnel reste inchangé.</small></div>`);
         const x=await getSettingsTable("professional_settings");
-        const pages=(await sb.from("pages").select("id,name,category,created_at").eq("owner_id",state.user.id).order("created_at",{ascending:false})).data||[];
-        const pageRows=pages.length ? pages.map(pg=>`<button class="settings-link-row" data-action="page-open" data-id="${esc(pg.id)}"><span><b>${esc(pg.name)}</b><small>${esc(pg.category||"Page Tafaß")}</small></span><span>›</span></button>`).join("") : `<div class="settings-empty">Aucune Page. Créez une Page pour utiliser les outils professionnels.</div>`;
         settingsDetail("Mode professionnel","TAFAß • PROFESSIONNEL","Activez les outils professionnels de Tafaß. Vos Pages restent indépendantes de votre profil personnel.",
           `<div class="settings-section-block">${settingSwitch("professionalEnabled","Mode professionnel","Activer les outils professionnels disponibles pour votre compte.",x.enabled)}</div>
            <div class="settings-section-block"><h3>Vos Pages</h3>${pageRows}</div>
@@ -4090,8 +4077,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       }
 
       if (action === "page-privacy") {
-        const pages=(await sb.from("pages").select("id,name,category,created_at").eq("owner_id",state.user.id).order("created_at",{ascending:false})).data||[];
-        const pageRows=pages.length ? pages.map(pg=>`<button class="settings-link-row" data-action="page-open" data-id="${esc(pg.id)}"><span><b>${esc(pg.name)}</b><small>${esc(pg.category||"Page")}</small></span><span>›</span></button>`).join("") : `<div class="settings-empty">Vous ne gérez encore aucune Page.</div>`;
+        return settingsDetail("Fonctionnalité indisponible","TAFAß • PARAMÈTRES","Les espaces de Page ne font pas partie de cette version de l’application.",`<div class="settings-info-card"><b>Pages indisponibles</b><small>Cette rubrique n’est plus proposée.</small></div>`);
         settingsDetail("Pages","TAFAß • PAGES","Gérez les Pages que vous administrez. Les permissions sont appliquées côté Supabase.",
           `<div class="settings-section-block"><h3>Vos Pages</h3>${pageRows}</div>
            <button class="ghost-action big" data-route="pages">Ouvrir Pages</button>`);
@@ -4374,7 +4360,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
 
   const PAGE_ICONS = {
     home:"home", friends:"friends", messages:"messages", notifications:"history", profile:"profile",
-    reels:"reels", pages:"pages", groups:"groups", saved:"saved", menu:"settings", tafab:"tafab",
+    reels:"reels", groups:"groups", saved:"saved", menu:"settings", tafab:"tafab",
     settings:"settings", search:"search", activity:"history", payment:"payment", help:"help"
   };
   function pageTitleIcon(routeOrTitle) {
@@ -4944,7 +4930,6 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       ['🎬','Reels',Number(st.total_reels||0).toLocaleString('fr-FR')],
       ['🎥','Vidéos',Number(st.total_videos||0).toLocaleString('fr-FR')],
       ['👥','Groupes',Number(st.total_groups||0).toLocaleString('fr-FR')],
-      ['📄','Pages',Number(st.total_pages||0).toLocaleString('fr-FR')],
       ['💬','Messages',Number(st.total_messages||0).toLocaleString('fr-FR')],
       ['🚨','Alertes',Number(st.pending_total||0).toLocaleString('fr-FR')]
     ];
@@ -5300,7 +5285,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       else if (route === "messages") await messagesPage();
       else if (route === "notifications") await notificationsPage();
       else if (route === "profile") await profilePage(state.profileTab);
-      else if (["reels","pages","groups","saved"].includes(route)) await genericListPage(route);
+      else if (["reels","groups","saved"].includes(route)) await genericListPage(route);
       else if (route === "events") await eventsPage();
       else if (route === "studio") await creatorStudioPage();
       else if (route === "creator") await creatorMonetisationPage();
@@ -5331,7 +5316,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   }
 
   const V44_ROUTE_META = {
-    home:["Actualités","Votre espace, vos contenus, votre communauté."], friends:["Amis","Retrouvez et gérez vos relations."], messages:["Messages","Vos conversations en temps réel."], notifications:["Notifications","Vos alertes importantes."], profile:["Profil","Votre espace personnel Tafaß."], pages:["Pages","Découvrez et gérez vos Pages."], groups:["Groupes","Communautés et discussions."], reels:["Réels","Découvrez les contenus courts."], menu:["Menu","Tous vos outils Tafaß au même endroit."], settings:["Paramètres","Personnalisez votre expérience."], search:["Recherche","Trouvez rapidement ce que vous cherchez."], saved:["Enregistrements","Vos contenus sauvegardés."], tafab:["Tafaß","Services et fonctionnalités Tafaß."], events:["Évènements","Découvrez les évènements."], studio:["Studio","Créez et gérez vos contenus."], creator:["Créateur","Outils de création et de monétisation."], music:["Musique","Votre espace musical."], business:["Professionnel","Outils professionnels."], verification:["Badge officiel","Vérification du compte."], ai:["Assistant","Espace intelligent Tafaß."], admin:["Administration","Centre de gestion Tafaß."] };
+    home:["Actualités","Votre espace, vos contenus, votre communauté."], friends:["Amis","Retrouvez et gérez vos relations."], messages:["Messages","Vos conversations en temps réel."], notifications:["Notifications","Vos alertes importantes."], profile:["Profil","Votre espace personnel Tafaß."],  groups:["Groupes","Communautés et discussions."], reels:["Réels","Découvrez les contenus courts."], menu:["Menu","Tous vos outils Tafaß au même endroit."], settings:["Paramètres","Personnalisez votre expérience."], search:["Recherche","Trouvez rapidement ce que vous cherchez."], saved:["Enregistrements","Vos contenus sauvegardés."], tafab:["Tafaß","Services et fonctionnalités Tafaß."], events:["Évènements","Découvrez les évènements."], studio:["Studio","Créez et gérez vos contenus."], creator:["Créateur","Outils de création et de monétisation."], music:["Musique","Votre espace musical."], business:["Professionnel","Outils professionnels."], verification:["Badge officiel","Vérification du compte."], ai:["Assistant","Espace intelligent Tafaß."], admin:["Administration","Centre de gestion Tafaß."] };
   function routeSkeleton(route){
     const meta=V44_ROUTE_META[route]||["Tafaß","Chargement de votre espace…"];
     return `<section class="v44-page-skeleton" aria-label="Chargement de ${esc(meta[0])}"><div class="v44-skel-head"><span class="v44-skel-icon"></span><div><i></i><b></b></div></div><div class="v44-skel-grid"><span></span><span></span><span></span></div><div class="v44-skel-line"></div><div class="v44-skel-line short"></div><small>${esc(meta[1])}</small><div class="v44-loading-points"><i></i><i></i><i></i></div></section>`;
@@ -5345,6 +5330,8 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   }
 
   function navigate(route, options = {}) {
+    // V97: Pages are fully removed from the application UI and routing.
+    if (route === "pages") route = "home";
     if (!routes.includes(route)) route = "home";
     if (document.body.classList.contains("modal-open")) closeModal();
     state.backOverride = null;
@@ -6906,8 +6893,8 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if (action === "page-name-history") return pageNameHistory(id);
     if (action === "page-settings-save") return pageSettings(id);
     if (action === "save-page-settings") { const pgId=id||state.activePage?.id; const key=`tafass_page_settings_${pgId}`; const values={}; document.querySelectorAll('[data-page-setting]').forEach(x=>values[x.dataset.pageSetting]=x.checked); localStorage.setItem(key,JSON.stringify(values)); closeModal(); toast('Paramètres de la Page enregistrés.'); return; }
-    if (action === "close-entity") { closeModal(); return navigate(actionEl.dataset.routeBack || "pages"); }
-    if (action === "page-manage-back") { const pageId=actionEl.dataset.id || ""; closeModal(); return pageId ? openPageDetail(pageId) : navigate("pages"); }
+    if (action === "close-entity") { closeModal(); return navigate("home", {replaceStack:true}); }
+    if (action === "page-manage-back") { const pageId=actionEl.dataset.id || ""; closeModal(); return pageId ? openPageDetail(pageId) : navigate("home", {replaceStack:true}); }
     if (action === "page-back") return goBack();
     if (action === "toggle-page-follow") return togglePageFollow(id);
     if (action === "edit-page") { const pg=(await sb.from('pages').select('owner_id').eq('id',id).maybeSingle()).data; if(!pg || String(pg.owner_id)!==String(state.user.id)) return toast('Accès refusé : réservé au propriétaire de la Page.'); return editPage(id); }
@@ -6994,7 +6981,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if (action === "auth-onboarding-back") { state.entering=false; state.user=null; sb.auth.signOut().catch(()=>{}); return showLogin(); }
     if (action === "boost-post") { closeModal(); return openBoostPost(id); }
     if (action === "create-boost-post") return createBoostPost();
-    if (action === "boost-page") return openBoostPage();
+    if (action === "boost-page") return toast('La promotion de Page n’est plus disponible.');
     if (action === "create-boost-page") return createBoostPage();
     if (action === "open-boost-dashboard") return openBoostOwnerDashboard(id);
     if (action === "owner-pause-boost") return pauseOwnerBoost(id);
@@ -7136,7 +7123,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       closeModal(); state.businessSuiteOpen=false; return navigate("messages");
     }
     if (action === "business-open-pages") {
-      closeModal(); state.businessSuiteOpen=false; return navigate("pages");
+      closeModal(); state.businessSuiteOpen=false; return navigate("home", {replaceStack:true});
     }
     if (action === "business-open-team") {
       const first=(await sb.from("pages").select("id").eq("owner_id",state.user.id).order("created_at",{ascending:false}).limit(1)).data?.[0];
@@ -7629,18 +7616,16 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       if(term.length<2){ close(); return; }
       el.innerHTML='<div class="tafa-v49-suggest-loading"><span></span><span></span><span></span> Recherche…</div>';
       const safe=term.replace(/[%_]/g,'');
-      const [peopleR,pagesR,groupsR]=await Promise.all([
+      const [peopleR,groupsR]=await Promise.all([
         sb.from('profiles').select('id,first_name,last_name,username,avatar_url').or(`first_name.ilike.%${safe}%,last_name.ilike.%${safe}%,username.ilike.%${safe}%`).limit(5),
-        sb.from('pages').select('id,name,category').or(`name.ilike.%${safe}%,category.ilike.%${safe}%`).limit(3),
         sb.from('groups').select('id,name,privacy').or(`name.ilike.%${safe}%,description.ilike.%${safe}%`).limit(3)
       ]);
       if(my!==seq || state.route!=='search')return;
       const people=filterBlocked(peopleR.data||[],'id');
       const phtml=people.map(x=>`<button type="button" class="tafa-v49-suggestion" data-v49-profile="${escSafe(x.id)}">${avatarHTML(x)}<span class="v49-suggest-copy"><b>${displayNameHTML(x)}</b><small>@${escSafe(x.username||'')}</small></span><small>Compte</small></button>`).join('');
-      const pagehtml=(pagesR.data||[]).map(x=>`<button type="button" class="tafa-v49-suggestion" data-v49-page="${escSafe(x.id)}"><span class="v49-suggest-icon">▣</span><span class="v49-suggest-copy"><b>${escSafe(x.name)}</b><small>${escSafe(x.category||'Page')}</small></span><small>Page</small></button>`).join('');
       const grouphtml=(groupsR.data||[]).map(x=>`<button type="button" class="tafa-v49-suggestion" data-v49-group="${escSafe(x.id)}"><span class="v49-suggest-icon">◎</span><span class="v49-suggest-copy"><b>${escSafe(x.name)}</b><small>${escSafe(x.privacy||'public')}</small></span><small>Groupe</small></button>`).join('');
-      const any=phtml||pagehtml||grouphtml;
-      el.innerHTML=any?`<div class="tafa-v49-suggest-head"><b>Suggestions</b><span>Résultats rapides</span></div>${phtml}${pagehtml}${grouphtml}<button type="button" class="tafa-v49-search-all" data-v49-search-all="${escSafe(term)}">Voir tous les résultats pour « ${escSafe(term)} »</button>`:`<div class="tafa-v49-suggest-empty">Aucune suggestion · appuyez sur Entrée pour rechercher.</div>`;
+      const any=phtml||grouphtml;
+      el.innerHTML=any?`<div class="tafa-v49-suggest-head"><b>Suggestions</b><span>Résultats rapides</span></div>${phtml}${grouphtml}<button type="button" class="tafa-v49-search-all" data-v49-search-all="${escSafe(term)}">Voir tous les résultats pour « ${escSafe(term)} »</button>`:`<div class="tafa-v49-suggest-empty">Aucune suggestion · appuyez sur Entrée pour rechercher.</div>`;
     }
     function bind(){
       if(window.__tafaV49SearchBound)return;
@@ -7653,7 +7638,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
         if(e.target?.id==='searchInput' && e.key==='Escape')close();
       });
       document.addEventListener('click',e=>{
-        const b=e.target.closest?.('[data-v49-query],[data-v49-profile],[data-v49-page],[data-v49-group],[data-v49-search-all]');
+        const b=e.target.closest?.('[data-v49-query],[data-v49-profile],[data-v49-group],[data-v49-search-all]');
         if(!b)return;
         e.preventDefault(); e.stopPropagation();
         if(b.dataset.v49Query){ const input=document.getElementById('searchInput'); if(input){input.value=b.dataset.v49Query; searchPage(b.dataset.v49Query,searchCategory);} return close(); }
@@ -7894,7 +7879,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
         const input=root.querySelector('#searchInput');
         if(input && !root.querySelector('.tafa-v52-search-tools')){
           const tools=document.createElement('div'); tools.className='tafa-v52-search-tools';
-          tools.innerHTML=`<button type="button" data-v52-search-filter="accounts">♙ Comptes</button><button type="button" data-v52-search-filter="pages">▣ Pages</button><button type="button" data-v52-search-filter="groups">◎ Groupes</button><button type="button" data-v52-search-filter="posts">▤ Publications</button><button type="button" data-v52-search-clear>Effacer</button>`;
+          tools.innerHTML=`<button type="button" data-v52-search-filter="accounts">♙ Comptes</button><button type="button" data-v52-search-filter="groups">◎ Groupes</button><button type="button" data-v52-search-filter="posts">▤ Publications</button><button type="button" data-v52-search-clear>Effacer</button>`;
           root.querySelector('.clean-search')?.insertAdjacentElement('afterend',tools);
           tools.addEventListener('click',e=>{
             const f=e.target.closest('[data-v52-search-filter]');
@@ -8005,7 +7990,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
         if(!root.querySelector('.tafa-v55-search-pro')){
           const pro=document.createElement('section'); pro.className='tafa-v55-search-pro';
           pro.innerHTML=`<div class="tafa-v55-search-pro-head"><div><span class="eyebrow">TAFAß · SEARCH PRO</span><b>Recherche experte</b><small>Utilisez <strong>@nom</strong> pour un compte ou <strong>#mot</strong> pour explorer un sujet.</small></div><span class="tafa-v55-search-status">● PRÊT</span></div>
-            <div class="tafa-v55-search-shortcuts"><button data-v55-search-cat="accounts">♙ Comptes</button><button data-v55-search-cat="posts">▤ Publications</button><button data-v55-search-cat="pages">▣ Pages</button><button data-v55-search-cat="groups">◎ Groupes</button><button data-v55-search-clear>Effacer</button></div>`;
+            <div class="tafa-v55-search-shortcuts"><button data-v55-search-cat="accounts">♙ Comptes</button><button data-v55-search-cat="posts">▤ Publications</button><button data-v55-search-cat="groups">◎ Groupes</button><button data-v55-search-clear>Effacer</button></div>`;
           root.querySelector('.clean-search')?.insertAdjacentElement('afterend',pro);
           pro.addEventListener('click',e=>{
             const cat=e.target.closest('[data-v55-search-cat]');
@@ -8385,11 +8370,9 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       'time-management':['Gestion du temps','Suivez votre temps d’utilisation et les rappels de pause de Tafaß.','Les rappels sont conçus pour vous informer ; ils ne remplacent pas les réglages système de votre appareil.'],
       'effects-settings':['Effets pour le visage et les mains','Activez ou désactivez les effets compatibles avec les capacités de votre appareil.','La disponibilité dépend du navigateur, de l’APK et des capacités matérielles.'],
       'profile-lock':['Verrouillage du profil','Limitez l’accès aux éléments privés de votre profil et activez les protections disponibles.','Le verrouillage n’empêche pas les informations rendues publiques ailleurs de rester visibles.'],
-      'professional-mode':['Mode professionnel','Activez les outils professionnels et gérez vos Pages depuis votre espace personnel.','Les Pages et leurs permissions restent séparées du profil personnel.'],
       'find-contact-settings':['Comment les autres peuvent vous trouver et vous contacter','Gérez les demandes d’amis, messages et possibilités de recherche par téléphone ou e-mail.','Désactiver un moyen de recherche réduit la découverte de votre compte par ce moyen.'],
       'post-privacy':['Publications','Définissez l’audience par défaut et certains contrôles de partage de vos publications.','Les réglages futurs ne changent pas automatiquement l’audience de chaque ancienne publication.'],
       'story-privacy':['Stories','Choisissez qui voit vos stories et contrôlez leur partage, archivage et mise en sourdine.','Les stories expirées suivent les règles d’archivage configurées.'],
-      'page-privacy':['Pages','Consultez les Pages que vous gérez et ouvrez leurs outils de permissions et de gestion.','Les permissions d’une Page sont gérées dans son propre espace.'],
       'followers-public':['Followers et contenu public','Gérez qui peut vous suivre, la visibilité des abonnements et les règles de contenu public.','Les options publiques déterminent la découverte et les interactions autorisées sur le contenu public.'],
       'profile-identification':['Profil et identification','Contrôlez les identifications, leur validation et l’indexation publique de votre profil.','La validation des tags vous permet de contrôler ce qui apparaît sur votre profil.'],
       'blocking':['Blocage','Consultez les comptes bloqués et retirez un blocage lorsque vous le souhaitez.','Le blocage limite les interactions selon les protections Tafaß.'],
@@ -8398,7 +8381,6 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       'activity-settings':['Historique d’activité','Consultez vos recherches et les actions enregistrées sur votre compte.','Vous pouvez supprimer les recherches enregistrées sans supprimer les contenus d’origine.'],
       'location-settings':['Localisation','Contrôlez la localisation du profil et, lorsque vous le demandez, la position GPS exacte.','La position précise n’est enregistrée que lorsqu’une autorisation et une action explicite le permettent.'],
       'apps-web':['Applications et sites Web','Consultez les connexions externes ou sessions enregistrées et révoquez celles dont vous n’avez plus besoin.','Révoquer une connexion empêche son utilisation selon l’état enregistré par Tafaß.'],
-      'professional-integrations':['Intégrations professionnelles','Gérez les intégrations professionnelles et les connexions liées à vos outils Tafaß.','Révoquez une intégration si vous ne souhaitez plus qu’elle reste active.'],
       'information-management':['Comment gérer vos informations','Accédez rapidement à l’activité, aux informations du profil et aux contrôles de confidentialité.','Cette rubrique sert de centre de gestion et ne supprime aucune donnée automatiquement.'],
       'terms':['Conditions de service','Règles d’utilisation de Tafaß, responsabilités, restrictions et fonctionnement général du service.','Lisez cette section avant d’utiliser une fonction sensible ou professionnelle.'],
       'privacy-policy':['Politique de confidentialité','Explique quelles informations peuvent être traitées, pourquoi et quels contrôles sont disponibles.','Les réglages de confidentialité restent le moyen principal de contrôler votre visibilité.'],
@@ -8409,9 +8391,9 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
 
     const V60_CATS = {
       'Votre compte':['account-settings'],
-      'Confidentialité':['privacy-settings','family-center','audience-defaults','profile-lock','find-contact-settings','post-privacy','story-privacy','page-privacy','followers-public','profile-identification','blocking','online-status'],
+      'Confidentialité':['privacy-settings','family-center','audience-defaults','profile-lock','find-contact-settings','post-privacy','story-privacy','followers-public','profile-identification','blocking','online-status'],
       'Préférences':['reaction-settings','notifications-settings','accessibility-settings','language-settings','media-settings','time-management','effects-settings'],
-      'Professionnel':['professional-mode','page-privacy','professional-integrations','apps-web','payment-settings'],
+      'Professionnel':['apps-web','payment-settings'],
       'Activité & données':['activity-settings','location-settings','information-management'],
       'Informations légales':['terms','privacy-policy','cookies','community-standards','about-tafass']
     };
@@ -8538,7 +8520,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       ${navButton("messages","messages","Messages",true)}
       ${navButton("notifications","notifications","Alertes",true)}
       ${navButton("reels","reels","Reels",true)}
-      ${navButton("pages","pages","Pages",true)}
+      
       ${navButton("menu","settings","Menu",true)}
     `;
     const pageSideNav = () => `
@@ -8547,14 +8529,14 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       ${navButton("messages","messages","Messages")}
       ${navButton("notifications","notifications","Alertes")}
       ${navButton("reels","reels","Reels")}
-      ${navButton("pages","pages","Pages")}
+      
       ${navButton("menu","settings","Menu")}
     `;
     const accountBottomNav = () => `
       ${navButton("home","home","Actualités",true)}
       ${navButton("friends","friends","Amis",true)}
       ${navButton("messages","messages","Messages",true)}
-      ${navButton("pages","pages","Pages",true)}
+      
       ${navButton("groups","groups","Groupes",true)}
       ${navButton("reels","reels","Reels",true)}
     `;
@@ -8564,7 +8546,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       ${navButton("friends","friends","Amis")}
       ${navButton("messages","messages","Messages")}
       ${navButton("notifications","notifications","Notifications")}
-      ${navButton("pages","pages","Pages")}
+      
       ${navButton("groups","groups","Groupes")}
       ${navButton("reels","reels","Reels")}
       ${navButton("tafab","tafab","Tafaß")}
@@ -9150,16 +9132,15 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   /* Search: actions are available immediately from result rows. */
   window.searchPage = async function(q='',category=searchCategory){
     searchCategory=category||searchCategory; const token=state.renderToken; const term=q.trim();
-    let people=[],posts=[],pages=[],groups=[];
+    let people=[],posts=[],groups=[];
     if(term){
       const safe=term.replace(/[%_]/g,'').trim(); if(!safe)return searchPage('',searchCategory);
-      const [pr,por,pgr,gr]=await Promise.all([
+      const [pr,por,gr]=await Promise.all([
         sb.from('profiles').select('*').or(`first_name.ilike.%${safe}%,last_name.ilike.%${safe}%,username.ilike.%${safe}%`).limit(40),
         sb.from('posts').select('*').or(`content.ilike.%${safe}%`).order('created_at',{ascending:false}).limit(30),
-        sb.from('pages').select(`${PAGE_FIELDS},deletion_status`).or(`name.ilike.%${safe}%,category.ilike.%${safe}%,bio.ilike.%${safe}%`).neq('deletion_status','deleted').limit(30),
         sb.from('groups').select(`${GROUP_FIELDS},deletion_status`).or(`name.ilike.%${safe}%,description.ilike.%${safe}%`).neq('deletion_status','deleted').limit(30)
       ]);
-      await getBlockedIds(); people=filterBlocked(pr.data||[],'id'); posts=filterBlocked(por.data||[],'user_id'); pages=pgr.data||[]; groups=gr.data||[];
+      await getBlockedIds(); people=filterBlocked(pr.data||[],'id'); posts=filterBlocked(por.data||[],'user_id'); groups=gr.data||[];
       if(state.user&&safe.length>=2){const h=await sb.from('search_history').select('id').eq('user_id',state.user.id).eq('search_text',term).limit(1);if(!(h.data||[]).length)await sb.from('search_history').insert({user_id:state.user.id,search_text:term,result_type:'all'});}
       const pids=[...new Set(posts.map(x=>x.user_id).filter(Boolean))];const pp=pids.length?await sb.from('profiles').select('*').in('id',pids):{data:[]};const pm=new Map((pp.data||[]).map(x=>[String(x.id),x]));posts=posts.map(x=>({...x,author:pm.get(String(x.user_id))}));
     }
@@ -9167,12 +9148,11 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     const followed=await v81GetFollowed(people.map(p=>p.id));
     const peopleHtml=people.length?people.map(p=>`<div class="list-row search-result-row v81-search-person">${avatarHTML(p)}<div class="grow">${displayNameHTML(p)}<small>${esc([p.city_current,p.country].filter(Boolean).join(' · ')||'Compte Tafaß')}</small></div><div class="v81-search-actions"><button class="small-action" data-action="v81-follow-user" data-id="${esc(p.id)}">${followed.has(String(p.id))?'Ne plus suivre':'Suivre'}</button><button class="ghost-action" data-action="view-profile" data-id="${esc(p.id)}">Profil</button></div></div>`).join(''):`<div class="empty">Aucun compte trouvé.</div>`;
     const postHtml=posts.length?posts.map(p=>`<div class="list-row search-result-row"><div class="grow"><b>${esc(nameOf(p.author||{}))}</b><small>${esc((p.content||'Publication sans texte').slice(0,160))}</small></div><button class="small-action" data-action="search-post" data-id="${esc(p.id)}">Voir</button></div>`).join(''):`<div class="empty">Aucune publication trouvée.</div>`;
-    const pageHtml=pages.length?pages.map(x=>`<div class="list-row search-result-row"><div class="entity-search-icon">▣</div><div class="grow"><b>${esc(x.name)}</b><small>${esc(x.category||'Page')} · ${esc(x.bio||'')}</small></div><div class="v81-search-actions"><button class="small-action" data-action="toggle-page-follow" data-id="${esc(x.id)}">Suivre</button><button class="ghost-action" data-action="page-open" data-id="${esc(x.id)}">Ouvrir</button></div></div>`).join(''):`<div class="empty">Aucune Page trouvée.</div>`;
     const groupHtml=groups.length?groups.map(x=>`<div class="list-row search-result-row"><div class="entity-search-icon">◎</div><div class="grow"><b>${esc(x.name)}</b><small>${esc(x.privacy==='private'?'Privé':'Public')} · ${esc(x.description||'')}</small></div><div class="v81-search-actions"><button class="small-action" data-action="toggle-group-member" data-id="${esc(x.id)}">${x.privacy==='private'?'Demander':'Rejoindre'}</button><button class="ghost-action" data-action="group-open" data-id="${esc(x.id)}">Ouvrir</button></div></div>`).join(''):`<div class="empty">Aucun groupe trouvé.</div>`;
-    const categories=[['accounts','Comptes',people.length],['posts','Publications',posts.length],['pages','Pages',pages.length],['groups','Groupes',groups.length]];
+    const categories=[['accounts','Comptes',people.length],['posts','Publications',posts.length],['groups','Groupes',groups.length]];
     const categoryTabs=term?`<div class="search-category-bar" role="tablist">${categories.map(([k,l,c])=>`<button type="button" class="search-category-tab ${searchCategory===k?'active':''}" data-action="search-category" data-category="${k}"><span>${k==='accounts'?'♙':k==='posts'?'▤':k==='pages'?'▣':'◎'}</span><span>${l}</span><b>${c}</b></button>`).join('')}</div>`:'';
-    const map={accounts:['Comptes',peopleHtml],posts:['Publications',postHtml],pages:['Pages',pageHtml],groups:['Groupes',groupHtml]};const active=term?map[searchCategory]||map.accounts:['','<div class="search-ready-hint"><span>⌕</span><div><b>Commencez votre recherche</b><small>Recherchez un compte, une publication, une Page ou un groupe.</small></div></div>'];
-    simplePage('Rechercher',`<section class="search-page-v81"><div class="page-header clean-page-header"><div><span class="eyebrow">TAFAß • EXPLORER</span><h2>Rechercher</h2><p class="page-kicker">Personnes, Pages, Groupes et publications.</p></div></div><form id="tafaSearchForm" class="clean-search searchbox premium-searchbox"><span class="icon">⌕</span><input id="searchInput" value="${esc(term)}" placeholder="Rechercher…" autocomplete="off"><button type="submit">→</button></form>${categoryTabs}<div class="search-active-result"><div class="search-result-heading"><div><span class="eyebrow">RÉSULTATS</span><h3>${esc(active[0]||'Recherche')}</h3></div><span class="search-result-count">${term?(categories.find(x=>x[0]===searchCategory)?.[2]||0):0}</span></div><div class="clean-list search-results-list">${active[1]}</div></div></section>`);
+    const map={accounts:['Comptes',peopleHtml],posts:['Publications',postHtml],groups:['Groupes',groupHtml]};const active=term?map[searchCategory]||map.accounts:['','<div class="search-ready-hint"><span>⌕</span><div><b>Commencez votre recherche</b><small>Recherchez un compte, une publication ou un groupe.</small></div></div>'];
+    simplePage('Rechercher',`<section class="search-page-v81"><div class="page-header clean-page-header"><div><span class="eyebrow">TAFAß • EXPLORER</span><h2>Rechercher</h2><p class="page-kicker">Personnes, Groupes et publications.</p></div></div><form id="tafaSearchForm" class="clean-search searchbox premium-searchbox"><span class="icon">⌕</span><input id="searchInput" value="${esc(term)}" placeholder="Rechercher…" autocomplete="off"><button type="submit">→</button></form>${categoryTabs}<div class="search-active-result"><div class="search-result-heading"><div><span class="eyebrow">RÉSULTATS</span><h3>${esc(active[0]||'Recherche')}</h3></div><span class="search-result-count">${term?(categories.find(x=>x[0]===searchCategory)?.[2]||0):0}</span></div><div class="clean-list search-results-list">${active[1]}</div></div></section>`);
     $('tafaSearchForm')?.addEventListener('submit',e=>{e.preventDefault();const v=$('searchInput')?.value.trim()||'';if(v)searchPage(v,searchCategory);});
   };
 
@@ -9340,4 +9320,23 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   openPageDetail=openPageDetailV82;
   window.__TAFA_V83__={version:'83',core:'clean-production',pages:'v83',realtime:'coalesced'};
 
+})();
+
+
+/* TAFAß V97 — FINAL PAGE PURGE / UI GUARD */
+(() => {
+  const purge = () => {
+    document.querySelectorAll('[data-route="pages"], [data-action="page-open"], [data-action="page-profile"], [data-action="page-switch"], [data-action="toggle-page-follow"], [data-action="create-page"], [data-action="edit-page"], [data-action="new-page-menu"], [data-action="business-open-pages"], [data-v49-page], [data-v49-search-all]').forEach(el => {
+      if (el?.dataset?.action === 'page-back') return;
+      el.remove();
+    });
+    document.querySelectorAll('.tafass-v82-pages,.page-detail,.page-premium-modal,.page-mode-feed,.page-context-banner,.page-menu-dashboard,.p91-page-menu,.tbs-page-main,.tbs-page-card').forEach(el => el.remove());
+    document.querySelectorAll('.fb-settings-row,[data-action]').forEach(el => {
+      const a=String(el.dataset?.action||'');
+      if (/^(professional-mode|page-privacy|professional-integrations|page-business)$/i.test(a)) el.remove();
+    });
+  };
+  purge();
+  new MutationObserver(purge).observe(document.body,{childList:true,subtree:true});
+  window.addEventListener('hashchange',()=>{ if(location.hash==='#pages') history.replaceState(null,'','#home'); });
 })();

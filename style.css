@@ -7009,3 +7009,34 @@ body.tafa-conversation-active .message-send-button span{display:none!important}
 .np-page-cta-option>span{width:36px;height:36px;display:grid;place-items:center;border-radius:11px;background:rgba(83,221,145,.10);color:#75e5aa;font-size:16px}
 .np-page-cta-option>div{min-width:0;flex:1}.np-page-cta-option b{display:block;font-size:10px}.np-page-cta-option small{display:block;margin-top:3px;color:#81958a;font-size:8px}.np-page-cta-option>i{font-style:normal;color:#62756a}.np-page-cta-option.active{border-color:rgba(96,225,155,.35);background:linear-gradient(135deg,rgba(70,220,139,.10),rgba(255,255,255,.025))}.np-page-cta-option.active>i{color:#6ee3a3}.np-page-cta-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}.np-page-cta-actions .np-page-menu-cancel{margin:0}
 @media(max-width:600px){.np-page-menu-trigger{width:40px!important;height:40px!important;min-width:40px!important;flex-basis:40px!important}.np-page-menu{border-radius:25px!important;padding:14px!important}.np-page-menu-head h3{font-size:16px}.np-page-menu-item{min-height:62px}.np-page-menu-copy b{font-size:10px}.np-page-menu-copy small{font-size:8px}}
+
+/* ============================================================
+   TAFAß V97 — PAGE REMOVAL / CLEAN ACCOUNT UI
+   Pages are intentionally disabled in this build. These selectors
+   are defensive only, so no legacy Page component can reappear.
+============================================================ */
+[data-route="pages"],
+[data-action="page-open"],
+[data-action="page-profile"],
+[data-action="page-switch"],
+[data-action="toggle-page-follow"],
+[data-action="create-page"],
+[data-action="edit-page"],
+[data-action="new-page-menu"],
+[data-action="business-open-pages"],
+[data-action="page-business"],
+[data-v49-page] {
+  display:none !important;
+}
+
+.tafass-v82-pages,
+.page-detail,
+.page-premium-modal,
+.page-mode-feed,
+.page-context-banner,
+.page-menu-dashboard,
+.p91-page-menu,
+.tbs-page-main,
+.tbs-page-card {
+  display:none !important;
+}
