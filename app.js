@@ -3590,6 +3590,10 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
 
   async function menuPage() {
     state.backOverride = null;
+    // V95: the account Menu is deliberately Page-free. The old Page Menu is removed
+    // completely; a new dedicated Page Menu will be introduced separately.
+    const pageMenuLegacySelectors = [".p91-page-menu",".tafa-v65-page-shell",".page-menu-dashboard",".page-menu-hero",".page-menu-card"];
+    pageMenuLegacySelectors.forEach(sel=>document.querySelectorAll(sel).forEach(el=>el.remove()));
     /* ADMIN MENU: resolve the server-side role before rendering the Menu.
        This makes Administration appear immediately for a real Supabase admin. */
     if(!pageModeActive()){
@@ -3606,7 +3610,6 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       ["messages","messages","Messages","Vos conversations"],
       ["notifications","history","Alertes","Vos notifications"],
       ["groups","groups","Groupes","Communautés"],
-      ["pages","pages","Pages","Pages et gestion"],
       ["reels","reels","Reels","Formats courts"],
       ["events","history","Évènements","Créer et découvrir des évènements"],
       ["studio","videos","Creator Studio","Créer et analyser vos contenus"],

@@ -6951,3 +6951,17 @@ body.tafa-conversation-active .message-send-button span{display:none!important}
  .p91-page-visitor-view .p91-page-actions{grid-template-columns:1.15fr 1fr 1fr!important}
  .p91-visitor-page-menu{width:calc(100vw - 12px)!important;border-radius:24px 24px 18px 18px!important}
 }
+
+/* V95 — remove every legacy Page Menu presentation. The new Page Menu will be rebuilt from zero. */
+.p91-page-menu,
+.tafa-v65-page-shell,
+.page-menu-dashboard,
+.page-menu-hero,
+.page-menu-hero-premium,
+.page-menu-card,
+.p91-page-menu-section,
+.p91-page-menu-list,
+.p91-page-menu-item,
+.p91-visitor-page-menu {
+  display:none !important;
+}
