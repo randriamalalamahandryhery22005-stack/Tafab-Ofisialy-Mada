@@ -9280,23 +9280,53 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     const team=(members.data||[]).map(m=>`<div class="v82-team-row">${avatarHTML(m.profiles||{},'avatar v82-team-avatar')}<div><b>${esc(nameOf(m.profiles||{}))}</b><small>${esc(m.role||'editor')}</small></div>${canManage&&String(m.user_id)!==String(state.user.id)?`<button type="button" class="v82-icon" data-action="page-member-menu" data-id="${esc(m.user_id)}" data-entity-id="${esc(id)}">•••</button>`:''}</div>`).join('')||`<div class="v82-muted">Aucun gestionnaire supplémentaire.</div>`;
     const about=`<div class="v82-info-grid"><div><small>Catégorie</small><b>${esc(x.category||'Autre')}</b></div><div><small>Créée le</small><b>${new Date(x.created_at).toLocaleDateString('fr-FR')}</b></div><div><small>Responsable</small><b>${esc(owner.data?nameOf(owner.data):'Membre Tafaß')}</b></div><div><small>Adresse</small><b>${esc(x.address||owner.data?.city_current||'Non renseignée')}</b></div>${x.contact_email?`<div><small>E-mail</small><b>${esc(x.contact_email)}</b></div>`:''}${x.contact_phone?`<div><small>Téléphone</small><b>${esc(x.contact_phone)}</b></div>`:''}${x.website_url?`<div class="wide"><small>Site web</small><b>${esc(x.website_url)}</b></div>`:''}</div>`;
     setupTafaV80Realtime('page',id);
-    openModal(`<div class="modal-box page-detail tafass-v82-page-modal" data-page-id="${esc(id)}">
-      <div class="v82-detail-topbar"><button type="button" class="v82-back" data-action="close-entity" data-route-back="${esc(state.entityBackRoute||'pages')}" aria-label="Retour"><span>‹</span><b>Pages</b></button><div class="v82-detail-title"><span class="v82-eyebrow">TAFAß · PAGE</span><strong>${esc(x.name)}</strong></div><button type="button" class="v82-icon v82-top-more" data-action="page-more" data-id="${esc(id)}" aria-label="Options">•••</button></div>
-      <div class="v82-scroll">
-        <section class="v82-cover" ${x.cover_url?`style="background-image:url('${esc(x.cover_url)}')"`:''}><div class="v82-cover-shade"></div></section>
-        <section class="v82-identity"><div class="v82-logo-wrap">${entityAvatarHTML(x,'page','v82-detail-avatar')}<span class="v82-check">✓</span></div><div class="v82-identity-copy"><h2>${esc(x.name)}</h2>${x.username?`<small class="v82-handle">@${esc(x.username)}</small>`:''}<p>${esc(x.bio||'Présentez votre activité, votre communauté et vos actualités.')}</p></div></section>
-        <div class="v82-stats"><span><b>${followerCount}</b><small>Abonnés</small></span><span><b>${postsRows.length}</b><small>Publications</small></span><span><b>${x.category||'Page'}</b><small>Catégorie</small></span></div>
-        <div class="v82-main-actions">${ownerMe?`<button type="button" class="v82-primary" data-action="page-switch" data-id="${esc(id)}">⇄ Basculer</button><button type="button" class="v82-secondary" data-action="edit-page" data-id="${esc(id)}">⚙ Gérer</button>`:`<button type="button" class="${follow.data?'v82-secondary':'v82-primary'}" data-action="toggle-page-follow" data-id="${esc(id)}">${follow.data?'✓ Suivie':'＋ Suivre'}</button><button type="button" class="v82-secondary" data-action="page-contact" data-id="${esc(id)}">💬 Messages</button>`}<button type="button" class="v82-secondary icon" data-action="page-profile" data-id="${esc(id)}" aria-label="Profil">◉</button></div>
-        <nav class="v82-detail-tabs page-tabs"><button type="button" class="active" data-action="page-tab" data-tab="posts" data-id="${esc(id)}">Publications</button><button type="button" data-action="page-tab" data-tab="about" data-id="${esc(id)}">À propos</button><button type="button" data-action="page-tab" data-tab="team" data-id="${esc(id)}">Équipe</button></nav>
-        ${canPublish?`<section class="v82-composer"><div class="v82-composer-head"><span class="v82-composer-mark">✦</span><div><b>Publier en tant que ${esc(x.name)}</b><small>${myRole==='editor'?'Éditeur':'Gestionnaire'}</small></div></div><textarea id="pagePostText" maxlength="5000" placeholder="Partagez une actualité avec vos abonnés…"></textarea><div class="v82-composer-bottom"><label class="v82-media">＋ Média<input id="pagePostMedia" type="file" accept="image/*,video/*" hidden></label><span id="pagePostMediaName">Aucun fichier</span><button type="button" class="v82-primary" data-action="page-publish" data-id="${esc(id)}">Publier</button></div></section>`:''}
-        <section class="v82-panel page-tab-panel" data-tab="posts"><div class="v82-panel-head"><div><span>ACTUALITÉ</span><h3>Publications</h3></div><small>● EN DIRECT</small></div><div class="v82-post-list">${postRows}</div></section>
-        <section class="v82-panel page-tab-panel hidden" data-tab="about"><div class="v82-panel-head"><div><span>INFORMATIONS</span><h3>À propos</h3></div></div>${about}</section>
-        <section class="v82-panel page-tab-panel hidden" data-tab="team"><div class="v82-panel-head"><div><span>GESTION</span><h3>Équipe</h3></div>${canManage?`<button type="button" class="v82-secondary" data-action="page-add-member" data-id="${esc(id)}">＋ Ajouter</button>`:''}</div><div class="v82-team-list">${team}</div></section>
-        <div class="v82-bottom-space"></div>
+    openModal(`<div class="modal-box page-detail tafass-v89-page-modal" data-page-id="${esc(id)}">
+      <header class="p89-page-topbar">
+        <button type="button" class="p89-page-back" data-action="close-entity" data-route-back="${esc(state.entityBackRoute||'pages')}" aria-label="Retour"><span>‹</span><b>Retour</b></button>
+        <div class="p89-page-top-title"><span>TAFAß · PAGE</span><strong>${esc(x.name)}</strong></div>
+        <button type="button" class="p89-page-icon" data-action="page-more" data-id="${esc(id)}" aria-label="Options">•••</button>
+      </header>
+      <div class="p89-page-scroll">
+        <section class="p89-hero" ${x.cover_url?`style="background-image:url('${esc(x.cover_url)}')"`:''}>
+          <div class="p89-hero-shade"></div>
+          <div class="p89-hero-label"><span>PAGE OFFICIELLE</span><b>${esc(x.category||'Communauté')}</b></div>
+        </section>
+        <section class="p89-page-head">
+          <div class="p89-page-avatar-wrap">${entityAvatarHTML(x,'page','p89-page-avatar')}<span class="p89-page-badge" aria-label="Page">✓</span></div>
+          <div class="p89-page-title-block"><h1>${esc(x.name)}</h1><p>${esc(x.bio||'Présentez votre activité, votre communauté et vos actualités.')}</p></div>
+        </section>
+        <section class="p89-page-stats" aria-label="Statistiques">
+          <div><b>${followerCount}</b><span>Abonnés</span></div>
+          <div><b>${postsRows.length}</b><span>Publications</span></div>
+          <div><b>${esc(x.category||'Page')}</b><span>Catégorie</span></div>
+        </section>
+        <section class="p89-page-actions">
+          ${ownerMe?`<button type="button" class="p89-action p89-action-primary" data-action="page-switch" data-id="${esc(id)}"><span>⇄</span><b>Basculer</b></button><button type="button" class="p89-action" data-action="edit-page" data-id="${esc(id)}"><span>⚙</span><b>Gérer</b></button>`:`<button type="button" class="p89-action p89-action-primary" data-action="toggle-page-follow" data-id="${esc(id)}"><span>${follow.data?'✓':'＋'}</span><b>${follow.data?'Suivie':'Suivre'}</b></button><button type="button" class="p89-action" data-action="page-contact" data-id="${esc(id)}"><span>✉</span><b>Messages</b></button>`}
+          <button type="button" class="p89-action p89-action-square" data-action="page-profile" data-id="${esc(id)}" aria-label="Profil de la Page"><span>◉</span></button>
+        </section>
+        <nav class="p89-page-tabs" role="tablist">
+          <button type="button" class="active" data-action="page-tab" data-tab="posts" data-id="${esc(id)}">Publications</button>
+          <button type="button" data-action="page-tab" data-tab="about" data-id="${esc(id)}">À propos</button>
+          <button type="button" data-action="page-tab" data-tab="team" data-id="${esc(id)}">Équipe</button>
+        </nav>
+        ${canPublish?`<section class="p89-page-composer"><div class="p89-composer-title"><span>✦</span><div><b>Publier en tant que ${esc(x.name)}</b><small>${myRole==='editor'?'Éditeur':'Gestionnaire'}</small></div></div><textarea id="pagePostText" maxlength="5000" placeholder="Partagez une actualité avec vos abonnés…"></textarea><div class="p89-composer-tools"><label class="p89-media"><span>＋</span>Média<input id="pagePostMedia" type="file" accept="image/*,video/*" hidden></label><span id="pagePostMediaName">Aucun fichier</span><button type="button" class="p89-publish" data-action="page-publish" data-id="${esc(id)}">Publier</button></div></section>`:''}
+        <section class="p89-page-tab-panel" data-tab="posts">
+          <div class="p89-section-head"><div><span>ACTUALITÉ</span><h2>Publications</h2></div><small>● ACTIF</small></div>
+          <div class="p89-post-list">${postRows.replace(/v82-/g,'p89-')}</div>
+        </section>
+        <section class="p89-page-tab-panel p89-hidden" data-tab="about">
+          <div class="p89-section-head"><div><span>INFORMATIONS</span><h2>À propos</h2></div></div>
+          <div class="p89-info-grid">${about.replace(/v82-info-grid/g,'p89-info-grid')}</div>
+        </section>
+        <section class="p89-page-tab-panel p89-hidden" data-tab="team">
+          <div class="p89-section-head"><div><span>GESTION</span><h2>Équipe</h2></div>${canManage?`<button type="button" class="p89-add" data-action="page-add-member" data-id="${esc(id)}">＋ Ajouter</button>`:''}</div>
+          <div class="p89-team-list">${team.replace(/v82-/g,'p89-')}</div>
+        </section>
+        <div class="p89-page-bottom"></div>
       </div>
     </div>`);
     const media=$('pagePostMedia'); media?.addEventListener('change',()=>{const f=media.files?.[0];const el=$('pagePostMediaName');if(el)el.textContent=f?f.name:'Aucun fichier';});
-    requestAnimationFrame(()=>{const root=document.querySelector('.tafass-v82-page-modal .v82-scroll');if(root)root.scrollTop=0;});
+    requestAnimationFrame(()=>{const root=document.querySelector('.tafass-v89-page-modal .p89-page-scroll');if(root)root.scrollTop=0;});
   }
 
   // V83 becomes the only active Page hub/detail implementation. Legacy names
