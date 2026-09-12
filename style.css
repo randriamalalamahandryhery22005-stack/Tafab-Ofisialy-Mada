@@ -7040,3 +7040,39 @@ body.tafa-conversation-active .message-send-button span{display:none!important}
 .tbs-page-card {
   display:none !important;
 }
+
+/* =========================================================
+   Tafaß SPLASH FIX — V188
+   Restaure les éléments de marque masqués par l'ancien
+   patch V41 et garde le splash centré sur mobile.
+   ========================================================= */
+.splash-brand,
+.splash-tagline,
+.splash-status{
+  display:block!important;
+  visibility:visible!important;
+}
+
+.splash-content{
+  justify-content:center!important;
+  gap:0!important;
+  transform:translateY(-2vh)!important;
+}
+
+.splash-brand{
+  margin-top:14px!important;
+  line-height:1.05!important;
+}
+
+.splash-tagline{
+  margin-top:8px!important;
+}
+
+.splash-loader{
+  margin-top:28px!important;
+}
+
+.splash-status{
+  min-height:14px!important;
+}
+
