@@ -70,7 +70,7 @@ document.documentElement.classList.add("app-boot");
     channel: null, theme: "dark", entering: false, loggingOut: false, composerOpen: false, composerBackground: "plain", composerLocation: "",
     composerDraftText: "", composerFile: null, composerVisibility: "public", composerMeta: {}, profileWallOwnerId:null, profileWallRequireApproval:true, profileWallRows:[],
     liveFeedChannel: null, conversationChannel: null, presenceChannel: null, activeLive: null, adminDashboardChannel:null, adminDashboardTimer:null, adminDashboardRefreshing:false, adminDashboardRefreshTimer:null,
-    profileTab: "posts", reactionSettingsCache:new Map(), locationWatchId:null, timeLimitRuntime:null, timeLimitTimer:null, timeLimitOverlay:null, friendsTab: "suggestions", pagesTab: "mine", groupsTab: "mine", groupSort: "recent", selectedConversation: null, viewingProfileId: null, renderToken: 0, activePage: null, entityBackRoute: null
+    profileTab: "posts", reactionSettingsCache:new Map(), locationWatchId:null, timeLimitRuntime:null, timeLimitTimer:null, timeLimitOverlay:null, friendsTab: "suggestions", pagesTab: "mine", groupsTab: "mine", groupSort: "recent", selectedConversation: null, viewingProfileId: null, renderToken: 0, activePage: null, entityBackRoute: null, pushLoginPromptOpen:false
   };
 
   // Production network/realtime guard: keeps the UI honest when connectivity changes.
@@ -132,18 +132,57 @@ document.documentElement.classList.add("app-boot");
       return {ok:false,reason:"exception",message:e?.message||"Impossible d'activer les notifications sur cet appareil."};
     }
   }
+  function closeLoginPushPrompt(){
+    document.getElementById("tafaLoginPushPrompt")?.remove();
+    state.pushLoginPromptOpen=false;
+  }
+  function showLoginPushPrompt(){
+    if(!state.user || document.getElementById("tafaLoginPushPrompt")) return;
+    if(!("Notification" in window)) return;
+    // Do not interrupt users who already granted notifications.
+    if(Notification.permission==="granted") return;
+    const o=document.createElement("div");
+    o.id="tafaLoginPushPrompt";
+    o.className="tafa-login-push-overlay";
+    o.innerHTML=`<div class="tafa-login-push-card" role="dialog" aria-modal="true" aria-labelledby="tafaLoginPushTitle">
+      <div class="tafa-login-push-icon" aria-hidden="true">♢</div>
+      <span class="eyebrow">TAFAß • NOTIFICATIONS</span>
+      <h2 id="tafaLoginPushTitle">Ne manquez plus rien</h2>
+      <p>Activez les notifications Tafaß pour recevoir immédiatement les messages, réactions, commentaires, demandes d’amis et autres alertes, même lorsque l’application est en arrière-plan.</p>
+      <div class="tafa-login-push-benefits">
+        <div><span>✓</span><b>Messages en temps réel</b></div>
+        <div><span>✓</span><b>Réactions et commentaires</b></div>
+        <div><span>✓</span><b>Demandes et alertes importantes</b></div>
+      </div>
+      <div class="tafa-login-push-status" id="tafaLoginPushStatus"></div>
+      <button type="button" class="primary big tafa-login-push-enable" data-action="enable-push-notifications">Activer les notifications</button>
+      <button type="button" class="tafa-login-push-later" data-action="skip-login-push">Continuer sans activer</button>
+      <small class="tafa-login-push-note">Une fenêtre d’autorisation Android/navigateur peut apparaître. Appuyez simplement sur « Autoriser ».</small>
+    </div>`;
+    document.body.appendChild(o);
+    state.pushLoginPromptOpen=true;
+  }
   async function enableTafaPushNotifications(){
     const btn=document.querySelector('[data-action="enable-push-notifications"]');
+    const status=document.getElementById("tafaLoginPushStatus");
     if(btn){btn.disabled=true;btn.classList.add("is-loading");btn.setAttribute("aria-busy","true");}
+    if(status) status.textContent="Activation des notifications…";
     try{
       const result=await setupTafaPushNotifications({requestPermission:true});
       if(result.ok){
         toast("Notifications activées sur cet appareil");
-        return openAdvancedSetting("notifications-settings");
+        if(document.getElementById("tafaLoginPushPrompt")){
+          closeLoginPushPrompt();
+        }else{
+          return openAdvancedSetting("notifications-settings");
+        }
+        return;
       }
       if(result.reason==="denied"){
-        toast("Notifications bloquées. Autorisez-les dans les paramètres du navigateur, puis réessayez.");
+        if(status) status.textContent="Les notifications sont bloquées. Ouvrez les paramètres du navigateur/appareil et autorisez Tafaß, puis revenez ici.";
+        toast("Notifications bloquées. Autorisez-les dans les paramètres, puis réessayez.");
       }else{
+        if(status) status.textContent=result.message||"Impossible d'activer les notifications.";
         toast(result.message||"Impossible d'activer les notifications.");
       }
     }finally{
@@ -5865,13 +5904,14 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       await splashReady;
       $("auth").classList.add("hidden"); $("app").classList.remove("hidden");
       await loadPosts(); await setupRealtime(); ensureLiveFeedRealtime();
-      // Register/refresh the Web Push subscription for every authenticated
-      // session, including existing accounts that only log in (not only new
-      // registrations). This is required for background Android/PWA pushes.
+      // Refresh an already-granted subscription silently. If permission has
+      // never been decided, show one clear activation screen immediately
+      // after login so users do not have to search through Settings.
       await setupTafaPushNotifications({requestPermission:false});
       await render();
       await startTimeLimitGuard();
       hideAppTransition();
+      if(Notification.permission==="default") setTimeout(showLoginPushPrompt,220);
     }finally{
       state.entering = false;
       if(!state.user) hideAppTransition();
@@ -6974,6 +7014,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if (action === "mark-read") return markRead();
     if (action === "theme") return toggleTheme();
     if (action === "enable-push-notifications") return enableTafaPushNotifications();
+    if (action === "skip-login-push") { closeLoginPushPrompt(); return; }
     if (action === "settings-focus-search") { $("settingsSearch")?.focus(); return; }
     if (action === "open-games") return gamesModal();
     if (action === "capture-exact-location") return captureExactLocation();
