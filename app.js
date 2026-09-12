@@ -7284,8 +7284,12 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if (action === "role-request-accept") return respondRoleRequest(id, true);
     if (action === "role-request-reject") return respondRoleRequest(id, false);
     if (action === "send-page-invites") return sendPageInvites(id);
-    if (action === "page-share") return pageShare(id);
+    if (action === "new-page-menu") return newPageMenu(id);
     if (action === "page-copy-link") return pageCopyLink(id);
+    if (action === "page-cta-settings") return pageCtaSettings(id);
+    if (action === "save-page-cta") return savePageCta(id);
+    if (action === "select-page-cta") { document.querySelectorAll('.np-page-cta-option').forEach(x=>x.classList.remove('active')); actionEl.classList.add('active'); return; }
+    if (action === "page-share") return pageShare(id);
     if (action === "page-report") return pageReport(id);
     if (action === "group-more") return groupMore(id);
     if (action === "group-team") return entityTeamManager("group",id);
