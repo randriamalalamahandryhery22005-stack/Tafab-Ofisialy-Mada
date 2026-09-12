@@ -6147,7 +6147,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       const mine=reactions.some(r=>r.user_id===state.user.id);
       const commentPreview=comments.slice(-3).map(c=>`<div class="page-comment-row">${avatarHTML(c.profiles||{},'avatar page-comment-avatar')}<div><b>${esc(nameOf(c.profiles||{}))}</b><span>${esc(c.content||'')}</span><small>${timeAgo(c.created_at)}</small></div></div>`).join('');
       return `<article class="page-post-card" data-page-post="${esc(p.id)}">
-        <header class="page-post-head"><div class="page-post-author">${entityAvatarHTML(x,'page','page-post-avatar')}<div><b>${esc(x.name)}</b><small>${timeAgo(p.created_at)} · Page</small></div></div>${(p.user_id===state.user.id||canManage)?`<button class="page-icon-btn" data-action="delete-page-post" data-id="${esc(p.id)}" data-entity-id="${esc(id)}" aria-label="Supprimer">⋯</button>`:''}</header>
+        <header class="page-post-head"><div class="page-post-author">${entityAvatarHTML(x,'page','page-post-avatar')}<div><b>${esc(x.name)}</b><small>${timeAgo(p.created_at)} · Page</small></div></div>${(p.user_id===state.user.id||canManage)?`<button class="page-icon-btn" data-action="page-post-more" data-id="${esc(p.id)}" data-entity-id="${esc(id)}" aria-label="Options de la publication">⋯</button>`:''}</header>
         ${p.content?`<div class="page-post-text">${esc(p.content)}</div>`:''}
         ${p.media_url?(String(p.media_type||'').startsWith('video')?`<video class="page-post-media" src="${esc(p.media_url)}" controls playsinline preload="metadata"></video>`:`<img class="page-post-media" src="${esc(p.media_url)}" alt="Publication ${esc(x.name)}" loading="lazy">`):''}
         <div class="page-post-stats"><span>${reactions.length} réaction${reactions.length===1?'':'s'}</span><span>${comments.length} commentaire${comments.length===1?'':'s'}</span><span>${shares.length} partage${shares.length===1?'':'s'}</span></div>
@@ -6164,14 +6164,54 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       <div class="page-cover" ${x.cover_url?`style="background-image:url('${esc(x.cover_url)}')"`:''}><div class="page-cover-overlay"></div><div class="page-live-badge">● PAGE</div></div>
       <div class="page-profile-head page-profile-head-v2"><div class="page-avatar-wrap">${avatar}<span class="page-verified">✓</span></div></div>
       <div class="page-profile-copy-v2"><h2>${esc(x.name)}</h2>${x.deletion_status==='pending_deletion'?`<div class="tfa-v80-deletion-alert">⚠ Suppression prévue le ${new Date(x.deletion_scheduled_at).toLocaleDateString('fr-FR')} · récupérable pendant 15 jours</div>`:""}${x.username?`<div class="page-handle">@${esc(x.username)}</div>`:''}<p>${esc(x.bio||'Présentez votre activité, votre communauté et vos actualités.')}</p><div class="page-follow-line"><span><b>${followerCount}</b> abonnés</span><span><b>${postCount}</b> publications</span></div></div>
-      <div class="page-top-actions page-primary-actions">${ownerMe?`<button class="page-action primary" data-action="page-switch" data-id="${esc(id)}">⇄ Basculer</button><button class="page-action secondary" data-action="edit-page" data-id="${esc(id)}">⚙ Gérer la Page</button>`:`<button class="page-action ${follow.data?'secondary':'primary'}" data-action="toggle-page-follow" data-id="${esc(id)}">${follow.data?'✓ Suivie':'＋ Suivre'}</button><button class="page-action secondary" data-action="page-contact" data-id="${esc(id)}">💬 Messages</button>`}<button class="page-action secondary" data-action="page-profile" data-id="${esc(id)}">◉ Profil</button><button class="page-action secondary page-more-action" data-action="page-more" data-id="${esc(id)}" aria-label="Plus d’options">•••</button></div>
-      <nav class="page-tabs"><button class="active" data-action="page-tab" data-tab="posts" data-id="${esc(id)}">Publications</button><button data-action="page-tab" data-tab="about" data-id="${esc(id)}">À propos</button><button data-action="page-tab" data-tab="team" data-id="${esc(id)}">Équipe</button></nav>
+      <div class="page-top-actions page-primary-actions">${ownerMe?`<button class="page-action primary" data-action="page-switch" data-id="${esc(id)}">⇄ Basculer</button><button class="page-action secondary" data-action="edit-page" data-id="${esc(id)}">⚙ Gérer</button><button class="page-action secondary" data-action="page-share" data-id="${esc(id)}">↗ Partager</button>`:`<button class="page-action ${follow.data?'secondary':'primary'}" data-action="toggle-page-follow" data-id="${esc(id)}">${follow.data?'✓ Suivie':'＋ Suivre'}</button><button class="page-action secondary" data-action="page-contact" data-id="${esc(id)}">💬 Messages</button><button class="page-action secondary" data-action="page-share" data-id="${esc(id)}">↗ Partager</button>`}<button class="page-action secondary page-more-action" data-action="page-more" data-id="${esc(id)}" aria-label="Options de la Page">•••</button></div>
+      <nav class="page-tabs page-tabs-distinct"><button class="active" data-action="page-tab" data-tab="posts" data-id="${esc(id)}">Publications</button><button data-action="page-tab" data-tab="about" data-id="${esc(id)}">À propos</button><button data-action="page-tab" data-tab="team" data-id="${esc(id)}">Communauté</button></nav>
       ${canPublish?`<section class="page-composer"><div class="page-composer-title"><span>✦</span><div><b>Publier en tant que ${esc(x.name)}</b><small>${myRole==='editor'?'Éditeur':'Gestionnaire'}</small></div></div><textarea id="pagePostText" maxlength="5000" placeholder="Partagez une actualité avec vos abonnés…"></textarea><div class="page-composer-bottom"><label class="page-media-btn">＋ Média<input id="pagePostMedia" type="file" accept="image/*,video/*" hidden></label><span id="pagePostMediaName">Aucun fichier</span><button class="page-publish-btn" data-action="page-publish" data-id="${esc(id)}">Publier</button></div></section>`:''}
       <section class="page-tab-panel page-live-section" data-tab="posts"><div class="page-section-title"><div><span>ACTUALITÉ</span><h3>Publications</h3></div><strong>● EN DIRECT</strong></div><div class="page-post-list">${postRows}</div></section>
       <section class="page-tab-panel page-about-section hidden" data-tab="about"><div class="page-section-title"><div><span>INFORMATIONS</span><h3>À propos de la Page</h3></div></div>${about}</section>
       <section class="page-tab-panel page-team-section hidden" data-tab="team"><div class="page-section-title"><div><span>GESTION</span><h3>Équipe de la Page</h3></div>${canManage?`<button class="page-small-btn" data-action="page-add-member" data-id="${esc(id)}">＋ Ajouter</button>`:''}</div>${team}</section>
     </div>`);
     const media=$('pagePostMedia'); media?.addEventListener('change',()=>{ const f=media.files?.[0]; $('pagePostMediaName').textContent=f?f.name:'Aucun fichier'; });
+  }
+
+  async function pagePostMore(postId, pageId){
+    const [{data:p,error:pe},{data:pg,error:ge}]=await Promise.all([
+      sb.from('page_posts').select('id,page_id,user_id,content,created_at').eq('id',postId).eq('page_id',pageId).maybeSingle(),
+      sb.from('pages').select('id,name,owner_id').eq('id',pageId).maybeSingle()
+    ]);
+    if(pe||ge||!p||!pg) return toast(pe?.message||ge?.message||'Publication introuvable.');
+    const me=(await sb.from('page_members').select('role').eq('page_id',pageId).eq('user_id',state.user.id).maybeSingle()).data;
+    const canManage=pg.owner_id===state.user.id || ['owner','admin','editor'].includes(me?.role) || state.__isAdmin===true;
+    const canEdit=p.user_id===state.user.id || canManage;
+    openModal(`<div class="modal-box page-post-options-modal">
+      <button class="modal-close" data-action="close-modal">×</button>
+      <div class="page-post-options-head"><span class="eyebrow">TAFAß • PUBLICATION</span><h3>Options de la publication</h3><p>${esc(pg.name)}</p></div>
+      <div class="page-post-options-list">
+        <button class="page-post-option" data-action="page-post-copy-link" data-id="${esc(postId)}" data-entity-id="${esc(pageId)}"><span>🔗</span><div><b>Copier le lien</b><small>Copier le lien de cette publication</small></div></button>
+        <button class="page-post-option" data-action="page-post-share" data-id="${esc(postId)}" data-entity-id="${esc(pageId)}"><span>↗</span><div><b>Partager</b><small>Partager cette publication</small></div></button>
+        ${canEdit?`<button class="page-post-option" data-action="edit-page-post" data-id="${esc(postId)}" data-entity-id="${esc(pageId)}"><span>✎</span><div><b>Modifier</b><small>Modifier le contenu de la publication</small></div></button>`:''}
+        ${canEdit?`<button class="page-post-option danger" data-action="delete-page-post" data-id="${esc(postId)}" data-entity-id="${esc(pageId)}"><span>🗑</span><div><b>Supprimer</b><small>Supprimer définitivement cette publication</small></div></button>`:''}
+        ${!canEdit?`<button class="page-post-option" data-action="page-post-report" data-id="${esc(postId)}" data-entity-id="${esc(pageId)}"><span>⚑</span><div><b>Signaler</b><small>Signaler cette publication</small></div></button>`:''}
+      </div>
+    </div>`);
+  }
+
+  async function pagePostCopyLink(postId,pageId){
+    const url=`${location.origin}${location.pathname}#/pages/${pageId}/post/${postId}`;
+    try{await navigator.clipboard.writeText(url);closeModal();toast('Lien de la publication copié.');}catch{toast('Impossible de copier le lien.');}
+  }
+
+  async function pagePostShare(postId,pageId){
+    const url=`${location.origin}${location.pathname}#/pages/${pageId}/post/${postId}`;
+    try{if(navigator.share) await navigator.share({title:'Publication Tafaß',url}); else await navigator.clipboard.writeText(url); toast(navigator.share?'':'Lien de la publication copié.');}catch{}
+  }
+
+  async function pagePostReport(postId,pageId){
+    const reason=await premiumPrompt('Signaler la publication','Expliquez brièvement le problème.','','Envoyer');
+    if(!reason)return;
+    const r=await sb.from('page_post_reports').insert({post_id:postId,page_id:pageId,reporter_id:state.user.id,reason});
+    if(r.error)return toast(r.error.message);
+    closeModal();toast('Signalement envoyé.');
   }
 
   async function pageMore(id){
@@ -7241,6 +7281,10 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if (action === "page-profile") { state.entityBackRoute = state.route || "pages"; return openPageDetail(id); }
     if (action === "page-open") { state.entityBackRoute = pageModeActive() && state.activePage?.id===id ? "home" : (state.route || "pages"); return openPageDetail(id); }
     if (action === "page-more") return pageMore(id);
+    if (action === "page-post-more") return pagePostMore(id, actionEl.dataset.entityId);
+    if (action === "page-post-copy-link") return pagePostCopyLink(id, actionEl.dataset.entityId);
+    if (action === "page-post-share") return pagePostShare(id, actionEl.dataset.entityId);
+    if (action === "page-post-report") return pagePostReport(id, actionEl.dataset.entityId);
     if (action === "page-team") return entityTeamManager("page",id);
     if (action === "page-invite-friends") return pageInviteFriends(id);
     if (action === "page-role-request") return sendPageRoleRequest(id, actionEl.dataset.entityId);

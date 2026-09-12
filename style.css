@@ -6814,3 +6814,43 @@ body.tafa-conversation-active .message-send-button span{display:none!important}
   .page-post-options-modal,.page-post-edit-modal{width:calc(100vw - 14px)!important;max-width:none!important;border-radius:20px!important}
   .page-post-option{min-height:58px!important}
 }
+
+
+/* =========================================================
+   TAFAß V91 — PAGE PROFILE DISTINCT / SCROLL FINAL
+   Page is intentionally different from a personal account.
+   ========================================================= */
+.page-premium-modal{
+  height:calc(100dvh - 20px)!important;
+  max-height:calc(100dvh - 20px)!important;
+  overflow-y:auto!important;
+  overflow-x:hidden!important;
+  -webkit-overflow-scrolling:touch!important;
+  overscroll-behavior:contain!important;
+  touch-action:pan-y!important;
+  scrollbar-width:thin!important;
+}
+.page-premium-modal>*{max-width:100%;}
+.page-premium-modal .page-cover{flex:none!important;}
+.page-premium-modal .page-profile-copy-v2{overflow:visible!important;}
+.page-premium-modal .page-tabs-distinct{position:sticky!important;top:0!important;z-index:12!important;background:rgba(11,17,30,.94)!important;backdrop-filter:blur(16px)!important;-webkit-backdrop-filter:blur(16px)!important;}
+.page-premium-modal .page-post-list{padding-bottom:70px!important;}
+.page-premium-modal .page-tab-panel{overflow:visible!important;}
+.page-premium-modal .page-post-card{overflow:visible!important;}
+.page-post-options-modal{width:min(520px,calc(100vw - 24px))!important;max-height:min(720px,calc(100dvh - 24px))!important;overflow-y:auto!important;border-radius:24px!important;padding:20px!important;}
+.page-post-options-head{padding:4px 4px 14px!important;border-bottom:1px solid var(--line)!important;}
+.page-post-options-head h3{margin:5px 0 4px!important;font-size:21px!important;}
+.page-post-options-head p{margin:0!important;color:var(--muted)!important;font-size:12px!important;overflow-wrap:anywhere!important;}
+.page-post-options-list{display:grid!important;gap:7px!important;padding-top:12px!important;}
+.page-post-option{width:100%!important;display:grid!important;grid-template-columns:42px minmax(0,1fr)!important;gap:11px!important;align-items:center!important;text-align:left!important;padding:12px!important;border:1px solid rgba(120,150,210,.10)!important;border-radius:15px!important;background:rgba(255,255,255,.025)!important;color:var(--text)!important;cursor:pointer!important;}
+.page-post-option>span{width:38px!important;height:38px!important;display:grid!important;place-items:center!important;border-radius:12px!important;background:rgba(75,112,190,.12)!important;font-size:16px!important;}
+.page-post-option b,.page-post-option small{display:block!important;overflow-wrap:anywhere!important;}
+.page-post-option b{font-size:13px!important;}
+.page-post-option small{margin-top:3px!important;color:var(--muted)!important;font-size:10px!important;line-height:1.35!important;}
+.page-post-option.danger{border-color:rgba(255,90,90,.15)!important;}
+.page-post-option.danger>span{background:rgba(255,75,75,.10)!important;}
+@media(max-width:620px){
+  .page-premium-modal{width:100vw!important;height:100dvh!important;max-height:100dvh!important;border-radius:18px 18px 0 0!important;}
+  .page-premium-modal .page-tabs-distinct{top:0!important;}
+  .page-post-options-modal{width:calc(100vw - 18px)!important;max-height:calc(100dvh - 18px)!important;border-radius:20px!important;padding:16px!important;}
+}
