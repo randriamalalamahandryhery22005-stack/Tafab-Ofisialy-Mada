@@ -3312,7 +3312,7 @@ async function genericListPage(route) {
       $("content").innerHTML = `<div class="card"><div class="page-header"><h2>Reels</h2><span class="muted">Découvrir</span></div>${rows.length?rows.map(p=>`<article class="post"><div class="post-head">${profileLink(p.author, avatarHTML(p.author), "profile-link profile-avatar-link")}<div class="meta">${profileLink(p.author, `<span class="post-author-name">${displayNameHTML(p.author)}</span>`, "profile-link profile-meta-link")}<span class="post-time"><small>${timeAgo(p.created_at)}</small></span></div></div>${p.content?`<div class="post-body">${esc(p.content)}</div>`:""}<video class="post-media" data-post-viewable="1" data-post-id="${esc(p.id)}" src="${esc(p.media_url)}" controls></video></article>`).join(""):`<div class="empty">Aucun Reel pour le moment.</div>`}</div>`;
       return;
     }
-    if (route === "pages") return navigate("home", {replaceStack:true});
+    if (route === "pages") return navigate("notifications", {replaceStack:true});
     if (route === "groups") return groupsV80Hub();
     if (route === "saved") {
       const token2=state.renderToken;
@@ -5331,7 +5331,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
 
   function navigate(route, options = {}) {
     // V97: Pages are fully removed from the application UI and routing.
-    if (route === "pages") route = "home";
+    if (route === "pages") route = "notifications";
     if (!routes.includes(route)) route = "home";
     if (document.body.classList.contains("modal-open")) closeModal();
     state.backOverride = null;
@@ -9323,11 +9323,10 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
 })();
 
 
-/* TAFAß V97 — FINAL PAGE PURGE / UI GUARD */
+/* TAFAß V98 — FINAL PAGE UI PURGE / ALERTES NAVIGATION */
 (() => {
   const purge = () => {
     document.querySelectorAll('[data-route="pages"], [data-action="page-open"], [data-action="page-profile"], [data-action="page-switch"], [data-action="toggle-page-follow"], [data-action="create-page"], [data-action="edit-page"], [data-action="new-page-menu"], [data-action="business-open-pages"], [data-v49-page], [data-v49-search-all]').forEach(el => {
-      if (el?.dataset?.action === 'page-back') return;
       el.remove();
     });
     document.querySelectorAll('.tafass-v82-pages,.page-detail,.page-premium-modal,.page-mode-feed,.page-context-banner,.page-menu-dashboard,.p91-page-menu,.tbs-page-main,.tbs-page-card').forEach(el => el.remove());
@@ -9338,5 +9337,5 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   };
   purge();
   new MutationObserver(purge).observe(document.body,{childList:true,subtree:true});
-  window.addEventListener('hashchange',()=>{ if(location.hash==='#pages') history.replaceState(null,'','#home'); });
+  window.addEventListener('hashchange',()=>{ if(location.hash==='#pages') history.replaceState(null,'','#notifications'); });
 })();
