@@ -50,27 +50,113 @@ function actorName(profile: any) {
 function routeFor(n: any) {
   const type = String(n?.type || "").toLowerCase();
   const entity = String(n?.entity_type || "").toLowerCase();
+  const notificationId = String(n?.id || "");
+  const entityId = String(n?.entity_id || n?.post_id || "");
 
-  if (
-    type.includes("message") ||
-    entity === "conversation"
-  ) {
-    return "#messages";
-  }
+  let route = "notifications";
+  const params = new URLSearchParams({
+    push: "1",
+    route,
+    ...(notificationId ? { notification: notificationId } : {})
+  });
 
-  if (entity === "post" || n?.post_id) {
-    return "#home";
-  }
-
-  if (
+  if (entity === "conversation" || type.includes("message")) {
+    route = "messages";
+    params.set("route", route);
+    const id = String(n?.entity_id || "");
+    if (id) params.set("conversation", id);
+  } else if (entity === "post" || n?.post_id) {
+    route = "home";
+    params.set("route", route);
+    const id = String(n?.post_id || n?.entity_id || "");
+    if (id) params.set("post", id);
+  } else if (entity === "page") {
+    route = "pages";
+    params.set("route", route);
+    if (entityId) params.set("entity", entityId);
+    params.set("entity_type", "page");
+  } else if (entity === "group") {
+    route = "groups";
+    params.set("route", route);
+    if (entityId) params.set("entity", entityId);
+    params.set("entity_type", "group");
+  } else if (entity === "profile") {
+    route = "profile";
+    params.set("route", route);
+    if (entityId) params.set("entity", entityId);
+    params.set("entity_type", "profile");
+  } else if (
     type.includes("friend") ||
     type.includes("follow") ||
     type.includes("request")
   ) {
-    return "#friends";
+    route = "friends";
+    params.set("route", route);
   }
 
-  return "#notifications";
+  return `https://tafab-ofisialy-mg.vercel.app/#${route}?${params.toString()}`;
+}
+
+function pushTargetFor(n: any) {
+  const type = String(n?.type || "").toLowerCase();
+  const entityType = String(n?.entity_type || "").toLowerCase();
+
+  if (entityType === "conversation" || type.includes("message")) {
+    return {
+      route: "messages",
+      notificationId: n?.id || "",
+      conversationId: n?.entity_id || "",
+      entityType: "conversation"
+    };
+  }
+
+  if (entityType === "post" || n?.post_id) {
+    return {
+      route: "home",
+      notificationId: n?.id || "",
+      postId: n?.post_id || n?.entity_id || "",
+      entityType: "post"
+    };
+  }
+
+  if (entityType === "page") {
+    return {
+      route: "pages",
+      notificationId: n?.id || "",
+      entityId: n?.entity_id || "",
+      entityType: "page"
+    };
+  }
+
+  if (entityType === "group") {
+    return {
+      route: "groups",
+      notificationId: n?.id || "",
+      entityId: n?.entity_id || "",
+      entityType: "group"
+    };
+  }
+
+  if (entityType === "profile") {
+    return {
+      route: "profile",
+      notificationId: n?.id || "",
+      entityId: n?.entity_id || "",
+      entityType: "profile"
+    };
+  }
+
+  return {
+    route:
+      type.includes("friend") ||
+      type.includes("follow") ||
+      type.includes("request")
+        ? "friends"
+        : "notifications",
+    notificationId: n?.id || "",
+    entityId: n?.entity_id || "",
+    entityType
+  };
 }
 
 Deno.serve(async (req) => {
@@ -219,6 +305,8 @@ Deno.serve(async (req) => {
       }
     }
 
+    const pushTarget = pushTargetFor(record);
+
     const body = JSON.stringify({
       title: "Tafaß",
       body: action || rawTitle,
@@ -231,11 +319,15 @@ Deno.serve(async (req) => {
 
       url: routeFor(record),
 
-      tag:
-        `tafass-${record?.id || crypto.randomUUID()}`,
+      route: pushTarget.route,
+      notification_id: pushTarget.notificationId || null,
+      conversation_id: pushTarget.conversationId || null,
+      post_id: pushTarget.postId || null,
+      entity_id: pushTarget.entityId || null,
+      entity_type: pushTarget.entityType || null,
 
-      notification_id:
-        record?.id || null,
+      tag:
+        `tafass-${record?.id || crypto.randomUUID()}`
     });
 
     let sent = 0;
