@@ -6759,3 +6759,58 @@ body.tafa-conversation-active .message-send-button span{display:none!important}
 .p89-page-bottom{height:28px}
 @media(max-width:600px){.tafass-v89-page-modal{inset:4px!important;width:calc(100vw - 8px)!important;height:calc(100dvh - 8px)!important;max-height:none!important;border-radius:21px!important}.tafass-v89-page-modal .p89-page-scroll{height:calc(100% - 58px)}.p89-page-topbar{height:58px;padding:0 8px}.p89-page-back{padding:0 9px}.p89-page-back b{font-size:9px}.p89-page-top-title strong{max-width:190px;font-size:11px}.p89-hero{height:190px}.p89-hero-label{left:14px;right:14px}.p89-page-head{padding:0 14px;margin-top:-43px;gap:10px}.p89-page-avatar{width:86px!important;height:86px!important;border-width:4px!important;border-radius:21px!important}.p89-page-title-block h1{font-size:20px}.p89-page-title-block p{font-size:9px;line-height:1.4;-webkit-line-clamp:2}.p89-page-stats{padding:14px 14px 3px;gap:6px}.p89-page-stats>div{padding:10px 5px}.p89-page-stats b{font-size:14px}.p89-page-stats span{font-size:7px}.p89-page-actions{padding:11px 14px;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 44px}.p89-page-tabs{padding:0 14px}.p89-page-tabs button{min-height:44px;font-size:9px}.p89-page-composer{margin:13px 14px;padding:12px}.p89-page-tab-panel{padding:14px 14px 0}.p89-section-head h2{font-size:17px}.p89-info-grid{grid-template-columns:1fr!important}.p89-info-grid .wide{grid-column:auto}.p89-post-text{font-size:11px}.p89-post-actions button{font-size:8px}}
 @media(max-width:390px){.p89-page-head{align-items:center}.p89-page-avatar{width:78px!important;height:78px!important}.p89-page-title-block h1{font-size:18px}.p89-page-actions{gap:6px}.p89-action b{font-size:9px}.p89-action{min-height:42px}}
+
+
+/* ============================================================
+   TAFAß V90 — PAGE DETAIL SCROLL + PUBLICATION OPTIONS
+   Fix mobile touch scrolling and replace the publication ellipsis
+   with a complete, separated premium action sheet.
+============================================================ */
+.tafass-v89-page-modal{
+  height:min(94dvh,900px)!important;
+  max-height:94dvh!important;
+  min-height:0!important;
+  overflow:hidden!important;
+  display:flex!important;
+  flex-direction:column!important;
+}
+.tafass-v89-page-modal .p89-page-topbar{
+  flex:0 0 58px!important;
+}
+.tafass-v89-page-modal .p89-page-scroll{
+  flex:1 1 auto!important;
+  min-height:0!important;
+  height:auto!important;
+  max-height:none!important;
+  overflow-y:auto!important;
+  overflow-x:hidden!important;
+  -webkit-overflow-scrolling:touch!important;
+  overscroll-behavior-y:contain!important;
+  touch-action:pan-y!important;
+  scroll-behavior:smooth!important;
+  padding-bottom:calc(34px + env(safe-area-inset-bottom))!important;
+}
+.tafass-v89-page-modal .p89-page-scroll::-webkit-scrollbar{width:0;height:0}
+.tafass-v89-page-modal .p89-post{position:relative;overflow:hidden!important}
+.tafass-v89-page-modal .p89-post-head{display:flex!important;align-items:center!important;gap:9px!important}
+.tafass-v89-page-modal .p89-post-head>div:first-child{min-width:0!important;flex:1!important}
+.tafass-v89-page-modal .p89-post-options{flex:0 0 40px!important;width:40px!important;height:40px!important;min-height:40px!important;border:1px solid rgba(255,255,255,.08)!important;border-radius:12px!important;background:#0d1b13!important;color:#c7d9cd!important;font-size:17px!important;letter-spacing:1px!important;display:grid!important;place-items:center!important;cursor:pointer!important}
+.tafass-v89-page-modal .p89-post-options:active{transform:scale(.96);background:#13251a!important}
+.page-post-options-modal,.page-post-edit-modal{width:min(520px,calc(100vw - 18px))!important;border-radius:22px!important;background:linear-gradient(145deg,#0b1811,#07100b)!important;border:1px solid rgba(118,232,164,.15)!important}
+.page-post-options-list{display:grid!important;gap:8px!important;margin-top:14px!important}
+.page-post-option{display:flex!important;align-items:center!important;gap:12px!important;width:100%!important;min-height:62px!important;padding:10px 12px!important;border:1px solid rgba(255,255,255,.07)!important;border-radius:15px!important;background:rgba(255,255,255,.025)!important;color:#e5f1e9!important;text-align:left!important;cursor:pointer!important}
+.page-post-option>span{width:38px!important;height:38px!important;flex:0 0 38px!important;border-radius:11px!important;display:grid!important;place-items:center!important;background:rgba(45,222,126,.09)!important;color:#6ce8a2!important;font-size:17px!important}
+.page-post-option>div{min-width:0!important;display:grid!important;gap:3px!important}
+.page-post-option b{font-size:11px!important}
+.page-post-option small{font-size:8px!important;color:#71877a!important;line-height:1.35!important}
+.page-post-option.danger{border-color:rgba(255,90,105,.14)!important}
+.page-post-option.danger>span{background:rgba(255,90,105,.09)!important;color:#ff8792!important}
+.page-post-edit-modal #pagePostEditText{width:100%!important;min-height:150px!important;box-sizing:border-box!important;resize:vertical!important;line-height:1.55!important}
+.page-post-edit-actions{display:grid!important;grid-template-columns:1fr 1fr!important;gap:8px!important;margin-top:10px!important}
+.page-post-edit-actions button{min-height:42px!important;border-radius:12px!important}
+@media(max-width:600px){
+  .tafass-v89-page-modal{inset:0!important;width:100vw!important;height:100dvh!important;max-height:100dvh!important;border-radius:0!important}
+  .tafass-v89-page-modal .p89-page-scroll{padding-bottom:calc(54px + env(safe-area-inset-bottom))!important}
+  .page-post-options-modal,.page-post-edit-modal{width:calc(100vw - 14px)!important;max-width:none!important;border-radius:20px!important}
+  .page-post-option{min-height:58px!important}
+}

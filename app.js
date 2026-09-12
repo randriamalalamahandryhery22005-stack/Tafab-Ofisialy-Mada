@@ -6041,6 +6041,39 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     await enterApp();
   }
 
+  async function pagePostMenu(postId,pageId){
+    const [{data:post,error:postErr},{data:page,error:pageErr}]=await Promise.all([
+      sb.from('page_posts').select('*').eq('id',postId).maybeSingle(),
+      sb.from('pages').select('id,name,owner_id').eq('id',pageId).maybeSingle()
+    ]);
+    if(postErr||!post)return toast(postErr?.message||'Publication introuvable.');
+    if(pageErr||!page)return toast(pageErr?.message||'Page introuvable.');
+    const {data:member}=await sb.from('page_members').select('role').eq('page_id',pageId).eq('user_id',state.user.id).maybeSingle();
+    const canManage=String(page.owner_id)===String(state.user.id)||['owner','admin'].includes(String(member?.role||''));
+    const canEdit=String(post.user_id)===String(state.user.id)&&canManage;
+    const canDelete=canManage;
+    const link=`${location.origin}${location.pathname}#/pages/${pageId}?post=${encodeURIComponent(postId)}`;
+    openModal(`<div class="modal-box page-post-options-modal">
+      <button class="modal-close" data-action="close-modal">×</button>
+      <span class="eyebrow">TAFAß · PUBLICATION</span>
+      <h3>Options de la publication</h3>
+      <p class="muted">${esc(page.name)} · choisissez une action.</p>
+      <div class="page-post-options-list">
+        <button class="page-post-option" data-action="copy-page-post-link" data-link="${esc(link)}"><span>↗</span><div><b>Copier le lien</b><small>Partager directement cette publication.</small></div></button>
+        ${canEdit?`<button class="page-post-option" data-action="edit-page-post" data-id="${esc(postId)}" data-entity-id="${esc(pageId)}"><span>✎</span><div><b>Modifier</b><small>Modifier le texte de cette publication.</small></div></button>`:''}
+        ${canDelete?`<button class="page-post-option danger" data-action="delete-page-post" data-id="${esc(postId)}" data-entity-id="${esc(pageId)}"><span>⌫</span><div><b>Supprimer</b><small>Supprimer définitivement cette publication.</small></div></button>`:''}
+      </div>
+    </div>`);
+  }
+
+  async function editPagePost(postId,pageId){
+    const {data:post,error}=await sb.from('page_posts').select('id,content,user_id').eq('id',postId).maybeSingle();
+    if(error||!post)return toast(error?.message||'Publication introuvable.');
+    if(String(post.user_id)!==String(state.user.id))return toast('Vous ne pouvez modifier que votre publication.');
+    openModal(`<div class="modal-box page-post-edit-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß · MODIFICATION</span><h3>Modifier la publication</h3><textarea id="pagePostEditText" class="premium-input" maxlength="5000" placeholder="Votre publication…">${esc(post.content||'')}</textarea><div class="page-post-edit-actions"><button class="secondary" data-action="close-modal">Annuler</button><button class="primary" data-action="save-page-post-edit" data-id="${esc(postId)}" data-entity-id="${esc(pageId)}">Enregistrer</button></div></div>`);
+    setTimeout(()=>$('pagePostEditText')?.focus(),50);
+  }
+
   async function pagePostReaction(postId, pageId){
     const {data:mine,error:readErr}=await sb.from('page_post_reactions').select('id').eq('page_post_id',postId).eq('user_id',state.user.id).maybeSingle();
     if(readErr)return toast(readErr.message);
@@ -6877,6 +6910,16 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       const r=await sb.from('page_posts').insert({page_id:id,user_id:state.user.id,content:content||'',media_url,media_type,visibility:'public'});
       setLoading(btn,false,'Publier'); if(r.error)return toast(r.error.message); toast('Publication publiée.'); return openPageDetail(id);
     }
+    if (action === "page-post-menu") return pagePostMenu(id, actionEl.dataset.entityId);
+    if (action === "copy-page-post-link") { const link=actionEl.dataset.link||''; try{await navigator.clipboard.writeText(link); toast('Lien de la publication copié.');}catch{toast('Impossible de copier le lien.');} return; }
+    if (action === "edit-page-post") return editPagePost(id, actionEl.dataset.entityId);
+    if (action === "save-page-post-edit") {
+      const pageId=actionEl.dataset.entityId, text=$('pagePostEditText')?.value.trim()||'';
+      if(!text)return toast('La publication ne peut pas être vide.');
+      const r=await sb.from('page_posts').update({content:text}).eq('id',id).eq('user_id',state.user.id);
+      if(r.error)return toast(r.error.message);
+      closeModal(); toast('Publication modifiée.'); return openPageDetail(pageId);
+    }
     if (action === "page-post-like") return pagePostReaction(id, actionEl.dataset.entityId);
     if (action === "page-post-comment") return pagePostComment(id, actionEl.dataset.entityId);
     if (action === "page-send-comment") {
@@ -7252,7 +7295,21 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       const r=await sb.from("group_posts").insert({group_id:id,user_id:state.user.id,content:content||"",media_url,media_type}).select().single(); if(r.error)return toast(r.error.message); toast("Publication publiée dans le groupe");
       return document.querySelector(`[data-action="group-open"][data-id="${id}"]`)?.click() || closeModal();
     }
-    if (action === "delete-page-post") { const r=await sb.from("page_posts").delete().eq("id",id); if(r.error)return toast(r.error.message); toast("Publication supprimée"); return openPageDetail(actionEl.dataset.entityId); }
+    if (action === "delete-page-post") {
+      const pageId=actionEl.dataset.entityId;
+      const [{data:post},{data:page},{data:member}]=await Promise.all([
+        sb.from('page_posts').select('user_id').eq('id',id).maybeSingle(),
+        sb.from('pages').select('owner_id').eq('id',pageId).maybeSingle(),
+        sb.from('page_members').select('role').eq('page_id',pageId).eq('user_id',state.user.id).maybeSingle()
+      ]);
+      const allowed=post && page && (String(post.user_id)===String(state.user.id) || String(page.owner_id)===String(state.user.id) || ['owner','admin'].includes(String(member?.role||'')));
+      if(!allowed)return toast('Vous n’avez pas les droits pour supprimer cette publication.');
+      const ok=window.confirm('Supprimer définitivement cette publication ?');
+      if(!ok)return;
+      const r=await sb.from("page_posts").delete().eq("id",id);
+      if(r.error)return toast(r.error.message);
+      closeModal(); toast("Publication supprimée"); return openPageDetail(pageId);
+    }
   });
 
   // Auth UI — bound explicitly so login/signup/recovery remain clickable even while the app is loading.
@@ -9269,7 +9326,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       const mine=reactions.some(r=>String(r.user_id)===String(state.user.id));
       const preview=comments.slice(-2).map(c=>`<div class="v82-comment"><span>${avatarHTML(c.profiles||{},'avatar v82-comment-avatar')}</span><div><b>${esc(nameOf(c.profiles||{}))}</b><p>${esc(c.content||'')}</p><small>${timeAgo(c.created_at)}</small></div></div>`).join('');
       return `<article class="v82-post" data-page-post="${esc(p.id)}">
-        <header class="v82-post-head"><div>${entityAvatarHTML(x,'page','v82-post-avatar')}<div><b>${esc(x.name)}</b><small>${timeAgo(p.created_at)} · Page</small></div></div>${(p.user_id===state.user.id||canManage)?`<button type="button" class="v82-icon" data-action="delete-page-post" data-id="${esc(p.id)}" data-entity-id="${esc(id)}" aria-label="Options">•••</button>`:''}</header>
+        <header class="v82-post-head"><div>${entityAvatarHTML(x,'page','v82-post-avatar')}<div><b>${esc(x.name)}</b><small>${timeAgo(p.created_at)} · Page</small></div></div>${(p.user_id===state.user.id||canManage)?`<button type="button" class="v82-icon p89-post-options" data-action="page-post-menu" data-id="${esc(p.id)}" data-entity-id="${esc(id)}" aria-label="Options de la publication">•••</button>`:''}</header>
         ${p.content?`<div class="v82-post-text">${esc(p.content)}</div>`:''}
         ${p.media_url?(String(p.media_type||'').startsWith('video')?`<video class="v82-post-media" src="${esc(p.media_url)}" controls playsinline preload="metadata"></video>`:`<img class="v82-post-media" src="${esc(p.media_url)}" alt="Publication" loading="lazy">`):''}
         <div class="v82-post-stats"><span>${reactions.length} réaction${reactions.length===1?'':'s'}</span><span>${comments.length} commentaire${comments.length===1?'':'s'}</span><span>${shares.length} partage${shares.length===1?'':'s'}</span></div>
