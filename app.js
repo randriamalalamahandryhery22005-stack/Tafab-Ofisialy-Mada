@@ -6049,20 +6049,24 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if(postErr||!post)return toast(postErr?.message||'Publication introuvable.');
     if(pageErr||!page)return toast(pageErr?.message||'Page introuvable.');
     const {data:member}=await sb.from('page_members').select('role').eq('page_id',pageId).eq('user_id',state.user.id).maybeSingle();
-    const canManage=String(page.owner_id)===String(state.user.id)||['owner','admin'].includes(String(member?.role||''));
-    const canEdit=String(post.user_id)===String(state.user.id)&&canManage;
+    const canManage=String(page.owner_id)===String(state.user.id)||['owner','admin','editor'].includes(String(member?.role||''))||state.__isAdmin===true;
+    const canEdit=String(post.user_id)===String(state.user.id)||canManage;
     const canDelete=canManage;
     const link=`${location.origin}${location.pathname}#/pages/${pageId}?post=${encodeURIComponent(postId)}`;
-    openModal(`<div class="modal-box page-post-options-modal">
-      <button class="modal-close" data-action="close-modal">×</button>
-      <span class="eyebrow">TAFAß · PUBLICATION</span>
-      <h3>Options de la publication</h3>
-      <p class="muted">${esc(page.name)} · choisissez une action.</p>
-      <div class="page-post-options-list">
-        <button class="page-post-option" data-action="copy-page-post-link" data-link="${esc(link)}"><span>↗</span><div><b>Copier le lien</b><small>Partager directement cette publication.</small></div></button>
-        ${canEdit?`<button class="page-post-option" data-action="edit-page-post" data-id="${esc(postId)}" data-entity-id="${esc(pageId)}"><span>✎</span><div><b>Modifier</b><small>Modifier le texte de cette publication.</small></div></button>`:''}
-        ${canDelete?`<button class="page-post-option danger" data-action="delete-page-post" data-id="${esc(postId)}" data-entity-id="${esc(pageId)}"><span>⌫</span><div><b>Supprimer</b><small>Supprimer définitivement cette publication.</small></div></button>`:''}
+    openModal(`<div class="modal-box page-post-options-modal p91-post-menu">
+      <div class="p91-sheet-handle"></div>
+      <div class="p91-post-menu-head">
+        <div class="p91-menu-icon">•••</div>
+        <div><span class="eyebrow">TAFAß · PUBLICATION</span><h3>Options de la publication</h3><p>${esc(page.name)}</p></div>
       </div>
+      <div class="page-post-options-list">
+        <button class="page-post-option" data-action="copy-page-post-link" data-link="${esc(link)}"><span>↗</span><div><b>Copier le lien</b><small>Conserver ou partager le lien exact</small></div></button>
+        <button class="page-post-option" data-action="page-post-share" data-id="${esc(postId)}" data-entity-id="${esc(pageId)}"><span>⌁</span><div><b>Partager</b><small>Partager cette publication sur Tafaß</small></div></button>
+        ${canEdit?`<button class="page-post-option" data-action="edit-page-post" data-id="${esc(postId)}" data-entity-id="${esc(pageId)}"><span>✎</span><div><b>Modifier</b><small>Modifier le contenu de la publication</small></div></button>`:''}
+        ${canDelete?`<button class="page-post-option danger" data-action="delete-page-post" data-id="${esc(postId)}" data-entity-id="${esc(pageId)}"><span>⌫</span><div><b>Supprimer</b><small>Supprimer définitivement cette publication</small></div></button>`:''}
+        ${!canEdit?`<button class="page-post-option" data-action="page-post-report" data-id="${esc(postId)}" data-entity-id="${esc(pageId)}"><span>⚑</span><div><b>Signaler la publication</b><small>Signaler un contenu qui ne respecte pas les règles</small></div></button>`:''}
+      </div>
+      <button class="p91-menu-cancel" data-action="close-modal">Annuler</button>
     </div>`);
   }
 
@@ -6216,11 +6220,72 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
 
   async function pageMore(id){
     const {data:p,error}=await sb.from('pages').select('id,name,owner_id,username,deletion_status,deletion_scheduled_at').eq('id',id).maybeSingle();
-    if(error||!p) return toast(error?.message||'Page introuvable.');
+    if(error||!p)return toast(error?.message||'Page introuvable.');
     const {data:m}=await sb.from('page_members').select('role').eq('page_id',id).eq('user_id',state.user.id).maybeSingle();
-    const isAdmin=p.owner_id===state.user.id || m?.role==='admin' || state.__isAdmin===true;
-    openModal(`<div class="modal-box page-more-menu-modal"><button class="modal-close" data-action="close-modal">×</button><div class="more-menu-hero"><span class="eyebrow">TAFAß • ${esc(p.name)}</span><h3>Plus d’options</h3>${p.deletion_status==='pending_deletion'?`<div class="tfa-v80-deletion-alert">⚠ Suppression prévue le ${new Date(p.deletion_scheduled_at).toLocaleDateString('fr-FR')} · 15 jours pour annuler</div>`:""}<p>Gérez ou partagez cette Page selon vos droits.</p></div><div class="more-menu-grid"><button class="more-menu-item" data-action="page-invite-friends" data-id="${esc(id)}"><span>👥</span><div><b>Inviter des amis</b><small>Envoyer une invitation à suivre la Page</small></div></button><button class="more-menu-item" data-action="page-share" data-id="${esc(id)}"><span>↗</span><div><b>Partager la Page</b><small>Partager avec vos contacts</small></div></button><button class="more-menu-item" data-action="page-copy-link" data-id="${esc(id)}"><span>🔗</span><div><b>Copier le lien</b><small>Copier l’adresse de la Page</small></div></button>${isAdmin?`<button class="more-menu-item" data-action="page-team" data-id="${esc(id)}"><span>♛</span><div><b>Équipe & rôles</b><small>Administrateurs, éditeurs et modérateurs</small></div></button>`:""}${isAdmin?`<button class="more-menu-item danger" data-action="page-request-delete" data-id="${esc(id)}"><span>🗑</span><div><b>Supprimer la Page</b><small>Récupérable pendant 15 jours</small></div></button>`:""}${p.owner_id===state.user.id && p.deletion_status==='pending_deletion'?`<button class="more-menu-item" data-action="page-cancel-delete" data-id="${esc(id)}"><span>↶</span><div><b>Annuler la suppression</b><small>Réactiver la Page avant l’échéance</small></div></button>`:""}${isAdmin?`<button class="more-menu-item" data-action="edit-page" data-id="${esc(id)}"><span>⚙</span><div><b>Gérer la Page</b><small>Informations, équipe et paramètres</small></div></button>`:''}<button class="more-menu-item" data-action="page-report" data-id="${esc(id)}"><span>⚑</span><div><b>Signaler la Page</b><small>Signaler un problème</small></div></button></div></div>`);
+    const ownerMe=String(p.owner_id)===String(state.user.id);
+    const isManager=ownerMe||['owner','admin','editor'].includes(String(m?.role||''))||state.__isAdmin===true;
+
+    if(!isManager){
+      openModal(`<div class="modal-box page-more-menu-modal p91-page-menu">
+        <div class="p91-sheet-handle"></div>
+        <div class="p91-owner-menu-head">
+          <div class="p91-page-menu-avatar">${entityAvatarHTML(p,'page','p91-menu-avatar')}</div>
+          <div><span class="eyebrow">TAFAß · PAGE</span><h3>${esc(p.name)}</h3><small>${esc(p.category||'Page')} · espace public</small></div>
+        </div>
+        <div class="p91-page-menu-list">
+          <button class="p91-page-menu-item" data-action="toggle-page-follow" data-id="${esc(id)}"><span>＋</span><div><b>Suivre la Page</b><small>Recevoir les actualités de cette Page</small></div></button>
+          <button class="p91-page-menu-item" data-action="page-contact" data-id="${esc(id)}"><span>✉</span><div><b>Envoyer un message</b><small>Contacter directement la Page</small></div></button>
+          <button class="p91-page-menu-item" data-action="page-share" data-id="${esc(id)}"><span>↗</span><div><b>Partager la Page</b><small>Partager cette Page avec vos contacts</small></div></button>
+          <button class="p91-page-menu-item" data-action="page-copy-link" data-id="${esc(id)}"><span>⌁</span><div><b>Copier le lien</b><small>Copier le lien public de la Page</small></div></button>
+          <button class="p91-page-menu-item" data-action="page-report" data-id="${esc(id)}"><span>⚑</span><div><b>Signaler la Page</b><small>Signaler un problème concernant cette Page</small></div></button>
+        </div>
+        <button class="p91-menu-cancel" data-action="close-modal">Annuler</button>
+      </div>`);
+      return;
+    }
+
+    openModal(`<div class="modal-box page-more-menu-modal p91-page-menu p91-page-owner-menu">
+      <div class="p91-sheet-handle"></div>
+      <div class="p91-owner-menu-head">
+        <div class="p91-page-menu-avatar">${entityAvatarHTML(p,'page','p91-menu-avatar')}</div>
+        <div><span class="eyebrow">TAFAß · GESTION DE PAGE</span><h3>${esc(p.name)}</h3><small>Outils professionnels et gestion</small></div>
+      </div>
+      ${p.deletion_status==='pending_deletion'?`<div class="tfa-v80-deletion-alert">⚠ Suppression prévue le ${new Date(p.deletion_scheduled_at).toLocaleDateString('fr-FR')} · 15 jours pour annuler</div>`:''}
+      <div class="p91-page-menu-section"><span>OUTILS</span></div>
+      <div class="p91-page-menu-list">
+        <button class="p91-page-menu-item" data-action="page-promote" data-id="${esc(id)}"><span>📣</span><div><b>Promouvoir</b><small>Développer la portée des publications de la Page</small></div></button>
+        <button class="p91-page-menu-item" data-action="page-status" data-id="${esc(id)}"><span>◉</span><div><b>Statut de la Page</b><small>Vérifier l’état et la visibilité de votre Page</small></div></button>
+        <button class="p91-page-menu-item" data-action="page-action-button" data-id="${esc(id)}"><span>⌁</span><div><b>Modifier le bouton d’action</b><small>Configurer l’action principale affichée aux visiteurs</small></div></button>
+        <button class="p91-page-menu-item" data-action="page-archive" data-id="${esc(id)}"><span>▣</span><div><b>Archive</b><small>Consulter les éléments archivés de la Page</small></div></button>
+        <button class="p91-page-menu-item" data-action="page-activity" data-id="${esc(id)}"><span>☷</span><div><b>Historique d’activité</b><small>Voir les actions réalisées sur la Page</small></div></button>
+        <button class="p91-page-menu-item" data-action="page-review" data-id="${esc(id)}"><span>▤</span><div><b>Examiner les publications et les identifications</b><small>Contrôler les contenus associés à la Page</small></div></button>
+        <button class="p91-page-menu-item" data-action="page-feature" data-id="${esc(id)}"><span>✦</span><div><b>Ajouter des éléments à la une</b><small>Mettre en avant les contenus importants</small></div></button>
+        <button class="p91-page-menu-item" data-action="page-search" data-id="${esc(id)}"><span>⌕</span><div><b>Rechercher</b><small>Rechercher dans les contenus de la Page</small></div></button>
+        <button class="p91-page-menu-item" data-action="page-invite-friends" data-id="${esc(id)}"><span>♙</span><div><b>Inviter des personnes à entrer en contact</b><small>Inviter vos amis à découvrir la Page</small></div></button>
+        <button class="p91-page-menu-item" data-action="page-copy-link" data-id="${esc(id)}"><span>🔗</span><div><b>Copier le lien sur la Page</b><small>Copier l’adresse publique de la Page</small></div></button>
+      </div>
+      <div class="p91-page-menu-section"><span>ADMINISTRATION</span></div>
+      <div class="p91-page-menu-list">
+        <button class="p91-page-menu-item" data-action="page-team" data-id="${esc(id)}"><span>♛</span><div><b>Équipe et rôles</b><small>Administrateurs, éditeurs et gestionnaires</small></div></button>
+        <button class="p91-page-menu-item" data-action="edit-page" data-id="${esc(id)}"><span>⚙</span><div><b>Paramètres et informations</b><small>Identité, coordonnées, visuels et configuration</small></div></button>
+        ${ownerMe&&p.deletion_status==='pending_deletion'?`<button class="p91-page-menu-item" data-action="page-cancel-delete" data-id="${esc(id)}"><span>↶</span><div><b>Annuler la suppression</b><small>Réactiver la Page avant l’échéance</small></div></button>`:''}
+      </div>
+      <button class="p91-menu-cancel" data-action="close-modal">Fermer</button>
+    </div>`);
   }
+
+  async function pageOwnerMenuInfo(id,title,text,actionLabel='Ouvrir'){
+    openModal(`<div class="modal-box p91-info-modal"><div class="p91-sheet-handle"></div><span class="eyebrow">TAFAß · PAGE</span><h3>${esc(title)}</h3><p>${esc(text)}</p><button class="primary big" data-action="${esc(actionLabel==='Gérer'?'edit-page':'close-modal')}" data-id="${esc(id)}">${esc(actionLabel)}</button></div>`);
+  }
+
+  async function pageStatus(id){ return pageOwnerMenuInfo(id,'Statut de la Page','Votre Page est actuellement visible et accessible aux visiteurs.','Fermer'); }
+  async function pagePromote(id){ return pageOwnerMenuInfo(id,'Promouvoir','Les outils de promotion permettent de développer la portée de vos contenus.','Fermer'); }
+  async function pageArchive(id){ return pageOwnerMenuInfo(id,'Archive','La gestion des éléments archivés sera centralisée ici sans modifier vos publications actives.','Fermer'); }
+  async function pageActivity(id){ closeModal(); return pageOwnerMenuInfo(id,'Historique d’activité','Les actions de gestion et de publication de la Page sont suivies dans votre historique.','Fermer'); }
+  async function pageReview(id){ return pageOwnerMenuInfo(id,'Publications et identifications','Utilisez cet espace pour contrôler les contenus associés à votre Page avant de les mettre en avant.','Fermer'); }
+  async function pageFeature(id){ return pageOwnerMenuInfo(id,'À la une','Les contenus importants de la Page pourront être regroupés ici.','Fermer'); }
+  async function pageSearch(id){ closeModal(); return toast('Recherche de Page prête à être utilisée.'); }
+  async function pageActionButton(id){ return pageOwnerMenuInfo(id,'Bouton d’action','La configuration du bouton principal de la Page est disponible dans les paramètres de gestion.','Gérer'); }
 
   async function pageInviteFriends(id){
     const {data:friends,error}=await sb.from('friendships').select('user_id,friend_id').or(`user_id.eq.${state.user.id},friend_id.eq.${state.user.id}`).limit(200);
@@ -7281,6 +7346,14 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if (action === "page-profile") { state.entityBackRoute = state.route || "pages"; return openPageDetail(id); }
     if (action === "page-open") { state.entityBackRoute = pageModeActive() && state.activePage?.id===id ? "home" : (state.route || "pages"); return openPageDetail(id); }
     if (action === "page-more") return pageMore(id);
+    if (action === "page-promote") return pagePromote(id);
+    if (action === "page-status") return pageStatus(id);
+    if (action === "page-action-button") return pageActionButton(id);
+    if (action === "page-archive") return pageArchive(id);
+    if (action === "page-activity") return pageActivity(id);
+    if (action === "page-review") return pageReview(id);
+    if (action === "page-feature") return pageFeature(id);
+    if (action === "page-search") return pageSearch(id);
     if (action === "page-post-more") return pagePostMore(id, actionEl.dataset.entityId);
     if (action === "page-post-copy-link") return pagePostCopyLink(id, actionEl.dataset.entityId);
     if (action === "page-post-share") return pagePostShare(id, actionEl.dataset.entityId);
@@ -9381,34 +9454,49 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     const team=(members.data||[]).map(m=>`<div class="v82-team-row">${avatarHTML(m.profiles||{},'avatar v82-team-avatar')}<div><b>${esc(nameOf(m.profiles||{}))}</b><small>${esc(m.role||'editor')}</small></div>${canManage&&String(m.user_id)!==String(state.user.id)?`<button type="button" class="v82-icon" data-action="page-member-menu" data-id="${esc(m.user_id)}" data-entity-id="${esc(id)}">•••</button>`:''}</div>`).join('')||`<div class="v82-muted">Aucun gestionnaire supplémentaire.</div>`;
     const about=`<div class="v82-info-grid"><div><small>Catégorie</small><b>${esc(x.category||'Autre')}</b></div><div><small>Créée le</small><b>${new Date(x.created_at).toLocaleDateString('fr-FR')}</b></div><div><small>Responsable</small><b>${esc(owner.data?nameOf(owner.data):'Membre Tafaß')}</b></div><div><small>Adresse</small><b>${esc(x.address||owner.data?.city_current||'Non renseignée')}</b></div>${x.contact_email?`<div><small>E-mail</small><b>${esc(x.contact_email)}</b></div>`:''}${x.contact_phone?`<div><small>Téléphone</small><b>${esc(x.contact_phone)}</b></div>`:''}${x.website_url?`<div class="wide"><small>Site web</small><b>${esc(x.website_url)}</b></div>`:''}</div>`;
     setupTafaV80Realtime('page',id);
-    openModal(`<div class="modal-box page-detail tafass-v89-page-modal" data-page-id="${esc(id)}">
-      <header class="p89-page-topbar">
-        <button type="button" class="p89-page-back" data-action="close-entity" data-route-back="${esc(state.entityBackRoute||'pages')}" aria-label="Retour"><span>‹</span><b>Retour</b></button>
-        <div class="p89-page-top-title"><span>TAFAß · PAGE</span><strong>${esc(x.name)}</strong></div>
-        <button type="button" class="p89-page-icon" data-action="page-more" data-id="${esc(id)}" aria-label="Options">•••</button>
+    openModal(`<div class="modal-box page-detail tafass-v91-page-modal" data-page-id="${esc(id)}">
+      <header class="p91-page-topbar">
+        <button type="button" class="p91-page-back" data-action="close-entity" data-route-back="${esc(state.entityBackRoute||'pages')}" aria-label="Retour"><span>‹</span><b>Retour</b></button>
+        <div class="p91-page-top-title"><span>TAFAß · PAGE</span><strong>${esc(x.name)}</strong></div>
+        <button type="button" class="p91-page-icon" data-action="page-more" data-id="${esc(id)}" aria-label="Plus d’options">•••</button>
       </header>
-      <div class="p89-page-scroll">
-        <section class="p89-hero" ${x.cover_url?`style="background-image:url('${esc(x.cover_url)}')"`:''}>
-          <div class="p89-hero-shade"></div>
-          <div class="p89-hero-label"><span>PAGE OFFICIELLE</span><b>${esc(x.category||'Communauté')}</b></div>
+      <div class="p91-page-scroll">
+        <section class="p91-cover" ${x.cover_url?`style="background-image:url('${esc(x.cover_url)}')"`:''}>
+          <div class="p91-cover-shade"></div>
+          <div class="p91-cover-meta"><span>PAGE OFFICIELLE</span><b>${esc(x.category||'Communauté')}</b></div>
         </section>
-        <section class="p89-page-head">
-          <div class="p89-page-avatar-wrap">${entityAvatarHTML(x,'page','p89-page-avatar')}<span class="p89-page-badge" aria-label="Page">✓</span></div>
-          <div class="p89-page-title-block"><h1>${esc(x.name)}</h1><p>${esc(x.bio||'Présentez votre activité, votre communauté et vos actualités.')}</p></div>
+        <section class="p91-identity">
+          <div class="p91-avatar-wrap">${entityAvatarHTML(x,'page','p91-page-avatar')}<span class="p91-verified">✓</span></div>
+          <div class="p91-identity-main">
+            <h1>${esc(x.name)}</h1>
+            <p class="p91-category">${esc(x.category||'Page')} · ${followerCount} abonné${followerCount===1?'':'s'}</p>
+            <p class="p91-bio">${esc(x.bio||'Présentez votre activité, votre communauté et vos actualités.')}</p>
+          </div>
         </section>
-        <section class="p89-page-stats" aria-label="Statistiques">
+        <section class="p91-stats">
           <div><b>${followerCount}</b><span>Abonnés</span></div>
           <div><b>${postsRows.length}</b><span>Publications</span></div>
           <div><b>${esc(x.category||'Page')}</b><span>Catégorie</span></div>
         </section>
-        <section class="p89-page-actions">
-          ${ownerMe?`<button type="button" class="p89-action p89-action-primary" data-action="page-switch" data-id="${esc(id)}"><span>⇄</span><b>Basculer</b></button><button type="button" class="p89-action" data-action="edit-page" data-id="${esc(id)}"><span>⚙</span><b>Gérer</b></button>`:`<button type="button" class="p89-action p89-action-primary" data-action="toggle-page-follow" data-id="${esc(id)}"><span>${follow.data?'✓':'＋'}</span><b>${follow.data?'Suivie':'Suivre'}</b></button><button type="button" class="p89-action" data-action="page-contact" data-id="${esc(id)}"><span>✉</span><b>Messages</b></button>`}
-          <button type="button" class="p89-action p89-action-square" data-action="page-profile" data-id="${esc(id)}" aria-label="Profil de la Page"><span>◉</span></button>
+        <section class="p91-page-actions">
+          ${ownerMe
+            ? `<button type="button" class="p91-action p91-action-primary" data-action="page-switch" data-id="${esc(id)}"><span>⇄</span><b>Basculer</b></button>
+               <button type="button" class="p91-action" data-action="edit-page" data-id="${esc(id)}"><span>⚙</span><b>Gérer</b></button>
+               <button type="button" class="p91-action" data-action="page-invite-friends" data-id="${esc(id)}"><span>♙</span><b>Inviter</b></button>`
+            : `<button type="button" class="p91-action p91-action-primary" data-action="toggle-page-follow" data-id="${esc(id)}"><span>${follow.data?'✓':'＋'}</span><b>${follow.data?'Suivie':'Suivre'}</b></button>
+               <button type="button" class="p91-action" data-action="page-contact" data-id="${esc(id)}"><span>✉</span><b>Message</b></button>
+               <button type="button" class="p91-action" data-action="page-share" data-id="${esc(id)}"><span>↗</span><b>Partager</b></button>`}
         </section>
-        <nav class="p89-page-tabs" role="tablist">
+        ${ownerMe?`<section class="p91-owner-tools">
+          <button data-action="edit-page" data-id="${esc(id)}"><span>▣</span><div><b>Profil de la Page</b><small>Identité, visuels et informations</small></div><i>›</i></button>
+          <button data-action="page-invite-friends" data-id="${esc(id)}"><span>♙</span><div><b>Inviter des amis</b><small>Développer la communauté</small></div><i>›</i></button>
+          <button data-action="page-team" data-id="${esc(id)}"><span>♛</span><div><b>Outils de la Page</b><small>Équipe, rôles et gestion</small></div><i>›</i></button>
+          <button data-action="edit-page" data-id="${esc(id)}"><span>⚙</span><div><b>Paramètres</b><small>Configurer votre Page</small></div><i>›</i></button>
+        </section>`:''}
+        <nav class="p91-page-tabs" role="tablist">
           <button type="button" class="active" data-action="page-tab" data-tab="posts" data-id="${esc(id)}">Publications</button>
           <button type="button" data-action="page-tab" data-tab="about" data-id="${esc(id)}">À propos</button>
-          <button type="button" data-action="page-tab" data-tab="team" data-id="${esc(id)}">Équipe</button>
+          ${ownerMe?`<button type="button" data-action="page-tab" data-tab="team" data-id="${esc(id)}">Équipe</button>`:`<button type="button" data-action="page-tab" data-tab="community" data-id="${esc(id)}">Communauté</button>`}
         </nav>
         ${canPublish?`<section class="p89-page-composer"><div class="p89-composer-title"><span>✦</span><div><b>Publier en tant que ${esc(x.name)}</b><small>${myRole==='editor'?'Éditeur':'Gestionnaire'}</small></div></div><textarea id="pagePostText" maxlength="5000" placeholder="Partagez une actualité avec vos abonnés…"></textarea><div class="p89-composer-tools"><label class="p89-media"><span>＋</span>Média<input id="pagePostMedia" type="file" accept="image/*,video/*" hidden></label><span id="pagePostMediaName">Aucun fichier</span><button type="button" class="p89-publish" data-action="page-publish" data-id="${esc(id)}">Publier</button></div></section>`:''}
         <section class="p89-page-tab-panel" data-tab="posts">
@@ -9419,9 +9507,13 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
           <div class="p89-section-head"><div><span>INFORMATIONS</span><h2>À propos</h2></div></div>
           <div class="p89-info-grid">${about.replace(/v82-info-grid/g,'p89-info-grid')}</div>
         </section>
-        <section class="p89-page-tab-panel p89-hidden" data-tab="team">
+        <section class="p89-page-tab-panel p89-hidden p91-community-panel" data-tab="team">
           <div class="p89-section-head"><div><span>GESTION</span><h2>Équipe</h2></div>${canManage?`<button type="button" class="p89-add" data-action="page-add-member" data-id="${esc(id)}">＋ Ajouter</button>`:''}</div>
           <div class="p89-team-list">${team.replace(/v82-/g,'p89-')}</div>
+        </section>
+        <section class="p89-page-tab-panel p89-hidden p91-community-panel" data-tab="community">
+          <div class="p89-section-head"><div><span>COMMUNAUTÉ</span><h2>Abonnés de la Page</h2></div></div>
+          <div class="p91-community-card"><span>◉</span><div><b>Une communauté autour de ${esc(x.name)}</b><small>Suivez la Page pour recevoir ses nouvelles publications et échanger avec elle.</small></div></div>
         </section>
         <div class="p89-page-bottom"></div>
       </div>
