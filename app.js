@@ -5894,7 +5894,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     }
   }
   async function signInWithProvider(provider) {
-    const allowed = ["google","facebook"];
+    const allowed = ["google"];
     // Supabase must have automatic identity linking enabled. When a verified
     // Google e-mail already belongs to a confirmed account, Supabase
     // then reuses that account instead of creating a second profile.
@@ -5912,12 +5912,9 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     } catch (e) {
       if (btn) { btn.disabled = false; btn.classList.remove("loading"); }
       const msg = String(e?.message || e || "Connexion impossible.");
-      if ($("authMsg")) {
-        const providerLabel = provider === "facebook" ? "Facebook" : "Google";
-        $("authMsg").textContent = msg.includes("provider") || msg.includes("not enabled")
-          ? `La connexion ${providerLabel} n’est pas encore activée dans Supabase.`
-          : msg;
-      }
+      if ($("authMsg")) $("authMsg").textContent = msg.includes("provider") || msg.includes("not enabled")
+        ? `La connexion Google n’est pas encore activée dans Supabase.`
+        : msg;
     }
   }
 
