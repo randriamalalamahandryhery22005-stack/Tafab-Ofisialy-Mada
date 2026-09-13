@@ -2022,24 +2022,24 @@ function publisherBackgrounds(){
       if (state.navStack[state.navStack.length - 1] !== "messages") state.navStack.push("messages");
       state.route = "messages"; history.replaceState(null, "", "#messages"); document.querySelectorAll("[data-route]").forEach(el => el.classList.toggle("active", el.dataset.route === "messages"));
     }
-    const [memberR, otherMemberR] = await Promise.all([
+    const [memberR, otherR] = await Promise.all([
       sb.from("conversation_members").select("user_id").eq("conversation_id", id).eq("user_id", state.user.id).maybeSingle(),
-      sb.from("conversation_members").select("user_id").eq("conversation_id", id).neq("user_id", state.user.id).maybeSingle()
+      sb.from("conversation_members").select("user_id").eq("conversation_id",id).neq("user_id",state.user.id).maybeSingle()
     ]);
     if (!memberR.data) return toast("Conversation inaccessible.");
-    const otherIdCheck=otherMemberR.data?.user_id;
+    const otherIdCheck=otherR.data?.user_id;
     if(otherIdCheck && await denyIfBlocked(otherIdCheck,"Conversation indisponible : ce compte est bloqué."))return;
-    const [messagesR, hiddenR] = await Promise.all([
+    const [msgsR, hiddenR] = await Promise.all([
       sb.from("messages").select("*").eq("conversation_id", id).order("created_at", { ascending: true }).limit(200),
       sb.from("tafab_message_hidden").select("message_id").eq("user_id",state.user.id)
     ]);
-    const rawMsgs=messagesR.data||[];
+    const rawMsgs=msgsR.data;
     const hiddenIds=new Set((hiddenR.data||[]).map(x=>x.message_id));
     const msgs=(rawMsgs||[]).filter(m=>!hiddenIds.has(m.id));
     const messageIds=(msgs||[]).map(m=>m.id).filter(Boolean);
     const [reactionsR] = await Promise.all([
       messageIds.length ? sb.from("tafab_message_reactions").select("message_id,user_id,reaction").in("message_id",messageIds) : Promise.resolve({data:[]}),
-      sb.rpc("tafa_mark_conversation_read", { p_conversation_id:id }).catch(()=>null)
+      sb.rpc("tafa_mark_conversation_read", { p_conversation_id:id })
     ]);
     const reactionMap=new Map();
     (reactionsR.data||[]).forEach(r=>{ if(!reactionMap.has(r.message_id)) reactionMap.set(r.message_id,[]); reactionMap.get(r.message_id).push(r); });
@@ -2051,17 +2051,16 @@ function publisherBackgrounds(){
       (msgs||[]).forEach(m=>{ const r=rmap.get(m.reply_to_id); if(r){ m.reply_to_content=r.content||""; m.reply_to_author_id=r.sender_id; } });
     }
     const ids = [...new Set((msgs || []).flatMap(m => [m.sender_id,m.reply_to_author_id]).filter(Boolean))];
-    const otherId = otherIdCheck;
-    const [profilesR, otherProfileR, aliasR, themeR] = await Promise.all([
-      ids.length ? sb.from("profiles").select("*").in("id", ids) : Promise.resolve({data:[]}),
+    const { data: profiles } = ids.length ? await sb.from("profiles").select("*").in("id", ids) : { data: [] };
+    if (token !== state.renderToken) return;
+    const map = new Map((profiles || []).map(p => [p.id, p]));
+    const otherId = otherIdCheck || null;
+    const [otherProfileR, aliasR, themeR] = await Promise.all([
       otherId ? sb.from("profiles").select("*").eq("id", otherId).maybeSingle() : Promise.resolve({data:null}),
       sb.from("tafab_conversation_aliases").select("target_user_id,nickname").eq("conversation_id",id),
       getConversationTheme(id)
     ]);
-    if (token !== state.renderToken) return;
-    const profiles=profilesR.data||[];
-    const map = new Map(profiles.map(p => [p.id, p]));
-    const otherProfile = otherProfileR.data || null;
+    const otherProfile=otherProfileR.data||null;
     const aliasRows=aliasR.data||[];
     const aliasMap=new Map(aliasRows.map(x=>[String(x.target_user_id),x.nickname]));
     const displayOtherName=otherProfile ? (aliasMap.get(String(otherProfile.id))||nameOf(otherProfile)) : "Discussion";
@@ -2085,27 +2084,35 @@ function publisherBackgrounds(){
       const globalOnline=otherId ? isUserOnline(otherId) : false;
       const el=$("conversationPresence"); if(el) el.textContent=(globalOnline||localOnline) ? "En ligne" : "Hors ligne";
     });
-    let refreshTimer=null;
-    let refreshBusy=false;
-    let refreshAgain=false;
-    const scheduleConversationRefresh=()=>{
+    let messageRefreshTimer=null;
+    convChannel.on("postgres_changes",{event:"INSERT",schema:"public",table:"messages",filter:`conversation_id=eq.${id}`},async payload=>{
       if(state.selectedConversation!==id || state.route!=="messages") return;
-      if(refreshTimer) clearTimeout(refreshTimer);
-      refreshTimer=setTimeout(async()=>{
-        refreshTimer=null;
-        if(refreshBusy){ refreshAgain=true; return; }
-        refreshBusy=true;
-        try{
-          if(state.selectedConversation===id && state.route==="messages") await openConversation(id);
-        }finally{
-          refreshBusy=false;
-          if(refreshAgain){ refreshAgain=false; scheduleConversationRefresh(); }
-        }
-      },140);
-    };
-    convChannel.on("postgres_changes",{event:"*",schema:"public",table:"messages",filter:`conversation_id=eq.${id}`},()=>{
-      scheduleConversationRefresh();
-      updateBadges();
+      const m=payload?.new;
+      if(m?.id && m.sender_id===state.user.id) { updateBadges(); return; }
+      // Never rebuild the whole conversation on every realtime event.
+      // Fetch only the newest message and append it to the existing DOM.
+      if(m?.id){
+        clearTimeout(messageRefreshTimer);
+        messageRefreshTimer=setTimeout(async()=>{
+          try{
+            const r=await sb.from("messages").select("*").eq("id",m.id).maybeSingle();
+            if(!r.data || state.selectedConversation!==id || state.route!=="messages") return;
+            const msg=r.data;
+            const exists=document.querySelector(`[data-message-id="${CSS.escape(String(msg.id))}"]`);
+            if(exists) return;
+            const ids=[msg.sender_id,msg.reply_to_id].filter(Boolean);
+            const pr=ids.length?await sb.from("profiles").select("*").in("id",ids):{data:[]};
+            const rm=msg.reply_to_id?await sb.from("messages").select("id,content,sender_id").eq("id",msg.reply_to_id).maybeSingle():{data:null};
+            if(rm.data){msg.reply_to_content=rm.data.content||"";msg.reply_to_author_id=rm.data.sender_id;}
+            const reactions=await sb.from("tafab_message_reactions").select("message_id,user_id,reaction").eq("message_id",msg.id);
+            const map=new Map((pr.data||[]).map(x=>[x.id,x]));
+            const reactionMap=new Map([[msg.id,reactions.data||[]]]);
+            const list=document.querySelector(".clean-message-list");
+            if(list){ const empty=list.querySelector(".message-first-contact"); if(empty) empty.remove(); list.insertAdjacentHTML("beforeend",conversationMessageHTML(msg,map,reactionMap)); list.scrollTop=list.scrollHeight; bindMessageLongPress(); }
+            updateBadges();
+          }catch(_){}
+        },120);
+      } else updateBadges();
     });
     convChannel.subscribe(async status=>{
       if(status==="SUBSCRIBED"){
@@ -2130,7 +2137,7 @@ function publisherBackgrounds(){
       if(otherId && await denyIfBlocked(otherId,"Message impossible : ce compte est bloqué."))return;
       const replyTo=$("messageText")?.dataset.replyTo || null;
       const r=await sb.from("messages").insert({conversation_id:id,sender_id:state.user.id,content:text,is_read:false,reply_to_id:replyTo});
-      if(r.error)toast(r.error.message); else {$("messageText"); delete $("messageText").dataset.replyTo; cancelMessageReply(); $("messageText").value="";}
+      if(r.error)toast(r.error.message); else {$("messageText"); delete $("messageText").dataset.replyTo; cancelMessageReply(); $("messageText").value=""; await openConversation(id);}
     });
     bindMessageLongPress();
   }
@@ -3442,7 +3449,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       bar.querySelector('progress').value=100; bar.querySelector('span').textContent='100%';
       const url=sb.storage.from('posts').getPublicUrl(path).data.publicUrl;
       const r=await sb.from('messages').insert({conversation_id:id,sender_id:state.user.id,content:file.name,media_url:url,media_type:file.type||'application/octet-stream',is_read:false});
-      if(r.error)throw r.error; input.value=''; toast('Fichier envoyé');
+      if(r.error)throw r.error; input.value=''; toast('Fichier envoyé'); await openConversation(id);
     }catch(e){toast('Upload impossible : '+(e.message||e));}finally{bar.remove();}
   }
   async function toggleVoiceRecording(){
@@ -3470,7 +3477,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     const path=`${state.user.id}/messages/${id}-${crypto.randomUUID()}.webm`; const up=await sb.storage.from('posts').upload(path,blob,{upsert:false,contentType:blob.type||'audio/webm'});
     if(up.error)return toast('Upload audio impossible : '+up.error.message);
     const url=sb.storage.from('posts').getPublicUrl(path).data.publicUrl;const r=await sb.from('messages').insert({conversation_id:id,sender_id:state.user.id,content:'🎙️ Message vocal',media_url:url,media_type:blob.type||'audio/webm',is_read:false});
-    if(r.error)return toast(r.error.message);discardVoice();toast('Message vocal envoyé');return;
+    if(r.error)return toast(r.error.message);discardVoice();toast('Message vocal envoyé');return openConversation(id);
   }
   async function downloadMessageFile(url,name){try{const r=await fetch(url);if(!r.ok)throw new Error();const b=await r.blob();const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name||'fichier';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}catch(_){window.open(url,'_blank');}}
   async function deleteConversationForMe(id){const r=await sb.from('tafab_deleted_conversations').upsert({user_id:state.user.id,conversation_id:id},{onConflict:'user_id,conversation_id'});if(r.error)return toast(r.error.message);closeModal();return messagesPage();}
