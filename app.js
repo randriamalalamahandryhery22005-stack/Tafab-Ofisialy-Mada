@@ -2022,19 +2022,27 @@ function publisherBackgrounds(){
       if (state.navStack[state.navStack.length - 1] !== "messages") state.navStack.push("messages");
       state.route = "messages"; history.replaceState(null, "", "#messages"); document.querySelectorAll("[data-route]").forEach(el => el.classList.toggle("active", el.dataset.route === "messages"));
     }
-    const { data: memberCheck } = await sb.from("conversation_members").select("user_id").eq("conversation_id", id).eq("user_id", state.user.id).maybeSingle();
-    if (!memberCheck) return toast("Conversation inaccessible.");
-    const otherIdCheck=(await sb.from("conversation_members").select("user_id").eq("conversation_id",id).neq("user_id",state.user.id).maybeSingle()).data?.user_id;
+    const [memberR, otherMemberR] = await Promise.all([
+      sb.from("conversation_members").select("user_id").eq("conversation_id", id).eq("user_id", state.user.id).maybeSingle(),
+      sb.from("conversation_members").select("user_id").eq("conversation_id", id).neq("user_id", state.user.id).maybeSingle()
+    ]);
+    if (!memberR.data) return toast("Conversation inaccessible.");
+    const otherIdCheck=otherMemberR.data?.user_id;
     if(otherIdCheck && await denyIfBlocked(otherIdCheck,"Conversation indisponible : ce compte est bloqué."))return;
-    const { data: rawMsgs } = await sb.from("messages").select("*").eq("conversation_id", id).order("created_at", { ascending: true }).limit(200);
-    const hiddenR=await sb.from("tafab_message_hidden").select("message_id").eq("user_id",state.user.id);
+    const [messagesR, hiddenR] = await Promise.all([
+      sb.from("messages").select("*").eq("conversation_id", id).order("created_at", { ascending: true }).limit(200),
+      sb.from("tafab_message_hidden").select("message_id").eq("user_id",state.user.id)
+    ]);
+    const rawMsgs=messagesR.data||[];
     const hiddenIds=new Set((hiddenR.data||[]).map(x=>x.message_id));
     const msgs=(rawMsgs||[]).filter(m=>!hiddenIds.has(m.id));
     const messageIds=(msgs||[]).map(m=>m.id).filter(Boolean);
-    const reactionsR=messageIds.length ? await sb.from("tafab_message_reactions").select("message_id,user_id,reaction").in("message_id",messageIds) : {data:[]};
+    const [reactionsR] = await Promise.all([
+      messageIds.length ? sb.from("tafab_message_reactions").select("message_id,user_id,reaction").in("message_id",messageIds) : Promise.resolve({data:[]}),
+      sb.rpc("tafa_mark_conversation_read", { p_conversation_id:id }).catch(()=>null)
+    ]);
     const reactionMap=new Map();
     (reactionsR.data||[]).forEach(r=>{ if(!reactionMap.has(r.message_id)) reactionMap.set(r.message_id,[]); reactionMap.get(r.message_id).push(r); });
-    await sb.rpc("tafa_mark_conversation_read", { p_conversation_id:id });
     // Resolve reply targets in one extra query so replies remain visible after reload/reconnect.
     const replyIds=[...new Set((msgs||[]).map(m=>m.reply_to_id).filter(Boolean))];
     if(replyIds.length){
@@ -2043,15 +2051,21 @@ function publisherBackgrounds(){
       (msgs||[]).forEach(m=>{ const r=rmap.get(m.reply_to_id); if(r){ m.reply_to_content=r.content||""; m.reply_to_author_id=r.sender_id; } });
     }
     const ids = [...new Set((msgs || []).flatMap(m => [m.sender_id,m.reply_to_author_id]).filter(Boolean))];
-    const { data: profiles } = ids.length ? await sb.from("profiles").select("*").in("id", ids) : { data: [] };
+    const otherId = otherIdCheck;
+    const [profilesR, otherProfileR, aliasR, themeR] = await Promise.all([
+      ids.length ? sb.from("profiles").select("*").in("id", ids) : Promise.resolve({data:[]}),
+      otherId ? sb.from("profiles").select("*").eq("id", otherId).maybeSingle() : Promise.resolve({data:null}),
+      sb.from("tafab_conversation_aliases").select("target_user_id,nickname").eq("conversation_id",id),
+      getConversationTheme(id)
+    ]);
     if (token !== state.renderToken) return;
-    const map = new Map((profiles || []).map(p => [p.id, p]));
-    const otherId = (await sb.from("conversation_members").select("user_id").eq("conversation_id", id).neq("user_id", state.user.id).maybeSingle()).data?.user_id;
-    const otherProfile = otherId ? (await sb.from("profiles").select("*").eq("id", otherId).maybeSingle()).data : null;
-    const aliasRows=(await sb.from("tafab_conversation_aliases").select("target_user_id,nickname").eq("conversation_id",id)).data||[];
+    const profiles=profilesR.data||[];
+    const map = new Map(profiles.map(p => [p.id, p]));
+    const otherProfile = otherProfileR.data || null;
+    const aliasRows=aliasR.data||[];
     const aliasMap=new Map(aliasRows.map(x=>[String(x.target_user_id),x.nickname]));
     const displayOtherName=otherProfile ? (aliasMap.get(String(otherProfile.id))||nameOf(otherProfile)) : "Discussion";
-    const conversationTheme=await getConversationTheme(id);
+    const conversationTheme=themeR||"emerald";
     $("content").innerHTML = `<section class="clean-page messages-page conversation-page conversation-page-clean tfa-message-theme-${esc(conversationTheme)}" data-message-theme="${esc(conversationTheme)}"><header class="conversation-clean-topbar"><button class="conversation-back" data-action="page-back" type="button" aria-label="Retour">‹</button><button class="conversation-person" data-action="view-profile" data-id="${esc(otherId||"")}" type="button">${avatarHTML(otherProfile || state.profile,"avatar conversation-avatar")}<span><b>${esc(displayOtherName)}</b><small id="conversationPresence" class="conversation-presence">Actif</small></span></button><div class="conversation-head-actions"><button type="button" aria-label="Rechercher dans la conversation" title="Rechercher" data-action="conversation-search"><span>⌕</span></button><button type="button" aria-label="Options" title="Options" data-action="conversation-menu" data-id="${esc(id)}">⚙</button></div></header><div id="conversationSearchBar" class="conversation-search-bar" hidden><span>⌕</span><input id="conversationSearchInput" type="search" placeholder="Rechercher dans les messages…" autocomplete="off"><b id="conversationSearchCount">0</b><button type="button" data-action="conversation-search-close" aria-label="Fermer">×</button></div><div id="typingIndicator" class="typing-indicator" hidden>écrit…</div><div class="message-list clean-message-list">${(msgs||[]).map(m=>conversationMessageHTML(m,map,reactionMap)).join("")||renderFirstContactGreetings(otherProfile||{})}</div><form id="messageForm" class="comment-form clean-message-form"><div class="message-voice-row"><button type="button" class="message-tool message-voice-tool" data-action="message-voice" title="Message vocal" aria-label="Message vocal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14.5a3.25 3.25 0 0 0 3.25-3.25V6.75a3.25 3.25 0 0 0-6.5 0v4.5A3.25 3.25 0 0 0 12 14.5Z"/><path d="M18.25 11.25a6.25 6.25 0 0 1-12.5 0M12 17.5V21M8.5 21h7"/></svg></button></div><div class="message-compose-row"><button type="button" class="message-tool message-attachment-tool" data-action="message-attachment" title="Photo ou fichier" aria-label="Photo ou fichier"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 3.75h8.25l3.75 3.75v12.75H6.5a2.75 2.75 0 0 1-2.75-2.75V6.5A2.75 2.75 0 0 1 6.5 3.75Z"/><path d="M14.5 3.75V8h4M7.5 15.5l2.3-2.3 2.15 2.15 1.8-1.8 2.75 2.75M8 8.75h.01"/></svg></button><input id="messageAttachment" type="file" hidden accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip,.apk"><div class="message-input-shell"><input id="messageText" autocomplete="off" placeholder="Message"><button type="button" class="message-emoji-button" data-action="message-emoji" title="Emoji" aria-label="Emoji"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M8.7 14.2c.9 1.15 2 1.7 3.3 1.7s2.4-.55 3.3-1.7M8.5 9.5h.01M15.5 9.5h.01"/></svg></button><div id="messageMentionSuggestions" class="message-mention-suggestions" hidden></div></div><button type="submit" class="message-send-button" aria-label="Envoyer" title="Envoyer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3.8 4.8 16.4 7.2-16.4 7.2 3.2-6.1 7.2-1.1-7.2-1.1-3.2-6.1Z"/></svg></button></div></form></section>`;
 
     // Conversation-level Realtime: typing + online presence without storing ephemeral state in SQL.
@@ -2071,8 +2085,26 @@ function publisherBackgrounds(){
       const globalOnline=otherId ? isUserOnline(otherId) : false;
       const el=$("conversationPresence"); if(el) el.textContent=(globalOnline||localOnline) ? "En ligne" : "Hors ligne";
     });
+    let refreshTimer=null;
+    let refreshBusy=false;
+    let refreshAgain=false;
+    const scheduleConversationRefresh=()=>{
+      if(state.selectedConversation!==id || state.route!=="messages") return;
+      if(refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer=setTimeout(async()=>{
+        refreshTimer=null;
+        if(refreshBusy){ refreshAgain=true; return; }
+        refreshBusy=true;
+        try{
+          if(state.selectedConversation===id && state.route==="messages") await openConversation(id);
+        }finally{
+          refreshBusy=false;
+          if(refreshAgain){ refreshAgain=false; scheduleConversationRefresh(); }
+        }
+      },140);
+    };
     convChannel.on("postgres_changes",{event:"*",schema:"public",table:"messages",filter:`conversation_id=eq.${id}`},()=>{
-      if(state.selectedConversation===id && state.route==="messages") openConversation(id);
+      scheduleConversationRefresh();
       updateBadges();
     });
     convChannel.subscribe(async status=>{
@@ -2098,7 +2130,7 @@ function publisherBackgrounds(){
       if(otherId && await denyIfBlocked(otherId,"Message impossible : ce compte est bloqué."))return;
       const replyTo=$("messageText")?.dataset.replyTo || null;
       const r=await sb.from("messages").insert({conversation_id:id,sender_id:state.user.id,content:text,is_read:false,reply_to_id:replyTo});
-      if(r.error)toast(r.error.message); else {$("messageText"); delete $("messageText").dataset.replyTo; cancelMessageReply(); $("messageText").value=""; await openConversation(id);}
+      if(r.error)toast(r.error.message); else {$("messageText"); delete $("messageText").dataset.replyTo; cancelMessageReply(); $("messageText").value="";}
     });
     bindMessageLongPress();
   }
@@ -3410,7 +3442,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       bar.querySelector('progress').value=100; bar.querySelector('span').textContent='100%';
       const url=sb.storage.from('posts').getPublicUrl(path).data.publicUrl;
       const r=await sb.from('messages').insert({conversation_id:id,sender_id:state.user.id,content:file.name,media_url:url,media_type:file.type||'application/octet-stream',is_read:false});
-      if(r.error)throw r.error; input.value=''; toast('Fichier envoyé'); await openConversation(id);
+      if(r.error)throw r.error; input.value=''; toast('Fichier envoyé');
     }catch(e){toast('Upload impossible : '+(e.message||e));}finally{bar.remove();}
   }
   async function toggleVoiceRecording(){
@@ -3438,7 +3470,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     const path=`${state.user.id}/messages/${id}-${crypto.randomUUID()}.webm`; const up=await sb.storage.from('posts').upload(path,blob,{upsert:false,contentType:blob.type||'audio/webm'});
     if(up.error)return toast('Upload audio impossible : '+up.error.message);
     const url=sb.storage.from('posts').getPublicUrl(path).data.publicUrl;const r=await sb.from('messages').insert({conversation_id:id,sender_id:state.user.id,content:'🎙️ Message vocal',media_url:url,media_type:blob.type||'audio/webm',is_read:false});
-    if(r.error)return toast(r.error.message);discardVoice();toast('Message vocal envoyé');return openConversation(id);
+    if(r.error)return toast(r.error.message);discardVoice();toast('Message vocal envoyé');return;
   }
   async function downloadMessageFile(url,name){try{const r=await fetch(url);if(!r.ok)throw new Error();const b=await r.blob();const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name||'fichier';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}catch(_){window.open(url,'_blank');}}
   async function deleteConversationForMe(id){const r=await sb.from('tafab_deleted_conversations').upsert({user_id:state.user.id,conversation_id:id},{onConflict:'user_id,conversation_id'});if(r.error)return toast(r.error.message);closeModal();return messagesPage();}
