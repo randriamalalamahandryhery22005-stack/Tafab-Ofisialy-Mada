@@ -3666,46 +3666,78 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   }
 
   async function menuPage() {
+    cleanLegacyUiArtifacts();
     state.backOverride = null;
-    // V95: the account Menu is deliberately Page-free. The old Page Menu is removed
-    // completely; a new dedicated Page Menu will be introduced separately.
-    const pageMenuLegacySelectors = [".p91-page-menu",".tafa-v65-page-shell",".page-menu-dashboard",".page-menu-hero",".page-menu-card"];
-    pageMenuLegacySelectors.forEach(sel=>document.querySelectorAll(sel).forEach(el=>el.remove()));
-    /* ADMIN MENU: resolve the server-side role before rendering the Menu.
-       This makes Administration appear immediately for a real Supabase admin. */
-    // V98: admin status is resolved by render() once in the background.
-    // Do not trigger a second Menu render from inside menuPage(); that used to
-    // destroy the user's scroll position and make the Menu feel stuck.
-    if(!pageModeActive()) state.__isAdmin = state.__isAdmin === true;
+    // V99 CLEAN: one active Menu, no legacy Page Menu overlays, no monetisation/Music.
+    [".p91-page-menu",".tafa-v65-page-shell",".page-menu-dashboard",".page-menu-hero",".page-menu-card"]
+      .forEach(sel=>document.querySelectorAll(sel).forEach(el=>el.remove()));
+
     const p = state.profile || {};
-    const items = [
-      ["profile","profile","Profil","Voir votre profil"],
-      ["friends","friends","Amis","Votre réseau"],
-      ["messages","messages","Messages","Vos conversations"],
-      ["notifications","history","Alertes","Vos notifications"],
-      ["groups","groups","Groupes","Communautés"],
-      ["reels","reels","Reels","Formats courts"],
+    const displayName = [p.first_name,p.last_name].filter(Boolean).join(" ").trim() || p.username || "Compte Tafaß";
+    const initials = displayName.split(/\s+/).slice(0,2).map(x=>x[0]).join("").toUpperCase();
+
+    const primary = [
+      ["profile","profile","Profil","Votre identité, publications et informations"],
+      ["friends","friends","Amis","Votre réseau et vos invitations"],
+      ["messages","messages","Messages","Conversations et échanges privés"],
+      ["notifications","history","Alertes","Notifications et activités récentes"],
+      ["groups","groups","Groupes","Communautés auxquelles vous participez"],
+      ["reels","reels","Reels","Vidéos courtes et découvertes"],
       ["events","history","Évènements","Créer et découvrir des évènements"],
-      ["studio","videos","Creator Studio","Créer et analyser vos contenus"],
-      ["creator","payment","Monétisation","Coins, revenus et soutien aux créateurs"],
-      ["ai","sparkles","Tafaß AI","Assistant, traduction, rédaction et résumé"],
-      ["music","music","Tafaß Music","Artistes, albums, playlists et favoris"],
-      ["business","business","Business & Publicité","Campagnes, audience et analytics"],
-      ["saved","saved","Enregistrements","Vos contenus sauvegardés"],
-      ["search","search","Rechercher","Trouver un compte ou contenu"],
-      ["settings","settings","Para & Conf","Compte et confidentialité"]
+      ["studio","videos","Creator Studio","Organiser et analyser vos contenus"],
+      ["ai","sparkles","Tafaß AI","Assistant intelligent pour vos contenus"],
+      ["saved","saved","Enregistrements","Retrouver vos contenus sauvegardés"],
+      ["search","search","Rechercher","Trouver comptes, personnes et contenus"],
+      ["settings","settings","Para & Conf","Compte, sécurité et confidentialité"]
     ];
-    const adminCard = state.__isAdmin ? [
-      ["admin","shield","Administration","Centre unique : comptes, vérifications, monétisation, signalements et sécurité"]
+
+    const services = [
+      ["tafab","tafab","Tafaß","Marketplace, annonces et services"],
+      ["business","business","Tafaß Business Suite","Outils professionnels et gestion de Page"]
+    ];
+
+    const admin = state.__isAdmin ? [
+      ["admin","shield","Administration","Comptes, sécurité, vérifications et modération"]
     ] : [];
-    const verificationCard = !state.__isAdmin ? [["verification","shield","Badge officiel","Nouveau parcours sécurisé pour demander le badge bleu"]] : [];
-    const actions = [
-      ["history","history","Historique d'activité","Vos actions enregistrées", "activity"],
-      ["payment","payment","Paiement","Vos paiements et transactions", "payment"],
-      ["help","help","Aide","Assistance et signalement", "help"]
-    ];
-    const card = x => `<button type="button" class="menu-card premium-menu-card ${x[0]==="admin" ? "admin-menu-card" : ""}" ${x[4] ? `data-action="menu-service" data-name="${esc(x[2])}" data-service="${esc(x[4])}"` : `data-action="menu-route" data-route-target="${esc(x[0])}"`} aria-label="${esc(x[2])}"><span class="menu-icon">${menuIcon(x[1])}</span><span class="menu-card-copy"><b>${esc(x[2])}</b><small title="${esc(x[3])}">${esc(x[3])}</small></span>${x[0]==="admin"?`<span class="admin-menu-badge" data-admin-badge aria-label="Alertes administration"></span>`:""}<span class="menu-arrow">›</span></button>`;
-    simplePage("Menu", `<div class="menu-section-title menu-shortcuts-title">Raccourcis</div><div class="menu-grid premium-menu-grid">${items.map(card).join("")}</div>${state.__isAdmin ? `<div class="menu-section-title admin-menu-section-title">Administration</div><div class="menu-grid premium-menu-grid admin-menu-grid">${adminCard.map(card).join("")}</div>` : `<div class="menu-section-title">Services</div><div class="menu-grid premium-menu-grid">${verificationCard.map(card).join("")}${actions.map(card).join("")}</div>`}<div class="menu-section-title">Compte</div><div class="menu-grid premium-menu-grid"><button class="menu-card premium-menu-card danger-card" data-action="new-logout"><span class="menu-icon">${menuIcon("logout")}</span><span class="menu-card-copy"><b>Quitter le compte</b><small>Fermer la session sur cet appareil</small></span><span class="menu-arrow">›</span></button></div>`);
+
+    const iconFor = key => menuIcon(key);
+    const card = (x, extra="") => `<button type="button" class="menu-card premium-menu-card menu-v99-card ${extra}" data-action="menu-route" data-route-target="${esc(x[0])}" aria-label="${esc(x[2])}">
+      <span class="menu-icon">${iconFor(x[1])}</span>
+      <span class="menu-card-copy"><b>${esc(x[2])}</b><small>${esc(x[3])}</small></span>
+      <span class="menu-arrow" aria-hidden="true">›</span>
+    </button>`;
+
+    const adminHtml = admin.length ? `<section class="menu-v99-section menu-v99-admin">
+      <div class="menu-v99-section-head"><div><span class="eyebrow">ESPACE SÉCURISÉ</span><h3>Administration</h3><p>Centre de contrôle de l’application</p></div><span class="menu-v99-status">● EN LIGNE</span></div>
+      <div class="menu-grid premium-menu-grid menu-v99-grid">${admin.map(x=>card(x,"menu-v99-admin-card")).join("")}</div>
+    </section>` : "";
+
+    simplePage("Menu", `<div class="menu-v99">
+      <header class="menu-v99-hero">
+        <div class="menu-v99-profile">
+          <div class="menu-v99-avatar">${p.avatar_url ? `<img src="${esc(p.avatar_url)}" alt="">` : `<span>${esc(initials)}</span>`}</div>
+          <div class="menu-v99-identity"><span class="eyebrow">TAFAß · ESPACE PERSONNEL</span><h2>${esc(displayName)}</h2><p>Accédez rapidement à toutes vos fonctions.</p></div>
+        </div>
+        <button class="menu-v99-settings" type="button" data-action="menu-route" data-route-target="settings" aria-label="Para & Conf">${menuIcon("settings")}</button>
+      </header>
+
+      <section class="menu-v99-section">
+        <div class="menu-v99-section-head"><div><span class="eyebrow">ACCÈS RAPIDE</span><h3>Vos espaces</h3><p>Navigation claire et organisée</p></div></div>
+        <div class="menu-grid premium-menu-grid menu-v99-grid">${primary.map(x=>card(x)).join("")}</div>
+      </section>
+
+      <section class="menu-v99-section menu-v99-services">
+        <div class="menu-v99-section-head"><div><span class="eyebrow">OUTILS</span><h3>Services Tafaß</h3><p>Fonctions professionnelles et services de la plateforme</p></div></div>
+        <div class="menu-grid premium-menu-grid menu-v99-grid">${services.map(x=>card(x,"menu-v99-service-card")).join("")}</div>
+      </section>
+
+      ${adminHtml}
+
+      <section class="menu-v99-account">
+        <div class="menu-v99-account-copy"><span class="eyebrow">SESSION</span><b>Compte actuel</b><small>Votre session est sécurisée sur cet appareil.</small></div>
+        <button class="menu-v99-logout" type="button" data-action="new-logout">${menuIcon("logout")}<span>Quitter le compte</span></button>
+      </section>
+    </div>`);
   }
 
   function openHelpTopic(topicId,fallbackName="Aide"){
