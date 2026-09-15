@@ -7,7 +7,7 @@
 ============================================================ */
 (() => {
   "use strict";
-  const BUILD_ID = "TAFAß-V90-CLEAN";
+  const BUILD_ID = "TAFAß-V85";
   const BUILD_KEY = "tafa_active_build";
   const previous = String(localStorage.getItem(BUILD_KEY) || "");
   if (previous !== BUILD_ID) {
@@ -43,7 +43,7 @@ document.documentElement.classList.add("app-boot");
 
   const $ = id => document.getElementById(id);
   const esc = s => String(s ?? "").replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]));
-  const routes = ["home","friends","search","messages","notifications","profile","reels","groups","saved","menu","tafab","events","studio","settings","ai","admin","verification"];
+  const routes = ["home","friends","search","messages","notifications","profile","reels","groups","saved","menu","tafab","events","studio","settings","creator","ai","music","business","admin","verification"];
 
   // V19 production upload guard: client-side validation is UX protection only;
   // Supabase Storage policies/server-side validation must remain the authority.
@@ -376,7 +376,7 @@ document.documentElement.classList.add("app-boot");
   function nameOf(p) {
     const full=[p?.first_name,p?.last_name].map(x=>String(x||'').trim()).filter(Boolean).join(" ");
     const generic=/^membre\s+tafaß$/i.test(full)||/^membre\s+tafa(?:ss|ß)$/i.test(full);
-    return (!generic && full) || p?.username || "Membre Tafaß";
+    return (!generic && full) || p?.username || (p?.email ? String(p.email).split('@')[0] : '') || "Membre Tafaß";
   }
   function isAdminProfile(p){ return p?.is_admin===true || p?.admin_badge===true; }
   function verifiedBadgeHTML(p){ if(!p || (!p.is_verified && !isAdminProfile(p))) return ""; const admin=isAdminProfile(p); return `<span class="tafa-verified-badge ${admin?"tafa-admin-badge":""}" title="${admin?"Administrateur officiel Tafaß":"Compte vérifié"}">✓</span>`; }
@@ -591,8 +591,8 @@ document.documentElement.classList.add("app-boot");
     // by the dedicated onboarding/account RPC instead.
     if (authEmail) state.profile.email = authEmail;
     const md=state.user?.user_metadata||{};
-    if ((!String(state.profile.first_name||'').trim() || /^membre$/i.test(String(state.profile.first_name||'').trim()) || /@/.test(String(state.profile.first_name||''))) && md.first_name) state.profile.first_name=md.first_name;
-    if ((!String(state.profile.last_name||'').trim() || /^tafaß$/i.test(String(state.profile.last_name||'').trim()) || /@/.test(String(state.profile.last_name||''))) && md.last_name) state.profile.last_name=md.last_name;
+    if ((!String(state.profile.first_name||'').trim() || /^membre$/i.test(String(state.profile.first_name||'').trim())) && md.first_name) state.profile.first_name=md.first_name;
+    if ((!String(state.profile.last_name||'').trim() || /^tafaß$/i.test(String(state.profile.last_name||'').trim())) && md.last_name) state.profile.last_name=md.last_name;
     // Tafaß uses the dark premium interface as the single supported theme.
     state.theme = "dark";
     if (state.user) await sb.from("user_settings").upsert({user_id:state.user.id,theme:"dark"},{onConflict:"user_id"});
@@ -719,7 +719,7 @@ document.documentElement.classList.add("app-boot");
     });
   }
   async function countUnreadNotificationsForRoutes(){
-    const result={home:0, friends:0, notifications:0, pages:0, groups:0, reels:0, events:0, tafab:0, studio:0, creator:0, ai:0, business:0, saved:0, settings:0, menu:0};
+    const result={home:0, friends:0, notifications:0, pages:0, groups:0, reels:0, events:0, tafab:0, studio:0, creator:0, ai:0, music:0, business:0, saved:0, settings:0, menu:0};
     const r=await sb.from("notifications").select("type,entity_type").eq("user_id",state.user.id).eq("is_read",false).limit(1000);
     if(r.error) return result;
     for(const n of (r.data||[])){
@@ -731,7 +731,9 @@ document.documentElement.classList.add("app-boot");
       if(/reel/.test(t) || /reel/.test(e)) result.reels++;
       if(/event/.test(t) || /event/.test(e)) result.events++;
       if(/listing|order|market|tafab/.test(t) || /listing|order|market|tafab/.test(e)) result.tafab++;
+      if(/creator|gift|withdraw|subscription/.test(t) || /creator|gift|withdraw|subscription/.test(e)) result.creator++;
       if(/ai/.test(t) || /ai/.test(e)) result.ai++;
+      if(/music/.test(t) || /music/.test(e)) result.music++;
       if(/business|ad/.test(t) || /business|ad/.test(e)) result.business++;
       if(/post|comment|reaction|share|story|follow/.test(t) || /post|comment|reaction|share|story/.test(e)) result.home++;
       if(/studio|draft/.test(t) || /studio|draft/.test(e)) result.studio++;
@@ -751,7 +753,7 @@ document.documentElement.classList.add("app-boot");
       setNavBadge("friends",n.friends);
       setNavBadge("messages",msg.count||0);
       setNavBadge("notifications",n.notifications);
-      ["groups","reels","events","tafab","studio","ai","business","saved","settings","menu"].forEach(r=>setNavBadge(r,n[r]||0));
+      ["groups","reels","events","tafab","studio","creator","ai","music","business","saved","settings","menu"].forEach(r=>setNavBadge(r,n[r]||0));
       if(state.__isAdmin===true){ adminBadgeCount().then(c=>{ document.querySelectorAll('[data-admin-badge]').forEach(el=>{el.textContent=c>0?String(c):''; el.classList.toggle('hidden',c<=0);}); setNavBadge('menu',Math.max(Number(n.menu||0),c)); }).catch(()=>{}); }
     }catch(e){ console.warn("Tafaß badges:",e); }
   }
@@ -779,7 +781,9 @@ document.documentElement.classList.add("app-boot");
         events: /event/i,
         tafab: /listing|order|market|tafab/i,
         studio: /studio|draft/i,
+        creator: /creator|gift|withdraw|subscription/i,
         ai: /ai/i,
+        music: /music/i,
         business: /business|ad/i,
         saved: /saved|bookmark/i,
         settings: /setting|security|privacy/i,
@@ -948,6 +952,8 @@ function openMoreComposer(){openModal(`<div class="modal-box composer-modal-prem
 async function renderFeed() {
     const token = state.renderToken;
     const stories=await loadActiveStories();
+    const sponsoredR=await sb.rpc('tafa_get_sponsored_ads',{p_limit:2});
+    const sponsoredAds=sponsoredR.error?[]:(sponsoredR.data||[]);
     const liveR=await sb.from("live_sessions").select("id,user_id,title,started_at,profiles(first_name,last_name,username,avatar_url)").eq("status","live").order("started_at",{ascending:false}).limit(12);
     const activeLives=liveR.error ? [] : (liveR.data||[]);
     if (token !== state.renderToken || state.route !== "home") return;
@@ -982,6 +988,7 @@ async function renderFeed() {
         </div>
         <input id="quickPostFile" class="quick-post-file" type="file" accept="image/*,video/*" hidden>
       </section>`;
+      if(sponsoredAds.length) html+=`<section class="sponsored-feed-section">${sponsoredAds.map(sponsoredAdHTML).join('')}</section>`;
       html += v80EntityFeedHTML(state.v80EntityFeed||[]);
 
     if(!state.posts.length) html+=`<div class="card empty">Aucune publication pour le moment.<br><span>Publiez la première sur Tafaß.</span></div>`;
@@ -1052,6 +1059,7 @@ function publisherBackgrounds(){
 
         <div class="publisher-tools">
           <button data-action="publisher-photo"><span class="publisher-tool-icon photos">▣</span><span><b>Photos/Vidéos</b><small>Ajouter depuis votre appareil</small></span></button>
+          <button data-action="publisher-music"><span class="publisher-tool-icon music">♫</span><span><b>Musique</b><small>Ajouter une musique</small></span></button>
           <button data-action="publisher-tag"><span class="publisher-tool-icon tag">♙</span><span><b>Identifier des personnes</b><small>Ajouter des personnes</small></span></button>
           <button data-action="publisher-location"><span class="publisher-tool-icon location">⌖</span><span><b>Ajouter un lieu</b><small>Indiquer où vous êtes</small></span></button>
           <button data-action="publisher-mood"><span class="publisher-tool-icon mood">☺</span><span><b>Humeur/Activité</b><small>Partager votre humeur</small></span></button>
@@ -1110,6 +1118,52 @@ function publisherBackgrounds(){
     </div>`);
   }
 
+  function publisherMusicCatalog(){
+    const styles=["Lo-fi Night","Afro Pulse","Tropical Flow","Piano Glow","Urban Wave","Sunset Drive","Acoustic Air","Future Pop","Ocean Dream","Cinematic Rise","Chill Focus","Island Beat"];
+    const moods=["Calme","Énergique","Romantique","Positif","Solaire","Nocturne","Élégant","Épique","Doux","Focus"];
+    const out=[];
+    for(let i=1;i<=120;i++) out.push({id:`ai-${i}`,title:`Tafaß Music ${String(i).padStart(3,'0')}`,style:styles[(i-1)%styles.length],mood:moods[(i*7-1)%moods.length],bpm:72+((i*11)%72),seed:i});
+    return out;
+  }
+  let musicAudioContext=null, musicNodes=[], currentMusicId=null, musicTimer=null;
+  function stopPublisherMusic(){
+    if(musicTimer)clearTimeout(musicTimer); musicTimer=null;
+    musicNodes.forEach(n=>{try{n.stop?.();n.disconnect?.();}catch(_){}}); musicNodes=[]; currentMusicId=null;
+  }
+  function playGeneratedMusic(track){
+    if(!track)return;
+    stopPublisherMusic();
+    try{
+      musicAudioContext ||= new (window.AudioContext||window.webkitAudioContext)();
+      const ctx=musicAudioContext; if(ctx.state==='suspended')ctx.resume().catch(()=>{});
+      const master=ctx.createGain(); master.gain.value=.055; master.connect(ctx.destination);
+      const scale=[220,247,277,330,370,440,494,554];
+      let step=0; currentMusicId=track.id;
+      const tick=()=>{
+        if(currentMusicId!==track.id)return;
+        const osc=ctx.createOscillator(), gain=ctx.createGain();
+        const freq=scale[(step*3+track.seed)%scale.length]*(step%8===7?.5:1);
+        osc.type=track.style.includes('Piano')?'sine':track.style.includes('Afro')?'triangle':'sine'; osc.frequency.value=freq;
+        gain.gain.setValueAtTime(.0001,ctx.currentTime); gain.gain.exponentialRampToValueAtTime(.7,ctx.currentTime+.025); gain.gain.exponentialRampToValueAtTime(.0001,ctx.currentTime+.24);
+        osc.connect(gain);gain.connect(master);osc.start();osc.stop(ctx.currentTime+.26);musicNodes.push(osc);step=(step+1)%16;
+        musicTimer=setTimeout(tick,Math.max(180,60000/track.bpm/2));
+      }; tick();
+    }catch(e){toast('Lecture audio indisponible sur cet appareil.');}
+  }
+  function openPublisherMusic(){
+    savePublisherDraft();
+    const tracks=publisherMusicCatalog();
+    openModal(`<div class="modal-box composer-field-modal publisher-music-modal">
+      <button class="modal-close" data-action="close-publisher-field" aria-label="Fermer">×</button>
+      <div class="composer-field-brand"><img src="assets/tafass-logo-premium.svg" alt="Tafaß"></div>
+      <span class="eyebrow">TAFAß • MUSIC LAB</span><h3>Choisir une musique</h3>
+      <p class="muted">120 pistes générées automatiquement. Une seule musique peut être attachée à la publication.</p>
+      <div class="music-search-row"><input id="publisherMusicSearch" class="premium-input" placeholder="Rechercher une piste, un style ou une ambiance…"><span class="music-count">120</span></div>
+      <div id="publisherMusicList" class="publisher-music-list">${tracks.map(t=>`<button type="button" class="publisher-music-item" data-action="select-publisher-music" data-music-id="${t.id}"><span class="music-cover">♫</span><span><b>${esc(t.title)}</b><small>${esc(t.style)} · ${esc(t.mood)} · ${t.bpm} BPM</small></span><span class="music-play">▶</span></button>`).join('')}</div>
+    </div>`);
+    const list=$('publisherMusicList'), search=$('publisherMusicSearch');
+    search?.addEventListener('input',()=>{const q=search.value.trim().toLowerCase();[...list.children].forEach(el=>el.classList.toggle('hidden',q&&!el.textContent.toLowerCase().includes(q)));});
+  }
   async function openPublisherTag(){
     savePublisherDraft();
     const {data:rows}=await sb.from('friendships').select('user_id,friend_id').or(`user_id.eq.${state.user.id},friend_id.eq.${state.user.id}`).limit(200);
@@ -1125,6 +1179,7 @@ function publisherBackgrounds(){
   }
   function openPublisherField(field){
     const config={
+      music:{eyebrow:"MUSIQUE",title:"Ajouter une musique",label:"Nom de la musique",placeholder:"Ex. Ma chanson préférée",action:"publisher-field-apply",button:"Ajouter"},
       tag:{eyebrow:"PERSONNES",title:"Identifier des personnes",label:"Nom de la personne",placeholder:"Rechercher ou saisir un nom",action:"publisher-field-apply",button:"Identifier"},
       location:{eyebrow:"LIEU",title:"Ajouter un lieu",label:"Lieu de la publication",placeholder:"Ex. Antananarivo, Madagascar",action:"publisher-field-apply",button:"Ajouter le lieu"},
       event:{eyebrow:"ÉVÈNEMENT",title:"Créer un évènement",label:"Nom de l’évènement",placeholder:"Ex. Rencontre Tafaß",action:"publisher-field-apply",button:"Ajouter l’évènement"},
@@ -1332,6 +1387,7 @@ function publisherBackgrounds(){
       <div class="live-modal-head"><div><span class="eyebrow">TAFAß • EN DIRECT</span><h3>${esc(session.title||"Direct Tafaß")}</h3><small class="admin-section-note">${esc(nameOf(session.profiles||{}))}</small></div><span class="live-pulse">● LIVE</span></div>
       <video id="liveRemoteVideo" class="live-video" autoplay playsinline controls></video>
       <div class="live-status"><span>●</span><b id="liveConnectionStatus">Connexion au direct…</b><small>Vous entendez l'audio du diffuseur. Vos commentaires sont transmis en temps réel.</small><strong id="liveViewerCount">1 spectateur</strong></div>
+      <div class="live-controls"><button class="secondary-action" data-action="live-toggle-mic">🔊 Audio</button><button class="secondary-action" data-action="live-gift" data-gift="heart" data-coins="10">❤️ 10</button><button class="secondary-action" data-action="live-gift" data-gift="rose" data-coins="50">🌹 50</button><button class="secondary-action" data-action="live-gift" data-gift="star" data-coins="100">⭐ 100</button></div>
       ${liveCommentsMarkup()}
     </div>`);
 
@@ -1401,6 +1457,7 @@ function publisherBackgrounds(){
       liveViewerPc?.close();
       if(liveChannel){try{await sb.removeChannel(liveChannel);}catch(_){}}
       if(liveCommentsChannel){try{await sb.removeChannel(liveCommentsChannel);}catch(_){} liveCommentsChannel=null;}
+      stopPublisherMusic();
       liveStream=null;liveViewerPc=null;liveChannel=null;liveSessionId=null;liveRole=null;liveViewerId=null;liveCommentRows=[];liveViewerCount=0;state.activeLive=null;
       closeModal();
     }
@@ -1554,7 +1611,7 @@ function publisherBackgrounds(){
     return `<article class="post post-premium" id="post-${esc(p.id)}" data-post-id="${esc(p.id)}" data-post-bg="${esc(p.background_style || "plain")}" data-media-type="${esc(p.media_type || "")}">
       <div class="post-head">${profileLink(p.author, avatarHTML(p.author), "profile-link profile-avatar-link")}<div class="meta">${profileLink(p.author, `<span class="post-author-name">${displayNameHTML(p.author)}</span>`, "profile-link profile-meta-link")}<span class="post-time"><small>${timeAgo(p.created_at)} · ${esc(p.visibility || "public")}</small></span></div><button class="post-menu" data-action="post-menu" data-id="${esc(p.id)}">⋯</button></div>${sharedBanner}
       ${p.content ? `<div class="post-body ${p.background_style && p.background_style !== "plain" ? "post-body-has-bg" : ""}">${captionHTML(p.content)}</div>` : ""}${media}
-      ${p.publication_meta && typeof p.publication_meta === "object" ? (()=>{const m=p.publication_meta||{};const chips=[];if(m.tag)chips.push(`<span>👥 ${esc(m.tag)}</span>`);if(m.location)chips.push(`<span>📍 ${esc(m.location)}</span>`);if(m.event)chips.push(`<span>📅 ${esc(m.event)}</span>`);if(m.mood)chips.push(`<span>☺ ${esc(m.mood)}</span>`);return chips.length?`<div class="post-meta-chips">${chips.join('')}</div>`:''})() : ""}
+      ${p.publication_meta && typeof p.publication_meta === "object" ? (()=>{const m=p.publication_meta||{};const chips=[];if(m.music)chips.push(`<button type="button" class="post-music-chip" data-action="play-post-music" data-music-id="${esc(m.music_id||'ai-1')}" data-music-seed="${esc(m.music_seed||1)}">♫ ${esc(m.music)} · Écouter</button>`);if(m.tag)chips.push(`<span>👥 ${esc(m.tag)}</span>`);if(m.location)chips.push(`<span>📍 ${esc(m.location)}</span>`);if(m.event)chips.push(`<span>📅 ${esc(m.event)}</span>`);if(m.mood)chips.push(`<span>☺ ${esc(m.mood)}</span>`);return chips.length?`<div class="post-meta-chips">${chips.join('')}</div>`:''})() : ""}
       ${p.publication_meta?.receive_messages && p.user_id !== state.user.id ? `<div class="post-message-cta"><div><b>Messages ouverts</b><small>Envoyez un message privé directement à ${esc(nameOf(p.author||{}))}.</small></div><button type="button" data-action="post-receive-message" data-owner-id="${esc(p.user_id)}">💬 Message</button></div>` : ""}
       <div class="post-stats" data-post-stats="${esc(p.id)}"><span class="reaction-summary" data-reaction-total="${totalReactions}">${reactionVisual || "<span class='muted-inline'>Aucune réaction</span>"}${showReactionCounts && totalReactions ? `<span class="reaction-people"><b data-reaction-total-number="${esc(p.id)}">${totalReactions}</b> réaction${totalReactions>1?'s':''}${reactionNames ? ` · ${reactionNames}${totalReactions>8?'…':''}` : ''}</span>` : ""}</span><span class="post-counts-inline"><span data-comment-count="${esc(p.id)}">${cs.length}</span> commentaire${cs.length!==1?'s':''} · <span data-share-count="${esc(p.id)}">${Number(p.shares || sh.length || 0)}</span> partage${Number(p.shares || sh.length || 0)!==1?'s':''}${(p.media_type === 'video' || p.media_type === 'reel') ? ` · <span class="post-view-count" data-post-views="${esc(p.id)}">${views} vue${views!==1?'s':''}</span>` : ''}</span></div>
       ${shareSummary}
@@ -3494,21 +3551,23 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
 
   async function tafabPage() {
     const token = state.renderToken;
-    const [listR, favR] = await Promise.all([
+    const [listR, adsR, favR] = await Promise.all([
       sb.from("tafab_listings").select("*").eq("status","active").order("created_at",{ascending:false}).limit(50),
+      sb.from("tafab_ads").select("*").eq("status","active").order("created_at",{ascending:false}).limit(20),
       sb.from("tafab_favorites").select("listing_id").eq("user_id",state.user.id)
     ]);
     if (listR.error) return simplePage("Tafaß", `<div class="empty">${esc(listR.error.message)}</div>`);
     if (token !== state.renderToken) return;
-    const listings=listR.data||[], favorites=new Set((favR.data||[]).map(x=>x.listing_id));
+    const listings=listR.data||[], ads=adsR.data||[], favorites=new Set((favR.data||[]).map(x=>x.listing_id));
     simplePage("Tafaß", `
       <div class="tafab-hero premium-hero clean-tafab-hero">
         <div class="tafab-brand-mark">T</div><div class="grow"><span class="eyebrow">TAFAß • MARCHÉ</span><h3>Vente & échanges</h3><p class="page-subtitle">Des offres publiées par les membres, synchronisées en temps réel.</p></div>
       </div>
-      <div class="page-header-actions"><button class="primary" data-action="create-tafab-listing">＋ Publier une offre</button><button class="ghost-action" data-action="show-tafab-orders">📦 Commandes</button></div>
+      <div class="page-header-actions"><button class="primary" data-action="create-tafab-listing">＋ Publier une offre</button><button class="ghost-action" data-action="show-tafab-orders">📦 Commandes</button><button class="ghost-action" data-action="create-tafab-ad">＋ Publicité</button></div>
       <div class="tafab-grid">
         ${listings.map(x=>`<article class="tafab-card tafab-ad"><div class="tafab-ad-label">OFFRE RÉELLE • TAFAß</div><h3>${esc(x.title)}</h3><p>${esc(x.description||"")}</p><div class="tafab-meta-line">${esc(x.location||"")} ${x.location&&x.price!=null?'• ':''}${x.price!=null?esc(x.price)+" "+esc(x.currency||"MGA"):""}</div><div class="tafab-actions v22-market-actions"><button class="primary" data-action="tafab-order" data-id="${esc(x.id)}">🛒 Commander</button><button class="ghost-action" data-action="tafab-contact" data-id="${esc(x.id)}">💬 Contacter</button><button class="ghost-action" data-action="tafab-favorite" data-id="${esc(x.id)}">${favorites.has(x.id)?'♥':'♡'} Favori</button><button class="ghost-action" data-action="tafab-info" data-id="${esc(x.id)}">Détails</button></div></article>`).join("")}
-        ${!listings.length?`<div class="empty tafab-empty" style="grid-column:1/-1"><b>Aucune offre pour le moment.</b><small>Les contenus apparaîtront ici dès qu'un membre en publiera un.</small></div>`:""}
+        ${ads.map(a=>`<article class="tafab-card tafab-discussion"><div class="tafab-card-head"><span class="tafab-icon">📢</span><div><b>${esc(a.title)}</b><small>Publicité Tafaß</small></div></div><p>${esc(a.description||"")}</p>${a.image_url?`<img class="post-media" src="${esc(a.image_url)}" alt="Publicité">`:""}<button class="primary big" data-action="tafab-ad" data-id="${esc(a.id)}">Voir la publicité</button></article>`).join("")}
+        ${!listings.length&&!ads.length?`<div class="empty tafab-empty" style="grid-column:1/-1"><b>Aucune offre ni publicité pour le moment.</b><small>Les contenus apparaîtront ici dès qu'un membre en publiera un.</small></div>`:""}
       </div>`);
   }
 
@@ -3567,13 +3626,10 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     pageMenuLegacySelectors.forEach(sel=>document.querySelectorAll(sel).forEach(el=>el.remove()));
     /* ADMIN MENU: resolve the server-side role before rendering the Menu.
        This makes Administration appear immediately for a real Supabase admin. */
-    if(!pageModeActive()){
-      const cachedAdmin = state.__isAdmin === true;
-      state.__isAdmin = cachedAdmin;
-      Promise.resolve().then(()=>adminIsAllowed()).then(ok=>{
-        if(state.route==="menu" && ok!==state.__isAdmin){ state.__isAdmin=ok; render().catch(()=>{}); }
-      }).catch(()=>{});
-    }
+    // V98: admin status is resolved by render() once in the background.
+    // Do not trigger a second Menu render from inside menuPage(); that used to
+    // destroy the user's scroll position and make the Menu feel stuck.
+    if(!pageModeActive()) state.__isAdmin = state.__isAdmin === true;
     const p = state.profile || {};
     const items = [
       ["profile","profile","Profil","Voir votre profil"],
@@ -3584,13 +3640,16 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       ["reels","reels","Reels","Formats courts"],
       ["events","history","Évènements","Créer et découvrir des évènements"],
       ["studio","videos","Creator Studio","Créer et analyser vos contenus"],
+      ["creator","payment","Monétisation","Coins, revenus et soutien aux créateurs"],
       ["ai","sparkles","Tafaß AI","Assistant, traduction, rédaction et résumé"],
+      ["music","music","Tafaß Music","Artistes, albums, playlists et favoris"],
+      ["business","business","Business & Publicité","Campagnes, audience et analytics"],
       ["saved","saved","Enregistrements","Vos contenus sauvegardés"],
       ["search","search","Rechercher","Trouver un compte ou contenu"],
       ["settings","settings","Para & Conf","Compte et confidentialité"]
     ];
     const adminCard = state.__isAdmin ? [
-      ["admin","shield","Administration","Centre unique : comptes, vérifications, signalements et sécurité"]
+      ["admin","shield","Administration","Centre unique : comptes, vérifications, monétisation, signalements et sécurité"]
     ] : [];
     const verificationCard = !state.__isAdmin ? [["verification","shield","Badge officiel","Nouveau parcours sécurisé pour demander le badge bleu"]] : [];
     const actions = [
@@ -3606,12 +3665,13 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     const topics={
       diagnostic:["Diagnostic express","TAFAß • DIAGNOSTIC","Distinguer rapidement navigation, connexion, affichage et données.",[["01 · Ne pas multiplier les clics","Une action en cours doit être laissée à son terme. Appuyer plusieurs fois peut lancer plusieurs requêtes ou rendre l’écran difficile à lire.","Attendez la fin du chargement puis réessayez une seule fois."],["02 · Vérifier la section","Si une donnée paraît absente, contrôlez d’abord la section concernée et vérifiez que l’action a réellement été validée.","Un écran vide peut simplement signifier qu’aucune donnée réelle n’est disponible."],["03 · Reproduire","Notez le nom de la page, l’action effectuée et le résultat obtenu. Reproduire le problème avec peu d’étapes facilite l’analyse.","Ajoutez le message d’erreur exact lorsqu’il existe."],["04 · Assistance","Si le problème reste reproductible, utilisez le guide technique et transmettez uniquement les informations nécessaires.","Ne partagez jamais de secret de connexion."]]],
       start:["Bien démarrer","TAFAß • PREMIERS PAS","Comprendre l’organisation de Tafaß et construire un espace personnel cohérent.",[["Votre identité","Le profil rassemble votre nom, nom d’utilisateur, photo, couverture et publications. Il constitue le point d’entrée vers votre activité.","Touchez un nom ou un avatar lié pour ouvrir le profil correspondant."],["Votre fil","Actualités regroupe les contenus accessibles à votre compte. Réactions, commentaires et partages sont séparés des actions publicitaires.","Un contenu sponsorisé doit rester identifiable comme tel."],["Votre réseau","Amis, Messages, Alertes, Groupes, Pages, Reels et Enregistrements ont chacun leur rôle afin d’éviter les écrans mélangés.","Chaque navigation doit ouvrir la bonne section."],["Vos réglages","Para & Conf regroupe les contrôles d’audience, notifications, recherche, présence, blocage et autres préférences.","Revoyez ces options lorsque votre usage change."]]],
-      publications:["Publications & médias","TAFAß • CRÉATION","Créer et gérer du contenu avec des contrôles clairs.",[["Créer","Ajoutez un texte ou un média, vérifiez son contenu puis choisissez l’audience disponible avant validation.","Une publication normale n’est pas une publicité."],["Interagir","Les réactions, commentaires et réponses permettent une discussion structurée. Les outils de gestion dépendent de votre rôle sur le contenu.","Le signalement sert à demander un examen, pas simplement à exprimer un désaccord."],["Partager","Le partage fait circuler un contenu selon les règles d’audience. Vérifiez toujours ce que vous partagez."],["Modifier / supprimer","Lorsque vous êtes propriétaire, Modifier ou Supprimer peuvent être proposés. Une validation protège contre les actions accidentelles.","Après validation, contrôlez immédiatement le résultat."]]],
+      publications:["Publications & médias","TAFAß • CRÉATION","Créer et gérer du contenu avec des contrôles clairs.",[["Créer","Ajoutez un texte ou un média, vérifiez son contenu puis choisissez l’audience disponible avant validation.","Une publication normale n’est pas une publicité."],["Interagir","Les réactions, commentaires et réponses permettent une discussion structurée. Les outils de gestion dépendent de votre rôle sur le contenu.","Le signalement sert à demander un examen, pas simplement à exprimer un désaccord."],["Partager","Le partage fait circuler un contenu selon les règles d’audience. Vérifiez toujours ce que vous partagez.","Partager et booster sont deux actions différentes."],["Modifier / supprimer","Lorsque vous êtes propriétaire, Modifier ou Supprimer peuvent être proposés. Une validation protège contre les actions accidentelles.","Après validation, contrôlez immédiatement le résultat."]]],
       community:["Communauté & échanges","TAFAß • COMMUNAUTÉ","Garder les relations, conversations et alertes lisibles et maîtrisables.",[["Amis","Les suggestions et demandes servent à construire votre réseau. Acceptez uniquement les demandes que vous souhaitez réellement recevoir.","Les paramètres permettent de limiter certaines sollicitations."],["Messages","Chaque conversation doit rester liée au bon contact. Les notifications et la présence dépendent de vos préférences.","Évitez de partager des informations sensibles inutilement."],["Alertes","Les alertes regroupent les événements qui nécessitent votre attention : interactions, demandes et autres événements de compte.","Une alerte peut être marquée comme vue lorsque vous l’ouvrez."],["Mentions","Les mentions relient un compte à un contenu. Les réglages d’identification déterminent comment elles peuvent être contrôlées.","Pour un contenu problématique, utilisez les outils de signalement ou de retrait disponibles."]]],
       privacy:["Confidentialité","TAFAß • CONTRÔLE","La confidentialité combine plusieurs réglages, pas un seul bouton.",[["Audience","Choisissez qui peut voir vos futures publications et les éléments publics de votre profil.","Vérifiez l’audience avant chaque publication importante."],["Recherche","Les contrôles de recherche déterminent certaines façons dont votre compte peut être retrouvé.","Réduire la recherche peut aussi réduire la facilité de retrouver votre compte."],["Blocage","Le blocage protège votre espace contre un compte que vous ne souhaitez plus laisser interagir avec vous.","La liste de blocage permet de revoir les comptes concernés."],["Localisation","La localisation précise est une donnée sensible : activez-la uniquement lorsqu’une fonction le nécessite.","Évitez de publier une adresse exacte sans raison."]]],
       security:["Sécurité du compte","TAFAß • PROTECTION","Protéger l’accès au compte et reconnaître rapidement les situations inhabituelles.",[["Secrets de connexion","Ne communiquez jamais mot de passe, code reçu, code de récupération ou jeton de session.","Une assistance sérieuse ne doit pas demander votre secret."],["Connexions","Consultez les connexions actives lorsqu’elles sont disponibles et examinez toute connexion inconnue.","Révoquez une connexion non reconnue si l’outil le permet."],["Messages suspects","Méfiez-vous des promesses de gains, demandes de paiement urgent ou demandes d’informations privées.","N’ouvrez pas automatiquement un lien provenant d’un compte inconnu."],["Après un incident","Sécurisez l’accès, examinez l’activité récente et utilisez l’assistance si le problème persiste.","Conservez les faits utiles sans transmettre de données secrètes."]]],
       saved:["Enregistrements","TAFAß • BIBLIOTHÈQUE","Une bibliothèque personnelle pour retrouver rapidement les contenus utiles.",[["Retrouver","Les publications sauvegardées apparaissent dans un espace dédié avec leur auteur et leur contenu lorsqu’ils sont encore disponibles.","Une publication supprimée par son auteur peut ne plus être accessible."],["Ouvrir","Chaque fiche peut proposer une action pour revenir au contenu d’origine ou consulter son contexte.","L’enregistrement ne partage pas automatiquement le contenu."],["Retirer","Retirer un enregistrement enlève votre sauvegarde mais ne supprime pas la publication originale.","Seul le propriétaire dispose des contrôles de suppression de son contenu."],["Garder propre","Retirez régulièrement les éléments devenus inutiles pour conserver une bibliothèque rapide à parcourir.","Les futurs filtres peuvent enrichir cet espace sans changer son principe."]]],
-      creator:["Pages, Groupes & créateurs","TAFAß • COMMUNAUTÉS","Séparer clairement profil personnel, Page, groupe et activité créateur.",[["Pages","Une Page peut représenter une activité, un projet ou une présence publique. Ses outils de gestion sont distincts du profil personnel.","Les fonctions de gestion sont réservées aux comptes autorisés."],["Groupes","Les groupes permettent des discussions autour d’un thème. Leurs règles peuvent compléter les standards généraux.","La visibilité dépend du type de groupe."],["Créateurs","Les outils créateur servent à publier et analyser votre activité.","Les outils disponibles dépendent de votre compte et des règles du service."],["Administration","Les actions sensibles doivent être réservées aux rôles autorisés et rester cohérentes avec les données serveur.","Une décision administrative n’est pas simplement un élément visuel d’interface."]]],
+      creator:["Pages, Groupes & créateurs","TAFAß • COMMUNAUTÉS","Séparer clairement profil personnel, Page, groupe et activité créateur.",[["Pages","Une Page peut représenter une activité, un projet ou une présence publique. Ses outils de gestion sont distincts du profil personnel.","Les fonctions de gestion sont réservées aux comptes autorisés."],["Groupes","Les groupes permettent des discussions autour d’un thème. Leurs règles peuvent compléter les standards généraux.","La visibilité dépend du type de groupe."],["Créateurs","Les outils créateur servent à publier, analyser l’activité et, lorsque l’éligibilité est remplie, utiliser certaines fonctions de monétisation.","Aucune monétisation ne garantit un revenu automatique."],["Administration","Les actions sensibles doivent être réservées aux rôles autorisés et rester cohérentes avec les données serveur.","Une décision administrative n’est pas simplement un élément visuel d’interface."]]],
+      boost:["Boost & sponsorisation","TAFAß • ADS","Distinguer clairement une publication normale d’un contenu Boosté.",[["Publication normale","Une publication organique suit les règles habituelles d’audience et de distribution.","Elle ne doit pas afficher la marque publicitaire du Boost."],["Créer un Boost","Le Boost ajoute objectif, audience, budget et durée puis suit un parcours de paiement et de validation.","Créer une campagne ne signifie pas qu’elle est déjà active."],["Marquage","Un contenu sponsorisé doit être immédiatement identifiable. Tafaß utilise une marque du type « TAFAß ADS · SPONSORISÉ · BOOST ».","Cette identification accompagne la diffusion de la campagne."],["Statistiques","Les impressions, portée et clics doivent correspondre aux événements enregistrés côté serveur.","Les chiffres publicitaires ne doivent pas être présentés comme des résultats fictifs."]]],
       technical:["Assistance technique","TAFAß • SUPPORT","Une méthode claire pour les écrans lents, bloqués ou incomplets.",[["Écran bloqué","Attendez la fin du chargement puis revenez une seule fois à la section précédente avant de réessayer.","Évitez les doubles clics pendant une transition."],["Donnée absente","Contrôlez que l’action a été validée et regardez la section où le résultat devrait apparaître.","Une erreur serveur peut empêcher une donnée de s’afficher."],["Lenteur","Vérifiez la connexion et évitez de lancer plusieurs actions simultanément.","Indiquez quelle section est lente plutôt que toute l’application."],["Rapport utile","Donnez la section, l’action, le résultat attendu, le résultat obtenu et le message d’erreur éventuel.","Une capture peut aider si elle ne contient aucun secret."]]],
       ideas:["Idées & amélioration","TAFAß • ÉVOLUTION","Transformer une idée en proposition claire et exploitable.",[["Le besoin","Expliquez ce que vous voulez accomplir et à quel endroit de l’application.","Un exemple concret est plus utile qu’une demande très générale."],["Le bénéfice","Précisez si l’idée améliore vitesse, lisibilité, sécurité, découverte ou gestion.","Cela aide à comprendre sa valeur."],["La priorité","Une amélioration fréquente peut être plus utile qu’une fonction complexe rarement utilisée.","Regrouper les idées proches évite les doublons."],["La confidentialité","N’incluez pas d’informations personnelles inutiles dans une suggestion.","Utilisez des exemples génériques lorsque c’est suffisant."]]],
       report:["Signalement","TAFAß • MODÉRATION","Signaler un problème avec précision sans exposer de données privées.",[["Choisir l’élément","Utilisez le signalement depuis le compte, la publication ou l’élément concerné lorsqu’il est disponible.","Sélectionner l’élément précis facilite l’examen."],["Décrire les faits","Expliquez ce qui s’est passé avec des informations factuelles et utiles.","Évitez les insultes et les données privées inutiles."],["Ne pas confondre désaccord et infraction","Un contenu peut ne pas vous plaire sans enfreindre une règle.","Réservez le signalement aux situations qui nécessitent réellement un examen."],["Après l’envoi","Le signalement demande un examen ; il ne constitue pas automatiquement une décision de modération.","Les mesures dépendent des règles et des informations disponibles."]]]
@@ -3643,6 +3703,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
         ["security","◈","Sécurité du compte","Protéger l’accès, reconnaître une activité inhabituelle et réagir sans communiquer ses secrets."],
         ["saved","♡","Enregistrements","Retrouver vos contenus sauvegardés, les ouvrir rapidement et retirer ceux qui ne sont plus utiles."],
         ["creator","▰","Pages, Groupes & créateurs","Comprendre les espaces communautaires, les outils professionnels et les fonctions créateur."],
+        ["boost","✦","Boost & sponsorisation","Comprendre la différence entre contenu normal, Boost et publicité sponsorisée avec son marquage dédié."],
         ["technical","⌘","Assistance technique","Méthode pour signaler un écran qui ne s’ouvre pas, un bouton inactif ou une synchronisation lente."],
         ["ideas","⌁","Idées & amélioration","Décrire une suggestion utile, son objectif et le bénéfice attendu pour l’expérience."],
         ["report","⚑","Signalement","Choisir le bon élément, expliquer les faits et protéger les informations privées lors d’un signalement."]
@@ -4097,11 +4158,11 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
 
       if (["terms","privacy-policy","cookies","community-standards","about-tafass"].includes(action)) {
         const docs={
-          "terms":{title:"Conditions de service",file:"terms.html",intro:"Les règles qui encadrent l’utilisation de Tafaß et les responsabilités liées au compte.",sections:[["Acceptation","L’utilisation de Tafaß suppose l’acceptation des règles applicables au service. Les fonctions peuvent évoluer et certaines peuvent être soumises à des conditions supplémentaires."],["Compte","Les informations de compte doivent rester aussi exactes que possible. Protégez vos moyens d’accès et ne partagez pas vos codes."],["Contenu","Vous restez responsable des contenus que vous publiez. N’utilisez pas Tafaß pour frauder, nuire, contourner les protections ou porter atteinte aux droits d’autrui."],["Interactions","Les commentaires, réactions, messages, partages et mentions doivent respecter les standards de la communauté."],["Restrictions","Certaines fonctions peuvent être limitées lorsqu’un risque de sécurité, un abus ou une violation des règles doit être examiné."],["Évolution du service","Tafaß peut modifier, améliorer ou interrompre temporairement certaines fonctions pour des raisons techniques, de sécurité ou d’évolution du produit."]]},
+          "terms":{title:"Conditions de service",file:"terms.html",intro:"Les règles qui encadrent l’utilisation de Tafaß et les responsabilités liées au compte.",sections:[["Acceptation","L’utilisation de Tafaß suppose l’acceptation des règles applicables au service. Les fonctions peuvent évoluer et certaines peuvent être soumises à des conditions supplémentaires."],["Compte","Les informations de compte doivent rester aussi exactes que possible. Protégez vos moyens d’accès et ne partagez pas vos codes."],["Contenu","Vous restez responsable des contenus que vous publiez. N’utilisez pas Tafaß pour frauder, nuire, contourner les protections ou porter atteinte aux droits d’autrui."],["Interactions","Les commentaires, réactions, messages, partages et mentions doivent respecter les standards de la communauté."],["Publicité et Boost","Une campagne publicitaire doit suivre le processus prévu de création, paiement et validation. Une demande créée n’est pas automatiquement une campagne active."],["Monétisation","Les revenus et retraits sont soumis aux règles d’éligibilité, de sécurité et de traitement disponibles dans Tafaß."],["Restrictions","Certaines fonctions peuvent être limitées lorsqu’un risque de sécurité, un abus ou une violation des règles doit être examiné."],["Évolution du service","Tafaß peut modifier, améliorer ou interrompre temporairement certaines fonctions pour des raisons techniques, de sécurité ou d’évolution du produit."]]},
           "privacy-policy":{title:"Politique de confidentialité",file:"privacy.html",intro:"Comprendre les informations traitées par Tafaß, leur utilisation et les contrôles disponibles.",sections:[["Informations de compte","Selon les fonctions utilisées, Tafaß peut traiter les informations de profil, les publications, les interactions, les notifications et les données nécessaires à la sécurité."],["Authentification","Les fournisseurs d’authentification peuvent transmettre les informations autorisées par leur flux. Tafaß ne demande pas votre mot de passe à un autre service."],["Fonctionnement","Les données servent à afficher les contenus, gérer les interactions, maintenir la session et fournir les fonctions demandées."],["Publicité","Les campagnes sponsorisées peuvent utiliser les critères de ciblage disponibles et autorisés. Les événements publicitaires servent à mesurer impressions, portée et clics."],["Sécurité","Les contrôles serveur et les permissions protègent les comptes et opérations sensibles, sans qu’un service en ligne puisse promettre une sécurité absolue."],["Conservation","Les informations peuvent être conservées pendant la durée nécessaire au fonctionnement, à la sécurité, à la prévention des abus et aux obligations applicables."],["Contrôle","Les réglages du compte permettent de gérer une partie de la visibilité, des notifications, de la recherche, de la présence et du blocage."]]},
           "cookies":{title:"Politique d’utilisation des cookies",file:"cookies.html",intro:"Expliquer les cookies et mécanismes locaux nécessaires au fonctionnement de Tafaß.",sections:[["Fonctionnement local","Le navigateur peut conserver des données techniques nécessaires à la session, aux préférences et au fonctionnement de l’interface."],["Authentification","Certains mécanismes locaux participent au maintien de la session et à la sécurité du parcours de connexion."],["Préférences","Des informations locales peuvent mémoriser des choix d’interface ou de confort afin d’éviter de les redemander."],["Services externes","Un fournisseur externe peut utiliser ses propres mécanismes lorsque vous choisissez une fonction comme l’authentification correspondante."],["Contrôle navigateur","Vous pouvez contrôler certaines données locales dans les réglages du navigateur. Désactiver une donnée strictement nécessaire peut empêcher une fonction de fonctionner correctement."]]},
           "community-standards":{title:"Standards de la communauté",file:"community-standards.html",intro:"Des règles communes pour préserver un espace utile, respectueux et sûr.",sections:[["Respect","Les échanges doivent rester respectueux. Le harcèlement, les menaces et les comportements destinés à nuire aux autres ne sont pas acceptés."],["Contenu dangereux ou illégal","N’utilisez pas Tafaß pour diffuser ou organiser des activités illégales, frauduleuses ou dangereuses."],["Fraude et manipulation","Les faux engagements, les manipulations destinées à tromper les utilisateurs et les contournements des protections peuvent entraîner des restrictions."],["Vie privée","Ne publiez pas inutilement les informations privées d’une autre personne et respectez les contrôles de confidentialité."],["Signalement","Utilisez les outils de signalement lorsque vous pensez qu’un compte ou un contenu nécessite un examen."],["Examen","Un signalement déclenche un processus d’examen ; il ne garantit pas automatiquement une mesure précise. Les décisions dépendent des règles et des éléments disponibles."]]},
-          "about-tafass":{title:"À propos de Tafaß",file:"about-tafass.html",intro:"Tafaß est pensé comme un espace social où profil, communauté, création et services complémentaires peuvent coexister dans une interface unique.",sections:[["Identité","Tafaß — Votre réseau. Votre communauté. L’application met l’accent sur une navigation claire, des profils accessibles depuis les contenus et des espaces séparés pour chaque usage."],["Actualités","Le fil rassemble les publications et interactions disponibles : textes, médias, réactions, commentaires, réponses et partage."],["Communauté","Amis, Messages, Alertes, Groupes et Pages structurent les relations et les espaces communautaires sans mélanger leurs fonctions."],["Création","Reels, vidéos, Creator Studio, musique et autres outils peuvent accompagner les utilisateurs qui souhaitent publier et développer leur contenu."],["Tafaß ADS","Le système publicitaire distingue les contenus sponsorisés des publications normales grâce à une identification dédiée. "],["Enregistrements","La bibliothèque personnelle permet de conserver des publications utiles et de les retirer sans supprimer le contenu original."],["Confidentialité","Les réglages permettent de contrôler plusieurs dimensions de la visibilité et des interactions. La confidentialité est traitée comme une partie centrale de l’expérience."],["Évolution","Tafaß peut évoluer avec de nouvelles fonctions, améliorations de performance et outils communautaires. Les fonctionnalités affichées dans l’application correspondent à la version disponible sur l’appareil."]]}
+          "about-tafass":{title:"À propos de Tafaß",file:"about-tafass.html",intro:"Tafaß est pensé comme un espace social où profil, communauté, création et services complémentaires peuvent coexister dans une interface unique.",sections:[["Identité","Tafaß — Votre réseau. Votre communauté. L’application met l’accent sur une navigation claire, des profils accessibles depuis les contenus et des espaces séparés pour chaque usage."],["Actualités","Le fil rassemble les publications et interactions disponibles : textes, médias, réactions, commentaires, réponses et partage."],["Communauté","Amis, Messages, Alertes, Groupes et Pages structurent les relations et les espaces communautaires sans mélanger leurs fonctions."],["Création","Reels, vidéos, Creator Studio, musique et autres outils peuvent accompagner les utilisateurs qui souhaitent publier et développer leur contenu."],["Tafaß ADS","Le système publicitaire distingue les contenus sponsorisés des publications normales grâce à une identification dédiée. Le Boost suit un parcours de budget, paiement et validation."],["Enregistrements","La bibliothèque personnelle permet de conserver des publications utiles et de les retirer sans supprimer le contenu original."],["Confidentialité","Les réglages permettent de contrôler plusieurs dimensions de la visibilité et des interactions. La confidentialité est traitée comme une partie centrale de l’expérience."],["Évolution","Tafaß peut évoluer avec de nouvelles fonctions, améliorations de performance et outils communautaires. Les fonctionnalités affichées dans l’application correspondent à la version disponible sur l’appareil."]]}
         };
         const d=docs[action];
         const body=d.sections.map(s=>`<article class="legal-long-block"><h4>${esc(s[0])}</h4><p>${esc(s[1])}</p></article>`).join("");
@@ -4302,6 +4363,23 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     } catch (_) { return null; }
   }
 
+  function createTafabAd() {
+    openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • PUBLICITÉ</span><h3>Publier une publicité</h3><div class="form-stack"><label>Titre<input id="adTitle" placeholder="Titre de la publicité" required></label><label>Description<textarea id="adDesc" placeholder="Votre message publicitaire"></textarea></label><label>Image URL <span class="muted-inline">(optionnel)</span><input id="adImage" type="url" placeholder="https://..."></label><label>Lien <span class="muted-inline">(optionnel)</span><input id="adUrl" type="url" placeholder="https://..."></label><button class="primary big" data-action="save-tafab-ad">Publier</button></div></div>`);
+  }
+
+  async function saveTafabAd() {
+    const title=$("adTitle")?.value.trim();
+    if(!title) return toast("Ajoutez un titre.");
+    const imageUrl=safeHttpUrl($("adImage")?.value, {allowEmpty:true});
+    const targetUrl=safeHttpUrl($("adUrl")?.value, {allowEmpty:true});
+    if($("adImage")?.value.trim() && !imageUrl) return toast("L’URL de l’image doit commencer par http:// ou https://.");
+    if($("adUrl")?.value.trim() && !targetUrl) return toast("Le lien doit commencer par http:// ou https://.");
+    const r=await sb.from("tafab_ads").insert({ owner_id:state.user.id, title, description:$("adDesc")?.value.trim()||"", image_url:$("adImage")?.value.trim()||null, target_url:$("adUrl")?.value.trim()||null, status:"active" }).select().single();
+    if(r.error) return toast(r.error.message);
+    await logActivity("tafab_ad_created", "Publicité Tafaß publiée", "tafab_ad", r.data.id);
+    closeModal(); toast("Publicité publiée"); await tafabPage();
+  }
+
   async function contactTafabListing(id) {
     const {data:x,error}=await sb.from("tafab_listings").select("*").eq("id",id).maybeSingle();
     if(error||!x) return toast(error?.message||"Offre introuvable");
@@ -4453,11 +4531,37 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   }
 
 
-  async function isAdminAccessAllowed(){
+  async function tafaV74IsAdmin(){
     try{ if(state.__isAdmin===true)return true; const {data}=await sb.from('profiles').select('is_admin,admin_badge').eq('id',state.user?.id||'').maybeSingle(); const ok=data?.is_admin===true||data?.admin_badge===true; if(ok)state.__isAdmin=true; return !!ok; }catch(_){return false;}
   }
-  async function adminShowAllUsers(){
-    if(!(await adminIsAllowed()))return toast('Accès réservé à l’administration.');
+  async function tafaV74LoadPlatformWallet(){
+    if(!state.user?.id)return null;
+    const r=await sb.from('tafa_platform_wallets_v74').select('coins,earnings_mga,lifetime_earnings_mga,total_withdrawn_mga,referral_code,referral_uses').eq('user_id',state.user.id).maybeSingle();
+    return r.data||null;
+  }
+  async function tafaV74OpenAdminWithdrawal(){
+    const ok=await tafaV74IsAdmin(); if(!ok)return toast('Accès réservé à l’administration.');
+    const w=await tafaV74LoadPlatformWallet(); const available=Number(w?.earnings_mga||0);
+    if(available<1000)return toast('Solde disponible insuffisant : minimum 1 000 Ar.');
+    const methods=await sb.from('tafab_creator_payout_methods').select('id,provider,phone,account_name,bank_name,bank_account,status').eq('user_id',state.user.id).eq('status','active').in('provider',['mvola','orange_money','airtel_money']).order('is_default',{ascending:false});
+    const rows=(methods.data||[]).map(m=>`<option value="${esc(m.id)}">${esc(({mvola:'MVola',orange_money:'Orange Money',airtel_money:'Airtel Money',bank:'Banque'})[m.provider]||m.provider)} · ${esc(m.provider==='bank'?(m.bank_name||'Banque'):m.phone||'')}</option>`).join('');
+    openModal(`<div class="modal-box monet-modal tafa-v74-admin-withdraw"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß · ADMIN</span><h3>Retrait prioritaire</h3><p class="muted">Solde disponible : <b>${available.toLocaleString('fr-FR')} Ar</b>. Le retrait admin est disponible dès que le solde atteint 1 000 Ar.</p><label>Montant (Ar)<input id="v74AdminWithdrawAmount" type="number" min="1000" max="${available}" step="100" value="${Math.max(1000,Math.floor(available))}"></label><label>Moyen<select id="v74AdminWithdrawMethod" class="premium-input">${rows||'<option value="">Aucun moyen actif</option>'}</select></label><button class="primary big" data-action="v74-admin-withdraw">Retirer maintenant</button></div>`);
+  }
+  async function tafaV74SubmitAdminWithdrawal(){
+    const amount=Math.floor(Number($('v74AdminWithdrawAmount')?.value||0)), method=$('v74AdminWithdrawMethod')?.value||'';
+    if(amount<1000)return toast('Minimum : 1 000 Ar.'); if(!method)return toast('Ajoutez un moyen de retrait actif.');
+    const r=await sb.rpc('tafa_admin_request_platform_withdrawal_v74',{p_amount_mga:amount,p_payout_method_id:method});
+    if(r.error)return toast(r.error.message);
+    closeModal();
+    const payout=await sb.functions.invoke('tafa-payout',{body:{request_id:r.data,kind:'platform'}});
+    if(payout.error) return toast('Demande enregistrée, mais le service de paiement est indisponible. Le retrait reste visible dans l’historique.');
+    if(payout.data?.ok) toast(`Paiement envoyé · ${payout.data.reference||'référence reçue'}`);
+    else if(payout.data?.status==='processing') toast('Paiement transmis au prestataire. Statut : en traitement.');
+    else toast(payout.data?.error||'Demande enregistrée. Le paiement doit encore être traité.');
+    return creatorMonetisationPage();
+  }
+  async function tafaV74ShowAdminUsers(){
+    if(!(await tafaV74IsAdmin()))return toast('Accès réservé à l’administration.');
     const r=await sb.rpc('tafa_admin_list_users',{p_limit:200,p_offset:0}); if(r.error)return toast(r.error.message);
     const rows=(r.data||[]).map(u=>{
       const nm=([u.first_name,u.last_name].filter(Boolean).join(' ')||u.username||u.email||'Compte');
@@ -4468,6 +4572,146 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     }).join('')||'<div class="empty">Aucun compte.</div>';
     openModal(`<div class="modal-box v74-admin-users-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß · COMPTES</span><h3>Tous les comptes utilisateurs</h3><div class="v74-admin-user-list">${rows}</div></div>`);
   }
+
+  async function creatorMonetisationPage(){
+    const uid=state.user.id;
+    const [walletR,profileR,methodsR,withdrawR,ledgerR,papiR,platformR,referralR]=await Promise.all([
+      sb.from('tafab_wallets').select('coins,earnings_mga,pending_earnings_mga,lifetime_earnings_mga,total_withdrawn_mga,updated_at').eq('user_id',uid).maybeSingle(),
+      sb.from('tafab_creator_monetization').select('*').eq('user_id',uid).maybeSingle(),
+      sb.from('tafab_creator_payout_methods').select('id,provider,phone,account_name,is_default,status,created_at').eq('user_id',uid).order('is_default',{ascending:false}).order('created_at',{ascending:false}),
+      sb.from('tafab_withdrawal_requests').select('id,amount_mga,method,destination_hint,status,created_at,processed_at,admin_note,provider_reference,payout_attempts,last_payout_error').eq('user_id',uid).order('created_at',{ascending:false}).limit(30),
+      sb.from('tafab_creator_earnings').select('id,source_type,gross_mga,platform_fee_mga,net_mga,status,description,created_at').eq('creator_id',uid).order('created_at',{ascending:false}).limit(30),
+      sb.from('tafab_papi_payments').select('id,reference,amount_mga,coins,provider,payment_method,payment_status,created_at,paid_at').eq('user_id',uid).order('created_at',{ascending:false}).limit(20),
+      sb.from('tafa_platform_wallets_v74').select('coins,earnings_mga,pending_earnings_mga,lifetime_earnings_mga,total_withdrawn_mga,referral_code,referral_uses').eq('user_id',uid).maybeSingle(),
+      sb.from('tafa_referral_rewards_v88').select('id',{count:'exact',head:true}).eq('referrer_user_id',uid)
+    ]);
+    const w=walletR.data||{coins:0,earnings_mga:0,pending_earnings_mga:0,lifetime_earnings_mga:0,total_withdrawn_mga:0};
+    const isAdminAccount=await tafaV74IsAdmin();
+    const platformWithdrawR=isAdminAccount ? await sb.from('tafa_admin_withdrawals_v74').select('id,amount_mga,status,created_at,processed_at,admin_note,provider_reference,payout_attempts,last_payout_error,payout_method_id').eq('admin_user_id',uid).order('created_at',{ascending:false}).limit(30) : {data:[]};
+    const platformWithdrawals=platformWithdrawR.data||[];
+    const mp={...(profileR.data||{status:'not_requested',enabled:false,min_withdrawal_mga:1000,revenue_share_percent:70,coins_to_mga:10}),...(isAdminAccount?{status:'approved',enabled:true,revenue_share_percent:100}: {})};
+    const methods=methodsR.data||[], withdrawals=withdrawR.data||[], ledger=ledgerR.data||[], papiPayments=papiR.error?[]:(papiR.data||[]), platform=platformR.data||null;
+    const referralUses=referralR?.error ? Number(platform?.referral_uses||0) : Number(referralR?.count||0);
+    const statusLabel={not_requested:'Non activé',pending:'En cours de vérification',approved:'Monétisation active',suspended:'Suspendue'}[mp.status]||mp.status||'Non activé';
+    const providerLabel={mvola:'MVola',orange_money:'Orange Money',airtel_money:'Airtel Money',bank:'Banque'};
+    const available=Number(w.earnings_mga||0), pending=Number(w.pending_earnings_mga||0), lifetime=Number(w.lifetime_earnings_mga||0), withdrawn=Number(w.total_withdrawn_mga||0), coins=Number(w.coins||0);
+    const conversionCoins=Math.max(1,Number(mp.coins_to_mga||10));
+    const methodRows=methods.map(m=>`<div class="monet-row"><div><b>${esc(providerLabel[m.provider]||m.provider)}</b><small>${m.provider==='bank'?esc((m.bank_name||'Banque')+' · '+(m.bank_account||'')):esc(m.phone||'')} · ${esc(m.account_name||'')}</small></div><span class="monet-pill ${m.status==='active'?'ok':''}">${m.status==='active'?'Actif':'Désactivé'}</span></div>`).join('')||'<div class="empty">Aucun moyen de retrait enregistré.</div>';
+    const earningRows=ledger.map(x=>`<div class="monet-row"><div><b>${esc(x.description||x.source_type||'Revenu')}</b><small>${timeAgo(x.created_at)} · ${esc(x.status||'available')}</small></div><strong>+${Number(x.net_mga||0).toLocaleString('fr-FR')} Ar</strong></div>`).join('')||'<div class="empty">Aucun revenu enregistré pour le moment.</div>';
+    const papiRows=papiPayments.map(x=>{const st=x.payment_status==='SUCCESS'?'Payé':x.payment_status==='FAILED'?'Échec':'En attente'; return `<div class="monet-row papi-payment-row"><div><b>🟢 ${Number(x.coins||0).toLocaleString('fr-FR')} coins · ${Number(x.amount_mga||0).toLocaleString('fr-FR')} Ar</b><small>${esc(x.payment_method||x.provider||'Papi')} · ${timeAgo(x.created_at)}</small></div><span class="monet-pill ${x.payment_status==='SUCCESS'?'ok':x.payment_status==='FAILED'?'bad':''}">${st}</span></div>`;}).join('')||'<div class="empty">Aucun achat Papi.</div>';
+    const withdrawalRows=withdrawals.map(x=>{const st=x.status==='paid'?'Payé':x.status==='processing'?'En traitement':x.status==='failed'?'Échec':x.status==='approved'?'Validé':x.status==='rejected'?'Refusé':'En attente'; const cls=x.status==='paid'?'ok':(['rejected','failed'].includes(x.status)?'bad':''); const ref=x.provider_reference?` · Réf. ${esc(x.provider_reference)}`:''; const err=x.last_payout_error?` · ${esc(x.last_payout_error)}`:''; return `<div class="monet-row"><div><b>${Number(x.amount_mga||0).toLocaleString('fr-FR')} Ar · ${esc(providerLabel[x.method]||x.method||'Mobile Money')}</b><small>${esc(x.destination_hint||'')} · ${timeAgo(x.created_at)}${ref}${x.admin_note?' · '+esc(x.admin_note):''}${err}</small></div><span class="monet-pill ${cls}">${st}</span></div>`;}).join('')||'<div class="empty">Aucune demande de retrait.</div>';
+    const actions=isAdminAccount
+      ? ''
+      : mp.status==='approved'
+        ? `<button class="primary" data-action="request-withdrawal">💸 Retirer mes revenus</button><button class="secondary-action" data-action="add-payout-method">＋ Moyen de retrait</button>`
+        : mp.status==='pending'
+          ? `<button class="secondary-action" disabled>⏳ Vérification en cours</button>`
+          : `<button class="primary" data-action="request-monetization">🚀 Demander l’activation</button>`;
+    const platformWithdrawalRows=platformWithdrawals.map(x=>{const st=x.status==='paid'?'Payé':x.status==='processing'?'En traitement':x.status==='failed'?'Échec':x.status==='rejected'?'Refusé':'En attente'; const cls=x.status==='paid'?'ok':(['rejected','failed'].includes(x.status)?'bad':''); const ref=x.provider_reference?` · Réf. ${esc(x.provider_reference)}`:''; const err=x.last_payout_error?` · ${esc(x.last_payout_error)}`:''; const repair=(x.status==='pending'&&!x.provider_reference)?`<button class="ghost-action" data-action="repair-legacy-platform-withdrawal" data-id="${esc(x.id)}">Corriger l’ancien retrait</button>`:''; return `<div class="monet-row"><div><b>${Number(x.amount_mga||0).toLocaleString('fr-FR')} Ar · Retrait plateforme</b><small>${timeAgo(x.created_at)}${ref}${err}</small></div><span class="monet-pill ${cls}">${st}</span>${repair}</div>`;}).join('')||'<div class="empty">Aucun retrait plateforme.</div>';
+    const adminPlatform = isAdminAccount && platform ? `<section class="monet-panel tafa-v74-admin-wallet"><div class="monet-section-title"><div><span class="eyebrow">TAFAß · ADMIN</span><h3>Mon portefeuille plateforme</h3><small class="admin-section-note">Coins et revenus générés par l’activité globale, calculés côté serveur.</small></div><button class="primary" data-action="v74-admin-open-withdraw">💸 Retrait</button></div><div class="monet-kpis"><div><span>Coins</span><b>${Number(platform.coins||0).toLocaleString('fr-FR')} 🪙</b></div><div><span>Disponible</span><b>${Number(platform.earnings_mga||0).toLocaleString('fr-FR')} Ar</b></div><div><span>Total gagné</span><b>${Number(platform.lifetime_earnings_mga||0).toLocaleString('fr-FR')} Ar</b></div><div><span>Parrainage</span><b>${Number(platform.referral_uses||0).toLocaleString('fr-FR')}</b><small>${esc(platform.referral_code||'')}</small></div></div><div class="monet-info-grid"><div><b>En traitement</b><span>${Number(platform.pending_earnings_mga||0).toLocaleString('fr-FR')} Ar</span></div><div><b>Total retiré</b><span>${Number(platform.total_withdrawn_mga||0).toLocaleString('fr-FR')} Ar</span></div></div><div class="monet-section-title"><div><h3>Historique des retraits</h3><small class="admin-section-note">Statut et référence du prestataire lorsqu’elles sont disponibles.</small></div></div><div class="monet-list">${platformWithdrawalRows}</div></section>` : '';
+    const referralActive=isAdminAccount || (mp.status==='approved' && mp.enabled!==false);
+    const referralCard = platform ? `<section class="monet-panel tafa-referral-panel-v75"><div class="monet-section-title"><div><span class="eyebrow">TAFAß · PARRAINAGE</span><h3>Votre code de parrainage</h3><small class="admin-section-note">Le code existe pour tous les comptes. Il devient utilisable pour les récompenses lorsque la monétisation est activée. Il reste facultatif à l’inscription et ne bloque jamais la création d’un compte.</small></div><button class="primary" data-action="copy-referral-code" data-code="${esc(platform.referral_code||'')}">⧉ Copier</button></div><div class="v75-referral-code"><strong>${esc(platform.referral_code||'TAFASS-—')}</strong><span class="${referralActive?'referral-active':'referral-inactive'}">${referralActive?'✓ Code actif':'○ Activation de la monétisation requise'} · ${referralUses.toLocaleString('fr-FR')} utilisation${referralUses===1?'':'s'}</span></div></section>` : '';
+    const creatorMonetHtml=`<div class="monet-kpis"><div><span>Disponible</span><b>${available.toLocaleString('fr-FR')} Ar</b><small>Retirable maintenant</small></div><div><span>En attente</span><b>${pending.toLocaleString('fr-FR')} Ar</b><small>Retraits en cours</small></div><div><span>Total gagné</span><b>${lifetime.toLocaleString('fr-FR')} Ar</b><small>Depuis l’activation</small></div><div><span>Total retiré</span><b>${withdrawn.toLocaleString('fr-FR')} Ar</b><small>Paiements finalisés</small></div></div>
+      <section class="monet-panel monet-explainer-v2"><div class="monet-section-title"><div><span class="eyebrow">COMMENT ÇA MARCHE ?</span><h3>Monétisation Tafaß, de A à Z</h3></div></div><div class="monet-longtext-v2">
+        <p><b>1. Devenir créateur éligible.</b> Vous demandez l’accès au programme. L’administration vérifie le compte, l’activité, le respect des règles et les conditions de monétisation. L’activation est une autorisation de participer au programme, pas une promesse de revenu automatique.</p>
+        <p><b>2. Créer du contenu utile.</b> Les publications, vidéos, Reels et directs peuvent développer votre audience. Une audience réelle, active et engagée augmente les possibilités de revenus. Les vues artificielles, le spam, les manipulations ou les activités frauduleuses ne doivent pas être utilisés pour générer des gains.</p>
+        <p><b>3. Recevoir des cadeaux et du soutien.</b> Pendant un Live, les spectateurs peuvent utiliser leurs coins pour envoyer des cadeaux. Les coins reçus sont enregistrés côté serveur et convertis en revenu monétaire selon le taux affiché par Tafaß. Le solde créateur est crédité uniquement par les opérations validées par le système.</p>
+        <p><b>4. Conversion coins → argent.</b> Le taux actuel affiché est <strong>${conversionCoins.toLocaleString('fr-FR')} coins = 1 Ar brut</strong>. Après la part créateur de ${Number(mp.revenue_share_percent||70)} %, cela représente environ <strong>${(Number(mp.revenue_share_percent||70)/100).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})} Ar net</strong> pour ${conversionCoins.toLocaleString('fr-FR')} coins de valeur brute.</p>
+        <p><b>5. Revenus publicitaires.</b> Les publicités sponsorisées financées par des annonceurs constituent une autre source potentielle. Une campagne payée par un annonceur ne signifie pas automatiquement qu’un créateur reçoit de l’argent : seule la part explicitement attribuée au programme créateur, après validation et calcul serveur, peut alimenter son portefeuille.</p>
+        <p><b>6. Solde disponible et solde en attente.</b> Le montant <em>Disponible</em> peut être demandé en retrait. Le montant <em>En attente</em> est réservé pour un retrait déjà envoyé à l’administration et ne peut pas être retiré une deuxième fois.</p>
+        <p><b>7. Retrait.</b> Ajoutez un compte MVola, Orange Money ou Airtel Money à votre nom, choisissez le montant et envoyez la demande. Le montant est réservé immédiatement. L’administration vérifie la demande, effectue le paiement réel sur le compte Mobile Money indiqué, puis marque la demande comme <strong>Payé</strong>.</p>
+        <p><b>8. Sécurité.</b> Le portefeuille, les crédits de revenus, les réservations de retrait et les conversions importantes sont traités côté serveur. Le navigateur ne doit jamais pouvoir augmenter lui-même son solde.</p>
+      </div></section>
+      <section class="monet-panel"><div class="monet-panel-head"><div><span class="eyebrow">PROGRAMME CRÉATEUR</span><h3>${esc(statusLabel)}</h3><p>${mp.status==='approved'?'Votre compte est éligible aux revenus configurés par Tafaß.':'Demandez l’accès au programme. L’administration vérifie votre compte avant activation.'}</p></div>${actions}</div><div class="monet-info-grid"><div><b>Part créateur</b><span>${Number(mp.revenue_share_percent||70)} %</span></div><div><b>Seuil de retrait</b><span>${Number(mp.min_withdrawal_mga||1000).toLocaleString('fr-FR')} Ar</span></div><div><b>Conversion</b><span>🪙 ${conversionCoins.toLocaleString('fr-FR')} coins = 1 Ar brut</span></div></div></section>
+      <section class="monet-panel papi-coins-panel"><div class="monet-section-title"><div><span class="eyebrow">TAFAß × PAPI</span><h3>🪙 Vos coins</h3><small class="admin-section-note">${coins.toLocaleString('fr-FR')} coins actuellement disponibles pour soutenir les créateurs.</small></div><button class="primary" data-action="papi-buy-coins">＋ Acheter des coins</button></div><div class="monet-coin-callout-v2"><strong>${coins.toLocaleString('fr-FR')} 🪙</strong><span>Achat sécurisé via Papi. Le solde est crédité uniquement après la notification serveur confirmant le paiement.</span></div></section>
+      <section class="monet-panel"><div class="monet-section-title"><div><h3>Moyens de retrait</h3><small class="admin-section-note">MVola, Orange Money, Airtel Money ou Banque.</small></div><button class="ghost-action" data-action="add-payout-method">Ajouter</button></div><div class="monet-list">${methodRows}</div></section>
+      <section class="monet-panel"><div class="monet-section-title"><div><h3>Revenus récents</h3><small class="admin-section-note">Chaque revenu validé est inscrit dans votre registre.</small></div></div><div class="monet-list">${earningRows}</div></section>
+      <section class="monet-panel papi-history-panel"><div class="monet-section-title"><div><span class="eyebrow">PAIEMENTS SÉCURISÉS</span><h3>Achats via Papi</h3><small class="admin-section-note">Statut confirmé par le serveur Tafaß.</small></div></div><div class="monet-list">${papiRows}</div></section>
+      <section class="monet-panel"><div class="monet-section-title"><div><h3>Demandes de retrait</h3><small class="admin-section-note">En attente → En traitement → Payé, ou Échec/Refusé. Un retrait n’est marqué Payé qu’après confirmation du prestataire.</small></div></div><div class="monet-list">${withdrawalRows}</div></section>`;
+    const adminMonetHtml=`<section class="monet-panel tafa-admin-monetization-active"><div class="monet-panel-head"><div><span class="eyebrow">TAFAß · ADMIN</span><h3>Monétisation automatiquement active</h3><p>Le compte administrateur est activé automatiquement. Il ne passe pas par l’achat de coins : il reçoit les revenus plateforme et utilise uniquement le portefeuille administrateur et le retrait.</p></div></div><div class="monet-info-grid"><div><b>Statut</b><span>Actif automatiquement</span></div><div><b>Achat de coins</b><span>Non disponible pour Admin</span></div><div><b>Retrait</b><span>Portefeuille Admin</span></div></div></section>`;
+    simplePage('Monétisation',`<section class="monet-hero monet-hero-v2"><div><span class="eyebrow">TAFAß • CREATOR MONETIZATION</span><h2>${isAdminAccount?'Monétisation administrateur':'Transformez votre audience en revenus.'}</h2><p>${isAdminAccount?'Le compte administrateur bénéficie automatiquement de la monétisation plateforme.':'Créez, développez votre communauté, recevez des cadeaux et convertissez les revenus éligibles en argent retirable.'}</p></div><span class="monet-status ${mp.status==='approved'?'active':''}">● ${esc(statusLabel)}</span></section>
+      ${referralCard}${adminPlatform}${isAdminAccount?adminMonetHtml:creatorMonetHtml}`);
+  }
+
+  function openMonetizationRequest(){
+    openModal(`<div class="modal-box monet-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • CREATOR PROGRAM</span><h3>Activer la monétisation</h3><p class="muted">Votre demande sera vérifiée par l’administration. L’activation ne garantit pas un revenu : les revenus dépendent des sources monétisées et des règles Tafaß.</p><label>Présentation du compte<textarea id="monetReason" class="premium-input" maxlength="800" placeholder="Décrivez votre activité de créateur…"></textarea></label><button class="primary big" data-action="submit-monetization-request">Envoyer la demande</button></div>`);
+  }
+  async function submitMonetizationRequest(){
+    const reason=$('monetReason')?.value.trim()||'';
+    const r=await sb.rpc('tafab_request_creator_monetization',{p_reason:reason});
+    if(r.error)return toast(r.error.message);
+    closeModal(); toast('Demande de monétisation envoyée.'); return creatorMonetisationPage();
+  }
+  function openPapiCoinsPurchase(){
+    openModal(`<div class="modal-box monet-modal papi-buy-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß × PAPI</span><h3>Acheter des coins</h3><p class="muted">Choisissez un pack ou personnalisez le nombre de coins. Le tarif est fixe : <strong>20 coins = 1 Ar</strong>, soit <strong>0,05 Ar par coin</strong>. Le paiement est effectué sur la page sécurisée Papi.</p><div class="papi-pack-grid"><button class="papi-pack active" data-papi-coins="10000"><b>500 Ar</b><span>10 000 🪙</span></button><button class="papi-pack" data-papi-coins="50000"><b>2 500 Ar</b><span>50 000 🪙</span></button><button class="papi-pack" data-papi-coins="100000"><b>5 000 Ar</b><span>100 000 🪙</span></button><button class="papi-pack" data-papi-coins="250000"><b>12 500 Ar</b><span>250 000 🪙</span></button></div><div class="papi-custom-box"><div><b>Personnaliser votre achat</b><small>Entrez le nombre de coins souhaité. Le prix s'adapte automatiquement.</small></div><label>Nombre de coins<input id="papiCustomCoins" class="premium-input" type="number" min="1000" step="1000" inputmode="numeric" value="10000" placeholder="Ex. 30000"></label><div class="papi-custom-price"><span>Prix</span><strong id="papiCalculatedPrice">500 Ar</strong></div></div><label>Moyen de paiement<select id="papiProvider" class="premium-input"><option value="">Choisir sur Papi</option><option value="MVOLA">🟢 MVola</option><option value="ORANGE_MONEY">🟠 Orange Money</option><option value="AIRTEL_MONEY">🔴 Airtel Money</option></select></label><input id="papiAmount" type="hidden" value="500"><input id="papiCoins" type="hidden" value="10000"><button class="primary big" data-action="papi-create-payment">Continuer vers Papi</button><small class="papi-secure-foot">🔐 API key conservée uniquement dans Supabase Edge Functions. Le solde est crédité après confirmation serveur.</small></div>`);
+    const sync=coins=>{
+      const c=Math.max(1000,Math.floor(Number(coins||0)/1000)*1000);
+      const amount=Math.round(c/20);
+      const ci=$('papiCustomCoins'),ai=$('papiAmount'),coin=$('papiCoins'),price=$('papiCalculatedPrice');
+      if(ci)ci.value=String(c); if(ai)ai.value=String(amount); if(coin)coin.value=String(c); if(price)price.textContent=`${amount.toLocaleString('fr-FR')} Ar`;
+    };
+    document.querySelectorAll('.papi-pack').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('.papi-pack').forEach(x=>x.classList.remove('active'));btn.classList.add('active');sync(btn.dataset.papiCoins||'10000');}));
+    $('papiCustomCoins')?.addEventListener('input',e=>{document.querySelectorAll('.papi-pack').forEach(x=>x.classList.remove('active'));sync(e.target.value);});
+    sync(10000);
+  }
+
+  async function createPapiCoinPayment(){
+    const coins=Math.floor(Number($('papiCoins')?.value||$('papiCustomCoins')?.value||0));
+    const amount=Math.round(Number($('papiAmount')?.value||0));
+    const provider=String($('papiProvider')?.value||'');
+    if(coins<1000 || coins%1000!==0 || amount!==Math.round(coins/20)) return toast('Nombre de coins invalide. Choisissez un multiple de 1 000.');
+    const {data,error}=await sb.functions.invoke('tafa-papi-payment',{body:{amount,coins,provider}});
+    if(error){
+      const msg=String(error.message||'');
+      return toast(/failed to fetch|fetch failed|network/i.test(msg)?'Impossible de joindre le paiement Papi. Vérifiez que l’Edge Function « tafa-papi-payment » est déployée.':msg);
+    }
+    if(!data?.ok||!data?.paymentLink)return toast(data?.error||'Papi n’a pas retourné de lien de paiement.');
+    closeModal();
+    toast('Redirection vers Papi…');
+    window.location.assign(data.paymentLink);
+  }
+
+  function openPayoutMethod(){
+    openModal(`<div class="modal-box monet-modal payout-premium-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • RETRAIT SÉCURISÉ</span><h3>Ajouter un moyen de retrait</h3><p class="muted">Choisissez où Tafaß doit envoyer votre paiement. Les coordonnées sont enregistrées côté serveur et utilisées uniquement pour les retraits.</p><label>Moyen de paiement<select id="payoutProvider" class="premium-input"><option value="mvola">🟢 MVola</option><option value="orange_money">🟠 Orange Money</option><option value="airtel_money">🔴 Airtel Money</option><option value="bank">🏦 Banque</option></select></label><div id="payoutMobileFields"><label>Numéro Mobile Money<input id="payoutPhone" class="premium-input" maxlength="30" inputmode="tel" placeholder="Ex. 034 00 000 00"></label><label>Nom du titulaire<input id="payoutName" class="premium-input" maxlength="120" placeholder="Nom associé au compte Mobile Money"></label></div><div id="payoutBankFields" style="display:none"><label>Nom de la banque<input id="payoutBankName" class="premium-input" maxlength="120" placeholder="Ex. BNI, BOA, BMOI..."></label><label>Numéro de compte / RIB<input id="payoutBankAccount" class="premium-input" maxlength="80" placeholder="RIB ou numéro de compte"></label><label>Nom du titulaire<input id="payoutBankHolder" class="premium-input" maxlength="120" placeholder="Nom exact du titulaire"></label></div><label class="check-row"><input id="payoutDefault" type="checkbox" checked> Utiliser comme moyen principal</label><button class="primary big" data-action="save-payout-method">Enregistrer</button></div>`);
+    const sel=$('payoutProvider');
+    const toggle=()=>{const bank=sel?.value==='bank'; const mf=$('payoutMobileFields'),bf=$('payoutBankFields'); if(mf)mf.style.display=bank?'none':'block'; if(bf)bf.style.display=bank?'block':'none';};
+    sel?.addEventListener('change',toggle); toggle();
+  }
+  async function savePayoutMethod(){
+    const provider=$('payoutProvider')?.value||'mvola', phone=$('payoutPhone')?.value.trim()||'', name=$('payoutName')?.value.trim()||'', bankName=$('payoutBankName')?.value.trim()||'', bankAccount=$('payoutBankAccount')?.value.trim()||'', bankHolder=$('payoutBankHolder')?.value.trim()||'', def=!!$('payoutDefault')?.checked;
+    if(provider==='bank'){
+      if(!bankName||bankAccount.replace(/\s/g,'').length<6||!bankHolder)return toast('Informations bancaires incomplètes.');
+    }else if(!phone||phone.replace(/\D/g,'').length<9)return toast('Numéro Mobile Money invalide.');
+    const r=await sb.rpc('tafab_save_payout_method_v67_3',{p_provider:provider,p_phone:phone,p_account_name:provider==='bank'?bankHolder:name,p_bank_name:bankName,p_bank_account:bankAccount,p_is_default:def});
+    if(r.error)return toast(r.error.message); closeModal(); toast('Moyen de retrait enregistré.'); return creatorMonetisationPage();
+  }
+  async function openWithdrawalRequest(){
+    openModal(`<div class="modal-box monet-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • RETRAIT</span><h3>Retirer vos revenus</h3><p class="muted">Minimum de retrait : <strong>1 000 Ar</strong>, soit <strong>10 000 coins</strong> de valeur brute selon le barème actuel. Le montant est réservé immédiatement. Le paiement est ensuite envoyé par le service de paiement configuré et l’historique affiche l’opérateur, le statut et la référence de transaction.</p><label>Montant (Ar)<input id="withdrawAmount" type="number" min="1000" step="100" inputmode="numeric" placeholder="Ex. 10000"><small class="monet-method-hint">Seuil : 1 000 Ar minimum. 10 000 coins = 1 000 Ar brut.</small></label><label>Moyen<select id="withdrawMethod" class="premium-input"><option value="">Sélectionnez un moyen</option></select></label><div id="withdrawMethodHint" class="monet-method-hint"></div><button class="primary big" data-action="submit-withdrawal">Demander le retrait</button></div>`);
+    const r=await sb.from('tafab_creator_payout_methods').select('id,provider,phone,account_name,bank_name,bank_account,status').eq('user_id',state.user.id).eq('status','active').order('is_default',{ascending:false});
+    const sel=$('withdrawMethod'); if(!sel)return;
+    (r.data||[]).forEach(m=>{const o=document.createElement('option');o.value=m.id;o.textContent=`${({mvola:'MVola',orange_money:'Orange Money',airtel_money:'Airtel Money',bank:'Banque'})[m.provider]||m.provider} · ${m.provider==='bank'?(m.bank_name||'Compte bancaire'):m.phone}`;o.dataset.provider=m.provider;o.dataset.phone=m.phone;o.dataset.bank=m.bank_name||'';sel.appendChild(o);});
+    sel.addEventListener('change',()=>{const o=sel.options[sel.selectedIndex];$('withdrawMethodHint').textContent=o?.dataset?.provider==='bank'?`Virement vers ${o.textContent}`:(o?.dataset?.phone?`Paiement vers ${o.textContent}`:'');});
+  }
+  async function submitWithdrawal(){
+    const amount=Math.floor(Number($('withdrawAmount')?.value||0)), methodId=$('withdrawMethod')?.value||'';
+    if(!Number.isFinite(amount)||amount<1000)return toast('Montant minimum : 1 000 Ar.');
+    if(!methodId)return toast('Sélectionnez un moyen de retrait.');
+    const r=await sb.rpc('tafab_request_creator_withdrawal',{p_amount_mga:amount,p_payout_method_id:methodId});
+    if(r.error)return toast(r.error.message); closeModal(); toast('Demande de retrait enregistrée.'); return creatorMonetisationPage();
+  }
+  function openCreatorPricing(){
+    openModal(`<div class="modal-box monet-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • SOUTIEN</span><h3>Abonnements & cadeaux</h3><p class="muted">Les abonnements et cadeaux sont des sources de revenus créateur. Leur règlement doit être financé par de vrais paiements enregistrés côté Tafaß.</p><div class="monet-info-card"><b>Important</b><span>Les vues seules ne créent pas automatiquement de l’argent. Les revenus publicitaires doivent provenir de campagnes réellement payées par les annonceurs.</span></div><button class="primary big" data-action="close-modal">Compris</button></div>`);
+  }
+
+  async function sendLiveGift(gift='heart',coins=10){
+    if(!liveSessionId || liveRole!=='viewer') return toast('Le cadeau est disponible pendant un direct.');
+    const r=await sb.from('live_sessions').select('user_id,status').eq('id',liveSessionId).maybeSingle();
+    if(r.error||!r.data||r.data.status!=='live')return toast('Ce direct est terminé.');
+    const rpc=await sb.rpc('tafab_send_live_gift',{p_live_session_id:liveSessionId,p_receiver_id:r.data.user_id,p_gift_type:gift,p_coins:coins});
+    if(rpc.error)return toast(rpc.error.message.includes('Insufficient')?'Coins insuffisants.':rpc.error.message);
+    toast(`Cadeau ${gift==='rose'?'🌹':gift==='star'?'⭐':'❤️'} envoyé !`);
+  }
+
 
   // V26.3: use Supabase Functions SDK instead of a manual fetch.
   // This keeps the project URL/auth handling centralized and avoids browser
@@ -4505,6 +4749,138 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     catch(e){toast(e?.message||"Impossible de contacter Tafaß AI.");}
     finally{setLoading(btn,false,"✦ Demander à Tafaß AI");}
   }
+  async function musicHubPage(){
+    const token=state.renderToken;
+    const [tr,likes]=await Promise.all([sb.from("tafab_music_tracks").select("id,title,genre,mood,duration_seconds,audio_url,cover_url,play_count,artist_id").eq("is_published",true).order("created_at",{ascending:false}).limit(80),sb.from("tafab_music_likes").select("track_id").eq("user_id",state.user.id)]);
+    if(token!==state.renderToken||state.route!=="music")return;
+    const liked=new Set((likes.data||[]).map(x=>x.track_id));
+    const rows=(tr.data||[]).map(t=>`<article class="v25-track"><button class="v25-track-play" data-action="music-play-db" data-id="${esc(t.id)}">▶</button><div class="v25-track-cover">♫</div><div class="v25-track-main"><b>${esc(t.title)}</b><small>${esc(t.genre||"Tafaß Original")} · ${esc(t.mood||"Ambiance")}${t.play_count?` · ${Number(t.play_count).toLocaleString('fr-FR')} écoutes`:""}</small></div><button class="v25-track-like ${liked.has(t.id)?"active":""}" data-action="music-like" data-id="${esc(t.id)}">${liked.has(t.id)?"♥":"♡"}</button></article>`).join("")||`<div class="empty">Le catalogue Music 2.0 sera rempli lorsque des artistes ou créateurs publieront leurs pistes.</div>`;
+    simplePage("Tafaß Music",`<div class="v25-music-hero"><div><span class="eyebrow">TAFAß • MUSIC 2.0</span><h3>Écoutez, découvrez, créez vos playlists.</h3><p>Catalogue extensible pour artistes, albums, playlists et favoris. Les pistes sans fichier audio peuvent utiliser le moteur original généré de Tafaß.</p></div><button class="primary" data-action="music-create-playlist">＋ Nouvelle playlist</button></div><div class="v25-music-tools"><input id="musicSearch" class="premium-input" placeholder="Rechercher un titre, style ou ambiance…"><button class="secondary-action" data-action="publisher-music">♫ Music Lab</button></div><section class="v25-music-panel"><div class="section-title"><div><h3>Découvrir</h3><small class="admin-section-note">${(tr.data||[]).length} piste(s) du catalogue serveur</small></div></div><div id="musicTrackList" class="v25-track-list">${rows}</div></section>`);
+    $("musicSearch")?.addEventListener("input",e=>{const q=e.target.value.toLowerCase();document.querySelectorAll(".v25-track").forEach(x=>x.classList.toggle("hidden",q&&!x.textContent.toLowerCase().includes(q)));});
+  }
+  async function playDbMusic(id){
+    const t=(await sb.from("tafab_music_tracks").select("*").eq("id",id).maybeSingle()).data; if(!t)return toast("Piste introuvable.");
+    if(t.audio_url){ let a=window.__tafassMusicAudio; if(a){a.pause();a=null;} a=new Audio(t.audio_url); window.__tafassMusicAudio=a; a.play().catch(()=>toast("Lecture audio bloquée par le navigateur.")); }
+    else { const catalog=publisherMusicCatalog(); const fallback=catalog.find(x=>x.title.toLowerCase()===String(t.title).toLowerCase())||catalog[(Number(t.play_count)||0)%catalog.length]; playGeneratedMusic(fallback); }
+    sb.rpc("tafab_music_register_play",{p_track_id:id}).catch(()=>{}); toast(`Lecture : ${t.title}`);
+  }
+  async function toggleMusicLike(id){
+    const q=await sb.from("tafab_music_likes").select("track_id").eq("user_id",state.user.id).eq("track_id",id).maybeSingle();
+    const r=q.data?await sb.from("tafab_music_likes").delete().eq("user_id",state.user.id).eq("track_id",id):await sb.from("tafab_music_likes").insert({user_id:state.user.id,track_id:id});
+    if(r.error)return toast(r.error.message); return musicHubPage();
+  }
+  function openMusicPlaylist(){openModal(`<div class="modal-box v25-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • PLAYLIST</span><h3>Créer une playlist</h3><input id="playlistName" class="premium-input" maxlength="80" placeholder="Nom de la playlist"><textarea id="playlistDesc" class="premium-input" maxlength="300" placeholder="Description (optionnel)"></textarea><button class="primary big" data-action="save-music-playlist">Créer</button></div>`)}
+  async function saveMusicPlaylist(){const name=$("playlistName")?.value.trim();if(!name)return toast("Donnez un nom à la playlist.");const r=await sb.from("tafab_music_playlists").insert({user_id:state.user.id,name,description:$("playlistDesc")?.value.trim()||"",is_public:false});if(r.error)return toast(r.error.message);closeModal();toast("Playlist créée.");}
+
+  async function openBoostPost(postId){
+    const q=await sb.from('posts').select('id,user_id,content,media_url,media_type').eq('id',postId).maybeSingle();
+    const post=q.data;
+    if(q.error||!post)return toast('Publication introuvable.');
+    if(post.user_id!==state.user.id)return toast('Vous pouvez uniquement booster votre propre publication.');
+    const type=post.media_type==='reel'?'reel':String(post.media_type||'').startsWith('video')?'video':String(post.media_type||'').startsWith('image')?'photo':'post';
+    openModal(`<div class="modal-box boost-modal-premium"><button class="modal-close" data-action="close-modal">×</button><div class="boost-hero"><div class="boost-mark">✦</div><div><span class="eyebrow">TAFAß • BOOST</span><h3>Booster cette publication</h3><p>Transformez votre publication en contenu sponsorisé après paiement et validation administrative.</p></div></div><div class="boost-preview">${post.media_url?(type==='video'||type==='reel'?`<video src="${esc(post.media_url)}" controls playsinline></video>`:`<img src="${esc(post.media_url)}" alt="Publication">`):''}<div><b>${esc((post.content||'Publication Tafaß').slice(0,100))}</b><small>Type : ${esc(type.toUpperCase())}</small></div></div><div class="boost-section"><span class="boost-section-title">OBJECTIF</span><div class="boost-objective-grid"><button class="boost-choice active" data-boost-objective="awareness">👁️<b>Visibilité</b><small>Plus de portée</small></button><button class="boost-choice" data-boost-objective="engagement">❤️<b>Engagement</b><small>Réactions, commentaires</small></button><button class="boost-choice" data-boost-objective="traffic">🔗<b>Trafic</b><small>Plus de clics</small></button></div></div><div class="boost-section"><span class="boost-section-title">AUDIENCE</span><label>Zone ciblée<input id="boostLocation" class="premium-input" value="Madagascar" maxlength="120" placeholder="Madagascar ou une ville"></label><div class="grid2"><label>Âge minimum<input id="boostAgeMin" type="number" min="18" max="100" value="18"></label><label>Âge maximum<input id="boostAgeMax" type="number" min="18" max="100" value="65"></label></div><label>Genre<select id="boostGender" class="premium-input"><option value="all">Tout le monde</option><option value="male">Hommes</option><option value="female">Femmes</option></select></label><small class="boost-note">Le ciblage utilise uniquement les informations réellement disponibles dans les profils Tafaß. Aucun profil individuel n'est vendu.</small></div><div class="boost-section"><span class="boost-section-title">BUDGET & DURÉE</span><div class="grid2"><label>Budget / jour (Ar)<input id="boostDaily" type="number" min="0" step="1000" value="10000"></label><label>Budget total (Ar)<input id="boostTotal" type="number" min="1000" step="1000" value="70000"></label></div><div class="grid2"><label>Début<input id="boostStart" type="date" value="${new Date().toISOString().slice(0,10)}"></label><label>Fin<input id="boostEnd" type="date"></label></div></div><input type="hidden" id="boostPostId" value="${esc(post.id)}"><input type="hidden" id="boostAdType" value="${esc(type)}"><button class="primary big boost-submit" data-action="create-boost-post">Continuer vers le paiement →</button></div>`);
+    document.querySelectorAll('[data-boost-objective]').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('[data-boost-objective]').forEach(x=>x.classList.remove('active'));b.classList.add('active');},{once:false}));
+  }
+  async function createBoostPost(){
+    const postId=$('boostPostId')?.value, adType=$('boostAdType')?.value||'post', objective=document.querySelector('[data-boost-objective].active')?.dataset.boostObjective||'awareness';
+    const min=Number($('boostAgeMin')?.value||18), max=Number($('boostAgeMax')?.value||65), daily=Math.max(0,Number($('boostDaily')?.value||0)), total=Math.max(0,Number($('boostTotal')?.value||0));
+    if(!postId)return toast('Publication invalide.'); if(min>max)return toast("La tranche d'âge est invalide."); if(total<1000)return toast('Budget total minimum : 1 000 Ar.'); if(daily>0&&daily>total)return toast('Le budget quotidien ne peut pas dépasser le budget total.');
+    const start=$('boostStart')?.value?new Date($('boostStart').value+'T00:00:00').toISOString():new Date().toISOString(); const endRaw=$('boostEnd')?.value; const end=endRaw?new Date(endRaw+'T23:59:59').toISOString():null;
+    if(end&&new Date(end)<=new Date(start))return toast('La date de fin doit être postérieure au début.');
+    const r=await sb.rpc('tafa_create_boost_campaign',{p_post_id:postId,p_ad_type:adType,p_objective:objective,p_name:`Boost ${adType} · Tafaß`,p_daily_budget_mga:daily,p_total_budget_mga:total,p_audience_location:$('boostLocation')?.value.trim()||'Madagascar',p_age_min:min,p_age_max:max,p_gender:$('boostGender')?.value||'all',p_starts_at:start,p_ends_at:end});
+    if(r.error)return toast(r.error.message); const id=r.data; closeModal(); return openBoostPayment(id,total);
+  }
+  async function openBoostPayment(campaignId,total){
+    openModal(`<div class="modal-box boost-modal-premium"><button class="modal-close" data-action="close-modal">×</button><div class="boost-hero"><div class="boost-mark">₿</div><div><span class="eyebrow">TAFAß • PAIEMENT PUBLICITAIRE</span><h3>Finaliser le paiement</h3><p>Le budget sera vérifié par l'administration avant diffusion de la campagne.</p></div></div><div class="boost-total-card"><small>BUDGET TOTAL</small><strong>${Number(total).toLocaleString('fr-FR')} Ar</strong><span>Prépayé · diffusion après validation</span></div><div class="payment-choice-grid"><button class="payment-method active" data-action="select-boost-payment" data-method="Airtel Money">🔴 Airtel Money</button><button class="payment-method" data-action="select-boost-payment" data-method="Yas Money">🟡 Yas Money</button></div><input type="hidden" id="boostPaymentMethod" value="Airtel Money"><label>Référence de transaction<input id="boostPaymentRef" class="premium-input" maxlength="160" placeholder="Référence exacte de votre paiement"></label><small class="boost-note">Effectuez le paiement sur le moyen de paiement officiel indiqué par Tafaß, puis saisissez sa référence exacte. L'activation est impossible tant que le paiement n'est pas vérifié.</small><button class="primary big" data-action="submit-boost-payment" data-id="${esc(campaignId)}" data-amount="${esc(total)}">Envoyer le paiement à vérifier</button></div>`);
+  }
+  async function submitBoostPayment(id,amount){
+    const ref=$('boostPaymentRef')?.value.trim()||'', method=$('boostPaymentMethod')?.value||'Airtel Money';
+    if(!ref)return toast('Ajoutez la référence exacte de la transaction.');
+    const r=await sb.rpc('tafa_submit_boost_payment',{p_campaign_id:id,p_method:method,p_amount_mga:Number(amount),p_reference:ref});
+    if(r.error)return toast(r.error.message); closeModal(); toast('Paiement envoyé. Votre campagne est en attente de vérification.'); return businessAdsPage();
+  }
+  async function openBoostPage(){
+    const q=await sb.from('pages').select('id,name,username,logo_url').eq('owner_id',state.user.id).order('created_at',{ascending:false});
+    const pages=q.data||[]; if(q.error)return toast(q.error.message); if(!pages.length)return toast('Créez d’abord une Page.');
+    openModal(`<div class="modal-box boost-modal-premium"><button class="modal-close" data-action="close-modal">×</button><div class="boost-hero"><div class="boost-mark">👥</div><div><span class="eyebrow">TAFAß • PAGE</span><h3>Promouvoir une Page</h3><p>Votre Page sera présentée comme sponsorisée pour gagner de nouveaux abonnés.</p></div></div><label>Page<select id="boostPageId" class="premium-input">${pages.map(x=>`<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('')}</select></label><div class="boost-section"><span class="boost-section-title">OBJECTIF</span><div class="boost-objective-grid"><button class="boost-choice active"><span>👥</span><b>Plus d'abonnés</b><small>Développer la communauté</small></button></div></div><div class="boost-section"><span class="boost-section-title">AUDIENCE</span><label>Zone ciblée<input id="boostLocation" class="premium-input" value="Madagascar" maxlength="120"></label><div class="grid2"><label>Âge minimum<input id="boostAgeMin" type="number" min="18" max="100" value="18"></label><label>Âge maximum<input id="boostAgeMax" type="number" min="18" max="100" value="65"></label></div><label>Genre<select id="boostGender" class="premium-input"><option value="all">Tout le monde</option><option value="male">Hommes</option><option value="female">Femmes</option></select></label></div><div class="boost-section"><span class="boost-section-title">BUDGET</span><div class="grid2"><label>Budget / jour (Ar)<input id="boostDaily" type="number" min="0" step="1000" value="10000"></label><label>Budget total (Ar)<input id="boostTotal" type="number" min="1000" step="1000" value="70000"></label></div></div><button class="primary big" data-action="create-boost-page">Continuer vers le paiement →</button></div>`);
+  }
+  async function createBoostPage(){
+    const pageId=$('boostPageId')?.value, min=Number($('boostAgeMin')?.value||18),max=Number($('boostAgeMax')?.value||65),daily=Math.max(0,Number($('boostDaily')?.value||0)),total=Math.max(0,Number($('boostTotal')?.value||0));
+    if(!pageId)return toast('Page invalide.'); if(min>max)return toast("La tranche d'âge est invalide."); if(total<1000)return toast('Budget total minimum : 1 000 Ar.'); if(daily>total&&daily>0)return toast('Le budget quotidien ne peut pas dépasser le budget total.');
+    const r=await sb.rpc('tafa_create_boost_campaign',{p_page_id:pageId,p_ad_type:'page_followers',p_objective:'page_followers',p_name:'Promotion Page · Tafaß',p_daily_budget_mga:daily,p_total_budget_mga:total,p_audience_location:$('boostLocation')?.value.trim()||'Madagascar',p_age_min:min,p_age_max:max,p_gender:$('boostGender')?.value||'all',p_starts_at:new Date().toISOString()});
+    if(r.error)return toast(r.error.message); closeModal(); return openBoostPayment(r.data,total);
+  }
+  async function recordSponsoredEvent(id,type){ if(!id)return; try{await sb.rpc('tafab_register_ad_event',{p_campaign_id:id,p_event_type:type});}catch(_){} }
+  function sponsoredAdHTML(ad){
+    const isVideo=String(ad.media_type||'').includes('video');
+    const mediaUrl=ad.media_url||'';
+    const media=mediaUrl?(isVideo?`<button type="button" class="sponsored-media-button" data-action="sponsored-view" data-id="${esc(ad.campaign_id)}" data-media-url="${esc(mediaUrl)}" data-media-type="video" data-title="${esc(ad.title||'Publicité Tafaß')}" data-description="${esc(ad.description||'')}" data-page-id="${esc(ad.page_id||'')}" data-target="${esc(ad.target_url||'')}"><video class="sponsored-media" src="${esc(mediaUrl)}" muted playsinline preload="metadata"></video><span class="sponsored-media-overlay">▶ Voir la publicité</span></button>`:`<button type="button" class="sponsored-media-button" data-action="sponsored-view" data-id="${esc(ad.campaign_id)}" data-media-url="${esc(mediaUrl)}" data-media-type="image" data-title="${esc(ad.title||'Publicité Tafaß')}" data-description="${esc(ad.description||'')}" data-page-id="${esc(ad.page_id||'')}" data-target="${esc(ad.target_url||'')}"><img class="sponsored-media" src="${esc(mediaUrl)}" alt="Publicité sponsorisée" loading="lazy"><span class="sponsored-media-overlay">Voir la publicité</span></button>`):ad.page_logo_url?`<button type="button" class="sponsored-media-button" data-action="sponsored-view" data-id="${esc(ad.campaign_id)}" data-media-type="page" data-title="${esc(ad.title||ad.page_name||'Publicité Tafaß')}" data-description="${esc(ad.description||'')}" data-page-id="${esc(ad.page_id||'')}" data-target="${esc(ad.target_url||'')}"><img class="sponsored-media sponsored-page-logo" src="${esc(ad.page_logo_url)}" alt="${esc(ad.page_name||'Page')}"><span class="sponsored-media-overlay">Voir la publicité</span></button>`:'';
+    const cta=ad.ad_type==='page_followers'?'S’abonner':ad.objective==='traffic'?'En savoir plus':ad.ad_type==='reel'?'Voir le Reel':'Voir';
+    return `<article class="sponsored-card" data-sponsored-id="${esc(ad.campaign_id)}"><div class="sponsored-head"><div class="sponsored-brand"><span class="sponsored-dot">✦</span><div><b>${esc(ad.page_name||'Sponsor Tafaß')}</b><small>Publicité · Sponsorisé</small></div></div><span class="sponsored-label"><b>✦ BOOSTÉ</b><small>TAFAß ADS · SPONSORISÉ</small></span></div>${media}<div class="sponsored-copy"><h3>${esc(ad.title||'Publicité Tafaß')}</h3><p>${esc(ad.description||'')}</p><div class="sponsored-actions"><button class="secondary-action" data-action="sponsored-view" data-id="${esc(ad.campaign_id)}" data-media-url="${esc(mediaUrl)}" data-media-type="${esc(isVideo?'video':mediaUrl?'image':'page')}" data-title="${esc(ad.title||'Publicité Tafaß')}" data-description="${esc(ad.description||'')}" data-page-id="${esc(ad.page_id||'')}" data-target="${esc(ad.target_url||'')}">Voir</button><button class="primary sponsored-cta" data-action="sponsored-click" data-id="${esc(ad.campaign_id)}" data-page-id="${esc(ad.page_id||'')}" data-target="${esc(ad.target_url||'')}">${cta}</button></div></div></article>`;
+  }
+
+  function openSponsoredView(actionEl){
+    const id=actionEl?.dataset?.id||'', mediaUrl=actionEl?.dataset?.mediaUrl||'', mediaType=actionEl?.dataset?.mediaType||'image', title=actionEl?.dataset?.title||'Publicité Tafaß', description=actionEl?.dataset?.description||'', pageId=actionEl?.dataset?.pageId||'', target=actionEl?.dataset?.target||'';
+    if(!id)return toast('Publicité sponsorisée introuvable.');
+    recordSponsoredEvent(id,'impression');
+    const media=mediaUrl?(mediaType==='video'?`<video class="sponsored-viewer-media" src="${esc(mediaUrl)}" controls autoplay playsinline preload="metadata"></video>`:`<img class="sponsored-viewer-media" src="${esc(mediaUrl)}" alt="${esc(title)}">`):'';
+    openModal(`<div class="modal-box sponsored-viewer-modal"><button class="modal-close" data-action="close-modal">×</button><div class="sponsored-viewer-brand"><span>✦ BOOSTÉ</span><small>TAFAß ADS · SPONSORISÉ</small></div><h3>${esc(title)}</h3>${media}<p>${esc(description)}</p><div class="sponsored-viewer-actions">${pageId?`<button class="secondary-action" data-action="sponsored-open-page" data-page-id="${esc(pageId)}">Voir la Page</button>`:''}${target?`<button class="primary" data-action="sponsored-open-target" data-id="${esc(id)}" data-target="${esc(target)}">Visiter</button>`:''}</div></div>`);
+  }
+
+  function adStatusLabel(status){return ({draft:'Brouillon',payment_pending:'Paiement à vérifier',pending_review:'En attente de validation',active:'Sponsorisé',paused:'En pause',completed:'Terminée',rejected:'Refusée'}[status]||status||'Inconnu');}
+  function adMoney(v){return `${Number(v||0).toLocaleString('fr-FR')} Ar`;}
+  function adPct(v){return `${Number(v||0).toFixed(2)}%`;}
+  async function openBoostOwnerDashboard(id){
+    if(!id)return toast('Campagne invalide.');
+    const q=await sb.from('tafab_ad_campaigns').select('*').eq('id',id).eq('owner_id',state.user.id).maybeSingle();
+    if(q.error||!q.data)return toast('Campagne introuvable ou accès refusé.');
+    const c=q.data;
+    const [st,days,pay]=await Promise.all([
+      sb.rpc('tafab_ad_campaign_dashboard',{p_campaign_id:id}),
+      sb.rpc('tafab_ad_campaign_daily_stats',{p_campaign_id:id,p_days:14}),
+      sb.from('tafab_ad_payments').select('method,amount_mga,transaction_reference,status,created_at,verified_at').eq('campaign_id',id).order('created_at',{ascending:false}).limit(5)
+    ]);
+    const x=st.data?.[0]||{};
+    const daily=days.data||[];
+    const payment=pay.data?.[0];
+    const max=Math.max(1,...daily.map(d=>Number(d.impressions||0)));
+    const chart=daily.length?`<div class="ad-dashboard-chart">${daily.map(d=>{const h=Math.max(8,Math.round(Number(d.impressions||0)/max*100));return `<div class="ad-chart-col"><span>${Number(d.impressions||0).toLocaleString('fr-FR')}</span><i style="height:${h}%"></i><small>${esc(String(d.day||'').slice(5))}</small></div>`}).join('')}</div>`:`<div class="ad-dashboard-empty">Les statistiques quotidiennes apparaîtront dès les premières diffusions.</div>`;
+    const status=adStatusLabel(c.status);
+    const remaining=Math.max(0,Number(c.total_budget_mga||0)-Number(c.spent_amount_mga||0));
+    const paymentBlock=payment?`<div class="ad-dashboard-payment"><div><span>PAIEMENT</span><b>${adMoney(payment.amount_mga)}</b><small>${esc(payment.method||'')} · Réf. ${esc(payment.transaction_reference||'')}</small></div><em class="ad-payment-state ${esc(payment.status||'')}">${esc(payment.status==='verified'?'Vérifié':payment.status==='pending'?'En vérification':payment.status==='rejected'?'Refusé':'Annulé')}</em></div>`:`<div class="ad-dashboard-empty">Aucun paiement enregistré.</div>`;
+    openModal(`<div class="modal-box ad-owner-dashboard-modal"><button class="modal-close" data-action="close-modal">×</button><div class="ad-dashboard-hero"><div class="ad-dashboard-mark">✦</div><div class="grow"><span class="eyebrow">TAFAß ADS · MON TABLEAU DE BORD</span><h3>${esc(c.name||'Campagne sponsorisée')}</h3><p>${esc(c.audience_location||'Madagascar')} · ${esc(c.objective||'awareness')} · ${esc(status)}</p></div><span class="ad-live-pill ${c.status==='active'?'live':''}"><i></i>${esc(status)}</span></div><div class="ad-dashboard-kpis"><div><strong>${Number(x.impressions||0).toLocaleString('fr-FR')}</strong><span>Impressions</span></div><div><strong>${Number(x.unique_reach||0).toLocaleString('fr-FR')}</strong><span>Personnes atteintes</span></div><div><strong>${Number(x.clicks||0).toLocaleString('fr-FR')}</strong><span>Clics</span></div><div><strong>${adPct(x.ctr)}</strong><span>CTR</span></div><div><strong>${adMoney(c.spent_amount_mga)}</strong><span>Dépensé</span></div><div><strong>${adMoney(remaining)}</strong><span>Reste</span></div></div><section class="ad-dashboard-section"><div class="ad-dashboard-section-head"><div><span class="eyebrow">ÉVOLUTION</span><h4>14 derniers jours</h4></div><span class="ad-dashboard-mini">Impressions quotidiennes</span></div>${chart}</section><section class="ad-dashboard-section"><div class="ad-dashboard-section-head"><div><span class="eyebrow">CAMPAGNE</span><h4>Paramètres & diffusion</h4></div></div><div class="ad-dashboard-grid"><div><span>Objectif</span><b>${esc(c.objective||'awareness')}</b></div><div><span>Audience</span><b>${esc(c.audience_location||'Madagascar')}</b></div><div><span>Âge</span><b>${Number(c.audience_age_min||18)}–${Number(c.audience_age_max||100)} ans</b></div><div><span>Budget total</span><b>${adMoney(c.total_budget_mga)}</b></div><div><span>Budget / jour</span><b>${adMoney(c.daily_budget_mga)}</b></div><div><span>Statut</span><b>${esc(status)}</b></div></div></section><section class="ad-dashboard-section"><div class="ad-dashboard-section-head"><div><span class="eyebrow">TRANSACTION</span><h4>Dernier paiement</h4></div></div>${paymentBlock}</section><div class="ad-dashboard-actions">${c.status==='active'?`<button class="secondary-action" data-action="owner-pause-boost" data-id="${esc(c.id)}">⏸ Mettre en pause</button>`:''}<button class="primary" data-action="owner-refresh-boost-dashboard" data-id="${esc(c.id)}">↻ Actualiser</button></div><div class="ad-dashboard-footnote">✦ Votre publicité conserve la marque <b>TAFAß ADS · SPONSORISÉ</b> pendant toute sa diffusion. Les chiffres sont calculés à partir des événements enregistrés côté serveur.</div></div>`);
+  }
+  async function pauseOwnerBoost(id){
+    if(!id)return;
+    const r=await sb.rpc('tafab_owner_pause_boost_campaign',{p_campaign_id:id});
+    if(r.error)return toast(r.error.message);
+    toast('Campagne mise en pause.');
+    closeModal();
+    return businessAdsPage();
+  }
+
+  async function businessAdsPage(){
+    const uid=state.user.id, token=state.renderToken;
+    const [b,c]=await Promise.all([
+      sb.from('tafab_business_profiles').select('*').eq('owner_id',uid).maybeSingle(),
+      sb.from('tafab_ad_campaigns').select('*').eq('owner_id',uid).order('created_at',{ascending:false}).limit(50)
+    ]);
+    if(token!==state.renderToken||state.route!=='business')return;
+    const campaigns=c.data||[], stats={};
+    await Promise.all(campaigns.map(async x=>{const r=await sb.rpc('tafab_ad_campaign_dashboard',{p_campaign_id:x.id});stats[x.id]=r.data?.[0]||{impressions:0,unique_reach:0,clicks:0,ctr:0};}));
+    const active=campaigns.filter(x=>x.status==='active').length;
+    const totalImp=Object.values(stats).reduce((n,x)=>n+Number(x.impressions||0),0), totalClicks=Object.values(stats).reduce((n,x)=>n+Number(x.clicks||0),0), totalReach=Object.values(stats).reduce((n,x)=>n+Number(x.unique_reach||0),0), totalSpent=campaigns.reduce((n,x)=>n+Number(x.spent_amount_mga||0),0);
+    const rows=campaigns.map(x=>{const st=stats[x.id]||{};return `<article class="v26-campaign ad-campaign-owner-card"><div class="v26-campaign-top"><div><span class="eyebrow">${esc(x.ad_type||x.objective||'BOOST').toUpperCase()}</span><h3>${esc(x.name)}</h3><small class="admin-section-note">${esc(x.audience_location||'Madagascar')} · ${Number(x.daily_budget_mga||0).toLocaleString('fr-FR')} Ar/jour</small></div><span class="v26-status ${esc(x.status)}">${esc(adStatusLabel(x.status))}</span></div><div class="v26-metrics"><div><b>${Number(st.impressions||0).toLocaleString('fr-FR')}</b><small>Impressions</small></div><div><b>${Number(st.unique_reach||0).toLocaleString('fr-FR')}</b><small>Portée</small></div><div><b>${Number(st.clicks||0).toLocaleString('fr-FR')}</b><small>Clics</small></div></div><div class="ad-owner-spend-row"><span>Budget ${adMoney(x.total_budget_mga)}</span><strong>${adMoney(x.spent_amount_mga)} dépensé</strong></div><div class="v26-actions"><button class="ghost-action ad-dashboard-open" data-action="open-boost-dashboard" data-id="${esc(x.id)}">📊 Tableau de bord</button>${x.status==='active'?`<button class="ghost-action" data-action="owner-pause-boost" data-id="${esc(x.id)}">⏸ Pause</button>`:''}</div><div class="ad-sponsored-mark">✦ TAFAß ADS <span>SPONSORISÉ</span></div></article>`}).join('')||'<div class="empty">Aucune campagne. Créez votre première campagne.</div>';
+    const biz=b.data;
+    simplePage('Business & Publicité',`<div class="v26-hero"><div><span class="eyebrow">TAFAß • ADS MANAGER</span><h3>Votre centre de publicité.</h3><p>Chaque Boost possède maintenant son propre tableau de bord pour suivre la diffusion, la portée, les clics, le budget et l’évolution de la campagne.</p></div><div class="v26-hero-actions"><button class="secondary-action" data-action="boost-page">👥 Promouvoir une Page</button><button class="primary big" data-action="new-ad-campaign">＋ Nouvelle campagne</button></div></div><div class="v26-kpis ad-owner-kpis"><div><b>${active}</b><small>Campagnes actives</small></div><div><b>${totalReach.toLocaleString('fr-FR')}</b><small>Personnes atteintes</small></div><div><b>${totalImp.toLocaleString('fr-FR')}</b><small>Impressions</small></div><div><b>${totalClicks.toLocaleString('fr-FR')}</b><small>Clics</small></div><div><b>${adMoney(totalSpent)}</b><small>Budget dépensé</small></div><div><b>${totalImp?adPct(100*totalClicks/totalImp):'0.00%'}</b><small>CTR global</small></div></div><section class="v26-panel ad-owner-intro"><div class="ad-owner-intro-icon">✦</div><div><span class="eyebrow">SUIVI EN DIRECT</span><h3>Vos publicités, leurs performances.</h3><p>Ouvrez <b>Tableau de bord</b> sur une campagne pour consulter les statistiques détaillées et l’évolution jour par jour.</p></div></section><section class="v26-panel"><div class="section-title"><div><h3>Profil Business</h3><small class="admin-section-note">${biz?'Votre identité professionnelle':'Présentez votre activité sur Tafaß'}</small></div><button class="secondary-action" data-action="edit-business-profile">${biz?'Modifier':'Créer'}</button></div>${biz?`<div class="v26-business-card"><div class="v26-business-logo">🏢</div><div class="grow"><b>${esc(biz.business_name)}</b><small>${esc(biz.category||'Entreprise')} · ${esc(biz.location||'Madagascar')}</small><p>${esc(biz.description||'')}</p></div>${biz.verified?'<span class="verified-mini">✓ Vérifié</span>':''}</div>`:'<div class="empty">Créez un profil Business pour centraliser votre activité.</div>'}</section><section class="v26-panel"><div class="section-title"><div><h3>Mes campagnes</h3><small class="admin-section-note">${campaigns.length} campagne(s) · cliquez sur Tableau de bord pour les détails</small></div></div><div class="v26-campaign-grid">${rows}</div></section>`);
+  }
+  function openBusinessProfile(){const b=window.__tafassBusiness||{};openModal(`<div class="modal-box v26-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • BUSINESS</span><h3>Profil professionnel</h3><label>Nom de l'entreprise<input id="bizName" class="premium-input" maxlength="120" value="${esc(b.business_name||'')}" placeholder="Ex. Tafaß Studio"></label><label>Catégorie<input id="bizCat" class="premium-input" maxlength="80" value="${esc(b.category||'Entreprise')}"></label><label>Localisation<input id="bizLoc" class="premium-input" maxlength="120" value="${esc(b.location||'Madagascar')}"></label><label>Description<textarea id="bizDesc" class="premium-input" maxlength="1000">${esc(b.description||'')}</textarea></label><label>Site web<input id="bizWeb" class="premium-input" maxlength="300" value="${esc(b.website||'')}"></label><button class="primary big" data-action="save-business-profile">Enregistrer</button></div>`)}
+  async function saveBusinessProfile(){const name=$('bizName')?.value.trim();if(!name)return toast("Nom de l'entreprise requis.");const payload={owner_id:state.user.id,business_name:name,category:$('bizCat')?.value.trim()||'Entreprise',location:$('bizLoc')?.value.trim()||'',description:$('bizDesc')?.value.trim()||'',website:$('bizWeb')?.value.trim()||''};const r=await sb.from('tafab_business_profiles').upsert(payload,{onConflict:'owner_id'});if(r.error)return toast(r.error.message);closeModal();toast('Profil Business enregistré.');return businessAdsPage();}
+  function openAdCampaign(){openModal(`<div class="modal-box v26-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • PUBLICITÉ</span><h3>Nouvelle campagne</h3><label>Nom<input id="adName" class="premium-input" maxlength="120" placeholder="Ex. Lancement produit"></label><label>Titre de l'annonce<input id="adCreativeTitle" class="premium-input" maxlength="120" placeholder="Message publicitaire"></label><label>Description<textarea id="adCreativeDesc" class="premium-input" maxlength="500" placeholder="Présentez votre offre…"></textarea></label><label>Lien de destination<input id="adTargetUrl" class="premium-input" maxlength="500" placeholder="https://…"></label><label>Objectif<select id="adObjective" class="premium-input"><option value="awareness">Notoriété</option><option value="traffic">Trafic</option><option value="engagement">Engagement</option><option value="sales">Ventes</option></select></label><label>Zone ciblée<input id="adLocation" class="premium-input" maxlength="120" value="Madagascar"></label><div class="grid2"><label>Budget/jour (Ar)<input id="adDaily" type="number" min="0" step="100" value="0"></label><label>Budget total (Ar)<input id="adTotal" type="number" min="0" step="100" value="0"></label></div><div class="grid2"><label>Âge min<input id="adAgeMin" type="number" min="18" max="100" value="18"></label><label>Âge max<input id="adAgeMax" type="number" min="18" max="100" value="65"></label></div><label>Centres d'intérêt<input id="adInterests" class="premium-input" maxlength="300" placeholder="mode, musique, technologie"></label><button class="primary big" data-action="save-ad-campaign">Créer la campagne</button></div>`)}
+  async function saveAdCampaign(){const name=$('adName')?.value.trim();if(!name)return toast('Nom de campagne requis.');const min=Number($('adAgeMin')?.value||18),max=Number($('adAgeMax')?.value||65);if(min>max)return toast("L'âge minimum doit être inférieur ou égal à l'âge maximum.");const interests=($('adInterests')?.value||'').split(',').map(x=>x.trim()).filter(Boolean).slice(0,20);const r=await sb.from('tafab_ad_campaigns').insert({owner_id:state.user.id,name,creative_title:$('adCreativeTitle')?.value.trim()||name,creative_description:$('adCreativeDesc')?.value.trim()||'',target_url:$('adTargetUrl')?.value.trim()||'',objective:$('adObjective')?.value||'awareness',status:'draft',daily_budget_mga:Math.max(0,Number($('adDaily')?.value||0)),total_budget_mga:Math.max(0,Number($('adTotal')?.value||0)),audience_location:$('adLocation')?.value.trim()||'Madagascar',audience_age_min:min,audience_age_max:max,audience_interests:interests});if(r.error)return toast(r.error.message);closeModal();toast('Campagne créée en brouillon.');return businessAdsPage();}
+  async function toggleAdCampaign(id,status){const next=status==='active'?'paused':'active';const q=await sb.from('tafab_ad_campaigns').select('*').eq('id',id).eq('owner_id',state.user.id).maybeSingle();if(q.error||!q.data)return toast('Campagne introuvable.');if(next==='active' && !Number(q.data.daily_budget_mga||0) && !Number(q.data.total_budget_mga||0))return toast('Ajoutez un budget avant d’activer la campagne.');const r=await sb.from('tafab_ad_campaigns').update({status:next,updated_at:new Date().toISOString()}).eq('id',id).eq('owner_id',state.user.id);if(r.error)return toast(r.error.message);const adPayload={owner_id:state.user.id,campaign_id:id,title:q.data.creative_title||q.data.name,description:q.data.creative_description||'',target_url:q.data.target_url||'',image_url:q.data.image_url||null,status:next==='active'?'active':'paused',starts_at:q.data.starts_at||new Date().toISOString(),ends_at:q.data.ends_at||null};const ar=await sb.from('tafab_ads').upsert(adPayload,{onConflict:'campaign_id'});if(ar.error)console.warn('Ad creative sync:',ar.error.message);toast(next==='active'?'Campagne activée.':'Campagne mise en pause.');return businessAdsPage();}
+  async function deleteAdCampaign(id){if(!(await premiumConfirm('Supprimer la campagne','Cette campagne sera supprimée de votre espace publicitaire.','Supprimer',true)))return;const r=await sb.from('tafab_ad_campaigns').delete().eq('id',id).eq('owner_id',state.user.id);if(r.error)return toast(r.error.message);toast('Campagne supprimée.');return businessAdsPage();}
+
   async function adminIsAllowed(){
     // V31.2: supabaseReady() was not defined in this build. That made the
     // admin check throw and silently hide Administration from the Menu.
@@ -4542,33 +4918,45 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   async function adminTotalPage(){
     if(!(await adminIsAllowed())){toast('Accès réservé à l’administration.');return navigate('home',{replaceStack:true});}
     state.__isAdmin=true;
-    const [dr,ur,rr,vr,ar]=await Promise.all([
+    const [dr,ur,wr,pr,rr,vr,ar,br,bc,crp,crm]=await Promise.all([
       sb.rpc('tafa_admin_dashboard_snapshot',{p_days:30}),
       sb.rpc('tafa_admin_list_users',{p_limit:80,p_offset:0}),
+      sb.rpc('tafa_admin_list_withdrawals',{p_limit:50}),
+      sb.rpc('tafa_admin_list_payments',{p_limit:50}),
       sb.rpc('tafa_admin_list_reports',{p_limit:50}),
       sb.rpc('tafa_admin_list_badge_requests',{p_limit:50}),
-      sb.rpc('tafa_admin_list_account_appeals',{p_limit:50})
+      sb.rpc('tafa_admin_list_account_appeals',{p_limit:50}),
+      sb.rpc('tafa_admin_list_boost_payments',{p_limit:100}),
+      sb.rpc('tafa_admin_list_boost_campaigns',{p_limit:200}),
+      sb.rpc('tafa_admin_list_creator_payouts',{p_limit:100}),
+      sb.rpc('tafa_admin_list_creator_monetization',{p_limit:100})
     ]);
     if(dr.error) throw dr.error;
     const snap=dr.data||{}, st=snap.overview||{}, daily=snap.daily||[], locations=snap.locations||[];
-    const users=ur.error?[]:(ur.data||[]);
-    const reports=rr.error?[]:(rr.data||[]);
-    const verifications=vr.error?[]:(vr.data||[]);
-    const appeals=ar.error?[]:(ar.data||[]);
+    const users=ur.error?[]:(ur.data||[]), withdrawals=wr.error?[]:(wr.data||[]), payments=pr.error?[]:(pr.data||[]), reports=rr.error?[]:(rr.data||[]), verifications=vr.error?[]:(vr.data||[]), appeals=ar.error?[]:(ar.data||[]), boostPayments=br.error?[]:(br.data||[]), boostCampaigns=bc.error?[]:(bc.data||[]), creatorPayouts=crp.error?[]:(crp.data||[]), creatorMonetization=crm.error?[]:(crm.data||[]);
     state.adminAppealsCache=appeals;
 
+    // Realtime admin dashboard: demandes de réactivation, comptes et contenu.
+    // Le websocket est la source principale ; le polling reste uniquement un
+    // filet de sécurité pour Android lorsque le navigateur suspend le socket.
     if(!state.adminDashboardChannel && navigator.onLine){
-      const ch=sb.channel('tafass-admin-dashboard-live-clean')
+      const ch=sb.channel('tafass-admin-dashboard-live')
         .on('postgres_changes',{event:'*',schema:'public',table:'profiles'},()=>adminDashboardRefreshSoon())
-        .on('postgres_changes',{event:'*',schema:'public',table:'tafa_account_appeals'},()=>adminDashboardRefreshSoon())
-        .on('postgres_changes',{event:'*',schema:'public',table:'tafa_verification_requests'},()=>adminDashboardRefreshSoon())
+        .on('postgres_changes',{event:'*',schema:'public',table:'tafa_account_appeals'},()=>adminDashboardRefreshSoon()).on('postgres_changes',{event:'*',schema:'public',table:'tafa_verification_requests'},()=>adminDashboardRefreshSoon())
+        .on('postgres_changes',{event:'*',schema:'public',table:'tafab_ad_payments'},()=>adminDashboardRefreshSoon())
+        .on('postgres_changes',{event:'*',schema:'public',table:'tafab_ad_campaigns'},()=>adminDashboardRefreshSoon())
+        .on('postgres_changes',{event:'*',schema:'public',table:'tafab_withdrawal_requests'},()=>adminDashboardRefreshSoon())
+        .on('postgres_changes',{event:'*',schema:'public',table:'tafab_creator_monetization'},()=>adminDashboardRefreshSoon())
+        .on('postgres_changes',{event:'*',schema:'public',table:'tafab_creator_earnings'},()=>adminDashboardRefreshSoon())
         .on('postgres_changes',{event:'*',schema:'public',table:'posts'},()=>adminDashboardRefreshSoon())
         .on('postgres_changes',{event:'*',schema:'public',table:'stories'},()=>adminDashboardRefreshSoon())
-        .subscribe(status=>{if(status==='SUBSCRIBED')adminDashboardRefreshSoon();});
+        .subscribe(status=>{
+          if(status==='SUBSCRIBED') adminDashboardRefreshSoon();
+        });
       state.adminDashboardChannel=ch;
     }
-    if(state.adminDashboardTimer)clearInterval(state.adminDashboardTimer);
-    state.adminDashboardTimer=setInterval(()=>{if(state.route==='admin'&&state.__isAdmin&&!state.adminDashboardRefreshing)adminDashboardRefreshSoon();},15000);
+    if(state.adminDashboardTimer) clearInterval(state.adminDashboardTimer);
+    state.adminDashboardTimer=setInterval(()=>{ if(state.route==='admin' && state.__isAdmin && !state.adminDashboardRefreshing) adminDashboardRefreshSoon(); },15000);
 
     const cards=[
       ['👥','Comptes',Number(st.total_accounts||0).toLocaleString('fr-FR')],
@@ -4583,37 +4971,69 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       ['💬','Messages',Number(st.total_messages||0).toLocaleString('fr-FR')],
       ['🚨','Alertes',Number(st.pending_total||0).toLocaleString('fr-FR')]
     ];
-    const rows=users.slice(0,8).map(u=>{
-      const nm=([u.first_name,u.last_name].filter(x=>String(x||'').trim()).join(' ')||u.username||'Compte Tafaß');
-      const stt=String(u.account_status||'active');
-      const label=stt==='blocked'?'Bloqué':stt==='restricted'?'Restreint':stt==='deleted'?'Supprimé':'Actif';
-      const cls=stt==='blocked'?'blocked':stt==='restricted'?'pending':stt==='deleted'?'rejected':'paid';
-      return `<div class="admin-user-row">${u.avatar_url?`<img src="${esc(u.avatar_url)}" alt="">`:'<div class="admin-user-avatar">👤</div>'}<div class="admin-user-main"><b>${esc(nm)}</b><small>${u.username?`@${esc(u.username)}`:'Compte Tafaß'} · ${esc(u.email||'—')}</small></div><span class="admin-status ${cls}">${label}</span><button class="ghost-action" data-action="admin-user-manage" data-id="${esc(u.id)}" data-status="${esc(stt)}">Gérer</button></div>`;
+    const usersPreview=users.slice(0,8);
+    const rows=usersPreview.map(u=>{
+      const nm=([u.first_name,u.last_name].filter(Boolean).join(' ')||u.username||u.email||'Compte');
+      const st=String(u.account_status||'active');
+      const label=st==='blocked'?'Bloqué':st==='restricted'?'Restreint':st==='deleted'?'Supprimé':'Actif';
+      const cls=st==='blocked'?'blocked':st==='restricted'?'pending':st==='deleted'?'rejected':'paid';
+      return `<div class="admin-user-row"><div class="admin-user-main">${u.avatar_url?`<img src="${esc(u.avatar_url)}" alt="">`:'<div class="admin-user-avatar">👤</div>'}<div><b>${esc(nm)}</b><small>${esc(u.email||'—')} · ${u.username?`@${esc(u.username)}`:'Compte Tafaß'}</small></div></div><span class="admin-status ${cls}">${label}</span><button class="ghost-action" data-action="admin-user-manage" data-id="${esc(u.id)}" data-status="${esc(st)}">Gérer</button></div>`;
     }).join('')||'<div class="empty">Aucun compte.</div>';
-    const reportRows=reports.map(x=>`<div class="admin-data-row"><div class="grow"><b>${esc(x.reporter_name||'Compte')} → ${esc(x.reported_name||'Compte')}</b><small>${esc(x.reason||'Signalement')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${x.status==='resolved'?'paid':''}">${esc(x.status||'pending')}</span>${x.status==='pending'?`<button class="ghost-action" data-action="admin-report-status" data-id="${esc(x.id)}" data-status="resolved">Traiter</button>`:''}</div>`).join('')||'<div class="empty">Aucun signalement.</div>';
-    const appealRows=appeals.map(x=>`<article class="admin-appeal-card ${x.status==='pending'?'is-pending':''}" data-action="admin-open-appeal" data-id="${esc(x.id)}"><div class="admin-appeal-avatar">♻</div><div class="admin-appeal-main"><div class="admin-appeal-top"><div><b>${esc(x.display_name||x.identity_name||'Compte')}</b><small>${esc(x.email||'')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${x.status==='approved'?'paid':x.status==='rejected'?'rejected':'pending'}">${x.status==='pending'?'En attente':x.status==='approved'?'Approuvée':'Refusée'}</span></div><p>${esc(x.reason||'Demande de réactivation')}</p></div></article>`).join('')||'<div class="empty">Aucune demande de réactivation.</div>';
-    const verificationRows=verifications.map(x=>`<div class="admin-data-row"><div class="grow"><b>${esc(x.display_name||x.identity_name||x.reason||'Compte')}</b><small>${esc(x.email||'')} · ${esc(x.reason||'Demande de vérification')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${x.status==='approved'?'paid':x.status==='rejected'?'rejected':''}">${esc(x.status||'pending')}</span>${x.status==='pending'?`<button class="ghost-action" data-action="admin-verification-status" data-id="${esc(x.id)}" data-status="approved">Approuver</button><button class="ghost-action danger-history-action" data-action="admin-verification-status" data-id="${esc(x.id)}" data-status="rejected">Refuser</button>`:''}</div>`).join('')||'<div class="empty">Aucune demande de vérification.</div>';
+    const withdrawalRows=withdrawals.map(x=>`<div class="admin-data-row"><div class="grow"><b>${esc(x.display_name||x.identity_name||x.reason||'Compte')}</b><small>${adminMoney(x.amount_mga)} · ${esc(x.method||'mobile_money')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${esc(x.status||'pending')}">${esc(x.status||'pending')}</span>${x.status==='pending'?`<button class="ghost-action" data-action="admin-withdrawal-status" data-id="${esc(x.id)}" data-status="approved">Approuver</button><button class="ghost-action danger-history-action" data-action="admin-withdrawal-status" data-id="${esc(x.id)}" data-status="rejected">Refuser</button>`:''}</div>`).join('')||'<div class="empty">Aucun retrait.</div>';
+    const creatorPayoutRows=creatorPayouts.map(x=>{const st=x.status||'pending'; const cls=st==='paid'?'paid':(['rejected','failed'].includes(st)?'rejected':st==='processing'?'pending':'pending'); const action=['pending','approved','failed','processing'].includes(st)?`<button class="ghost-action" data-action="admin-creator-payout" data-id="${esc(x.id)}" data-status="paid">💸 ${st==='failed'?'Réessayer':'Payer réellement'}</button><button class="ghost-action danger-history-action" data-action="admin-creator-payout" data-id="${esc(x.id)}" data-status="rejected">Refuser</button>`:''; const ref=x.provider_reference?` · Réf. ${esc(x.provider_reference)}`:''; const err=x.last_payout_error?` · ${esc(x.last_payout_error)}`:''; return `<div class="admin-data-row monet-admin-row"><div class="grow"><b>💸 ${esc(x.display_name||x.identity_name||x.reason||'Compte')}</b><small>${adminMoney(x.amount_mga)} · ${esc(x.method||'mobile_money')} · ${esc(x.destination_hint||'')} · ${timeAgo(x.created_at)}${ref}${err}</small></div><span class="admin-status ${cls}">${esc(st)}</span>${action}</div>`;}).join('')||'<div class="empty">Aucun retrait créateur.</div>';
+    const creatorMonetRows=creatorMonetization.map(x=>`<div class="admin-data-row monet-admin-row"><div class="grow"><b>◎ ${esc(x.display_name||x.identity_name||x.reason||'Compte')}</b><small>${esc(x.status||'pending')} · ${Number(x.lifetime_earnings_mga||0).toLocaleString('fr-FR')} Ar gagnés · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${x.status==='approved'?'paid':x.status==='suspended'?'rejected':'pending'}">${esc(x.status||'pending')}</span>${x.status==='pending'?`<button class="ghost-action" data-action="admin-creator-monetization" data-id="${esc(x.user_id)}" data-status="approved">✓ Activer</button><button class="ghost-action danger-history-action" data-action="admin-creator-monetization" data-id="${esc(x.user_id)}" data-status="rejected">Refuser</button>`:x.status==='approved'?`<button class="ghost-action danger-history-action" data-action="admin-creator-monetization" data-id="${esc(x.user_id)}" data-status="suspended">Suspendre</button>`:''}</div>`).join('')||'<div class="empty">Aucune demande de monétisation.</div>';
+    const paymentRows=payments.map(x=>`<div class="admin-data-row"><div class="grow"><b>${esc(x.display_name||x.identity_name||x.reason||'Compte')}</b><small>${adminMoney(x.amount)} · ${esc(x.method||'')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${esc(x.status||'pending')}">${esc(x.status||'pending')}</span>${x.status==='pending'?`<button class="ghost-action" data-action="admin-payment-status" data-id="${esc(x.id)}" data-status="paid">Valider</button><button class="ghost-action danger-history-action" data-action="admin-payment-status" data-id="${esc(x.id)}" data-status="failed">Refuser</button>`:''}</div>`).join('')||'<div class="empty">Aucun paiement.</div>';
+    const boostPaymentRows=boostPayments.map(x=>`<div class="admin-data-row boost-admin-payment-row"><div class="grow"><b>✦ ${esc(x.campaign_name||'Campagne')}</b><small>${esc(x.display_name||x.identity_name||x.reason||'Compte')} · ${adminMoney(x.amount_mga)} · ${esc(x.method||'')} · Réf. ${esc(x.transaction_reference||'')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${x.status==='verified'?'paid':x.status==='rejected'?'rejected':'pending'}">${x.status==='pending'?'Paiement à vérifier':x.status==='verified'?'Vérifié':'Refusé'}</span>${x.status==='pending'?`<button class="ghost-action" data-action="admin-boost-payment-status" data-id="${esc(x.id)}" data-status="verified">✓ Vérifier</button><button class="ghost-action danger-history-action" data-action="admin-boost-payment-status" data-id="${esc(x.id)}" data-status="rejected">Refuser</button>`:x.status==='verified'?`<button class="ghost-action" data-action="admin-boost-campaign-status" data-id="${esc(x.campaign_id)}" data-status="active">✓ Sponsoriser</button>`:''}</div>`).join('')||'<div class="empty">Aucun paiement publicitaire en attente.</div>';
+    const boostCampaignRows=boostCampaigns.map(x=>`<div class="admin-data-row boost-admin-campaign-row"><div class="grow"><b>✦ ${esc(x.name||'Campagne')}</b><small>${esc(x.owner_name||'Compte')} · ${esc(x.ad_type||x.objective||'BOOST')} · ${adminMoney(x.spent_amount_mga)} / ${adminMoney(x.total_budget_mga)} · ${esc(x.audience_location||'Madagascar')}</small></div><span class="admin-status ${x.status==='active'?'paid':x.status==='rejected'?'rejected':x.status==='paused'?'':'pending'}">${esc(adStatusLabel(x.status))}</span><button class="ghost-action" data-action="admin-boost-campaign-control" data-id="${esc(x.id)}" data-status="active">▶ Activer</button><button class="ghost-action" data-action="admin-boost-campaign-control" data-id="${esc(x.id)}" data-status="paused">⏸ Pause</button>${x.status!=='rejected'?`<button class="ghost-action danger-history-action" data-action="admin-boost-campaign-control" data-id="${esc(x.id)}" data-status="rejected">Refuser</button>`:''}</div>`).join('')||'<div class="empty">Aucune campagne publicitaire.</div>';
+    const reportRows=reports.map(x=>`<div class="admin-data-row tafa-v51-report-row" data-v51-report-id="${esc(x.id)}" data-v51-reason="${esc(x.reason||'Signalement')}" data-v51-status="${esc(x.status||'pending')}" data-v51-created="${esc(x.created_at||'')}"><div class="grow"><b>${esc(x.reporter_name||'Compte')} → ${esc(x.reported_name||'Compte')}</b><small>${esc(x.reason||'Signalement')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${x.status==='resolved'?'paid':''}">${esc(x.status||'pending')}</span><button class="ghost-action" data-v51-report-open="1">Détails</button>${x.status==='pending'?`<button class="ghost-action" data-action="admin-report-status" data-id="${esc(x.id)}" data-status="resolved">Traiter</button>`:''}</div>`).join('')||'<div class="empty">Aucun signalement.</div>';
+    const appealRows=appeals.map(x=>`<article class="admin-appeal-card ${x.status==='pending'?'is-pending':''}" data-action="admin-open-appeal" data-id="${esc(x.id)}"><div class="admin-appeal-avatar">♻</div><div class="admin-appeal-main"><div class="admin-appeal-top"><div><b>${esc(x.display_name||x.identity_name||x.reason||'Compte')}</b><small>${esc(x.email||'')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${x.status==='approved'?'paid':x.status==='rejected'?'rejected':'pending'}">${x.status==='pending'?'En attente':x.status==='approved'?'Approuvée':'Refusée'}</span></div><p>${esc(x.reason||'Demande de réactivation')}</p><div class="admin-appeal-footer"><small>${x.status==='pending'?'Examen administratif requis':'Traitée par l’administration'}</small>${x.status==='pending'?'<span class="admin-appeal-review">Ouvrir l’examen →</span>':''}</div></div></article>`).join('')||'<div class="empty">Aucune demande de réactivation.</div>';
+    const verificationRows=verifications.map(x=>{const ps=String(x.papi_payment?.payment_status||'').toUpperCase();const payLabel=ps==='SUCCESS'?` · Paiement Papi confirmé (${adminMoney(x.papi_payment?.amount_mga||25000)})`:ps==='PENDING'?' · Paiement Papi en attente':ps==='FAILED'?' · Paiement Papi échoué':' · Paiement non confirmé';const canApprove=x.status==='pending'&&ps==='SUCCESS';return `<div class="admin-data-row"><div class="grow"><b>${esc(x.display_name||x.identity_name||x.reason||'Compte')}</b><small>${esc(x.email||'')} · ${esc(x.reason||'Demande de vérification')}${payLabel} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${x.status==='approved'?'paid':x.status==='rejected'?'rejected':''}">${esc(x.status||'pending')}</span>${x.status==='pending'?`${canApprove?`<button class="ghost-action" data-action="admin-verification-status" data-id="${esc(x.id)}" data-status="approved">Approuver</button>`:`<button class="ghost-action" disabled title="Paiement Papi requis">Payer d’abord</button>`}<button class="ghost-action danger-history-action" data-action="admin-verification-status" data-id="${esc(x.id)}" data-status="rejected">Refuser</button>`:''}</div>`}).join('')||'<div class="empty">Aucune demande de vérification.</div>';
+
     const maxDaily=Math.max(1,...daily.map(x=>Number(x.new_accounts||0)));
     const trendRows=daily.map(x=>{const n=Number(x.new_accounts||0),w=Math.max(3,Math.round((n/maxDaily)*100));return `<div class="admin-trend-row"><span>${esc(x.day_label||x.day||'')}</span><div class="admin-trend-track"><i style="width:${w}%"></i></div><b>${n}</b></div>`}).join('');
     const locationRows=locations.map(x=>`<div class="admin-location-row"><div><b>${esc(x.city||'Localisation inconnue')}</b><small>${esc(x.country||'Pays inconnu')}</small></div><strong>${Number(x.accounts||0).toLocaleString('fr-FR')}</strong></div>`).join('')||'<div class="empty">Aucune localisation disponible.</div>';
-    const growth=Number(st.previous_30d_accounts||0)>0?(((Number(st.new_accounts_30d||0)-Number(st.previous_30d_accounts||0))/Number(st.previous_30d_accounts||1))*100).toFixed(1):(Number(st.new_accounts_30d||0)>0?'100.0':'0.0');
+    const growth=Number(st.previous_30d_accounts||0)>0 ? (((Number(st.new_accounts_30d||0)-Number(st.previous_30d_accounts||0))/Number(st.previous_30d_accounts||1))*100).toFixed(1) : (Number(st.new_accounts_30d||0)>0?'100.0':'0.0');
     const growthSign=Number(growth)>0?'+':'';
-    return simplePage('Administration',`<section class="admin-total-page admin-dashboard-premium">
-      <div class="admin-total-hero admin-dashboard-hero"><div><span class="eyebrow">TAFAß · ADMINISTRATION</span><h2>Tableau de bord</h2><p>Vue globale et temps réel des comptes, du contenu et de la sécurité.</p></div><div class="admin-live-indicator"><span></span> EN DIRECT</div></div>
-      <div class="admin-dashboard-toolbar"><span>Dernière synchronisation : <b>${new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</b></span><button class="ghost-action" data-action="admin-refresh">↻ Actualiser</button></div>
-      <nav class="tafa-v74-admin-tabs" aria-label="Administration"><button class="active" data-v74-admin-jump="Évolution des comptes">📈 Évolution</button><button data-v74-admin-jump="Comptes utilisateurs">👥 Comptes</button><button data-v74-admin-jump="Signalements">🚨 Sécurité</button></nav>
-      <div class="admin-total-grid v75-admin-section" data-v75-admin-section="evolution">${cards.map(c=>`<div class="admin-stat"><span>${c[0]}</span><b>${c[2]}</b><small>${esc(c[1])}</small></div>`).join('')}</div>
-      <div class="admin-dashboard-columns v75-admin-section" data-v75-admin-section="evolution"><section class="admin-total-section"><div class="admin-section-head"><div class="admin-section-title"><h3>📈 Évolution des comptes</h3><small class="admin-section-note">30 derniers jours · croissance ${growthSign}${growth}%</small></div></div><div class="admin-trend-chart">${trendRows||'<div class="empty">Pas encore de données.</div>'}</div></section><section class="admin-total-section"><div class="admin-section-head"><div class="admin-section-title"><h3>📍 Répartition</h3><small class="admin-section-note">Données agrégées par ville et pays.</small></div></div><div class="admin-location-list">${locationRows}</div></section></div>
-      <div class="admin-total-section v75-admin-section" data-v75-admin-section="users"><div class="admin-section-head"><div class="admin-section-title"><h3>👥 Comptes utilisateurs</h3><small class="admin-section-note">Les premiers comptes sont affichés ici.</small></div></div><div class="v75-admin-user-table">${rows}</div>${users.length>8?'<button class="ghost-action v74-see-more" data-action="admin-users-more">Voir plus</button>':''}</div>
-      <div class="admin-total-section v75-admin-section" data-v75-admin-section="reports"><div class="admin-section-head"><div class="admin-section-title"><h3>🚨 Signalements</h3></div></div><div class="admin-data-list">${reportRows}</div></div>
-      <div class="admin-total-section v75-admin-section" data-v75-admin-section="reports"><div class="admin-section-head"><div class="admin-section-title"><h3>🔵 Vérifications</h3></div></div><div class="admin-data-list">${verificationRows}</div></div>
-      <div class="admin-total-section v75-admin-section" data-v75-admin-section="reports"><div class="admin-section-head"><div class="admin-section-title"><h3>♻️ Réactivations</h3></div></div><div class="admin-data-list">${appealRows}</div></div>
+
+    return simplePage('Admin Total',`<section class="admin-total-page admin-dashboard-premium">
+      <div class="admin-total-hero admin-dashboard-hero"><div><span class="eyebrow">TAFAß · ADMINISTRATION TOTALE</span><h2>Tableau de bord</h2><p>Vue globale et temps réel de l’activité Tafaß, des comptes, du contenu et de la sécurité.</p></div><div class="admin-live-indicator"><span></span> EN DIRECT</div></div>
+      <div class="admin-dashboard-toolbar"><span>Dernière synchronisation : <b>${new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</b></span><button class="ghost-action" data-action="admin-refresh">↻ Actualiser maintenant</button></div>
+      <nav class="tafa-v74-admin-tabs" aria-label="Administration"><button class="active" data-v74-admin-jump="Évolution des comptes">📈 Évolutions des comptes</button><button data-v74-admin-jump="Comptes utilisateurs">👥 Comptes d'utilisateurs</button><button data-v74-admin-jump="Monétisation">💰 Monétisations</button><button data-v74-admin-jump="Signalements">🚨 Signalements & Réactivations</button></nav>
+      <div class="admin-total-grid admin-dashboard-kpis v75-admin-section" data-v75-admin-section="evolution">${cards.map(c=>`<div class="admin-stat"><span>${c[0]}</span><b>${c[2]}</b><small>${esc(c[1])}</small></div>`).join('')}</div>
+      <div class="admin-dashboard-columns v75-admin-section" data-v75-admin-section="evolution">
+        <section class="admin-total-section"><div class="admin-section-head"><div class="admin-section-title"><h3>📈 Évolution des comptes</h3><small class="admin-section-note">Nouveaux comptes sur les 30 derniers jours · croissance ${growthSign}${growth}%</small></div></div><div class="admin-trend-chart">${trendRows||'<div class="empty">Pas encore de données d’évolution.</div>'}</div></section>
+        <section class="admin-total-section"><div class="admin-section-head"><div class="admin-section-title"><h3>📍 Où se trouvent les comptes</h3><small class="admin-section-note">Répartition agrégée par ville et pays, sans adresse précise.</small></div></div><div class="admin-location-list">${locationRows}</div></section>
+      </div>
+      <div class="admin-dashboard-columns v75-admin-section" data-v75-admin-section="evolution">
+        <section class="admin-total-section"><div class="admin-section-head"><div class="admin-section-title"><h3>📱 Santé de l’application</h3><small class="admin-section-note">Volume actuel des principaux espaces.</small></div></div><div class="admin-health-grid"><div><b>${Number(st.total_posts||0).toLocaleString('fr-FR')}</b><span>Publications</span></div><div><b>${Number(st.total_stories||0).toLocaleString('fr-FR')}</b><span>Stories</span></div><div><b>${Number(st.total_reels||0).toLocaleString('fr-FR')}</b><span>Reels</span></div><div><b>${Number(st.total_videos||0).toLocaleString('fr-FR')}</b><span>Vidéos</span></div><div><b>${Number(st.total_groups||0).toLocaleString('fr-FR')}</b><span>Groupes</span></div><div><b>${Number(st.total_pages||0).toLocaleString('fr-FR')}</b><span>Pages</span></div></div></section>
+        <section class="admin-total-section"><div class="admin-section-head"><div class="admin-section-title"><h3>🛡️ Sécurité</h3><small class="admin-section-note">Éléments nécessitant une intervention.</small></div></div><div class="admin-health-grid admin-security-grid"><div><b>${Number(st.blocked_accounts||0).toLocaleString('fr-FR')}</b><span>Comptes bloqués</span></div><div><b>${Number(st.pending_reports||0).toLocaleString('fr-FR')}</b><span>Signalements</span></div><div><b>${Number(st.pending_verifications||0).toLocaleString('fr-FR')}</b><span>Vérifications</span></div><div><b>${Number(st.pending_appeals||0).toLocaleString('fr-FR')}</b><span>Réactivations</span></div></div></section>
+      </div>
+      <div class="admin-total-section v75-admin-section" data-v75-admin-section="users"><div class="admin-section-head"><div class="admin-section-title"><h3>👥 Comptes utilisateurs</h3><small class="admin-section-note">4 comptes en haut + 4 en bas. Les autres sont accessibles avec « Voir plus ».</small></div><span class="admin-live-indicator"><span></span> EN DIRECT</span></div><div class="v75-admin-user-table"><div class="v75-admin-user-head"><span>Compte</span><span>E-mail</span><span>Statut</span><span>Action</span></div>${rows}</div>${users.length>8?'<button class="ghost-action v74-see-more" data-action="v74-admin-users-more">Voir plus</button>':''}</div>
+      <div class="admin-total-section v75-admin-section monet-admin-section" data-v75-admin-section="monetization"><div class="admin-section-head"><div class="admin-section-title"><h3>💰 Monétisation</h3><small class="admin-section-note">${adminMoney(st.total_creator_earnings_mga)} de revenus créateurs · ${Number(st.total_coins||0).toLocaleString('fr-FR')} coins.</small></div></div><div class="admin-subsection"><h4>Demandes d'activation</h4><div class="admin-data-list">${creatorMonetRows}</div></div><div class="admin-subsection"><h4>Retraits créateurs</h4><div class="admin-data-list">${creatorPayoutRows}</div></div></div>
+      <div class="admin-total-section v75-admin-section" data-v75-admin-section="monetization"><div class="admin-section-head"><div class="admin-section-title"><h3>💳 Paiements</h3><small class="admin-section-note">Validation administrative des paiements.</small></div></div><div class="admin-data-list">${paymentRows}</div></div>
+      <div class="admin-total-section v75-admin-section" data-v75-admin-section="monetization"><div class="admin-section-head"><div class="admin-section-title"><h3>✦ Publicités sponsorisées</h3><small class="admin-section-note">Paiements publicitaires à vérifier avant diffusion</small></div><span class="admin-live-indicator"><span></span> EN DIRECT</span></div><div class="admin-data-list">${boostPaymentRows}</div></div>
+      <div class="admin-total-section v75-admin-section" data-v75-admin-section="monetization"><div class="admin-section-head"><div class="admin-section-title"><h3>✦ Gestion globale des campagnes</h3><small class="admin-section-note">L’administration contrôle toutes les campagnes, leurs statuts et leur diffusion.</small></div><span class="admin-live-indicator"><span></span> EN DIRECT</span></div><div class="admin-data-list">${boostCampaignRows}</div></div>
+      <div class="admin-total-section v75-admin-section" data-v75-admin-section="reports"><div class="admin-section-head"><div class="admin-section-title"><h3>🚨 Signalements</h3><small class="admin-section-note">Modération et suivi des signalements.</small></div></div><div class="admin-data-list">${reportRows}</div></div>
+      <div class="admin-total-section v75-admin-section" data-v75-admin-section="reports"><div class="admin-section-head"><div class="admin-section-title"><h3>🔵 Vérifications</h3><small class="admin-section-note">Demandes de badge bleu.</small></div></div><div class="admin-data-list">${verificationRows}</div></div>
+      <div class="admin-total-section v75-admin-section" data-v75-admin-section="reports"><div class="admin-section-head"><div class="admin-section-title"><h3>♻️ Réactivations</h3><small class="admin-section-note">Demandes après suspension.</small></div></div><div class="admin-data-list">${appealRows}</div></div>
     </section>`);
-    const root=document.querySelector('.admin-total-page');
-    if(root)root.querySelectorAll('[data-v75-admin-section]').forEach(sec=>{sec.hidden=sec.dataset.v75AdminSection!=='evolution';});
+    const adminRoot=document.querySelector('.admin-total-page');
+    if(adminRoot){
+      const secs=[...adminRoot.querySelectorAll('.admin-total-section')];
+      secs.forEach(sec=>{
+        if(sec.dataset.v75AdminSection) return;
+        const h=(sec.querySelector('h3')?.textContent||'').toLowerCase();
+        let group='evolution';
+        if(h.includes('comptes utilisateurs')) group='users';
+        else if(h.includes('monétisation')||h.includes('paiements')||h.includes('publicités')||h.includes('campagnes')) group='monetization';
+        else if(h.includes('signalements')||h.includes('vérifications')||h.includes('réactivations')) group='reports';
+        sec.dataset.v75AdminSection=group;
+      });
+      adminRoot.querySelectorAll('[data-v75-admin-section]').forEach(sec=>{sec.hidden=sec.dataset.v75AdminSection!=='evolution';});
+    }
   }
   async function adminManageUser(id,status){
-    if(!(await isAdminAccessAllowed())) return toast('Accès réservé à l’administration.');
+    if(!(await tafaV74IsAdmin())) return toast('Accès réservé à l’administration.');
     if(String(id)===String(state.user?.id)) return toast('L’administrateur ne peut pas gérer son propre compte depuis cette interface.');
     const current=String(status||'active');
     const title=current==='blocked'?'Gérer le compte bloqué':current==='restricted'?'Gérer le compte restreint':'Gérer le compte';
@@ -4636,6 +5056,42 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     const next=status==='blocked'?'active':'blocked'; if(!(await premiumConfirm(next==='blocked'?'Bloquer le compte':'Réactiver le compte',next==='blocked'?'Le compte ne pourra plus utiliser normalement les fonctions protégées.':'Le compte sera à nouveau autorisé à utiliser l’application.',next==='blocked'?'Bloquer':'Réactiver',next==='blocked')))return;
     const r=await sb.rpc('tafa_admin_set_account_status',{p_user_id:id,p_status:next}); if(r.error)return toast(r.error.message); toast(next==='blocked'?'Compte bloqué.':'Compte réactivé.'); return adminTotalPage();
   }
+  async function adminSetWithdrawalStatus(id,status){
+    if(!(await premiumConfirm(status==='approved'?'Approuver le retrait':'Refuser le retrait',status==='approved'?'Le retrait sera marqué comme approuvé.':'La demande sera refusée.',status==='approved'?'Approuver':'Refuser',status!=='approved')))return;
+    const r=await sb.rpc('tafa_admin_set_withdrawal_status',{p_id:id,p_status:status}); if(r.error)return toast(r.error.message); toast('Retrait mis à jour.'); return adminTotalPage();
+  }
+  async function adminSetPaymentStatus(id,status){
+    if(!(await premiumConfirm(status==='paid'?'Valider le paiement':'Refuser le paiement',status==='paid'?'Confirmez que le paiement a bien été vérifié.':'Le paiement sera refusé.',status==='paid'?'Valider':'Refuser',status!=='paid')))return;
+    const r=await sb.rpc('tafa_admin_set_payment_status',{p_id:id,p_status:status}); if(r.error)return toast(r.error.message); toast('Paiement mis à jour.'); return adminTotalPage();
+  }
+  async function repairLegacyPlatformWithdrawal(id){
+    if(!(await tafaV74IsAdmin()))return toast('Accès réservé à l’administration.');
+    const ok=await premiumConfirm('Corriger cet ancien retrait','Ce retrait est encore en attente mais son ancien système l’a comptabilisé à tort dans « Total retiré ». Cette correction remet le montant en « En traitement » sans envoyer ni supprimer d’argent. Utilisez-la uniquement si ce retrait n’a jamais été payé.','Corriger',true);
+    if(!ok)return;
+    const r=await sb.rpc('tafa_reconcile_legacy_platform_withdrawal',{p_request_id:id,p_confirm:true});
+    if(r.error)return toast(r.error.message);
+    toast('Ancien retrait corrigé : le montant est maintenant en traitement.');
+    return creatorMonetisationPage();
+  }
+
+  async function adminSetCreatorPayout(id,status){
+    if(status==='rejected'){
+      const ok=await premiumConfirm('Refuser la demande de retrait','Le retrait sera refusé et le montant réservé sera automatiquement rendu au solde disponible.','Refuser',true); if(!ok)return;
+      const r=await sb.rpc('tafa_admin_process_creator_payout',{p_request_id:id,p_status:'rejected',p_admin_note:''});
+      if(r.error)return toast(r.error.message); toast('Retrait refusé et solde restitué.'); return adminTotalPage();
+    }
+    const ok=await premiumConfirm('Effectuer le paiement réel','Tafaß va appeler le service de paiement configuré pour envoyer le montant au bénéficiaire. La demande ne sera marquée Payé qu’après confirmation du prestataire.','Payer réellement',false); if(!ok)return;
+    const r=await sb.functions.invoke('tafa-payout',{body:{request_id:id}});
+    if(r.error)return toast(r.error.message||'Service de paiement indisponible.');
+    if(r.data?.ok){ toast(`Paiement envoyé · ${r.data.reference||'référence reçue'}`); return adminTotalPage(); }
+    return toast(r.data?.error||'Le paiement n’a pas été confirmé.');
+  }
+  async function adminSetCreatorMonetization(id,status){
+    const ok=await premiumConfirm(status==='approved'?'Activer la monétisation':'Modifier la monétisation',status==='approved'?'Le créateur pourra commencer à recevoir les revenus éligibles configurés par Tafaß.':status==='suspended'?'La monétisation sera suspendue et aucun nouveau revenu ne sera crédité.':'La demande sera refusée et le programme restera désactivé.',status==='approved'?'Activer':status==='suspended'?'Suspendre':'Refuser',status!=='approved'); if(!ok)return;
+    const r=await sb.rpc('tafa_admin_set_creator_monetization_status',{p_user_id:id,p_status:status});
+    if(r.error)return toast(r.error.message); toast('Statut de monétisation mis à jour.'); return adminTotalPage();
+  }
+
   async function adminSetReportStatus(id,status){
     const r=await sb.rpc('tafa_admin_set_report_status',{p_id:id,p_status:status}); if(r.error)return toast(r.error.message); toast('Signalement traité.'); return adminTotalPage();
   }
@@ -4754,6 +5210,41 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       return toast(e?.message||'Impossible de traiter la demande de réactivation.');
     }
   }
+  function openBoostAdminConfirm(kind,id,status){
+    const payment=kind==='payment';
+    const positive=status==='verified'||status==='active';
+    const title=payment?(positive?'Vérifier le paiement':'Refuser le paiement'):(positive?'Approuver & sponsoriser':'Refuser la campagne');
+    const text=payment?(positive?'Le paiement sera marqué comme vérifié et la campagne passera à l’étape de validation.':'Le paiement publicitaire sera refusé.'):(positive?'La campagne sera activée et pourra être diffusée comme publicité sponsorisée.':'La campagne sera refusée et ne sera pas diffusée.');
+    const icon=positive?'✓':'!';
+    openModal(`<div class="modal-box boost-admin-confirm-modal"><div class="boost-admin-confirm-icon ${positive?'positive':'negative'}">${icon}</div><span class="eyebrow">TAFAß ADS · ADMINISTRATION</span><h3>${title}</h3><p>${text}</p><div class="boost-admin-confirm-actions"><button class="ghost-action" data-action="close-modal">Annuler</button><button class="boost-admin-confirm-primary ${positive?'positive':'negative'}" data-action="confirm-boost-admin" data-kind="${kind}" data-id="${esc(id)}" data-status="${esc(status)}">${positive?'✓ Confirmer':'Refuser'}</button></div></div>`);
+  }
+  async function confirmBoostAdminAction(kind,id,status){
+    if(!id)return toast('Action publicitaire invalide.');
+    const actionButton=document.querySelector('[data-action="confirm-boost-admin"]');
+    if(actionButton){actionButton.disabled=true;actionButton.textContent='Traitement…';}
+    const r=kind==='payment'
+      ? await sb.rpc('tafa_admin_review_boost_payment',{p_payment_id:id,p_status:status})
+      : await sb.rpc('tafa_admin_review_boost_campaign',{p_campaign_id:id,p_status:status});
+    if(r.error){if(actionButton){actionButton.disabled=false;actionButton.textContent=status==='active'||status==='verified'?'✓ Confirmer':'Refuser';}return toast(r.error.message);}
+    closeModal();
+    toast(kind==='payment'?(status==='verified'?'Paiement vérifié.':'Paiement publicitaire refusé.'):(status==='active'?'Campagne sponsorisée activée.':'Campagne refusée.'));
+    return adminTotalPage();
+  }
+  async function adminControlBoostCampaign(id,status){
+    if(!id)return toast('Campagne publicitaire invalide.');
+    const r=await sb.rpc('tafa_admin_control_boost_campaign',{p_campaign_id:id,p_status:status});
+    if(r.error)return toast(r.error.message);
+    toast(status==='active'?'Campagne sponsorisée activée.':status==='paused'?'Campagne mise en pause.':status==='rejected'?'Campagne refusée.':'Campagne terminée.');
+    return adminTotalPage();
+  }
+  async function adminSetBoostPaymentStatus(id,status){
+    if(!id)return toast('Paiement publicitaire invalide.');
+    return openBoostAdminConfirm('payment',id,status);
+  }
+  async function adminSetBoostCampaignStatus(id,status){
+    if(!id)return;
+    return openBoostAdminConfirm('campaign',id,status);
+  }
   async function adminSetVerificationStatus(id,status){ if(!['approved','rejected'].includes(String(status)))return toast('Statut de vérification invalide.'); if(!(await premiumConfirm(status==='approved'?'Approuver la vérification':'Refuser la vérification',status==='approved'?'Le badge bleu sera activé après validation administrative.':'La demande sera refusée.',status==='approved'?'Approuver':'Refuser',status!=='approved')))return; const r=await sb.rpc('tafa_admin_set_verification_status',{p_id:id,p_status:status}); if(r.error)return toast(r.error.message); await loadVerificationRequests(); toast(status==='approved'?'Badge bleu activé.':'Demande refusée.'); if(state.route==='verification') await verificationPage(); return adminTotalPage(); }
   async function openRestrictionAppeal(){
     const r=await sb.from('tafa_account_appeals').select('status,created_at').eq('user_id',state.user.id).order('created_at',{ascending:false}).limit(3);
@@ -4796,6 +5287,11 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   }
   async function render() {
     if (!state.user) return;
+    // V98 SCROLL STABILITY: capture the route before any async/background work.
+    // A realtime/admin refresh must never reset the page currently being scrolled.
+    const renderRouteAtStart = state.route;
+    const preserveScroll = renderRouteAtStart === "menu";
+    const scrollYBeforeRender = preserveScroll ? (window.scrollY || document.documentElement.scrollTop || 0) : 0;
     if(state.profile?.account_status==='restricted' || state.profile?.account_status==='blocked'){
       const blocked=state.profile?.account_status==='blocked';
       $("content").innerHTML=`<section class="restriction-screen ${blocked?'is-blocked':''}"><div class="restriction-top-glow"></div><div class="restriction-icon">⛔</div><span class="eyebrow">TAFAß · SÉCURITÉ</span><h2>${blocked?'Compte bloqué':'Compte restreint'}</h2><p>Une violation d’une identité ou d’un média protégé a été détectée. Les actions sensibles restent bloquées pendant la procédure de sécurité.</p><div class="restriction-live-status"><span></span> STATUT SURVEILLÉ EN DIRECT</div><div class="restriction-steps"><div class="done"><b>01</b><span>${blocked?'Blocage':'Suspension'}</span><small>Protection du réseau</small></div><div class="active"><b>02</b><span>Vérification</span><small>Éléments concernés</small></div><div><b>03</b><span>Explication</span><small>Votre demande</small></div><div><b>04</b><span>Examen</span><small>Contrôle administratif</small></div><div><b>05</b><span>Approbation</span><small>Validation finale</small></div></div><button class="primary big" data-action="open-restriction-appeal">Commencer la procédure de réactivation</button><button class="ghost-action" data-action="new-logout">Quitter le compte</button></section>`;
@@ -4824,7 +5320,10 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     state.route = route;
     beginPageLoading(token);
     document.querySelectorAll("[data-route]").forEach(el => el.classList.toggle("active", el.dataset.route === route));
-    window.scrollTo({ top: 0, behavior: "auto" });
+    // Only reset scroll when the route actually changes. Never reset the Menu while it is open.
+    if (!preserveScroll && renderRouteAtStart !== state.route) {
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    }
     try {
       if (route === "home") await (pageModeActive() ? renderPageFeed() : renderFeed());
       else if (route === "friends") await friendsPage();
@@ -4835,7 +5334,10 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       else if (["reels","groups","saved"].includes(route)) await genericListPage(route);
       else if (route === "events") await eventsPage();
       else if (route === "studio") await creatorStudioPage();
+      else if (route === "creator") await creatorMonetisationPage();
       else if (route === "ai") await aiWorkspacePage();
+      else if (route === "music") await musicHubPage();
+      else if (route === "business") await businessAdsPage();
       else if (route === "admin") await adminTotalPage();
       else if (route === "verification") await verificationPage();
       else if (route === "menu") await menuPage();
@@ -4849,6 +5351,11 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       if (pageRoot) pageRoot.dataset.pageRoute = route;
       document.querySelectorAll("[data-route]").forEach(el => el.classList.toggle("active", el.dataset.route === state.route));
       updateBadges();
+      if (route === "menu" && preserveScroll && state.route === "menu") {
+        requestAnimationFrame(() => {
+          if (state.route === "menu") window.scrollTo({ top: scrollYBeforeRender, left: 0, behavior: "auto" });
+        });
+      }
     } catch (err) {
       console.error("Tafaß render:", err);
       if (token === state.renderToken && state.route === route) {
@@ -4860,7 +5367,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   }
 
   const V44_ROUTE_META = {
-    home:["Actualités","Votre espace, vos contenus, votre communauté."], friends:["Amis","Retrouvez et gérez vos relations."], messages:["Messages","Vos conversations en temps réel."], notifications:["Notifications","Vos alertes importantes."], profile:["Profil","Votre espace personnel Tafaß."],  groups:["Groupes","Communautés et discussions."], reels:["Réels","Découvrez les contenus courts."], menu:["Menu","Tous vos outils Tafaß au même endroit."], settings:["Paramètres","Personnalisez votre expérience."], search:["Recherche","Trouvez rapidement ce que vous cherchez."], saved:["Enregistrements","Vos contenus sauvegardés."], tafab:["Tafaß","Services et fonctionnalités Tafaß."], events:["Évènements","Découvrez les évènements."], studio:["Studio","Créez et gérez vos contenus."], creator:["Créateur","Outils de création et d’analyse."],  business:["Professionnel","Outils professionnels."], verification:["Badge officiel","Vérification du compte."], ai:["Assistant","Espace intelligent Tafaß."], admin:["Administration","Centre de gestion Tafaß."] };
+    home:["Actualités","Votre espace, vos contenus, votre communauté."], friends:["Amis","Retrouvez et gérez vos relations."], messages:["Messages","Vos conversations en temps réel."], notifications:["Notifications","Vos alertes importantes."], profile:["Profil","Votre espace personnel Tafaß."],  groups:["Groupes","Communautés et discussions."], reels:["Réels","Découvrez les contenus courts."], menu:["Menu","Tous vos outils Tafaß au même endroit."], settings:["Paramètres","Personnalisez votre expérience."], search:["Recherche","Trouvez rapidement ce que vous cherchez."], saved:["Enregistrements","Vos contenus sauvegardés."], tafab:["Tafaß","Services et fonctionnalités Tafaß."], events:["Évènements","Découvrez les évènements."], studio:["Studio","Créez et gérez vos contenus."], creator:["Créateur","Outils de création et de monétisation."], music:["Musique","Votre espace musical."], business:["Professionnel","Outils professionnels."], verification:["Badge officiel","Vérification du compte."], ai:["Assistant","Espace intelligent Tafaß."], admin:["Administration","Centre de gestion Tafaß."] };
   function routeSkeleton(route){
     const meta=V44_ROUTE_META[route]||["Tafaß","Chargement de votre espace…"];
     return `<section class="v44-page-skeleton" aria-label="Chargement de ${esc(meta[0])}"><div class="v44-skel-head"><span class="v44-skel-icon"></span><div><i></i><b></b></div></div><div class="v44-skel-grid"><span></span><span></span><span></span></div><div class="v44-skel-line"></div><div class="v44-skel-line short"></div><small>${esc(meta[1])}</small><div class="v44-loading-points"><i></i><i></i><i></i></div></section>`;
@@ -5101,7 +5608,10 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       publication_settings: () => { if (state.route==="settings" && state.settingsDetailAction==="post-privacy") openAdvancedSetting("post-privacy"); },
       public_content_settings: () => { if (state.route==="settings" && state.settingsDetailAction==="followers-public") openAdvancedSetting("followers-public"); },
       search_history: () => { if (state.route==="search") searchPage($("searchInput")?.value||""); },
-      activity_history: () => { if (state.route==="menu") menuPage(); },
+      activity_history: () => {
+        // V98: activity updates must not rebuild the Menu while it is being scrolled.
+        // The Menu contains navigation cards, not live activity data.
+      },
       blocked_profiles: () => { if (state.viewingProfileId && state.route==="profile") openUserProfile(state.viewingProfileId); },
       profile_reports: () => {},
       payment_transactions: () => { if (state.route==="settings") servicePage("payment"); },
@@ -5137,9 +5647,23 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       conversation_members: () => { if (state.route==="messages") messagesPage(); },
       tafab_listings: () => { if (state.route==="tafab") servicePage("marketplace"); },
       tafab_listing_messages: () => { if (state.route==="tafab") servicePage("marketplace"); },
+      tafab_ads: () => {},
       tafab_events: () => { if (state.route==="events") eventsPage(); },
       tafab_event_attendees: () => { if (state.route==="events") eventsPage(); },
       tafab_creator_drafts: () => { if (state.route==="studio") creatorStudioPage(); },
+      tafab_live_gifts: () => { if (state.route==="creator") creatorMonetisationPage(); },
+      tafab_creator_subscriptions: () => { if (state.route==="creator") creatorMonetisationPage(); },
+      tafab_wallets: () => { if (state.route==="creator") creatorMonetisationPage(); },
+      tafab_withdrawal_requests: () => { if (state.route==="creator") creatorMonetisationPage(); },
+      tafab_creator_monetization: () => { if (state.route==="creator") creatorMonetisationPage(); },
+      tafab_creator_earnings: () => { if (state.route==="creator") creatorMonetisationPage(); },
+      tafab_creator_payout_methods: () => { if (state.route==="creator") creatorMonetisationPage(); },
+      tafab_music_tracks: () => { if (state.route==="music") musicHubPage(); },
+      tafab_music_likes: () => { if (state.route==="music") musicHubPage(); },
+      tafab_music_playlists: () => { if (state.route==="music") musicHubPage(); },
+      tafab_business_profiles: () => { if (state.route==="business") businessAdsPage(); },
+      tafab_ad_campaigns: () => { if (state.route==="business") businessAdsPage(); },
+      tafab_ad_events: () => { if (state.route==="business") businessAdsPage(); },
       tafa_profile_wall_posts: () => { if(state.route==="profile" && state.viewingProfileId) openUserProfile(state.viewingProfileId); },
       tafa_profile_wall_settings: () => { if(state.route==="profile" && state.viewingProfileId) openUserProfile(state.viewingProfileId); }
     };
@@ -5593,6 +6117,122 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     openModal(`<div class="modal-box interaction-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • COMMENTAIRE</span><h3>Commenter la publication</h3><textarea id="pageCommentInput" class="premium-input" maxlength="2000" placeholder="Écrivez votre commentaire…"></textarea><button class="primary big" data-action="page-send-comment" data-id="${esc(postId)}" data-entity-id="${esc(pageId)}">Publier le commentaire</button></div>`);
     setTimeout(()=>$('pageCommentInput')?.focus(),50);
   }
+  async function pagePostShare(postId,pageId){
+    const {error}=await sb.from('page_post_shares').insert({page_post_id:postId,user_id:state.user.id,share_message:''});
+    if(error)return toast(error.message);
+    toast('Publication partagée.');
+    return openPageDetail(pageId);
+  }
+  async function groupPostReaction(postId,groupId){
+    const {data:mine,error:readErr}=await sb.from('group_post_reactions').select('id').eq('group_post_id',postId).eq('user_id',state.user.id).maybeSingle();
+    if(readErr)return toast(readErr.message);
+    const r=mine?await sb.from('group_post_reactions').delete().eq('id',mine.id):await sb.from('group_post_reactions').insert({group_post_id:postId,user_id:state.user.id,reaction_type:'like'});
+    if(r.error)return toast(r.error.message);
+    return reopenGroupDetail(groupId);
+  }
+  async function groupPostComment(postId,groupId){
+    openModal(`<div class="modal-box interaction-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • GROUPE</span><h3>Commenter la publication</h3><textarea id="groupCommentInput" class="premium-input" maxlength="2000" placeholder="Écrivez votre commentaire…"></textarea><button class="primary big" data-action="group-send-comment" data-id="${esc(postId)}" data-entity-id="${esc(groupId)}">Publier le commentaire</button></div>`);
+    setTimeout(()=>$('groupCommentInput')?.focus(),50);
+  }
+  async function groupPostShare(postId,groupId){
+    const {data:original,error:readErr}=await sb.from('group_posts').select('*').eq('id',postId).maybeSingle();
+    if(readErr||!original)return toast(readErr?.message||'Publication introuvable.');
+    const {data:owner}=await sb.from('profiles').select('first_name,last_name,username').eq('id',original.user_id).maybeSingle();
+    const {data:group}=await sb.from('groups').select('name').eq('id',groupId).maybeSingle();
+    const {error}=await sb.from('group_post_shares').insert({group_post_id:postId,user_id:state.user.id,share_message:''});
+    if(error)return toast(error.message);
+    const clone={group_id:groupId,user_id:state.user.id,content:original.content||'',media_url:original.media_url||null,media_type:original.media_type||null,visibility:original.visibility||'public',shared_from_group_post_id:original.id,shared_from_user_id:original.user_id,shared_from_user_name:nameOf(owner||{}),shared_from_group_name:group?.name||'Groupe Tafaß'};
+    const cr=await sb.from('group_posts').insert(clone);
+    if(cr.error)return toast('Partage enregistré, mais la publication n’a pas pu être republiée dans le groupe : '+cr.error.message);
+    toast('✓ Publication partagée dans le groupe.');
+    return reopenGroupDetail(groupId);
+  }
+  async function reopenGroupDetail(id){
+    const listBtn=document.querySelector(`[data-action="group-open"][data-id="${CSS.escape(id)}"]`);
+    if(listBtn){ listBtn.click(); return; }
+    return toast('Actualisez les Groupes pour rouvrir cette communauté.');
+  }
+  async function openPageDetail(id){
+    const {data:x,error:xerr}=await fetchPageById(id);
+    if(xerr) return toast(xerr.message);
+    if(!x) return toast('Page introuvable.');
+    const [follow,followers,owner,members,posts]=await Promise.all([
+      sb.from('page_followers').select('page_id,user_id').eq('page_id',id).eq('user_id',state.user.id).maybeSingle(),
+      sb.from('page_followers').select('page_id',{count:'exact',head:true}).eq('page_id',id),
+      sb.from('profiles').select('first_name,last_name,username,avatar_url,email,phone,country,city_current,bio').eq('id',x.owner_id).maybeSingle(),
+      sb.from('page_members').select('user_id,role,profiles(first_name,last_name,username,avatar_url)').eq('page_id',id).order('created_at',{ascending:true}),
+      sb.from('page_posts').select('*,page_post_reactions(id,user_id,reaction_type),page_post_comments(id,user_id,content,created_at,profiles(first_name,last_name,username,avatar_url)),page_post_shares(id,user_id)').eq('page_id',id).order('created_at',{ascending:false}).limit(30)
+    ]);
+    if(posts.error) return toast(posts.error.message);
+    const ownerMe=x.owner_id===state.user.id;
+    const nameHistoryR=await sb.from('activity_history').select('description,created_at').eq('user_id',x.owner_id).eq('entity_type','page').eq('entity_id',id).eq('action_type','page_name_changed').order('created_at',{ascending:false}).limit(10);
+    const nameHistory=nameHistoryR.data||[];
+    const previousName=nameHistory[0]?.description ? (String(nameHistory[0].description).match(/Ancien nom\s*:\s*(.*?)\s*→/)||[])[1] : '';
+    const myRole=(members.data||[]).find(m=>m.user_id===state.user.id)?.role || null;
+    const canManage=ownerMe || ['owner','admin'].includes(myRole);
+    const canPublish=ownerMe || ['owner','admin'].includes(myRole);
+    const followerCount=followers.count||0;
+    const postCount=posts.data?.length||0;
+    const avatar=entityAvatarHTML(x,'page','page-detail-avatar');
+    const postRows=(posts.data||[]).map(p=>{
+      const reactions=p.page_post_reactions||[], comments=p.page_post_comments||[], shares=p.page_post_shares||[];
+      const mine=reactions.some(r=>r.user_id===state.user.id);
+      const commentPreview=comments.slice(-3).map(c=>`<div class="page-comment-row">${avatarHTML(c.profiles||{},'avatar page-comment-avatar')}<div><b>${esc(nameOf(c.profiles||{}))}</b><span>${esc(c.content||'')}</span><small>${timeAgo(c.created_at)}</small></div></div>`).join('');
+      return `<article class="page-post-card" data-page-post="${esc(p.id)}">
+        <header class="page-post-head"><div class="page-post-author">${entityAvatarHTML(x,'page','page-post-avatar')}<div><b>${esc(x.name)}</b><small>${timeAgo(p.created_at)} · Page</small></div></div>${(p.user_id===state.user.id||canManage)?`<button class="page-icon-btn" data-action="page-post-more" data-id="${esc(p.id)}" data-entity-id="${esc(id)}" aria-label="Options de la publication">⋯</button>`:''}</header>
+        ${p.content?`<div class="page-post-text">${esc(p.content)}</div>`:''}
+        ${p.media_url?(String(p.media_type||'').startsWith('video')?`<video class="page-post-media" src="${esc(p.media_url)}" controls playsinline preload="metadata"></video>`:`<img class="page-post-media" src="${esc(p.media_url)}" alt="Publication ${esc(x.name)}" loading="lazy">`):''}
+        <div class="page-post-stats"><span>${reactions.length} réaction${reactions.length===1?'':'s'}</span><span>${comments.length} commentaire${comments.length===1?'':'s'}</span><span>${shares.length} partage${shares.length===1?'':'s'}</span></div>
+        <div class="page-post-actions"><button class="${mine?'active':''}" data-action="page-post-like" data-id="${esc(p.id)}" data-entity-id="${esc(id)}">${mine?'♥':'♡'} J’aime</button><button data-action="page-post-comment" data-id="${esc(p.id)}" data-entity-id="${esc(id)}">💬 Commenter</button><button data-action="share-page-post" data-id="${esc(p.id)}" data-entity-id="${esc(id)}">↗ Partager</button></div>
+        ${commentPreview?`<div class="page-comments-preview">${commentPreview}</div>`:''}
+      </article>`;
+    }).join('') || `<div class="page-empty-state"><div class="page-empty-icon">✦</div><b>Aucune publication pour le moment</b><span>Les nouvelles publications de la Page apparaîtront ici instantanément.</span></div>`;
+    const team=(members.data||[]).map(m=>`<div class="page-team-row">${avatarHTML(m.profiles||{},'avatar page-team-avatar')}<div class="grow"><b>${esc(nameOf(m.profiles||{}))}</b><small>${esc(m.role||'editor')}</small></div>${canManage&&m.user_id!==state.user.id?`<button class="page-team-role" data-action="page-member-menu" data-id="${esc(m.user_id)}" data-entity-id="${esc(id)}">⋯</button>`:''}</div>`).join('') || '<div class="muted">Aucun gestionnaire supplémentaire.</div>';
+    const ownerName=owner.data?nameOf(owner.data):'';
+    const about=`<div class="page-info-grid"><div><small>Catégorie</small><b>${esc(x.category||'Autre')}</b></div><div><small>Créée le</small><b>${new Date(x.created_at).toLocaleDateString('fr-FR')}</b></div><div><small>Responsable</small><b>${esc(ownerName||'Membre Tafaß')}</b></div><div><small>Adresse</small><b>${esc(x.address||owner.data?.city_current||'Non renseignée')}</b></div>${previousName?`<div class="wide page-old-name-detail"><small>Ancien nom</small><b>${esc(previousName)}</b><em>Nom précédent enregistré le ${new Date(nameHistory[0].created_at).toLocaleDateString('fr-FR')}</em></div>`:''}${x.contact_email?`<div><small>E-mail</small><b>${esc(x.contact_email)}</b></div>`:''}${x.contact_phone?`<div><small>Téléphone</small><b>${esc(x.contact_phone)}</b></div>`:''}${x.website_url?`<div class="wide"><small>Site web</small><b>${esc(x.website_url)}</b></div>`:''}</div>`;
+    setupTafaV80Realtime('page',id);
+    openModal(`<div class="modal-box page-premium-modal page-detail fb-style-detail" data-page-id="${esc(id)}">
+      <button class="entity-back-btn" data-action="close-entity" data-route-back="${esc(state.entityBackRoute || "pages")}" aria-label="Retour aux Pages"><span>‹</span><small>Pages</small></button>
+      <div class="page-cover" ${x.cover_url?`style="background-image:url('${esc(x.cover_url)}')"`:''}><div class="page-cover-overlay"></div><div class="page-live-badge">● PAGE</div></div>
+      <div class="page-profile-head page-profile-head-v2"><div class="page-avatar-wrap">${avatar}<span class="page-verified">✓</span></div></div>
+      <div class="page-profile-copy-v2"><h2>${esc(x.name)}</h2>${x.deletion_status==='pending_deletion'?`<div class="tfa-v80-deletion-alert">⚠ Suppression prévue le ${new Date(x.deletion_scheduled_at).toLocaleDateString('fr-FR')} · récupérable pendant 15 jours</div>`:""}${x.username?`<div class="page-handle">@${esc(x.username)}</div>`:''}<p>${esc(x.bio||'Présentez votre activité, votre communauté et vos actualités.')}</p><div class="page-follow-line"><span><b>${followerCount}</b> abonnés</span><span><b>${postCount}</b> publications</span></div></div>
+      <div class="page-top-actions page-primary-actions">${ownerMe?`<button class="page-action primary" data-action="page-switch" data-id="${esc(id)}">⇄ Basculer</button><button class="page-action secondary" data-action="edit-page" data-id="${esc(id)}">⚙ Gérer</button><button class="page-action secondary" data-action="page-share" data-id="${esc(id)}">↗ Partager</button>`:`<button class="page-action ${follow.data?'secondary':'primary'}" data-action="toggle-page-follow" data-id="${esc(id)}">${follow.data?'✓ Suivie':'＋ Suivre'}</button><button class="page-action secondary" data-action="page-contact" data-id="${esc(id)}">💬 Messages</button><button class="page-action secondary" data-action="page-share" data-id="${esc(id)}">↗ Partager</button>`}</div>
+      <nav class="page-tabs page-tabs-distinct"><button class="active" data-action="page-tab" data-tab="posts" data-id="${esc(id)}">Publications</button><button data-action="page-tab" data-tab="about" data-id="${esc(id)}">À propos</button><button data-action="page-tab" data-tab="team" data-id="${esc(id)}">Communauté</button></nav>
+      ${canPublish?`<section class="page-composer"><div class="page-composer-title"><span>✦</span><div><b>Publier en tant que ${esc(x.name)}</b><small>${myRole==='editor'?'Éditeur':'Gestionnaire'}</small></div></div><textarea id="pagePostText" maxlength="5000" placeholder="Partagez une actualité avec vos abonnés…"></textarea><div class="page-composer-bottom"><label class="page-media-btn">＋ Média<input id="pagePostMedia" type="file" accept="image/*,video/*" hidden></label><span id="pagePostMediaName">Aucun fichier</span><button class="page-publish-btn" data-action="page-publish" data-id="${esc(id)}">Publier</button></div></section>`:''}
+      <section class="page-tab-panel page-live-section" data-tab="posts"><div class="page-section-title"><div><span>ACTUALITÉ</span><h3>Publications</h3></div><strong>● EN DIRECT</strong></div><div class="page-post-list">${postRows}</div></section>
+      <section class="page-tab-panel page-about-section hidden" data-tab="about"><div class="page-section-title"><div><span>INFORMATIONS</span><h3>À propos de la Page</h3></div></div>${about}</section>
+      <section class="page-tab-panel page-team-section hidden" data-tab="team"><div class="page-section-title"><div><span>GESTION</span><h3>Équipe de la Page</h3></div>${canManage?`<button class="page-small-btn" data-action="page-add-member" data-id="${esc(id)}">＋ Ajouter</button>`:''}</div>${team}</section>
+    </div>`);
+    const media=$('pagePostMedia'); media?.addEventListener('change',()=>{ const f=media.files?.[0]; $('pagePostMediaName').textContent=f?f.name:'Aucun fichier'; });
+  }
+
+  async function pagePostMore(postId, pageId){
+    const [{data:p,error:pe},{data:pg,error:ge}]=await Promise.all([
+      sb.from('page_posts').select('id,page_id,user_id,content,created_at').eq('id',postId).eq('page_id',pageId).maybeSingle(),
+      sb.from('pages').select('id,name,owner_id').eq('id',pageId).maybeSingle()
+    ]);
+    if(pe||ge||!p||!pg) return toast(pe?.message||ge?.message||'Publication introuvable.');
+    const ownerMe=String(pg.owner_id)===String(state.user.id);
+    const canManage=ownerMe;
+    const canEdit=ownerMe;
+    openModal(`<div class="modal-box page-post-options-modal">
+      <button class="modal-close" data-action="close-modal">×</button>
+      <div class="page-post-options-head"><span class="eyebrow">TAFAß • PUBLICATION</span><h3>Options de la publication</h3><p>${esc(pg.name)}</p></div>
+      <div class="page-post-options-list">
+        <button class="page-post-option" data-action="page-post-copy-link" data-id="${esc(postId)}" data-entity-id="${esc(pageId)}"><span>🔗</span><div><b>Copier le lien</b><small>Copier le lien de cette publication</small></div></button>
+        <button class="page-post-option" data-action="page-post-share" data-id="${esc(postId)}" data-entity-id="${esc(pageId)}"><span>↗</span><div><b>Partager</b><small>Partager cette publication</small></div></button>
+        ${canEdit?`<button class="page-post-option" data-action="edit-page-post" data-id="${esc(postId)}" data-entity-id="${esc(pageId)}"><span>✎</span><div><b>Modifier</b><small>Modifier le contenu de la publication</small></div></button>`:''}
+        ${canEdit?`<button class="page-post-option danger" data-action="delete-page-post" data-id="${esc(postId)}" data-entity-id="${esc(pageId)}"><span>🗑</span><div><b>Supprimer</b><small>Supprimer définitivement cette publication</small></div></button>`:''}
+        ${!canEdit?`<button class="page-post-option" data-action="page-post-report" data-id="${esc(postId)}" data-entity-id="${esc(pageId)}"><span>⚑</span><div><b>Signaler</b><small>Signaler cette publication</small></div></button>`:''}
+      </div>
+    </div>`);
+  }
+
+  async function pagePostCopyLink(postId,pageId){
+    const url=`${location.origin}${location.pathname}#/pages/${pageId}/post/${postId}`;
+    try{await navigator.clipboard.writeText(url);closeModal();toast('Lien de la publication copié.');}catch{toast('Impossible de copier le lien.');}
+  }
+
   async function pagePostShare(postId,pageId){
     const url=`${location.origin}${location.pathname}#/pages/${pageId}/post/${postId}`;
     try{if(navigator.share) await navigator.share({title:'Publication Tafaß',url}); else await navigator.clipboard.writeText(url); toast(navigator.share?'':'Lien de la publication copié.');}catch{}
@@ -6151,6 +6791,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       if($("composerFileName"))$("composerFileName").textContent="Aucun média sélectionné";
       return;
     }
+    if (action === "publisher-music") return openPublisherMusic();
     if (action === "publisher-tag") return openPublisherTag();
     if (action === "publisher-location") return openPublisherLocation();
     if (action === "publisher-mood") return openMoodComposer();
@@ -6178,13 +6819,21 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       state.composerMeta={...(state.composerMeta||{}),tagged_users:next,tag:next.map(x=>x.name).join(", ")};
       actionEl.classList.toggle("selected",next.some(x=>x.id===tid)); return;
     }
+    if (action === "select-publisher-music") {
+      const track=publisherMusicCatalog().find(x=>x.id===actionEl.dataset.musicId); if(!track)return;
+      state.composerMeta={...(state.composerMeta||{}),music:track.title,music_id:track.id,music_style:track.style,music_seed:track.seed,music_bpm:track.bpm};
+      playGeneratedMusic(track); toast(`${track.title} sélectionnée`); closeModal(); if(state.composerOpen)setTimeout(()=>openPublisher(),40); return;
+    }
+    if (action === "play-post-music") {
+      const seed=Number(actionEl.dataset.musicSeed||1), idm=actionEl.dataset.musicId||`ai-${seed}`; const track=publisherMusicCatalog().find(x=>x.id===idm)||publisherMusicCatalog()[seed-1]||publisherMusicCatalog()[0]; playGeneratedMusic(track); toast(`Lecture : ${track.title}`); return;
+    }
     if (action === "post-receive-message") {
       const ownerId=actionEl.dataset.ownerId; if(!ownerId)return; return startConversation(ownerId);
     }
     if (action === "publisher-field-apply") {
       const field=actionEl.dataset.field, value=$("publisherFieldInput")?.value.trim()||"";
       if(!value)return toast("Saisissez une valeur.");
-      const prefix=field==="tag"?`👥 ${value}`:field==="location"?`📍 ${value}`:field==="event"?`📅 ${value}`:`❓ ${value}`;
+      const prefix=field==="music"?`♫ ${value}`:field==="tag"?`👥 ${value}`:field==="location"?`📍 ${value}`:field==="event"?`📅 ${value}`:`❓ ${value}`;
       state.composerMeta={...(state.composerMeta||{}), [field]:value};
       if(field==="location") state.composerLocation=value;
       state.composerDraftText=(prefix+(state.composerDraftText.trim()?`\n${state.composerDraftText.trim()}`:"")).slice(0,5000);
@@ -6201,6 +6850,27 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if (action === "admin-verification-status") return adminSetVerificationStatus(id, actionEl.dataset.status);
     if (action === "admin-open-appeal") return adminOpenAppeal(id);
     if (action === "admin-appeal-status") return adminSetAppealStatus(id, actionEl.dataset.status);
+    if (action === "copy-referral-code") { const code=actionEl.dataset.code||""; if(!code)return toast("Code de parrainage indisponible."); try{await navigator.clipboard.writeText(code);toast("Code de parrainage copié.");}catch(_){const ta=document.createElement("textarea");ta.value=code;ta.style.position="fixed";ta.style.opacity="0";document.body.appendChild(ta);ta.select();try{document.execCommand("copy");toast("Code de parrainage copié.");}catch(__){toast("Copie impossible sur cet appareil.");}ta.remove();} return; }
+    if (action === "v74-admin-open-withdraw") return tafaV74OpenAdminWithdrawal();
+    if (action === "v74-admin-withdraw") return tafaV74SubmitAdminWithdrawal();
+    if (action === "repair-legacy-platform-withdrawal") return repairLegacyPlatformWithdrawal(id);
+    if (action === "v74-admin-users-more") return tafaV74ShowAdminUsers();
+    if (action === "admin-refresh") return adminTotalPage();
+    if (action === "admin-user-manage") return adminManageUser(id,actionEl.dataset.status||'active');
+    if (action === "admin-user-status") return adminSetUserStatusV78(id,actionEl.dataset.status||'active');
+    if (action === "admin-user-delete") return adminDeleteUserV78(id);
+    if (action === "admin-toggle-user") return adminToggleUser(id,actionEl.dataset.status||'active');
+    if (action === "admin-withdrawal-status") return adminSetWithdrawalStatus(id,actionEl.dataset.status||'rejected');
+    if (action === "admin-creator-payout") return adminSetCreatorPayout(id,actionEl.dataset.status||'rejected');
+    if (action === "admin-creator-monetization") return adminSetCreatorMonetization(id,actionEl.dataset.status||'rejected');
+    if (action === "admin-payment-status") return adminSetPaymentStatus(id,actionEl.dataset.status||'failed');
+    if (action === "admin-boost-payment-status") return adminSetBoostPaymentStatus(id,actionEl.dataset.status||'rejected');
+    if (action === "admin-boost-campaign-status") return adminSetBoostCampaignStatus(id,actionEl.dataset.status||'rejected');
+    if (action === "admin-boost-campaign-control") return adminControlBoostCampaign(id,actionEl.dataset.status||'paused');
+    if (action === "confirm-boost-admin") return confirmBoostAdminAction(actionEl.dataset.kind||"payment",id,actionEl.dataset.status||"rejected");
+    if (action === "admin-report-status") return adminSetReportStatus(id,actionEl.dataset.status||'resolved');
+    if (action === "v81-follow-user") return window.tafaV81FollowUser(id);
+    if (action === "search-category") { searchCategory = actionEl.dataset.category || "accounts"; return searchPage($("searchInput")?.value || "", searchCategory); }
     if (action === "profile-wall-composer") { const owner=actionEl.dataset.id||state.viewingProfileId||state.user.id; const prof=owner===state.user.id?state.profile:((state.users||[]).find(x=>String(x.id)===String(owner))||{}); return openProfileWallComposer(owner,nameOf(prof)); }
     if (action === "close-profile-wall-composer") { closeModal(); return; }
     if (action === "profile-wall-photo") { return $("profileWallFile")?.click(); }
@@ -6240,6 +6910,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       let post = state.posts.find(x => x.id === id);
       if (!post) post = (await sb.from("posts").select("*").eq("id", id).maybeSingle()).data;
       const owner = post?.user_id === state.user.id;
+      return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">PUBLICATION</span><h3>Actions</h3><div class="menu-grid"><button class="menu-card" data-action="save-post" data-id="${esc(id)}"><span class="menu-icon">♡</span><span><b>Enregistrer</b><small>Disponible pour tous</small></span></button>${owner ? `<button class="menu-card premium-boost-menu-card" data-action="boost-post" data-id="${esc(id)}"><span class="menu-icon">✦</span><span><b>Booster / Sponsoriser</b><small>Audience, budget et ciblage</small></span></button><button class="menu-card" data-action="edit-post" data-id="${esc(id)}"><span class="menu-icon">✎</span><span><b>Modifier</b><small>Uniquement votre publication</small></span></button><button class="menu-card danger-card" data-action="delete-post" data-id="${esc(id)}"><span class="menu-icon">⌫</span><span><b>Supprimer</b><small>Vous êtes le propriétaire</small></span></button>` : `<button class="menu-card" data-action="report-post" data-id="${esc(id)}"><span class="menu-icon">⚑</span><span><b>Signaler</b><small>Signaler cette publication</small></span></button>`}</div></div>`);
     }
     if (action === "delete-search-history") {
       const r=await sb.from("search_history").delete().eq("id",id).eq("user_id",state.user.id);
@@ -6362,6 +7033,25 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     }
 
     if (action === "auth-onboarding-back") { state.entering=false; state.user=null; sb.auth.signOut().catch(()=>{}); return showLogin(); }
+    if (action === "boost-post") { closeModal(); return openBoostPost(id); }
+    if (action === "create-boost-post") return createBoostPost();
+    if (action === "boost-page") return toast('La promotion de Page n’est plus disponible.');
+    if (action === "create-boost-page") return createBoostPage();
+    if (action === "open-boost-dashboard") return openBoostOwnerDashboard(id);
+    if (action === "owner-pause-boost") return pauseOwnerBoost(id);
+    if (action === "owner-refresh-boost-dashboard") return openBoostOwnerDashboard(id);
+    if (action === "select-boost-payment") { document.querySelectorAll('[data-action="select-boost-payment"]').forEach(x=>x.classList.remove('active')); actionEl.classList.add('active'); const i=$("boostPaymentMethod"); if(i)i.value=actionEl.dataset.method||'Airtel Money'; return; }
+    if (action === "submit-boost-payment") return submitBoostPayment(id,Number(actionEl.dataset.amount||0));
+    if (action === "sponsored-view") return openSponsoredView(actionEl);
+    if (action === "sponsored-open-page") { closeModal(); if(actionEl.dataset.pageId) return openPageDetail(actionEl.dataset.pageId); return; }
+    if (action === "sponsored-open-target") { await recordSponsoredEvent(id,'click'); const target=actionEl.dataset.target||''; if(target){try{window.open(target,'_blank','noopener,noreferrer')}catch(_){}} return; }
+    if (action === "sponsored-click") { await recordSponsoredEvent(id,'click'); const target=actionEl.dataset.target||''; if(target){try{window.open(target,'_blank','noopener,noreferrer')}catch(_){}} else if(actionEl.dataset.pageId) return openPageDetail(actionEl.dataset.pageId); return; }
+    if (action === "new-ad-campaign") return openAdCampaign();
+    if (action === "save-ad-campaign") return saveAdCampaign();
+    if (action === "toggle-ad-campaign") return toggleAdCampaign(id, actionEl.dataset.status||"draft");
+    if (action === "delete-ad-campaign") return deleteAdCampaign(id);
+    if (action === "edit-business-profile") { const r=await sb.from("tafab_business_profiles").select("*").eq("owner_id",state.user.id).maybeSingle(); window.__tafassBusiness=r.data||{}; return openBusinessProfile(); }
+    if (action === "save-business-profile") return saveBusinessProfile();
     if (action === "menu-route") { const target = actionEl.dataset.routeTarget; if (target) navigate(target); return; }
     if (action === "retry-route") { const target = actionEl.dataset.routeTarget; if (target) { state.renderToken++; state.route=target; await render(); } return; }
     if (action === "menu-info") { settingInfo(actionEl.dataset.name || "Menu"); return; }
@@ -6521,6 +7211,14 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
 
     if (action === "create-tafab-listing") return createTafabListing();
     if (action === "save-tafab-listing") return saveTafabListing();
+    if (action === "create-tafab-ad") return createTafabAd();
+    if (action === "tafab-ad") {
+      const r = await sb.from("tafab_ads").select("*").eq("id",id).maybeSingle();
+      if (r.error || !r.data) return toast(r.error?.message || "Publicité introuvable.");
+      const a = r.data;
+      return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • PUBLICITÉ</span><h3>${esc(a.title)}</h3>${a.image_url?`<img class="post-media" src="${esc(a.image_url)}" alt="Publicité" loading="lazy">`:""}<p>${esc(a.description||"")}</p>${a.target_url?`<a class="primary big" href="${esc(a.target_url)}" target="_blank" rel="noopener noreferrer">Ouvrir le lien</a>`:""}</div>`);
+    }
+    if (action === "save-tafab-ad") return saveTafabAd();
     if (action === "tafab-message") return contactTafabListing(id);
     if (action === "tafab-order") return orderTafabListing(id);
     if (action === "confirm-tafab-order") return confirmTafabOrder(id);
@@ -6530,9 +7228,23 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if (action === "message-voice") return toggleVoiceRecording();
     if (action === "discard-voice") return discardVoice();
     if (action === "send-voice-draft") return sendVoiceDraft();
+    if (action === "live-gift") return sendLiveGift(actionEl.dataset.gift||"heart",Number(actionEl.dataset.coins||10));
     if (action === "ai-mode") { window.__tafassAiMode=actionEl.dataset.mode||"assistant"; document.querySelectorAll('[data-action="ai-mode"]').forEach(x=>x.classList.toggle("active",x===actionEl)); const labels={assistant:"Assistant",write:"Écrire",translate:"Traduire",summarize:"Résumer"}; if($("aiModeHint"))$("aiModeHint").textContent=`Mode : ${labels[window.__tafassAiMode]||"Assistant"}`; return; }
     if (action === "run-ai") return runAi();
     if (action === "copy-ai") { const text=$("aiResponse")?.dataset.copy||""; if(!text)return; try{await navigator.clipboard.writeText(text);toast("Réponse copiée.");}catch(_){toast("Copie indisponible sur cet appareil.");} return; }
+    if (action === "music-play-db") return playDbMusic(id);
+    if (action === "music-like") return toggleMusicLike(id);
+    if (action === "music-create-playlist") return openMusicPlaylist();
+    if (action === "save-music-playlist") return saveMusicPlaylist();
+    if (action === "request-monetization") return openMonetizationRequest();
+    if (action === "papi-buy-coins") return openPapiCoinsPurchase();
+    if (action === "papi-create-payment") return createPapiCoinPayment();
+    if (action === "submit-monetization-request") return submitMonetizationRequest();
+    if (action === "add-payout-method") return openPayoutMethod();
+    if (action === "save-payout-method") return savePayoutMethod();
+    if (action === "request-withdrawal") return openWithdrawalRequest();
+    if (action === "submit-withdrawal") return submitWithdrawal();
+    if (action === "creator-pricing") return openCreatorPricing();
     if (action === "tafab-contact") return contactTafabListing(id);
     if (action === "send-tafab-message") return sendTafabMessage(id);
     if (action === "tafab-info") { const x=(await sb.from("tafab_listings").select("*").eq("id",id).maybeSingle()).data; if(!x)return toast("Offre introuvable"); return openModal(`<div class="modal-box"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">OFFRE TAFAß</span><h3>${esc(x.title)}</h3><p>${esc(x.description||"")}</p><p class="muted">${esc(x.location||"")} ${x.price!=null?"• "+esc(x.price)+" "+esc(x.currency||"MGA"):""}</p><button class="primary big" data-action="tafab-contact" data-id="${esc(x.id)}">Contacter le vendeur</button></div>`); }
@@ -6724,13 +7436,13 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
         const signupCountry=$("country")?.value||signupMeta.name;
         const btn=signupForm.querySelector('button[type="submit"]');setLoading(btn,true,"Créer mon compte");$("signupMsg").textContent="Création du compte…";
         try{
-          const meta={first_name:first,last_name:last,phone,phone_code:signupMeta.code,country:signupCountry,birth:$("birth")?.value||null};
+          const meta={first_name:first,last_name:last,phone,phone_code:signupMeta.code,country:signupCountry,birth:$("birth")?.value||null,referral_code:$("referralCode")?.value.trim().toUpperCase()||null};
           const {data,error}=await sb.auth.signUp({email,password,data:meta});
           if(error)throw error;
           if(data.session){
             const pr=await sb.from("profiles").upsert({id:data.user.id,...meta,email,updated_at:new Date().toISOString()},{onConflict:"id"});
             if(pr.error)throw pr.error;
-            state.profile={...(state.profile||{}),id:data.user.id,first_name:first,last_name:last,email,phone,phone_code:signupMeta.code,country:signupCountry,birth:$("birth")?.value||null};
+            state.profile={...(state.profile||{}),id:data.user.id,first_name:first,last_name:last,email,phone,phone_code:signupMeta.code,country:signupCountry,birth:$("birth")?.value||null,referral_code:meta.referral_code};
             state.user=data.user;await enterApp();
           }else{$("signupMsg").textContent="Compte créé. Vérifiez votre e-mail si la confirmation est activée.";showLogin();$("loginEmail").value=email;}
         }catch(err){$("signupMsg").textContent=err?.message||"Création du compte impossible.";}
@@ -6754,7 +7466,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     const b=e.target.closest('[data-v74-admin-jump]'); if(!b)return;
     const key=b.dataset.v74AdminJump||'';
     const root=document.querySelector('.admin-total-page'); if(!root)return;
-    const groups={'Évolution des comptes':'evolution','Comptes utilisateurs':'users','Signalements':'reports'};
+    const groups={'Évolution des comptes':'evolution','Comptes utilisateurs':'users','Monétisation':'monetization','Signalements':'reports'};
     const group=groups[key]||'evolution';
     root.querySelectorAll('[data-v75-admin-section]').forEach(sec=>{sec.hidden=sec.dataset.v75AdminSection!==group;});
     root.querySelectorAll('.tafa-v74-admin-tabs button').forEach(x=>x.classList.toggle('active',x===b));
@@ -7002,6 +7714,123 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   }
 
   /* TAFAß V51 — Admin Pro Moderation & Analytics */
+  const tafaV51Admin = (() => {
+    let mounted=false, auditLoaded=false;
+    const escSafe=v=>esc(String(v??''));
+    function root(){return document.querySelector('.admin-dashboard-premium');}
+    function section(title){return [...(root()?.querySelectorAll('.admin-total-section')||[])].find(s=>(s.querySelector('h3')?.textContent||'').includes(title));}
+    function openReport(row){
+      if(!row)return;
+      const reason=row.dataset.v51Reason||'Signalement';
+      const status=row.dataset.v51Status||'pending';
+      const created=row.dataset.v51Created ? new Date(row.dataset.v51Created).toLocaleString('fr-FR') : '—';
+      const people=row.querySelector('.grow b')?.textContent||'Compte';
+      openModal(`<div class="modal-box tafa-v51-report-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß · MODÉRATION V51</span><h3>Détail du signalement</h3><div class="tafa-v51-detail-grid"><div><span>Signalement</span><b>${escSafe(reason)}</b></div><div><span>Statut</span><b>${escSafe(status)}</b></div><div><span>Comptes concernés</span><b>${escSafe(people)}</b></div><div><span>Date</span><b>${escSafe(created)}</b></div></div><div class="tafa-v51-detail-note">Analysez le contexte avant toute action. Les actions administratives existantes restent utilisées pour traiter le dossier.</div>${status==='pending'?`<button class="primary big" data-action="admin-report-status" data-id="${escSafe(row.dataset.v51ReportId)}" data-status="resolved">✓ Marquer comme traité</button>`:''}</div>`);
+    }
+    async function loadAudit(){
+      if(auditLoaded||!state.user||!state.__isAdmin||!supabaseReady())return;
+      auditLoaded=true;
+      const sec=section('Comptes utilisateurs')||section('Sécurité');
+      if(!sec)return;
+      try{
+        const r=await sb.from('tafa_admin_audit_logs').select('*').order('created_at',{ascending:false}).limit(20);
+        if(r.error)throw r.error;
+        const logs=r.data||[];
+        const html=logs.map(x=>{const action=x.action||x.event||x.type||'Action administrative';const target=x.target_user_id||x.target_id||x.user_id||'';const detail=x.details||x.note||x.description||'';return `<div class="tafa-v51-audit-row"><span class="tafa-v51-audit-icon">✓</span><div><b>${escSafe(action)}</b><small>${escSafe(target?`Cible : ${target} · `:'')}${escSafe(detail||'Action enregistrée')} · ${x.created_at?escSafe(new Date(x.created_at).toLocaleString('fr-FR')):'—'}</small></div></div>`}).join('')||'<div class="empty">Aucune action administrative récente.</div>';
+        const wrap=document.createElement('section'); wrap.className='admin-total-section tafa-v51-audit-section';
+        wrap.innerHTML=`<div class="admin-section-head"><div class="admin-section-title"><h3>🧾 Journal administratif</h3><small class="admin-section-note">20 dernières actions enregistrées.</small></div><button class="ghost-action" data-v51-export>Exporter</button></div><div class="tafa-v51-audit-list">${html}</div>`;
+        sec.parentNode?.insertBefore(wrap,sec.nextSibling);
+        wrap.querySelector('[data-v51-export]')?.addEventListener('click',()=>exportAudit(logs));
+      }catch(e){auditLoaded=false;console.warn('Tafaß V51 audit:',e?.message||e);}
+    }
+    function exportAudit(logs){
+      const rows=[['Date','Action','Cible','Détail'],...(logs||[]).map(x=>[x.created_at||'',x.action||x.event||x.type||'',x.target_user_id||x.target_id||x.user_id||'',x.details||x.note||x.description||''])];
+      const csv=rows.map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n');
+      const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download=`tafass-admin-audit-${new Date().toISOString().slice(0,10)}.csv`;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500);
+    }
+    function mount(){
+      const r=root(); if(!r)return;
+      if(!mounted){
+        mounted=true;
+        const hero=r.querySelector('.admin-dashboard-hero');
+        if(hero&&!r.querySelector('.tafa-v51-command')){
+          const reports=section('Signalements');
+          const verifs=section('Vérifications');
+          const appeals=section('Réactivations');
+          const count=(sec)=>sec?sec.querySelectorAll('.admin-data-row').length:0;
+          const pending=(sec)=>sec?[...sec.querySelectorAll('.admin-status')].filter(x=>/pending|en attente/i.test(x.textContent||'')).length:0;
+          const bar=document.createElement('section');bar.className='tafa-v51-command';
+          bar.innerHTML=`<div class="tafa-v51-command-head"><div><span class="eyebrow">TAFAß · ADMIN PRO V51</span><b>Moderation & Analytics</b><small>Priorisez les dossiers sensibles et surveillez les volumes clés.</small></div><span class="tafa-v51-live"><i></i> LIVE</span></div><div class="tafa-v51-kpis"><div><b>${pending(reports)}</b><span>Signalements en attente</span></div><div><b>${pending(verifs)}</b><span>Vérifications à examiner</span></div><div><b>${pending(appeals)}</b><span>Réactivations à examiner</span></div><div><b>${count(reports)}</b><span>Signalements affichés</span></div></div><div class="tafa-v51-priority"><span>⚡ Priorité actuelle</span><strong>${pending(reports)+pending(verifs)+pending(appeals)>0?'Action administrative requise':'Aucun dossier urgent détecté'}</strong></div>`;
+          hero.insertAdjacentElement('afterend',bar);
+        }
+      }
+      loadAudit();
+    }
+    function bind(){
+      if(window.__tafaV51AdminBound)return;window.__tafaV51AdminBound=true;
+      document.addEventListener('click',e=>{const b=e.target.closest?.('[data-v51-report-open]');if(b){e.preventDefault();e.stopPropagation();openReport(b.closest('.tafa-v51-report-row'));}},true);
+    }
+    function refresh(){auditLoaded=false;mounted=false;setTimeout(()=>{mount();},0);}
+    return {mount,bind,refresh};
+  })();
+  tafaV51Admin.bind();
+  tafaV51Admin.mount();
+  const tafaV51OriginalAdminTotalPage = adminTotalPage;
+  adminTotalPage = async function(...args){ const result=await tafaV51OriginalAdminTotalPage.apply(this,args); tafaV51Admin.refresh(); return result; };
+
+  /* TAFAß V50 — Admin Pro Command Center */
+  const tafaV50Admin = (() => {
+    let activeFilter='all';
+    let query='';
+    function root(){ return document.querySelector('.admin-dashboard-premium'); }
+    function apply(){
+      const r=root(); if(!r)return;
+      const sections=[...r.querySelectorAll('.admin-total-section')];
+      const q=query.toLowerCase();
+      sections.forEach(sec=>{
+        const text=(sec.textContent||'').toLowerCase();
+        const title=(sec.querySelector('h3')?.textContent||'').toLowerCase();
+        let show=activeFilter==='all';
+        if(activeFilter==='security') show=/sécurité|signalements|vérifications|réactivations/.test(title);
+        if(activeFilter==='finance') show=/monétisation|paiements|publicités sponsorisées|campagnes/.test(title);
+        if(activeFilter==='users') show=/comptes utilisateurs/.test(title);
+        if(activeFilter==='content') show=/santé de l’application|publications|contenu/.test(title);
+        if(q) show=show && text.includes(q);
+        sec.style.display=show?'':'none';
+      });
+      r.querySelectorAll('[data-v50-filter]').forEach(b=>b.classList.toggle('active',b.dataset.v50Filter===activeFilter));
+      const count=r.querySelector('[data-v50-result-count]');
+      if(count) count.textContent=`${sections.filter(x=>x.style.display!=='none').length} sections visibles`;
+    }
+    function mount(){
+      const r=root(); if(!r || r.querySelector('.tafa-v50-command')) return;
+      const hero=r.querySelector('.admin-dashboard-hero');
+      if(!hero)return;
+      const bar=document.createElement('div');
+      bar.className='tafa-v50-command';
+      bar.innerHTML=`<div class="tafa-v50-command-top"><div><span class="eyebrow">TAFAß · ADMIN PRO V50</span><b>Centre de contrôle</b><small>Modération, activité, finances et sécurité depuis un seul espace.</small></div><div class="tafa-v50-live"><i></i> SURVEILLANCE ACTIVE</div></div><div class="tafa-v50-command-tools"><label class="tafa-v50-search">⌕<input data-v50-search placeholder="Rechercher dans le tableau de bord…" autocomplete="off"><button type="button" data-v50-clear>×</button></label><div class="tafa-v50-filters"><button type="button" data-v50-filter="all" class="active">Tout</button><button type="button" data-v50-filter="security">Sécurité</button><button type="button" data-v50-filter="users">Comptes</button><button type="button" data-v50-filter="finance">Finances</button><button type="button" data-v50-filter="content">Contenu</button></div><span data-v50-result-count>—</span></div><div class="tafa-v50-shortcuts"><button data-v50-jump="🚨 Signalements">🚨 Signalements</button><button data-v50-jump="🔵 Vérifications">🔵 Vérifications</button><button data-v50-jump="♻️ Réactivations">♻️ Réactivations</button><button data-v50-jump="💳 Paiements">💳 Paiements</button><button data-v50-jump="👥 Comptes utilisateurs">👥 Utilisateurs</button></div>`;
+      hero.insertAdjacentElement('afterend',bar);
+      bar.addEventListener('click',e=>{
+        const f=e.target.closest('[data-v50-filter]');
+        if(f){activeFilter=f.dataset.v50Filter;apply();return;}
+        const c=e.target.closest('[data-v50-clear]');
+        if(c){const i=bar.querySelector('[data-v50-search]');i.value='';query='';apply();i.focus();return;}
+        const j=e.target.closest('[data-v50-jump]');
+        if(j){activeFilter='all';query='';const target=[...r.querySelectorAll('.admin-total-section')].find(x=>(x.querySelector('h3')?.textContent||'').includes(j.dataset.v50Jump));if(target){target.scrollIntoView({behavior:'smooth',block:'start'});target.classList.add('tafa-v50-focus');setTimeout(()=>target.classList.remove('tafa-v50-focus'),1200)}apply();}
+      });
+      bar.querySelector('[data-v50-search]').addEventListener('input',e=>{query=e.target.value.trim();apply()});
+      apply();
+    }
+    function refresh(){setTimeout(mount,0);}
+    return {mount,refresh};
+  })();
+  const tafaV50OriginalAdminTotalPage = adminTotalPage;
+  adminTotalPage = async function(...args){
+    const result = await tafaV50OriginalAdminTotalPage.apply(this,args);
+    tafaV50Admin.refresh();
+    return result;
+  };
+  tafaV50Admin.mount();
 
 
   /* TAFAß V52 — Profil • Amis • Recherche • Para & Conf : COMPLETE UX */
@@ -8210,7 +9039,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if(!b)return;
     e.preventDefault(); e.stopPropagation();
     const root=document.querySelector('.admin-total-page'); if(!root)return;
-    const groups={'Évolution des comptes':'evolution','Comptes utilisateurs':'users','Signalements':'reports'};
+    const groups={'Évolution des comptes':'evolution','Comptes utilisateurs':'users','Monétisation':'monetization','Signalements':'reports'};
     const group=groups[b.dataset.v74AdminJump]||'evolution';
     root.querySelectorAll('[data-v75-admin-section]').forEach(sec=>sec.hidden=sec.dataset.v75AdminSection!==group);
     root.querySelectorAll('.tafa-v74-admin-tabs button').forEach(x=>x.classList.toggle('active',x===b));
