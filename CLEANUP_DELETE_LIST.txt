@@ -1,0 +1,43 @@
+TAFAß V90 CLEAN — fichiers historiques à supprimer du dossier source
+
+Les fichiers ci-dessous sont des anciennes migrations/documentations liées à la monétisation,
+au parrainage, aux retraits/payouts, aux publicités/Boost et à Tafaß Music.
+Ils ne sont pas inclus dans le nouveau patch.
+
+SUPPRESSION SOURCE RECOMMANDÉE :
+- README_TAFASS_ADS_V1.txt
+- README_TAFASS_ADS_V3.txt
+- README_TAFASS_MONETISATION_V1.txt
+- README_TAFASS_MONETISATION_V2.txt
+- README_V24_CREATOR_MONETISATION_LIVE.md
+- README_V25_AI_MUSIC_2.md
+- README_V67_2_REAL_PAYOUTS.md
+- README_V67_3_REAL_PAYOUTS.md
+- README_V67_MONETISATION_REWARDS.md
+- README_V74_PLATFORM_MONETIZATION.md
+- README_V76_MONETIZATION_ADMIN_PROFILE.md
+- README_V83_2_WITHDRAWAL_ID_FIX.md
+- README_V83_3_REAL_WITHDRAWAL_TRACKING.md
+- README_V83_4_WITHDRAWAL_STATE_FIX.md
+- TAFASS_ADMIN_TOTAL_V29_MONETISATION.sql
+- TAFASS_ADS_V1_PREMIUM_REAL_BOOST.sql
+- TAFASS_ADS_V2_DASHBOARD_ADMIN.sql
+- TAFASS_MONETISATION_V1_REAL_EARNINGS_WITHDRAWALS.sql
+- TAFASS_MONETISATION_V2_REAL_COINS_WITHDRAWALS.sql
+- TAFASS_V24_CREATOR_MONETISATION_LIVE.sql
+- TAFASS_V25_AI_MUSIC_2.sql
+- TAFASS_V67_2_REAL_PAYOUTS.sql
+- TAFASS_V67_3_REAL_PAYOUTS.sql
+- TAFASS_V67_MONETISATION_REWARDS.sql
+- TAFASS_V74_1_PLATFORM_MONETIZATION_FIX.sql
+- TAFASS_V76_MONETIZATION_REFERRAL_PROFILE.sql
+- TAFASS_V83_2_WITHDRAWAL_ID_FIX.sql
+- TAFASS_V83_3_REAL_WITHDRAWAL_TRACKING.sql
+- TAFASS_V88_REFERRAL_MONETISATION_FIX.sql
+- TAFASS_V89_REFERRAL_RELIABLE_FIX.sql
+
+Important :
+- Le patch V90 retire ces fonctionnalités de l'interface et du JavaScript actif.
+- Ne réexécutez pas ces anciennes migrations SQL pour la nouvelle version.
+- CLEAN_V90_IDENTITY.sql est le seul SQL ajouté par ce patch pour corriger l'identité
+  d'affichage des profils.

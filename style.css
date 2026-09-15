@@ -7155,3 +7155,48 @@ body.tafa-conversation-active .message-send-button span{display:none!important}
   .splash-brand{font-size:33px!important}
   .splash-tagline{font-size:11px!important}
 }
+
+/* =========================================================
+   TAFAß V90 CLEAN UI — unified layout / anti-overlap layer
+   This is intentionally appended so the active UI has one
+   consistent presentation without changing Supabase logic.
+   ========================================================= */
+*,*::before,*::after{box-sizing:border-box}
+button,input,select,textarea{font:inherit}
+button{max-width:100%}
+img,video{max-width:100%}
+.menu-grid,.more-composer-grid,.audience-options,.mood-grid,.publisher-tag-list{align-items:stretch}
+.menu-card,.more-composer-grid>button,.audience-option,.mood-choice,.publisher-tag-person{
+  min-width:0;
+  display:flex;
+  align-items:center;
+  gap:12px;
+  overflow:hidden;
+}
+.menu-card>span,.more-composer-grid>button>div,.audience-option>span:nth-child(2),.mood-choice>b,.publisher-tag-person>span{
+  min-width:0;
+  overflow-wrap:anywhere;
+}
+.menu-card small,.more-composer-grid small,.audience-option small,.mood-choice small,.publisher-tag-person small{
+  display:block;
+  line-height:1.35;
+  overflow-wrap:anywhere;
+}
+.modal-box,.card,.admin-total-section,.admin-stat,.admin-data-row,.admin-user-row{
+  min-width:0;
+  overflow-wrap:anywhere;
+}
+.modal-box{width:min(100%,760px);max-height:min(90vh,900px);overflow:auto}
+.premium-input,input,select,textarea{max-width:100%;min-width:0}
+.grid2{min-width:0}
+.grid2>*{min-width:0}
+.admin-data-row,.admin-user-row{gap:10px;align-items:center}
+.admin-data-row .grow,.admin-user-main{min-width:0;flex:1}
+.admin-data-row small,.admin-user-main small{display:block;overflow-wrap:anywhere;line-height:1.35}
+.admin-status,.ghost-action,.primary,.secondary-action{white-space:normal}
+@media(max-width:640px){
+  .menu-grid,.grid2{grid-template-columns:1fr!important}
+  .admin-data-row,.admin-user-row{align-items:flex-start;flex-wrap:wrap}
+  .admin-data-row .admin-status,.admin-data-row .ghost-action,.admin-user-row .admin-status,.admin-user-row .ghost-action{margin-left:auto}
+  .modal-box{border-radius:18px!important;padding:16px!important}
+}
