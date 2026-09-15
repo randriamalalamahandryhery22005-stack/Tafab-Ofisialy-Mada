@@ -1766,40 +1766,48 @@ function publisherBackgrounds(){
   async function friendsPage(tab = state.friendsTab) {
     state.friendsTab = tab || "suggestions";
     const token = state.renderToken;
-    await getBlockedIds();
-    const { data: peopleRaw, error } = await sb.from("profiles").select("*").neq("id", state.user.id).order("created_at", { ascending:false }).limit(100);
-    const people=filterBlocked(peopleRaw||[],"id");
-    if (token !== state.renderToken) return;
-    if (error) return simplePage("Amis", `<div class="empty">${esc(error.message)}</div>`);
-
-    const [incomingR, sentR, mineR] = await Promise.all([
+    // V101: load the relationship lists in parallel with profiles, then paint.
+    // The expensive common-friends RPC is deliberately deferred until after the
+    // first usable UI is visible.
+    const [peopleR, incomingR, sentR, mineR] = await Promise.all([
+      sb.from("profiles").select("*").neq("id", state.user.id).order("created_at", {ascending:false}).limit(100),
       sb.from("friend_requests").select("sender_id,status").eq("receiver_id", state.user.id).eq("status", "pending"),
       sb.from("friend_requests").select("receiver_id,status").eq("sender_id", state.user.id).eq("status", "pending"),
       sb.from("friendships").select("friend_id").eq("user_id", state.user.id)
     ]);
-    if (token !== state.renderToken) return;
+    if (token !== state.renderToken || state.route !== "friends") return;
+    if (peopleR.error) return simplePage("Amis", `<div class="empty">${esc(peopleR.error.message)}</div>`);
+    await getBlockedIds();
+    const people = filterBlocked(peopleR.data || [], "id");
     const incoming = new Set((incomingR.data || []).map(x => x.sender_id));
     const sent = new Set((sentR.data || []).map(x => x.receiver_id));
     const friendIds = new Set((mineR.data || []).map(x => x.friend_id));
-    const map = new Map((people || []).map(p => [p.id, p]));
+    const map = new Map(people.map(p => [p.id, p]));
     const friends = [...friendIds].map(id => map.get(id)).filter(Boolean);
     const requests = [...incoming].map(id => map.get(id)).filter(Boolean);
-    const suggestions = (people || []).filter(p => !friendIds.has(p.id) && !incoming.has(p.id) && !sent.has(p.id));
-
-    // Calcul réel et sécurisé des amis en commun via une fonction SQL dédiée.
+    const suggestions = people.filter(p => !friendIds.has(p.id) && !incoming.has(p.id) && !sent.has(p.id));
     const commonMap = new Map();
-    if (people?.length) {
-      const commonR = await sb.rpc("tafa_common_friend_counts", { p_user_ids: people.map(p => p.id) });
-      (commonR.data || []).forEach(r => commonMap.set(r.user_id, Number(r.common_count || 0)));
+    const renderFriends = () => {
+      if (token !== state.renderToken || state.route !== "friends") return;
+      const tabButton = (key, label, count) => `<button class="${state.friendsTab === key ? "active" : ""}" data-action="friends-tab" data-tab="${key}">${label}${count ? ` <span class="tab-count">${count}</span>` : ""}</button>`;
+      const body = state.friendsTab === "friends"
+        ? (friends.length ? friends.map(p => friendRow(p,"friend",commonMap.get(p.id)||0)).join("") : `<div class="empty">Vous n'avez pas encore d'amis.</div>`)
+        : state.friendsTab === "requests"
+          ? (requests.length ? requests.map(p => friendRow(p,"incoming",commonMap.get(p.id)||0)).join("") : `<div class="empty">Aucune demande en attente.</div>`)
+          : (suggestions.length ? suggestions.map(p => friendRow(p,sent.has(p.id)?"sent":"add",commonMap.get(p.id)||0)).join("") : `<div class="empty">Aucune suggestion pour le moment.</div>`);
+      const title = state.friendsTab === "friends" ? "Vos amis" : state.friendsTab === "requests" ? "Demandes reçues" : "Suggestions pour vous";
+      $("content").innerHTML = `<section class="clean-page friends-page" data-page-route="friends"><div class="page-header clean-page-header"><div><h2>Amis</h2><p class="page-kicker">Votre réseau, vos demandes et vos suggestions réelles</p></div><span class="count-label">${friends.length} amis</span></div><div class="friends-filter clean-filter">${tabButton("suggestions","Suggestions",suggestions.length)}${tabButton("friends","Amis",friends.length)}${tabButton("requests","Demandes",requests.length)}</div><div class="clean-section friends-section"><h3 class="menu-section-title">${title}</h3><div class="friends-list">${body}</div></div></section>`;
+    };
+    // Show the actual page as soon as the four basic reads finish.
+    renderFriends();
+    // V101: common-friend counts are enhancement data, never a navigation blocker.
+    if (people.length) {
+      sb.rpc("tafa_common_friend_counts", {p_user_ids: people.map(p => p.id)}).then(commonR => {
+        if (token !== state.renderToken || state.route !== "friends") return;
+        (commonR.data || []).forEach(r => commonMap.set(r.user_id, Number(r.common_count || 0)));
+        renderFriends();
+      }).catch(() => {});
     }
-    const tabButton = (key, label, count) => `<button class="${state.friendsTab === key ? "active" : ""}" data-action="friends-tab" data-tab="${key}">${label}${count ? ` <span class="tab-count">${count}</span>` : ""}</button>`;
-    const body = state.friendsTab === "friends"
-      ? (friends.length ? friends.map(p => friendRow(p,"friend",commonMap.get(p.id)||0)).join("") : `<div class="empty">Vous n'avez pas encore d'amis.</div>`)
-      : state.friendsTab === "requests"
-        ? (requests.length ? requests.map(p => friendRow(p,"incoming",commonMap.get(p.id)||0)).join("") : `<div class="empty">Aucune demande en attente.</div>`)
-        : (suggestions.length ? suggestions.map(p => friendRow(p,sent.has(p.id)?"sent":"add",commonMap.get(p.id)||0)).join("") : `<div class="empty">Aucune suggestion pour le moment.</div>`);
-    const title = state.friendsTab === "friends" ? "Vos amis" : state.friendsTab === "requests" ? "Demandes reçues" : "Suggestions pour vous";
-    $("content").innerHTML = `<section class="clean-page friends-page"><div class="page-header clean-page-header"><div><h2>Amis</h2><p class="page-kicker">Votre réseau, vos demandes et vos suggestions réelles</p></div><span class="count-label">${friends.length} amis</span></div><div class="friends-filter clean-filter">${tabButton("suggestions","Suggestions",suggestions.length)}${tabButton("friends","Amis",friends.length)}${tabButton("requests","Demandes",requests.length)}</div><div class="clean-section friends-section"><h3 class="menu-section-title">${title}</h3><div class="friends-list">${body}</div></div></section>`;
   }
   function friendRow(p,type,commonCount=0) {
     const common = commonCount > 0 ? `<small class="mutual-friends">${commonCount} ami${commonCount > 1 ? "s" : ""} en commun</small>` : "";
@@ -2442,20 +2450,27 @@ function publisherBackgrounds(){
     const { data, error } = await sb.from("notifications").select("*").eq("user_id", state.user.id).order("created_at", { ascending:false }).limit(100);
     if (token !== state.renderToken || state.route !== "notifications") return;
     if (error) return simplePage("Alertes", `<div class="empty">${esc(error.message)}</div>`);
-    const actorIds = [...new Set((data || []).map(n => n.actor_id).filter(Boolean))];
-    const { data: actors } = actorIds.length ? await sb.from("profiles").select("*").in("id", actorIds) : { data: [] };
-    const amap = new Map((actors || []).map(p => [p.id,p]));
-    if (token !== state.renderToken) return;
-    $("content").innerHTML = `<section class="clean-page alerts-page"><div class="page-header clean-page-header"><div><h2>Alertes</h2><p class="page-kicker">Les activités réelles de votre compte, en temps réel</p></div><button class="text-button clean-read-button" data-action="mark-read">Tout lire</button></div>
-      <div class="clean-list">${(data || []).map(n => {
+    const renderNotifications = (amap = new Map()) => {
+      if (token !== state.renderToken || state.route !== "notifications") return;
+      $("content").innerHTML = `<section class="clean-page alerts-page" data-page-route="notifications"><div class="page-header clean-page-header"><div><h2>Alertes</h2><p class="page-kicker">Les activités réelles de votre compte, en temps réel</p></div><button class="text-button clean-read-button" data-action="mark-read">Tout lire</button></div><div class="clean-list">${(data || []).map(n => {
         const actor = amap.get(n.actor_id);
         const target = notificationTarget(n, actor);
-        const actionAttrs = target ? `data-action="${esc(target.action)}" data-id="${esc(target.id || "")}"` : `data-action="notification-read" data-id="${esc(n.id)}"`; const roleButtons = (n.type==='page_role_request'||n.type==='group_role_request') ? `<span class="notification-role-actions"><button data-action="accept-role-request" data-id="${esc(n.entity_id||'')}">Accepter</button><button data-action="reject-role-request" data-id="${esc(n.entity_id||'')}">Refuser</button></span>` : "";
+        const actionAttrs = target ? `data-action="${esc(target.action)}" data-id="${esc(target.id || "")}"` : `data-action="notification-read" data-id="${esc(n.id)}"`;
+        const roleButtons = (n.type==='page_role_request'||n.type==='group_role_request') ? `<span class="notification-role-actions"><button data-action="accept-role-request" data-id="${esc(n.entity_id||'')}">Accepter</button><button data-action="reject-role-request" data-id="${esc(n.entity_id||'')}">Refuser</button></span>` : "";
         const actorName = actor ? nameOf(actor) : "Un membre";
         return `<button class="list-row notification-row ${n.is_read ? "" : "unread"}" ${actionAttrs} data-notification="${esc(n.id)}">${avatarHTML(actor || null)}<div class="grow"><b>${esc(actorName)}</b><small>${esc(notificationAction(n))} · ${timeAgo(n.created_at)}</small></div>${n.is_read ? "" : '<span class="blue-dot"></span>'}${roleButtons}<span class="notification-arrow">›</span></button>`;
       }).join("") || `<div class="empty">Aucune alerte pour le moment.</div>`}</div></section>`;
+    };
+    // V101: notification rows appear before actor-profile hydration.
+    renderNotifications();
+    const actorIds = [...new Set((data || []).map(n => n.actor_id).filter(Boolean))];
+    if (actorIds.length) {
+      sb.from("profiles").select("*").in("id", actorIds).then(({data:actors}) => {
+        if (token !== state.renderToken || state.route !== "notifications") return;
+        renderNotifications(new Map((actors || []).map(p => [p.id,p])));
+      }).catch(() => {});
+    }
   }
-
   async function openNotificationPost(notificationId) {
     const n = (await sb.from("notifications").select("*").eq("id", notificationId).maybeSingle()).data;
     if (!n) return toast("Alerte introuvable");

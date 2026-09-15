@@ -7210,3 +7210,72 @@ html, body {
 .messages-loading-state{min-height:92px;display:flex;align-items:center;justify-content:center;gap:10px;padding:22px;color:var(--muted,#777);font-size:13px}
 .tafa-spinner{width:17px;height:17px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;display:inline-block;animation:tafaSpin .65s linear infinite}
 @keyframes tafaSpin{to{transform:rotate(360deg)}}
+
+/* ============================================================
+   TAFAß V102 — MESSAGES SIZE STABILITY
+   Keep Messages list and opened conversation in the same content
+   frame. Opening a conversation must not switch the whole app into
+   a different full-screen layout or visually jump/resize.
+   ============================================================ */
+body.tafa-conversation-active .main-layout{
+  height:auto!important;
+  min-height:calc(100dvh - 62px)!important;
+  padding:22px 18px 105px!important;
+}
+body.tafa-conversation-active .content{
+  height:auto!important;
+  min-height:0!important;
+  padding-bottom:110px!important;
+  overflow:visible!important;
+}
+body.tafa-conversation-active .conversation-page-clean{
+  width:min(100%,780px)!important;
+  max-width:780px!important;
+  height:calc(100dvh - 170px)!important;
+  min-height:460px!important;
+  max-height:calc(100dvh - 170px)!important;
+  margin:0 auto!important;
+  border:1px solid var(--line)!important;
+  border-radius:18px!important;
+  background:var(--surface)!important;
+  overflow:hidden!important;
+  box-sizing:border-box!important;
+}
+body.tafa-conversation-active .conversation-page-clean .conversation-clean-topbar{
+  flex:0 0 58px!important;
+  min-height:58px!important;
+}
+body.tafa-conversation-active .conversation-page-clean .clean-message-list{
+  flex:1 1 auto!important;
+  min-height:0!important;
+  max-height:none!important;
+  overflow-x:hidden!important;
+  overflow-y:auto!important;
+  -webkit-overflow-scrolling:touch!important;
+}
+body.tafa-conversation-active .conversation-page-clean .clean-message-form{
+  position:relative!important;
+  left:auto!important;
+  right:auto!important;
+  bottom:auto!important;
+  transform:none!important;
+  width:100%!important;
+  flex:0 0 auto!important;
+  box-sizing:border-box!important;
+  z-index:20!important;
+}
+@media(max-width:1100px){
+  body.tafa-conversation-active .main-layout{padding:14px 12px 88px!important}
+}
+@media(max-width:720px){
+  body.tafa-conversation-active .main-layout{padding:9px 9px 86px!important}
+  body.tafa-conversation-active .content{padding:0 0 8px!important}
+  body.tafa-conversation-active .conversation-page-clean{
+    width:100%!important;
+    max-width:none!important;
+    height:calc(100dvh - 160px)!important;
+    max-height:calc(100dvh - 160px)!important;
+    min-height:420px!important;
+    border-radius:15px!important;
+  }
+}
