@@ -7374,3 +7374,10 @@ body.tafa-conversation-active .conversation-page-clean .clean-message-form{
   .menu-v99-account{padding:12px 2px;align-items:flex-start;flex-direction:column}
   .menu-v99-logout{width:100%;justify-content:center}
 }
+
+/* V105 menu/media additions */
+.menu-photo-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:14px}
+.menu-photo-item{margin:0;overflow:hidden;border:1px solid rgba(255,255,255,.08);border-radius:14px;background:rgba(255,255,255,.025)}
+.menu-photo-item img{display:block;width:100%;aspect-ratio:1/1;object-fit:cover}
+.menu-photo-item div{padding:7px 8px;font-size:11px;color:var(--muted,#9da4af);min-height:28px}
+@media(max-width:560px){.menu-photo-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}.menu-photo-item{border-radius:10px}.menu-photo-item div{display:none}}

@@ -43,7 +43,7 @@ document.documentElement.classList.add("app-boot");
 
   const $ = id => document.getElementById(id);
   const esc = s => String(s ?? "").replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]));
-  const routes = ["home","friends","search","messages","notifications","profile","reels","groups","saved","menu","tafab","events","studio","settings","creator","ai","music","business","admin","verification"];
+  const routes = ["home","friends","search","messages","notifications","profile","reels","groups","saved","menu","tafab","events","studio","settings","creator","ai","music","business","admin","verification","pages","photos"];
 
   // V19 production upload guard: client-side validation is UX protection only;
   // Supabase Storage policies/server-side validation must remain the authority.
@@ -3389,6 +3389,17 @@ function publisherBackgrounds(){
     </section>`);
   }
 
+  async function photosPage(){
+    const token=state.renderToken;
+    const rows=(state.posts||[]).filter(p=>{
+      const t=String(p.media_type||"").toLowerCase();
+      return p.media_url && !t.includes("video") && !t.includes("reel");
+    });
+    if(token!==state.renderToken||state.route!=="photos")return;
+    const html=rows.length?`<div class="menu-photo-grid">${rows.map(p=>`<article class="menu-photo-item"><img src="${esc(p.media_url)}" alt=""><div>${p.content?`<span>${esc(String(p.content).slice(0,70))}</span>`:""}</div></article>`).join("")}</div>`:`<div class="empty">Aucune photo disponible pour le moment.</div>`;
+    return simplePage("Photos",`<section class="photos-page"><div class="menu-v99-section-head"><div><span class="eyebrow">TAFAß · GALERIE</span><h3>Photos</h3><p>Retrouvez les photos publiées dans votre fil.</p></div></div>${html}</section>`);
+  }
+
 async function genericListPage(route) {
     const token = state.renderToken;
     if (route === "reels") {
@@ -3639,7 +3650,10 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       tafab:'<path d="M6 4h7a5 5 0 0 1 0 10H9v6H6z"/><path d="M9 8h4a1.5 1.5 0 0 1 0 3H9z"/><path d="M16 15l3 3-3 3"/>',
       payment:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h4"/>',
       logout:'<path d="M10 5H5v14h5M14 8l5 4-5 4M19 12H9"/>',
-      business:'<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 20v-6h8v6M8 8h8M8 11h8"/>'
+      business:'<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 20v-6h8v6M8 8h8M8 11h8"/>',
+      pages:'<path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h5"/>',
+      photos:'<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8" cy="9" r="1.5"/><path d="m5 17 4-4 3 3 3-4 4 5"/>',
+      shield:'<path d="M12 3 20 6v5c0 5-3.4 8.5-8 10-4.6-1.5-8-5-8-10V6z"/><path d="m8.5 12 2.2 2.2 4.8-5"/>'
     };
     return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[type] || paths.settings}</svg>`;
   }
@@ -3665,6 +3679,13 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     openModal(`<div class="modal-box page-settings-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • HISTORIQUE</span><h3>Historique des noms</h3><p class="muted">Nom actuel : <b>${esc(p.name)}</b>. Un changement de nom est autorisé une fois tous les 15 jours.</p><div class="page-history-list">${rows}</div></div>`);
   }
 
+  // Safe legacy-cleanup hook: older Menu builds called this before rendering.
+  // Keep it intentionally scoped to detached/legacy overlays so the current Menu is never removed.
+  function cleanLegacyUiArtifacts(){
+    const selectors=[".p91-page-menu",".tafa-v65-page-shell",".page-menu-dashboard",".legacy-menu-overlay","[data-legacy-menu=\"1\"]"];
+    selectors.forEach(sel=>document.querySelectorAll(sel).forEach(el=>{ try{el.remove();}catch(_){}}));
+  }
+
   async function menuPage() {
     cleanLegacyUiArtifacts();
     state.backOverride = null;
@@ -3677,22 +3698,22 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     const initials = displayName.split(/\s+/).slice(0,2).map(x=>x[0]).join("").toUpperCase();
 
     const primary = [
-      ["profile","profile","Profil","Votre identité, publications et informations"],
+      ["home","home","Accueil","Actualités et publications"],
+      ["profile","profile","Mon Profil","Votre identité, publications et informations"],
       ["friends","friends","Amis","Votre réseau et vos invitations"],
       ["messages","messages","Messages","Conversations et échanges privés"],
-      ["notifications","history","Alertes","Notifications et activités récentes"],
+      ["notifications","notifications","Notifications","Vos alertes et activités récentes"],
       ["groups","groups","Groupes","Communautés auxquelles vous participez"],
-      ["reels","reels","Reels","Vidéos courtes et découvertes"],
-      ["events","history","Évènements","Créer et découvrir des évènements"],
-      ["studio","videos","Creator Studio","Organiser et analyser vos contenus"],
-      ["ai","sparkles","Tafaß AI","Assistant intelligent pour vos contenus"],
-      ["saved","saved","Enregistrements","Retrouver vos contenus sauvegardés"],
+      ["pages","pages","Pages","Pages que vous gérez ou suivez"],
+      ["reels","videos","Vidéos","Vidéos courtes et contenus vidéo"],
+      ["photos","photos","Photos","Photos et médias publiés"],
       ["search","search","Rechercher","Trouver comptes, personnes et contenus"],
-      ["settings","settings","Para & Conf","Compte, sécurité et confidentialité"]
     ];
 
     const services = [
-      ["tafab","tafab","Tafaß","Marketplace, annonces et services"],
+      ["events","history","Évènements","Créer et découvrir des évènements"],
+      ["tafab","tafab","Marketplace","Annonces, services et découvertes"],
+      ["saved","saved","Enregistrements","Retrouver vos contenus sauvegardés"],
       ["business","business","Tafaß Business Suite","Outils professionnels et gestion de Page"]
     ];
 
@@ -5411,6 +5432,8 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       else if (route === "notifications") await notificationsPage();
       else if (route === "profile") await profilePage(state.profileTab);
       else if (["reels","groups","saved"].includes(route)) await genericListPage(route);
+      else if (route === "pages") await pagesV80Hub();
+      else if (route === "photos") await photosPage();
       else if (route === "events") await eventsPage();
       else if (route === "studio") await creatorStudioPage();
       else if (route === "creator") await creatorMonetisationPage();
@@ -5461,7 +5484,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
 
   function navigate(route, options = {}) {
     // V97: Pages are fully removed from the application UI and routing.
-    if (route === "pages") route = "notifications";
+
     if (!routes.includes(route)) route = "home";
     if (document.body.classList.contains("modal-open")) closeModal();
     state.backOverride = null;
