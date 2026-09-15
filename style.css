@@ -7279,3 +7279,58 @@ body.tafa-conversation-active .conversation-page-clean .clean-message-form{
     border-radius:15px!important;
   }
 }
+
+/* V103 — EXPANDED CONVERSATION FRAME
+   The opened Messages conversation should use the available app width/height,
+   rather than appearing as a small centered card. */
+body.tafa-conversation-active .main-layout{
+  width:100%!important;
+  max-width:none!important;
+  min-height:calc(100dvh - 64px)!important;
+  height:calc(100dvh - 64px)!important;
+  padding:8px 8px 82px!important;
+  box-sizing:border-box!important;
+}
+body.tafa-conversation-active .content{
+  width:100%!important;
+  max-width:none!important;
+  height:100%!important;
+  min-height:0!important;
+  padding:0!important;
+  box-sizing:border-box!important;
+}
+body.tafa-conversation-active .conversation-page-clean{
+  width:100%!important;
+  max-width:none!important;
+  height:100%!important;
+  min-height:0!important;
+  max-height:none!important;
+  margin:0!important;
+  border-radius:14px!important;
+  box-sizing:border-box!important;
+}
+body.tafa-conversation-active .conversation-page-clean .conversation-clean-topbar{
+  flex:0 0 60px!important;
+  min-height:60px!important;
+}
+body.tafa-conversation-active .conversation-page-clean .clean-message-list{
+  flex:1 1 auto!important;
+  height:auto!important;
+  min-height:0!important;
+  max-height:none!important;
+}
+body.tafa-conversation-active .conversation-page-clean .clean-message-form{
+  flex:0 0 auto!important;
+  width:100%!important;
+  margin:0!important;
+}
+@media(max-width:720px){
+  body.tafa-conversation-active .main-layout{
+    height:calc(100dvh - 58px)!important;
+    min-height:calc(100dvh - 58px)!important;
+    padding:3px 3px 70px!important;
+  }
+  body.tafa-conversation-active .conversation-page-clean{
+    border-radius:10px!important;
+  }
+}
