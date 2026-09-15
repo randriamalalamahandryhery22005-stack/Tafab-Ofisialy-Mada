@@ -7,7 +7,7 @@
 ============================================================ */
 (() => {
   "use strict";
-  const BUILD_ID = "TAFAß-V99-CLEAN";
+  const BUILD_ID = "TAFAß-V85";
   const BUILD_KEY = "tafa_active_build";
   const previous = String(localStorage.getItem(BUILD_KEY) || "");
   if (previous !== BUILD_ID) {
@@ -43,7 +43,7 @@ document.documentElement.classList.add("app-boot");
 
   const $ = id => document.getElementById(id);
   const esc = s => String(s ?? "").replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]));
-  const routes = ["home","friends","search","messages","notifications","profile","reels","groups","saved","menu","tafab","events","studio","settings","ai","business","admin","verification"];
+  const routes = ["home","friends","search","messages","notifications","profile","reels","groups","saved","menu","tafab","events","studio","settings","creator","ai","music","business","admin","verification"];
 
   // V19 production upload guard: client-side validation is UX protection only;
   // Supabase Storage policies/server-side validation must remain the authority.
@@ -1898,61 +1898,93 @@ function publisherBackgrounds(){
     if(state.conversationChannel){ try{ await sb.removeChannel(state.conversationChannel); }catch(_){} state.conversationChannel=null; }
     state.selectedConversation=null;
     if(pageModeActive()) return pageMessagesHub();
+
     const token = state.renderToken;
-    const { data: memberships, error } = await sb.from("conversation_members")
-      .select("conversation_id")
-      .eq("user_id", state.user.id);
 
-    if (token !== state.renderToken || state.route !== "messages") return;
-    if (error) return simplePage("Messages", `<div class="empty">${esc(error.message)}</div>`);
-
-    await getBlockedIds();
-    const ids = [...new Set((memberships || []).map(x => x.conversation_id))];
-    let conversations = [];
-    if (ids.length) {
-      const r = await sb.from("conversations").select("*")
-        .in("id", ids).order("created_at", { ascending: false });
-      conversations = r.data || [];
-    }
-
-    const cards = [];
-    for (const c of conversations) {
-      const { data: cm } = await sb.from("conversation_members")
-        .select("user_id").eq("conversation_id", c.id);
-      const otherIds = [...new Set((cm || []).map(x => x.user_id).filter(id => id !== state.user.id))];
-      let person = null;
-      if (otherIds.length) {
-        const r = await sb.from("profiles").select("*").eq("id", otherIds[0]).maybeSingle();
-        person = r.data || null;
-      }
-      if(person && blockedCache.ids.has(person.id)) continue;
-      const hiddenConv=(await sb.from("tafab_deleted_conversations").select("conversation_id").eq("user_id",state.user.id).eq("conversation_id",c.id).maybeSingle()).data;
-      if(hiddenConv) continue;
-      const { data: last } = await sb.from("messages").select("content,created_at")
-        .eq("conversation_id", c.id).order("created_at", { ascending:false }).limit(1);
-      const alias=(person && (await sb.from("tafab_conversation_aliases").select("nickname").eq("conversation_id",c.id).eq("target_user_id",person.id).maybeSingle()).data?.nickname)||"";
-      cards.push(`<button class="list-row message-conversation clean-conversation-row" style="width:100%;text-align:left"
-        data-action="open-conversation" data-id="${esc(c.id)}" data-other-id="${esc(person?.id||"")}">
-        ${avatarHTML(person || state.profile)}
-        <div class="grow"><b>${esc(c.name || (person ? (alias || nameOf(person)) : "Conversation"))}</b>
-        <small>${esc(last?.[0]?.content || "Ouvrir la conversation")} · ${last?.[0] ? timeAgo(last[0].created_at) : ""}</small></div><small class="conversation-chevron">›</small>
-      </button>`);
-    }
-
-    if (token !== state.renderToken) return;
-    $("content").innerHTML = `<section class="clean-page messages-page">
-      <div class="page-header clean-page-header"><div><h2>Messages</h2><p class="page-kicker">Vos conversations, simplement et en temps réel</p></div><button class="round-button clean-new-button" data-action="new-message" aria-label="Nouvelle conversation">＋</button></div>
-      <div class="clean-search searchbox"><span class="icon">⌕</span><input id="messageSearch" placeholder="Rechercher une conversation"></div>
-      <div id="conversationList" class="clean-list">${cards.join("") || `<div class="empty">Aucune conversation.<br><button class="text-button" data-action="new-message">Commencer une discussion</button></div>`}</div>
-    </section>`;
-
-    $("messageSearch")?.addEventListener("input", e => {
-      const q = e.target.value.trim().toLowerCase();
-      document.querySelectorAll(".message-conversation").forEach(row => {
-        row.classList.toggle("hidden", q && !row.textContent.toLowerCase().includes(q));
+    // V100: paint the Messages shell immediately. Network hydration happens
+    // afterwards so navigation is not blocked by Supabase.
+    const paintList = (html = '<div class="messages-loading-state"><span class="tafa-spinner" aria-hidden="true"></span><span>Chargement des conversations…</span></div>') => {
+      if(token !== state.renderToken || state.route !== "messages") return false;
+      const content = $("content");
+      if(!content) return false;
+      content.innerHTML = `<section class="clean-page messages-page" data-page-route="messages">
+        <div class="page-header clean-page-header"><div><h2>Messages</h2><p class="page-kicker">Vos conversations, simplement et en temps réel</p></div><button class="round-button clean-new-button" data-action="new-message" aria-label="Nouvelle conversation">＋</button></div>
+        <div class="clean-search searchbox"><span class="icon">⌕</span><input id="messageSearch" placeholder="Rechercher une conversation"></div>
+        <div id="conversationList" class="clean-list">${html}</div>
+      </section>`;
+      $("messageSearch")?.addEventListener("input", e => {
+        const q = e.target.value.trim().toLowerCase();
+        document.querySelectorAll(".message-conversation").forEach(row => row.classList.toggle("hidden", !!q && !row.textContent.toLowerCase().includes(q)));
       });
-    });
-    bindConversationLongPress();
+      return true;
+    };
+
+    paintList();
+
+    try {
+      // V100: replace the previous N+1 request chain with batched reads.
+      const [membershipsR, blockedR] = await Promise.all([
+        sb.from("conversation_members").select("conversation_id").eq("user_id", state.user.id),
+        getBlockedIds()
+      ]);
+      if(token !== state.renderToken || state.route !== "messages") return;
+      if(membershipsR.error) throw membershipsR.error;
+
+      const ids = [...new Set((membershipsR.data || []).map(x => x.conversation_id).filter(Boolean))];
+      if(!ids.length){
+        paintList(`<div class="empty">Aucune conversation.<br><button class="text-button" data-action="new-message">Commencer une discussion</button></div>`);
+        return;
+      }
+
+      const [convsR, membersR, hiddenR, messagesR, aliasesR] = await Promise.all([
+        sb.from("conversations").select("id,name,created_at,type").in("id", ids).order("created_at", {ascending:false}),
+        sb.from("conversation_members").select("conversation_id,user_id").in("conversation_id", ids),
+        sb.from("tafab_deleted_conversations").select("conversation_id").eq("user_id", state.user.id).in("conversation_id", ids),
+        sb.from("messages").select("conversation_id,content,created_at").in("conversation_id", ids).order("created_at", {ascending:false}).limit(Math.max(200, ids.length * 5)),
+        sb.from("tafab_conversation_aliases").select("conversation_id,target_user_id,nickname").in("conversation_id", ids).eq("target_user_id", state.user.id)
+      ]);
+      if(token !== state.renderToken || state.route !== "messages") return;
+      if(convsR.error) throw convsR.error;
+
+      const conversations = convsR.data || [];
+      const memberRows = membersR.data || [];
+      const hidden = new Set((hiddenR.data || []).map(x => String(x.conversation_id)));
+      const otherByConv = new Map();
+      for(const row of memberRows){
+        if(String(row.user_id) === String(state.user.id)) continue;
+        if(!otherByConv.has(row.conversation_id)) otherByConv.set(row.conversation_id, row.user_id);
+      }
+      const otherIds = [...new Set([...otherByConv.values()].filter(Boolean))];
+      const profilesR = otherIds.length
+        ? await sb.from("profiles").select("*").in("id", otherIds)
+        : {data:[],error:null};
+      if(token !== state.renderToken || state.route !== "messages") return;
+      if(profilesR.error) throw profilesR.error;
+      const profiles = new Map((profilesR.data || []).map(p => [String(p.id), p]));
+      const lastByConv = new Map();
+      for(const m of (messagesR.data || [])) if(!lastByConv.has(String(m.conversation_id))) lastByConv.set(String(m.conversation_id), m);
+      const aliasByConv = new Map((aliasesR.data || []).map(a => [String(a.conversation_id), a.nickname || ""]));
+
+      const cards = [];
+      for(const c of conversations){
+        if(hidden.has(String(c.id))) continue;
+        const person = profiles.get(String(otherByConv.get(c.id))) || null;
+        if(person && blockedCache.ids.has(person.id)) continue;
+        const last = lastByConv.get(String(c.id));
+        const alias = aliasByConv.get(String(c.id)) || "";
+        const title = c.name || (person ? (alias || nameOf(person)) : "Conversation");
+        cards.push(`<button class="list-row message-conversation clean-conversation-row" style="width:100%;text-align:left" data-action="open-conversation" data-id="${esc(c.id)}" data-other-id="${esc(person?.id||"")}">
+          ${avatarHTML(person || state.profile)}
+          <div class="grow"><b>${esc(title)}</b><small>${esc(last?.content || "Ouvrir la conversation")} · ${last ? timeAgo(last.created_at) : ""}</small></div><small class="conversation-chevron">›</small>
+        </button>`);
+      }
+      if(token !== state.renderToken || state.route !== "messages") return;
+      paintList(cards.join("") || `<div class="empty">Aucune conversation.<br><button class="text-button" data-action="new-message">Commencer une discussion</button></div>`);
+      bindConversationLongPress();
+    }catch(e){
+      if(token !== state.renderToken || state.route !== "messages") return;
+      paintList(`<div class="empty"><b>Impossible de charger les messages.</b><br><small>${esc(e?.message || "Erreur réseau")}</small><br><button class="text-button" data-action="menu-route" data-route-target="messages">Réessayer</button></div>`);
+    }
   }
 
   async function newMessage() {
@@ -3618,93 +3650,47 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     openModal(`<div class="modal-box page-settings-modal"><button class="modal-close" data-action="close-modal">×</button><span class="eyebrow">TAFAß • HISTORIQUE</span><h3>Historique des noms</h3><p class="muted">Nom actuel : <b>${esc(p.name)}</b>. Un changement de nom est autorisé une fois tous les 15 jours.</p><div class="page-history-list">${rows}</div></div>`);
   }
 
-
-  // V99 CLEAN: remove DOM remnants left by older frontend builds without touching data.
-  function cleanLegacyUiArtifacts(){
-    const selectors=[
-      '.monet-panel','.monet-hero','.papi-coins-panel','.papi-history-panel',
-      '.tafa-referral-panel-v75','.tafa-v74-admin-wallet','.tafa-admin-monetization-active',
-      '.monet-admin-section','.monetization-section','.music-hub','.music-lab',
-      '[data-v75-admin-section="monetization"]'
-    ];
-    selectors.forEach(sel=>document.querySelectorAll(sel).forEach(el=>el.remove()));
-    ['tafa_active_build','tafa_build_version','tafa_ui_version','tafa_v85_active','tafa_v98_active']
-      .forEach(k=>{try{localStorage.removeItem(k)}catch(_){}}); 
-    try{localStorage.setItem('tafa_active_build','TAFAß-V99-CLEAN')}catch(_){}
-  }
   async function menuPage() {
-    cleanLegacyUiArtifacts();
     state.backOverride = null;
-    // V99 CLEAN: one active Menu, no legacy Page Menu overlays, no monetisation/Music.
-    [".p91-page-menu",".tafa-v65-page-shell",".page-menu-dashboard",".page-menu-hero",".page-menu-card"]
-      .forEach(sel=>document.querySelectorAll(sel).forEach(el=>el.remove()));
-
+    // V95: the account Menu is deliberately Page-free. The old Page Menu is removed
+    // completely; a new dedicated Page Menu will be introduced separately.
+    const pageMenuLegacySelectors = [".p91-page-menu",".tafa-v65-page-shell",".page-menu-dashboard",".page-menu-hero",".page-menu-card"];
+    pageMenuLegacySelectors.forEach(sel=>document.querySelectorAll(sel).forEach(el=>el.remove()));
+    /* ADMIN MENU: resolve the server-side role before rendering the Menu.
+       This makes Administration appear immediately for a real Supabase admin. */
+    // V98: admin status is resolved by render() once in the background.
+    // Do not trigger a second Menu render from inside menuPage(); that used to
+    // destroy the user's scroll position and make the Menu feel stuck.
+    if(!pageModeActive()) state.__isAdmin = state.__isAdmin === true;
     const p = state.profile || {};
-    const displayName = [p.first_name,p.last_name].filter(Boolean).join(" ").trim() || p.username || "Compte Tafaß";
-    const initials = displayName.split(/\s+/).slice(0,2).map(x=>x[0]).join("").toUpperCase();
-
-    const primary = [
-      ["profile","profile","Profil","Votre identité, publications et informations"],
-      ["friends","friends","Amis","Votre réseau et vos invitations"],
-      ["messages","messages","Messages","Conversations et échanges privés"],
-      ["notifications","history","Alertes","Notifications et activités récentes"],
-      ["groups","groups","Groupes","Communautés auxquelles vous participez"],
-      ["reels","reels","Reels","Vidéos courtes et découvertes"],
+    const items = [
+      ["profile","profile","Profil","Voir votre profil"],
+      ["friends","friends","Amis","Votre réseau"],
+      ["messages","messages","Messages","Vos conversations"],
+      ["notifications","history","Alertes","Vos notifications"],
+      ["groups","groups","Groupes","Communautés"],
+      ["reels","reels","Reels","Formats courts"],
       ["events","history","Évènements","Créer et découvrir des évènements"],
-      ["studio","videos","Creator Studio","Organiser et analyser vos contenus"],
-      ["ai","sparkles","Tafaß AI","Assistant intelligent pour vos contenus"],
-      ["saved","saved","Enregistrements","Retrouver vos contenus sauvegardés"],
-      ["search","search","Rechercher","Trouver comptes, personnes et contenus"],
-      ["settings","settings","Para & Conf","Compte, sécurité et confidentialité"]
+      ["studio","videos","Creator Studio","Créer et analyser vos contenus"],
+      ["creator","payment","Monétisation","Coins, revenus et soutien aux créateurs"],
+      ["ai","sparkles","Tafaß AI","Assistant, traduction, rédaction et résumé"],
+      ["music","music","Tafaß Music","Artistes, albums, playlists et favoris"],
+      ["business","business","Business & Publicité","Campagnes, audience et analytics"],
+      ["saved","saved","Enregistrements","Vos contenus sauvegardés"],
+      ["search","search","Rechercher","Trouver un compte ou contenu"],
+      ["settings","settings","Para & Conf","Compte et confidentialité"]
     ];
-
-    const services = [
-      ["tafab","tafab","Tafaß","Marketplace, annonces et services"],
-      ["business","business","Tafaß Business Suite","Outils professionnels et gestion de Page"]
-    ];
-
-    const admin = state.__isAdmin ? [
-      ["admin","shield","Administration","Comptes, sécurité, vérifications et modération"]
+    const adminCard = state.__isAdmin ? [
+      ["admin","shield","Administration","Centre unique : comptes, vérifications, monétisation, signalements et sécurité"]
     ] : [];
-
-    const iconFor = key => menuIcon(key);
-    const card = (x, extra="") => `<button type="button" class="menu-card premium-menu-card menu-v99-card ${extra}" data-action="menu-route" data-route-target="${esc(x[0])}" aria-label="${esc(x[2])}">
-      <span class="menu-icon">${iconFor(x[1])}</span>
-      <span class="menu-card-copy"><b>${esc(x[2])}</b><small>${esc(x[3])}</small></span>
-      <span class="menu-arrow" aria-hidden="true">›</span>
-    </button>`;
-
-    const adminHtml = admin.length ? `<section class="menu-v99-section menu-v99-admin">
-      <div class="menu-v99-section-head"><div><span class="eyebrow">ESPACE SÉCURISÉ</span><h3>Administration</h3><p>Centre de contrôle de l’application</p></div><span class="menu-v99-status">● EN LIGNE</span></div>
-      <div class="menu-grid premium-menu-grid menu-v99-grid">${admin.map(x=>card(x,"menu-v99-admin-card")).join("")}</div>
-    </section>` : "";
-
-    simplePage("Menu", `<div class="menu-v99">
-      <header class="menu-v99-hero">
-        <div class="menu-v99-profile">
-          <div class="menu-v99-avatar">${p.avatar_url ? `<img src="${esc(p.avatar_url)}" alt="">` : `<span>${esc(initials)}</span>`}</div>
-          <div class="menu-v99-identity"><span class="eyebrow">TAFAß · ESPACE PERSONNEL</span><h2>${esc(displayName)}</h2><p>Accédez rapidement à toutes vos fonctions.</p></div>
-        </div>
-        <button class="menu-v99-settings" type="button" data-action="menu-route" data-route-target="settings" aria-label="Para & Conf">${menuIcon("settings")}</button>
-      </header>
-
-      <section class="menu-v99-section">
-        <div class="menu-v99-section-head"><div><span class="eyebrow">ACCÈS RAPIDE</span><h3>Vos espaces</h3><p>Navigation claire et organisée</p></div></div>
-        <div class="menu-grid premium-menu-grid menu-v99-grid">${primary.map(x=>card(x)).join("")}</div>
-      </section>
-
-      <section class="menu-v99-section menu-v99-services">
-        <div class="menu-v99-section-head"><div><span class="eyebrow">OUTILS</span><h3>Services Tafaß</h3><p>Fonctions professionnelles et services de la plateforme</p></div></div>
-        <div class="menu-grid premium-menu-grid menu-v99-grid">${services.map(x=>card(x,"menu-v99-service-card")).join("")}</div>
-      </section>
-
-      ${adminHtml}
-
-      <section class="menu-v99-account">
-        <div class="menu-v99-account-copy"><span class="eyebrow">SESSION</span><b>Compte actuel</b><small>Votre session est sécurisée sur cet appareil.</small></div>
-        <button class="menu-v99-logout" type="button" data-action="new-logout">${menuIcon("logout")}<span>Quitter le compte</span></button>
-      </section>
-    </div>`);
+    const verificationCard = !state.__isAdmin ? [["verification","shield","Badge officiel","Nouveau parcours sécurisé pour demander le badge bleu"]] : [];
+    const actions = [
+      ["history","history","Historique d'activité","Vos actions enregistrées", "activity"],
+      ["payment","payment","Paiement","Vos paiements et transactions", "payment"],
+      ["help","help","Aide","Assistance et signalement", "help"]
+    ];
+    const card = x => `<button type="button" class="menu-card premium-menu-card ${x[0]==="admin" ? "admin-menu-card" : ""}" ${x[4] ? `data-action="menu-service" data-name="${esc(x[2])}" data-service="${esc(x[4])}"` : `data-action="menu-route" data-route-target="${esc(x[0])}"`} aria-label="${esc(x[2])}"><span class="menu-icon">${menuIcon(x[1])}</span><span class="menu-card-copy"><b>${esc(x[2])}</b><small title="${esc(x[3])}">${esc(x[3])}</small></span>${x[0]==="admin"?`<span class="admin-menu-badge" data-admin-badge aria-label="Alertes administration"></span>`:""}<span class="menu-arrow">›</span></button>`;
+    simplePage("Menu", `<div class="menu-section-title menu-shortcuts-title">Raccourcis</div><div class="menu-grid premium-menu-grid">${items.map(card).join("")}</div>${state.__isAdmin ? `<div class="menu-section-title admin-menu-section-title">Administration</div><div class="menu-grid premium-menu-grid admin-menu-grid">${adminCard.map(card).join("")}</div>` : `<div class="menu-section-title">Services</div><div class="menu-grid premium-menu-grid">${verificationCard.map(card).join("")}${actions.map(card).join("")}</div>`}<div class="menu-section-title">Compte</div><div class="menu-grid premium-menu-grid"><button class="menu-card premium-menu-card danger-card" data-action="new-logout"><span class="menu-icon">${menuIcon("logout")}</span><span class="menu-card-copy"><b>Quitter le compte</b><small>Fermer la session sur cet appareil</small></span><span class="menu-arrow">›</span></button></div>`);
   }
 
   function openHelpTopic(topicId,fallbackName="Aide"){
@@ -4973,11 +4959,13 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       sb.rpc('tafa_admin_list_badge_requests',{p_limit:50}),
       sb.rpc('tafa_admin_list_account_appeals',{p_limit:50}),
       sb.rpc('tafa_admin_list_boost_payments',{p_limit:100}),
-      sb.rpc('tafa_admin_list_boost_campaigns',{p_limit:200})
+      sb.rpc('tafa_admin_list_boost_campaigns',{p_limit:200}),
+      sb.rpc('tafa_admin_list_creator_payouts',{p_limit:100}),
+      sb.rpc('tafa_admin_list_creator_monetization',{p_limit:100})
     ]);
     if(dr.error) throw dr.error;
     const snap=dr.data||{}, st=snap.overview||{}, daily=snap.daily||[], locations=snap.locations||[];
-    const users=ur.error?[]:(ur.data||[]), withdrawals=wr.error?[]:(wr.data||[]), payments=pr.error?[]:(pr.data||[]), reports=rr.error?[]:(rr.data||[]), verifications=vr.error?[]:(vr.data||[]), appeals=ar.error?[]:(ar.data||[]), boostPayments=br.error?[]:(br.data||[]), boostCampaigns=bc.error?[]:(bc.data||[]);
+    const users=ur.error?[]:(ur.data||[]), withdrawals=wr.error?[]:(wr.data||[]), payments=pr.error?[]:(pr.data||[]), reports=rr.error?[]:(rr.data||[]), verifications=vr.error?[]:(vr.data||[]), appeals=ar.error?[]:(ar.data||[]), boostPayments=br.error?[]:(br.data||[]), boostCampaigns=bc.error?[]:(bc.data||[]), creatorPayouts=crp.error?[]:(crp.data||[]), creatorMonetization=crm.error?[]:(crm.data||[]);
     state.adminAppealsCache=appeals;
 
     // Realtime admin dashboard: demandes de réactivation, comptes et contenu.
@@ -4989,6 +4977,9 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
         .on('postgres_changes',{event:'*',schema:'public',table:'tafa_account_appeals'},()=>adminDashboardRefreshSoon()).on('postgres_changes',{event:'*',schema:'public',table:'tafa_verification_requests'},()=>adminDashboardRefreshSoon())
         .on('postgres_changes',{event:'*',schema:'public',table:'tafab_ad_payments'},()=>adminDashboardRefreshSoon())
         .on('postgres_changes',{event:'*',schema:'public',table:'tafab_ad_campaigns'},()=>adminDashboardRefreshSoon())
+        .on('postgres_changes',{event:'*',schema:'public',table:'tafab_withdrawal_requests'},()=>adminDashboardRefreshSoon())
+        .on('postgres_changes',{event:'*',schema:'public',table:'tafab_creator_monetization'},()=>adminDashboardRefreshSoon())
+        .on('postgres_changes',{event:'*',schema:'public',table:'tafab_creator_earnings'},()=>adminDashboardRefreshSoon())
         .on('postgres_changes',{event:'*',schema:'public',table:'posts'},()=>adminDashboardRefreshSoon())
         .on('postgres_changes',{event:'*',schema:'public',table:'stories'},()=>adminDashboardRefreshSoon())
         .subscribe(status=>{
@@ -5021,6 +5012,8 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
       return `<div class="admin-user-row"><div class="admin-user-main">${u.avatar_url?`<img src="${esc(u.avatar_url)}" alt="">`:'<div class="admin-user-avatar">👤</div>'}<div><b>${esc(nm)}</b><small>${esc(u.email||'—')} · ${u.username?`@${esc(u.username)}`:'Compte Tafaß'}</small></div></div><span class="admin-status ${cls}">${label}</span><button class="ghost-action" data-action="admin-user-manage" data-id="${esc(u.id)}" data-status="${esc(st)}">Gérer</button></div>`;
     }).join('')||'<div class="empty">Aucun compte.</div>';
     const withdrawalRows=withdrawals.map(x=>`<div class="admin-data-row"><div class="grow"><b>${esc(x.display_name||x.identity_name||x.reason||'Compte')}</b><small>${adminMoney(x.amount_mga)} · ${esc(x.method||'mobile_money')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${esc(x.status||'pending')}">${esc(x.status||'pending')}</span>${x.status==='pending'?`<button class="ghost-action" data-action="admin-withdrawal-status" data-id="${esc(x.id)}" data-status="approved">Approuver</button><button class="ghost-action danger-history-action" data-action="admin-withdrawal-status" data-id="${esc(x.id)}" data-status="rejected">Refuser</button>`:''}</div>`).join('')||'<div class="empty">Aucun retrait.</div>';
+    const creatorPayoutRows=creatorPayouts.map(x=>{const st=x.status||'pending'; const cls=st==='paid'?'paid':(['rejected','failed'].includes(st)?'rejected':st==='processing'?'pending':'pending'); const action=['pending','approved','failed','processing'].includes(st)?`<button class="ghost-action" data-action="admin-creator-payout" data-id="${esc(x.id)}" data-status="paid">💸 ${st==='failed'?'Réessayer':'Payer réellement'}</button><button class="ghost-action danger-history-action" data-action="admin-creator-payout" data-id="${esc(x.id)}" data-status="rejected">Refuser</button>`:''; const ref=x.provider_reference?` · Réf. ${esc(x.provider_reference)}`:''; const err=x.last_payout_error?` · ${esc(x.last_payout_error)}`:''; return `<div class="admin-data-row monet-admin-row"><div class="grow"><b>💸 ${esc(x.display_name||x.identity_name||x.reason||'Compte')}</b><small>${adminMoney(x.amount_mga)} · ${esc(x.method||'mobile_money')} · ${esc(x.destination_hint||'')} · ${timeAgo(x.created_at)}${ref}${err}</small></div><span class="admin-status ${cls}">${esc(st)}</span>${action}</div>`;}).join('')||'<div class="empty">Aucun retrait créateur.</div>';
+    const creatorMonetRows=creatorMonetization.map(x=>`<div class="admin-data-row monet-admin-row"><div class="grow"><b>◎ ${esc(x.display_name||x.identity_name||x.reason||'Compte')}</b><small>${esc(x.status||'pending')} · ${Number(x.lifetime_earnings_mga||0).toLocaleString('fr-FR')} Ar gagnés · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${x.status==='approved'?'paid':x.status==='suspended'?'rejected':'pending'}">${esc(x.status||'pending')}</span>${x.status==='pending'?`<button class="ghost-action" data-action="admin-creator-monetization" data-id="${esc(x.user_id)}" data-status="approved">✓ Activer</button><button class="ghost-action danger-history-action" data-action="admin-creator-monetization" data-id="${esc(x.user_id)}" data-status="rejected">Refuser</button>`:x.status==='approved'?`<button class="ghost-action danger-history-action" data-action="admin-creator-monetization" data-id="${esc(x.user_id)}" data-status="suspended">Suspendre</button>`:''}</div>`).join('')||'<div class="empty">Aucune demande de monétisation.</div>';
     const paymentRows=payments.map(x=>`<div class="admin-data-row"><div class="grow"><b>${esc(x.display_name||x.identity_name||x.reason||'Compte')}</b><small>${adminMoney(x.amount)} · ${esc(x.method||'')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${esc(x.status||'pending')}">${esc(x.status||'pending')}</span>${x.status==='pending'?`<button class="ghost-action" data-action="admin-payment-status" data-id="${esc(x.id)}" data-status="paid">Valider</button><button class="ghost-action danger-history-action" data-action="admin-payment-status" data-id="${esc(x.id)}" data-status="failed">Refuser</button>`:''}</div>`).join('')||'<div class="empty">Aucun paiement.</div>';
     const boostPaymentRows=boostPayments.map(x=>`<div class="admin-data-row boost-admin-payment-row"><div class="grow"><b>✦ ${esc(x.campaign_name||'Campagne')}</b><small>${esc(x.display_name||x.identity_name||x.reason||'Compte')} · ${adminMoney(x.amount_mga)} · ${esc(x.method||'')} · Réf. ${esc(x.transaction_reference||'')} · ${timeAgo(x.created_at)}</small></div><span class="admin-status ${x.status==='verified'?'paid':x.status==='rejected'?'rejected':'pending'}">${x.status==='pending'?'Paiement à vérifier':x.status==='verified'?'Vérifié':'Refusé'}</span>${x.status==='pending'?`<button class="ghost-action" data-action="admin-boost-payment-status" data-id="${esc(x.id)}" data-status="verified">✓ Vérifier</button><button class="ghost-action danger-history-action" data-action="admin-boost-payment-status" data-id="${esc(x.id)}" data-status="rejected">Refuser</button>`:x.status==='verified'?`<button class="ghost-action" data-action="admin-boost-campaign-status" data-id="${esc(x.campaign_id)}" data-status="active">✓ Sponsoriser</button>`:''}</div>`).join('')||'<div class="empty">Aucun paiement publicitaire en attente.</div>';
     const boostCampaignRows=boostCampaigns.map(x=>`<div class="admin-data-row boost-admin-campaign-row"><div class="grow"><b>✦ ${esc(x.name||'Campagne')}</b><small>${esc(x.owner_name||'Compte')} · ${esc(x.ad_type||x.objective||'BOOST')} · ${adminMoney(x.spent_amount_mga)} / ${adminMoney(x.total_budget_mga)} · ${esc(x.audience_location||'Madagascar')}</small></div><span class="admin-status ${x.status==='active'?'paid':x.status==='rejected'?'rejected':x.status==='paused'?'':'pending'}">${esc(adStatusLabel(x.status))}</span><button class="ghost-action" data-action="admin-boost-campaign-control" data-id="${esc(x.id)}" data-status="active">▶ Activer</button><button class="ghost-action" data-action="admin-boost-campaign-control" data-id="${esc(x.id)}" data-status="paused">⏸ Pause</button>${x.status!=='rejected'?`<button class="ghost-action danger-history-action" data-action="admin-boost-campaign-control" data-id="${esc(x.id)}" data-status="rejected">Refuser</button>`:''}</div>`).join('')||'<div class="empty">Aucune campagne publicitaire.</div>';
@@ -5037,7 +5030,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     return simplePage('Admin Total',`<section class="admin-total-page admin-dashboard-premium">
       <div class="admin-total-hero admin-dashboard-hero"><div><span class="eyebrow">TAFAß · ADMINISTRATION TOTALE</span><h2>Tableau de bord</h2><p>Vue globale et temps réel de l’activité Tafaß, des comptes, du contenu et de la sécurité.</p></div><div class="admin-live-indicator"><span></span> EN DIRECT</div></div>
       <div class="admin-dashboard-toolbar"><span>Dernière synchronisation : <b>${new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</b></span><button class="ghost-action" data-action="admin-refresh">↻ Actualiser maintenant</button></div>
-      <nav class="tafa-v74-admin-tabs" aria-label="Administration"><button class="active" data-v74-admin-jump="Évolution des comptes">📈 Évolutions des comptes</button><button data-v74-admin-jump="Comptes utilisateurs">👥 Comptes d'utilisateurs</button><button data-v74-admin-jump="Signalements">🚨 Signalements & Réactivations</button></nav>
+      <nav class="tafa-v74-admin-tabs" aria-label="Administration"><button class="active" data-v74-admin-jump="Évolution des comptes">📈 Évolutions des comptes</button><button data-v74-admin-jump="Comptes utilisateurs">👥 Comptes d'utilisateurs</button><button data-v74-admin-jump="Monétisation">💰 Monétisations</button><button data-v74-admin-jump="Signalements">🚨 Signalements & Réactivations</button></nav>
       <div class="admin-total-grid admin-dashboard-kpis v75-admin-section" data-v75-admin-section="evolution">${cards.map(c=>`<div class="admin-stat"><span>${c[0]}</span><b>${c[2]}</b><small>${esc(c[1])}</small></div>`).join('')}</div>
       <div class="admin-dashboard-columns v75-admin-section" data-v75-admin-section="evolution">
         <section class="admin-total-section"><div class="admin-section-head"><div class="admin-section-title"><h3>📈 Évolution des comptes</h3><small class="admin-section-note">Nouveaux comptes sur les 30 derniers jours · croissance ${growthSign}${growth}%</small></div></div><div class="admin-trend-chart">${trendRows||'<div class="empty">Pas encore de données d’évolution.</div>'}</div></section>
@@ -5048,6 +5041,10 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
         <section class="admin-total-section"><div class="admin-section-head"><div class="admin-section-title"><h3>🛡️ Sécurité</h3><small class="admin-section-note">Éléments nécessitant une intervention.</small></div></div><div class="admin-health-grid admin-security-grid"><div><b>${Number(st.blocked_accounts||0).toLocaleString('fr-FR')}</b><span>Comptes bloqués</span></div><div><b>${Number(st.pending_reports||0).toLocaleString('fr-FR')}</b><span>Signalements</span></div><div><b>${Number(st.pending_verifications||0).toLocaleString('fr-FR')}</b><span>Vérifications</span></div><div><b>${Number(st.pending_appeals||0).toLocaleString('fr-FR')}</b><span>Réactivations</span></div></div></section>
       </div>
       <div class="admin-total-section v75-admin-section" data-v75-admin-section="users"><div class="admin-section-head"><div class="admin-section-title"><h3>👥 Comptes utilisateurs</h3><small class="admin-section-note">4 comptes en haut + 4 en bas. Les autres sont accessibles avec « Voir plus ».</small></div><span class="admin-live-indicator"><span></span> EN DIRECT</span></div><div class="v75-admin-user-table"><div class="v75-admin-user-head"><span>Compte</span><span>E-mail</span><span>Statut</span><span>Action</span></div>${rows}</div>${users.length>8?'<button class="ghost-action v74-see-more" data-action="v74-admin-users-more">Voir plus</button>':''}</div>
+      <div class="admin-total-section v75-admin-section monet-admin-section" data-v75-admin-section="monetization"><div class="admin-section-head"><div class="admin-section-title"><h3>💰 Monétisation</h3><small class="admin-section-note">${adminMoney(st.total_creator_earnings_mga)} de revenus créateurs · ${Number(st.total_coins||0).toLocaleString('fr-FR')} coins.</small></div></div><div class="admin-subsection"><h4>Demandes d'activation</h4><div class="admin-data-list">${creatorMonetRows}</div></div><div class="admin-subsection"><h4>Retraits créateurs</h4><div class="admin-data-list">${creatorPayoutRows}</div></div></div>
+      <div class="admin-total-section v75-admin-section" data-v75-admin-section="monetization"><div class="admin-section-head"><div class="admin-section-title"><h3>💳 Paiements</h3><small class="admin-section-note">Validation administrative des paiements.</small></div></div><div class="admin-data-list">${paymentRows}</div></div>
+      <div class="admin-total-section v75-admin-section" data-v75-admin-section="monetization"><div class="admin-section-head"><div class="admin-section-title"><h3>✦ Publicités sponsorisées</h3><small class="admin-section-note">Paiements publicitaires à vérifier avant diffusion</small></div><span class="admin-live-indicator"><span></span> EN DIRECT</span></div><div class="admin-data-list">${boostPaymentRows}</div></div>
+      <div class="admin-total-section v75-admin-section" data-v75-admin-section="monetization"><div class="admin-section-head"><div class="admin-section-title"><h3>✦ Gestion globale des campagnes</h3><small class="admin-section-note">L’administration contrôle toutes les campagnes, leurs statuts et leur diffusion.</small></div><span class="admin-live-indicator"><span></span> EN DIRECT</span></div><div class="admin-data-list">${boostCampaignRows}</div></div>
       <div class="admin-total-section v75-admin-section" data-v75-admin-section="reports"><div class="admin-section-head"><div class="admin-section-title"><h3>🚨 Signalements</h3><small class="admin-section-note">Modération et suivi des signalements.</small></div></div><div class="admin-data-list">${reportRows}</div></div>
       <div class="admin-total-section v75-admin-section" data-v75-admin-section="reports"><div class="admin-section-head"><div class="admin-section-title"><h3>🔵 Vérifications</h3><small class="admin-section-note">Demandes de badge bleu.</small></div></div><div class="admin-data-list">${verificationRows}</div></div>
       <div class="admin-total-section v75-admin-section" data-v75-admin-section="reports"><div class="admin-section-head"><div class="admin-section-title"><h3>♻️ Réactivations</h3><small class="admin-section-note">Demandes après suspension.</small></div></div><div class="admin-data-list">${appealRows}</div></div>
@@ -5416,9 +5413,8 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
   }
 
   function navigate(route, options = {}) {
-    // V99 CLEAN: removed legacy modules are no longer routable.
+    // V97: Pages are fully removed from the application UI and routing.
     if (route === "pages") route = "notifications";
-    if (route === "creator" || route === "music") route = "menu";
     if (!routes.includes(route)) route = "home";
     if (document.body.classList.contains("modal-open")) closeModal();
     state.backOverride = null;
@@ -7502,7 +7498,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     const b=e.target.closest('[data-v74-admin-jump]'); if(!b)return;
     const key=b.dataset.v74AdminJump||'';
     const root=document.querySelector('.admin-total-page'); if(!root)return;
-    const groups={'Évolution des comptes':'evolution','Comptes utilisateurs':'users','Signalements':'reports'};
+    const groups={'Évolution des comptes':'evolution','Comptes utilisateurs':'users','Monétisation':'monetization','Signalements':'reports'};
     const group=groups[key]||'evolution';
     root.querySelectorAll('[data-v75-admin-section]').forEach(sec=>{sec.hidden=sec.dataset.v75AdminSection!==group;});
     root.querySelectorAll('.tafa-v74-admin-tabs button').forEach(x=>x.classList.toggle('active',x===b));
@@ -9075,7 +9071,7 @@ const TAFAß_EMOJI_CATALOG = ["⌚","⌛","⏩","⏪","⏫","⏬","⏰","⏳","�
     if(!b)return;
     e.preventDefault(); e.stopPropagation();
     const root=document.querySelector('.admin-total-page'); if(!root)return;
-    const groups={'Évolution des comptes':'evolution','Comptes utilisateurs':'users','Signalements':'reports'};
+    const groups={'Évolution des comptes':'evolution','Comptes utilisateurs':'users','Monétisation':'monetization','Signalements':'reports'};
     const group=groups[b.dataset.v74AdminJump]||'evolution';
     root.querySelectorAll('[data-v75-admin-section]').forEach(sec=>sec.hidden=sec.dataset.v75AdminSection!==group);
     root.querySelectorAll('.tafa-v74-admin-tabs button').forEach(x=>x.classList.toggle('active',x===b));
